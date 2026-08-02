@@ -335,19 +335,28 @@
      backdrop (stars at night, sun glow by day) — cards on top stay opaque for reading */
   :root[data-theme="dark"] .page { background: color-mix(in srgb, var(--paper) 72%, transparent); }
   :root[data-theme="light"] .page { background: color-mix(in srgb, var(--paper) 88%, transparent); }
-  /* 2026-08-02 (Linh, GCal reference screenshot: "i dont like this" (the cream/gold wash)
-     -> "i like the new direction" on the neutral mockup, viewed as a PHONE mockup):
-     Day page ONLY, light mode ONLY, PHONE WIDTHS ONLY -- same scope as the rest of this
-     mobile pass (hero collapse, FAB), since the reference/approval were both phone
-     screenshots and desktop's light Day page was never shown as part of this change.
-     Redefining these custom properties here cascades into everything inside #dayPage
-     that reads var(--paper)/var(--desk)/etc (the .page rule above included), without
-     touching the warm Ink & Brass tokens anywhere else (Week/Month/other chapters, dark
-     mode, or the desktop Day page). --margin-rule (the gold accent used for badges/
-     borders/the FAB) is deliberately NOT overridden — gold-as-accent was never the
-     complaint, gold-as-background-wash was. */
+  /* 2026-08-02 (Linh, GCal reference screenshots — first "i like the new direction" on a
+     mockup, then on the REAL phone: "colours look bad i hate it" -> "too gold/cream" ->
+     sent an actual Google Calendar screenshot: "make light version like this"):
+     Day page ONLY, light mode ONLY, PHONE WIDTHS ONLY. SUPERSEDES the first pass, which
+     only overrode #dayPage's own tokens — the header/nav chrome sits OUTSIDE #dayPage
+     (html,body { background: var(--desk) } two rules below) so it kept the warm cream on
+     her real phone even though the card content underneath had gone neutral, reading as
+     an ugly two-tone mismatch rather than the flat, uniform GCal look she pointed at.
+     Overriding on body[data-view="day"] alone still wasn't enough on the real phone —
+     "html, body { background: var(--desk) }" a few lines down means html paints its OWN
+     var(--desk), resolved from ITS OWN ancestor chain, and custom properties never
+     cascade upward from a child (body) to a parent (html) — so html kept the warm tan
+     showing straight through body's "background: transparent" (this file's actual
+     day-mode mechanism — the sun-glow below paints on TOP of that, not instead of it).
+     :has() lets :root itself react to body's data-view, fixing html's own background at
+     the source instead of a level too low to reach it. The sun-glow rule further below
+     keys off body[data-view="day"] directly, which — being body's own attribute, not an
+     ancestor's — never had this problem.
+     --margin-rule (the gold accent used for badges/borders) is deliberately NOT
+     overridden — gold-as-accent was never the complaint, gold-as-background-wash was. */
   @media (max-width: 640px) {
-    :root[data-theme="light"] #dayPage {
+    :root[data-theme="light"]:has(body[data-view="day"]) {
       --desk: #F1F0EE; --paper: #FFFFFF; --note-bg: #F6F6F5; --field-bg: #FBFBFA;
     }
   }
@@ -364,6 +373,11 @@
   @keyframes sun-breathe {
     0%, 100% { opacity: 0.75; }
     50% { opacity: 1; }
+  }
+  /* the warm glow above was the main thing still reading as "gold wash" on the Day
+     page even after the flat-neutral pass above — flat off for that same scope */
+  @media (max-width: 640px) {
+    :root[data-theme="light"] body[data-view="day"]::before { background: none; animation: none; }
   }
   h1, h2, h3, .p-title, .fam-title, .nm, .ttl { font-weight: 800 !important; }
   /* the `hidden` attribute must always win — several elements (e.g. .field, flex/grid
@@ -2638,9 +2652,18 @@
     font-size: 11px; font-weight: 700; color: var(--nav-active); font-variant-numeric: tabular-nums;
     background: color-mix(in oklab, var(--nav-active) 16%, transparent); }
   .rtn-sub-num::before { content: counter(substep); }
-  .rtn-sub-row .rtn-sub-text { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); }
+  /* 2026-08-02 (Linh, real-phone screenshot: "hard to read and disportionate... the
+     inconsistencies make me wanna cry"): the generic ".field input[type=...] { width:
+     100% }" rule a few hundred lines down (0,2,1 specificity — the [type] attribute
+     counts the same as a class) was quietly outranking these two rows' (0,2,0) sizing
+     the whole time, since #rtnSubList happens to sit inside a .field wrapper like any
+     other form field. On a narrow phone that meant the minutes input inflating to fill
+     the row (huge "3"/"5"/"7") while the step-text input got squeezed to nothing beside
+     it — invisible, not just cramped. #rtnSubList-prefixed selectors below win outright
+     (ID beats class+attribute) without needing !important. */
+  #rtnSubList .rtn-sub-row .rtn-sub-text { flex: 1; min-width: 0; width: auto; font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); }
   .rtn-sub-min-wrap { flex: none; display: flex; align-items: center; gap: 5px; }
-  .rtn-sub-row .rtn-sub-min { width: 52px; font: inherit; font-size: 13px; padding: 7px 8px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  #rtnSubList .rtn-sub-row .rtn-sub-min { width: 52px; flex: none; font: inherit; font-size: 13px; padding: 7px 8px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
   .rtn-sub-min-suffix { font-size: 11px; color: var(--ink-soft); }
   .rtn-sub-row .rtn-sub-del { flex: none; border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 3px 6px; border-radius: 6px; transition: color .12s, background .12s; }
   .rtn-sub-row .rtn-sub-del:hover { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 12%, transparent); }
