@@ -289,6 +289,22 @@
     --sky-night: rgba(18, 22, 46, 0.12);
     --sky-day: rgba(217, 169, 63, 0.07);
   }
+  /* 2026-08-03 (Linh: "yes i want light mode back"): restored from the last state it
+     was in before the 2026-08-02 dark-only removal (recovered via `git show 9323dfa`
+     on Book33.html, the commit that deleted it) -- these are the SAME values, already
+     the flat-neutral GCal-clean palette from her own "keep light, go neutral" pass, not
+     the earlier ornate gold-wash version. Restored as-is rather than redesigned, since
+     this was the last approved state, not a fresh design decision. */
+  :root[data-theme="light"] {
+    --desk: #EFE3CC; --paper: #FBF6EC; --note-bg: #F5EEDD; --field-bg: #F7F1E2;
+    --ink: #2A2015; --ink-soft: #5C4F3C; --ink-faint: #8A7D68; --ink-bright: #15100A;
+    --jewel-mix: 14%;
+    --tone-mix: var(--ink);
+    --shadow: 0 1px 2px rgba(14,22,33,0.05), 0 4px 16px -6px rgba(14,22,33,0.12);
+    --page-shadow: 0 1px 3px rgba(14,22,33,0.06), 0 18px 48px -24px rgba(14,22,33,0.32);
+    --mochi-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 -8px 18px rgba(14,22,33,0.05) inset, 0 12px 28px -14px rgba(14,22,33,0.18);
+    --accent-on: #1A1508;  /* gold accent needs dark text for contrast, even in light theme where --paper is white */
+  }
   /* Safety net: if color-mix isn't supported the derived tokens would collapse,
      so pin a static winter palette instead. */
   @supports not (color: color-mix(in oklab, red, blue)) {
@@ -369,6 +385,31 @@
   /* the sky shows through EVERY page: the sheet goes slightly translucent over the fixed
      backdrop (stars at night, sun glow by day) — cards on top stay opaque for reading */
   :root[data-theme="dark"] .page { background: color-mix(in srgb, var(--paper) 72%, transparent); }
+  :root[data-theme="light"] .page { background: color-mix(in srgb, var(--paper) 88%, transparent); }
+  /* 2026-08-03: restored alongside the light palette above, same values as before
+     removal -- the final approved state was flat neutral on mobile (this app), not the
+     earlier gold-wash. The old decorative "warm glowing sun" body::before + its
+     sun-breathe animation are deliberately NOT restored: that layer was already
+     switched off on phone widths before removal (a separate mobile-only override two
+     rules below this one, in the pre-removal source) per the standing "clean wins over
+     decoration on Book33 mobile" order, and this file only ever renders at phone
+     widths, so it would have been inert dead weight either way. Flag if desktop should
+     get it back too. */
+  @media (max-width: 640px) {
+    :root[data-theme="light"] {
+      --desk: #F1F0EE; --paper: #FFFFFF; --note-bg: #F6F6F5; --field-bg: #FBFBFA;
+    }
+  }
+  /* the quick-add bar was hardcoded dark (#1D1710 etc.) regardless of theme -- correct
+     visually while light mode itself was warm/dark-adjacent gold, wrong now light mode
+     is flat neutral white. */
+  @media (max-width: 640px) {
+    :root[data-theme="light"] .quick-add { background: var(--field-bg); border-color: var(--note-line); }
+    :root[data-theme="light"] .quick-add input { color: var(--ink); }
+    :root[data-theme="light"] .quick-add input::placeholder { color: var(--ink-faint); }
+    :root[data-theme="light"] .qa-field { background: var(--paper); border-color: var(--note-line); }
+    :root[data-theme="light"] .quick-add .qa-btn.qa-secondary { background: transparent; }
+  }
   h1, h2, h3, .p-title, .fam-title, .nm, .ttl { font-weight: 800 !important; }
   /* the `hidden` attribute must always win — several elements (e.g. .field, flex/grid
      containers) set their own `display`, which ties in specificity with the browser's
@@ -4295,6 +4336,15 @@
   .profile-edit { border: none; background: none; color: var(--ink-soft); font-size: 11px; cursor: pointer; text-decoration: underline; margin-left: auto; }
   .profile-edit:hover { color: var(--margin-rule); }
 
+  /* 2026-08-03: restored with the rest of light mode -- same CSS as before removal. */
+  .theme-toggle {
+    position: fixed; top: max(14px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); z-index: 200;
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--note-line);
+    background: var(--paper); color: var(--ink); font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.15s ease;
+  }
+  .theme-toggle:hover { transform: scale(1.08); }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 9px;
@@ -4458,7 +4508,7 @@
   .cyc-cell, .mo-cell, .td-group, .week-col {
     border-radius: var(--radius-sm);
   }
-  .cyc-chip, .track-opt, .wk-period, .wk-fertile, .wk-cd {
+  .cyc-chip, .track-opt, .theme-toggle, .wk-period, .wk-fertile, .wk-cd {
     border-radius: 999px;
   }
   .dh-confirm.saved { background: var(--margin-rule); border-color: var(--margin-rule); color: var(--nav-active-ink); }
@@ -4869,9 +4919,10 @@
     .tl-edit, .p-edit { padding: 8px 8px 8px 10px; }
     .bc-rename, .bd-rename, .wm-item .del, .wrp-del { padding: 7px 8px; }
     /* 2026-08-02 (mobile-first pass, HIG/Material 44pt min tap target): these were sized
-       for a mouse (jump-btn 32px circle, fast-goal-chip 3px/9px padding, track-opt
-       weekday/frequency pills) — bump to 44px on phone widths only, desktop keeps the
-       denser look. */
+       for a mouse (jump-btn 32px circle, theme-toggle 34px circle, fast-goal-chip
+       3px/9px padding, track-opt weekday/frequency pills) — bump to 44px on phone widths
+       only, desktop keeps the denser look. */
+    .theme-toggle { width: 44px; height: 44px; }
     .fast-goal-chip { padding: 10px 14px; min-height: 44px; }
     .track-opt { min-height: 44px; }
     /* jump-btn moves fixed top-left of the theme-toggle (see bottom-nav block below —
@@ -5192,8 +5243,7 @@
        already moved to position:fixed for phone widths, so nothing mobile still
        needs it) -- neutralising it here is what makes #jumpBtn's absolute offsets
        resolve against #wrap instead of against nav-tiers' collapsed, centred,
-       zero-size box. Now the only top-right icon (theme-toggle removed with light
-       mode), it takes the corner slot theme-toggle used to sit in. */
+       zero-size box. */
     /* 2026-08-03 (Linh: "the strip above the day/date row is a slightly different
        shade... visible seam"): traced via getBoundingClientRect -- #wrap is a flex
        column with gap:10px; even at position:static, .nav-tiers still generated a
@@ -5205,8 +5255,15 @@
        #wrap's position:relative exactly as it already did (display:contents, like
        position:static, isn't a positioned ancestor either). */
     .nav-tiers { display: contents; }
-    .jump-btn {
+    /* 2026-08-03 (light mode restored): theme-toggle is back, reclaiming its original
+       right:6 corner slot -- jump-btn goes back to right:42 (its own pre-removal
+       position) so the two sit side by side instead of colliding. */
+    .theme-toggle {
       position: absolute; top: 6px; right: 6px; left: auto;
+      width: 30px; height: 30px; font-size: 13px;
+    }
+    .jump-btn {
+      position: absolute; top: 6px; right: 42px; left: auto;
       width: 30px; height: 30px;
     }
   }
@@ -5293,7 +5350,10 @@
     #wrap[data-view="day"] { padding-top: 6px; }
     #dayPage { padding-top: 0; }
     #dayRow2 {
-      min-height: 30px; margin: -10px 0 6px; padding: 0 70px 0 66px; align-items: center;
+      min-height: 30px; margin: -10px 0 6px; padding: 0 76px 0 66px; align-items: center;
+      /* 2026-08-03: right padding widened 70->76 -- theme-toggle reclaimed right:6,
+         pushing search to right:42 (its pre-removal slot), so the right icon cluster
+         now spans to ~72px from the edge instead of 36px. */
       /* 2026-08-02 (header cleanup, "disorganised"): #dayRow2 sits inside .page's own
          flow (page has its own 8px top padding on mobile), while the BK33/search icons
          either side of it are position:absolute against #wrap and land 10px higher —
@@ -6188,10 +6248,20 @@
   :root .quick-add input { color: #F4EEDF !important; padding: 1px 2px !important; }
   :root .quick-add input::placeholder { color: #C6B893 !important; }
   #moMonthSel, #moYearSel { padding: 2px 4px !important; color: var(--ink) !important; }
+  /* 2026-08-03: restored with the rest of light mode -- the two rules just above
+     hardcode cream-on-dark text (correct for the quick-add pill's original always-dark
+     look), which is wrong now that light mode is flat neutral white. Same !important
+     weight, placed after, at matching specificity, so it actually wins. */
+  @media (max-width: 640px) {
+    :root[data-theme="light"] .quick-add input { color: var(--ink) !important; }
+    :root[data-theme="light"] .quick-add input::placeholder { color: var(--ink-faint) !important; }
+  }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
 
+  <!-- 2026-08-03: restored with the rest of light mode. -->
+  <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
   <!-- 2026-08-02 (Linh: "move these to top left corner of screen represented by a
        Book33 icon" -- the 5 bottom-nav tabs replaced by a hamburger-style drawer,
        see the mobile #categoryTabs rewrite ~line 4799): phone-only (desktop keeps its
@@ -7560,8 +7630,11 @@
 
 <script>
 (function () {
-  // dark-only — light mode and the toggle are gone, always force dark.
-  document.documentElement.dataset.theme = "dark";
+  // 2026-08-03 (Linh: "yes i want light mode back"): restored -- dark, high-contrast
+  // by default, a manually saved preference (the toggle button) wins over that default.
+  const THEME_KEY = "daybook-theme";
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  document.documentElement.dataset.theme = savedTheme || document.documentElement.dataset.theme || "dark";
 
   // every save in this file goes `try { localStorage.setItem(…) } catch (e) {}` —
   // if storage fills up (or private browsing blocks it) her logging would vanish
@@ -16278,6 +16351,16 @@
       HEALTH[id] = isFinite(v) ? v : null;
       saveHealth(); renderHealth();
     }));
+  // 2026-08-03: restored with the rest of light mode.
+  const themeToggleBtn = document.getElementById("themeToggle");
+  const syncThemeToggleIcon = () => { themeToggleBtn.textContent = document.documentElement.dataset.theme === "dark" ? "🌙" : "☀️"; };
+  syncThemeToggleIcon();
+  themeToggleBtn.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem(THEME_KEY, next);
+    syncThemeToggleIcon();
+  });
   // 2026-08-02 (mobile hero collapse): #tilesDate persists across day navigation
   // (renderDay only repopulates the ID'd children inside it, never recreates the
   // node), so this class toggle naturally stays put as she moves between days —
@@ -19624,8 +19707,11 @@
       // the left side"): retuned again — the dot's own top offset (12px min) didn't
       // match the 30px search button's vertical centre (centre y=21, i.e. top 14.5px
       // for a 13px dot), so the two sat ~7px out of line. Centred on the search icon.
+      // 2026-08-03 (light mode restored): theme-toggle reclaimed right:6, pushing
+      // search to right:42 (its own pre-removal slot) -- the dot moves past BOTH now
+      // (was only clearing search alone), or it'd land under the toggle's left edge.
       dot.style.top = "max(14px, calc(env(safe-area-inset-top) + 14px))";
-      dot.style.right = "max(44px, calc(env(safe-area-inset-right) + 44px))";
+      dot.style.right = "max(80px, calc(env(safe-area-inset-right) + 80px))";
       dot.style.left = "auto"; dot.style.bottom = "auto";
     } else {
       dot.style.bottom = "12px"; dot.style.top = "auto";
