@@ -2698,6 +2698,24 @@
   .ppl-actions { display: flex; gap: 2px; white-space: nowrap; }
   .ppl-actions .del { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 14px; padding: 2px 5px; }
   .ppl-actions .del:hover { color: var(--margin-rule); }
+  /* 2026-08-02 (code44 whole-app mobile audit): same fix as .rtn-row below — 6 columns
+     (Name/Group/Part of life/Birthday/Connections/actions) just overflow-x:auto'd on
+     phone, truncating Birthday+ off the right edge. Same standard responsive-table
+     reflow: markup untouched, pure display-model switch to a bordered card per person. */
+  @media (max-width: 640px) {
+    .ppl-table-wrap { overflow-x: visible; }
+    .ppl-table thead { display: none; }
+    .ppl-table tbody { display: block; }
+    .ppl-table tbody tr {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+      border: 1px solid var(--note-line); border-radius: var(--radius-md);
+      padding: 10px 12px; margin-bottom: 8px; background: var(--field-bg);
+    }
+    .ppl-table td { display: block; padding: 0; border: none; }
+    .ppl-table td:first-child { flex: 1 1 100%; }
+    .ppl-table td:nth-child(2), .ppl-table td:nth-child(3), .ppl-table td:nth-child(4), .ppl-table td:nth-child(5) { flex: none; }
+    .ppl-actions { flex: none; margin-left: auto; }
+  }
 
   /* Routines: All routines, table format (Linh 2026-07-27) — a compact row per
      routine with a calendar on/off toggle, replacing the earlier detail cards
@@ -2751,6 +2769,29 @@
     display: flex; flex-direction: column;
   }
   .rtn-steps-empty { font-size: 12px; color: var(--ink-faint); font-style: italic; padding: 4px 0; }
+  /* 2026-08-02 (code44 whole-app mobile audit): the desktop table just overflow-x:auto'd
+     on phone widths (.rtn-table-wrap above), so the Calendar toggle silently scrolled off
+     the right edge — reads as missing data, not "there's more, swipe". Reflowing the same
+     markup (thead/tbody/tr/td unchanged) into a bordered card per routine is the standard
+     responsive-table technique — no JS/HTML changes needed, purely a display-model switch. */
+  @media (max-width: 640px) {
+    .rtn-table-wrap { overflow-x: visible; }
+    .routine-table { table-layout: auto; }
+    .routine-table thead { display: none; }
+    .routine-table tbody { display: block; }
+    .rtn-row {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+      border: 1px solid var(--note-line); border-radius: var(--radius-md);
+      padding: 10px 12px; margin-bottom: 8px; background: var(--field-bg);
+    }
+    .rtn-row td { display: block; padding: 0; border: none; }
+    .rtn-row td:first-child { flex: 1 1 100%; }
+    .rtn-row td:nth-child(2) { flex: 1 1 100%; }
+    .rtn-cal-cell, .rtn-actions-cell { flex: none; }
+    .rtn-actions-cell { margin-left: auto; }
+    .rtn-steps-row { display: block; margin-top: -8px; }
+    .rtn-steps-row td { display: block; border-bottom: none; padding: 0 0 8px; }
+  }
   .note-inline {
     font-size: 13px; color: var(--ink-soft); background: var(--note-bg);
     border: 1px solid var(--note-line); border-radius: var(--radius-sm);
@@ -3128,6 +3169,12 @@
     .mo-num { font-size: 13px; }
     .mo-ingress { font-size: 9.5px; }
     .mo-nav .mo-title { font-size: 24px; min-width: 150px; }
+    /* 2026-08-02 (code44 whole-app mobile audit): .mo-title is shared with Month
+       ("August 2026" — short, fits fine at 24px) but Week's full date-RANGE title
+       ("July 27 – August 2, 2026") is nearly 2x longer and was wrapping to 3 lines,
+       eating vertical space before any real content showed. #wkTitle (an ID) wins over
+       the shared .mo-nav .mo-title class rule without needing !important. */
+    #wkTitle { font-size: 17px; min-width: 0; }
   }
 
   /* ============ WEEK ============ */
@@ -3657,6 +3704,17 @@
   .h-stats { display: flex; flex-wrap: wrap; gap: 22px; margin: 12px 0 6px; }
   .h-stat .n { font-family: var(--font-display); font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
   .h-stat .l { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.11em; color: var(--ink-faint); margin-top: 4px; }
+  /* 2026-08-02 (code44 whole-app mobile audit, CPD Points): 3 shrink-to-fit stats at
+     22px's gap:22px wrapped 2-then-1 on phone width, reading as a lopsided, spread-out
+     block. Scoped to #cpdSummary specifically (not the shared .h-stats/.h-stat used
+     elsewhere, e.g. Health) — 3 even columns instead of an uneven wrap, tighter gap and
+     number size to fit comfortably on one row. */
+  @media (max-width: 640px) {
+    #cpdSummary .h-stats { flex-wrap: nowrap; gap: 10px; margin: 10px 0 6px; }
+    #cpdSummary .h-stat { flex: 1 1 0; min-width: 0; }
+    #cpdSummary .h-stat .n { font-size: 19px; }
+    #cpdSummary .h-stat .l { font-size: 8.5px; white-space: normal; }
+  }
 
   .log-row {
     display: flex; align-items: center; gap: 10px; padding: 6px 0;
@@ -12566,7 +12624,13 @@
 
   const fmtDur = ms => {
     const s = Math.max(0, Math.floor(ms / 1000));
-    return `${String(Math.floor(s / 3600)).padStart(2,"0")}:${String(Math.floor(s % 3600 / 60)).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
+    const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+    // 2026-08-02 (code44 mobile audit): a 3-digit-hour fast ("142:18:50") overflowed the
+    // fixed-size ring — dropping seconds past 100h keeps it inside the same visual
+    // language (still H:MM, just less precision once it's already multi-day) instead of
+    // switching format entirely.
+    if (h >= 100) return `${h}:${String(m).padStart(2,"0")}`;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
   };
   const fmtHrs = ms => `${Math.floor(ms / 3600000)}h ${Math.round(ms % 3600000 / 60000)}m`;
   const shortDate = iso => {
