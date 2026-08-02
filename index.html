@@ -1488,6 +1488,13 @@
   /* nav: sub-tab cluster separators + quick-jump palette */
   .sub-sep { width: 1px; align-self: stretch; margin: 3px 7px; background: var(--note-line); flex: none; }
   .nav-tiers { position: relative; }
+  /* 2026-08-04: wraps jump-btn + theme-toggle so mobile can group them on one side of
+     the new real-flow header bar (see the mobile .nav-tiers rewrite below). On desktop
+     this must stay invisible to layout -- display:contents makes its two children act
+     as direct .nav-tiers flex items again, identical to the DOM shape before this wrapper
+     existed, so the existing desktop rules (.jump-btn's own position:absolute corner,
+     .theme-toggle's own position:fixed circle) keep working unchanged. */
+  .topbar-right { display: contents; }
   .jump-btn {
     position: absolute; right: 0; top: 2px; width: 32px; height: 32px; border-radius: 50%;
     border: 1.5px solid var(--nav-active); background: transparent; color: var(--nav-active);
@@ -4953,17 +4960,26 @@
      nothing floats any more, so nothing can land off-screen). */
   .nav-drawer-btn { display: none; }
   @media (max-width: 640px) {
+    /* 2026-08-04 (Step 2): was position:absolute/top:6/left:6, floating over whatever
+       page content sat underneath. Now a normal flex item inside the real .nav-tiers
+       header row (see that rewrite further down), so it just sits in its own row
+       instead of overlapping the date. */
     .nav-drawer-btn {
-      display: flex; align-items: center; justify-content: center;
-      position: absolute; top: 6px; left: 6px; z-index: 260;
+      display: flex; align-items: center; justify-content: center; flex: none;
+      position: static; z-index: 1;
       width: auto; min-width: 30px; height: 30px; padding: 0 10px; border-radius: 15px;
       border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
       font-size: 12px; font-weight: 800; letter-spacing: -0.02em; cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.12);
     }
+    /* 2026-08-04: was anchored with a hardcoded "safe-area + 42px" guess at the header
+       bar's height -- fragile the moment that bar's real height changes (which it just
+       did, gaining safe-area padding of its own). Anchored to .nav-tiers itself instead
+       (position:relative on .nav-tiers is a global base rule, not mobile-only) so the
+       dropdown always opens flush under the bar regardless of its actual height. */
     #categoryTabs.view-tabs {
-      position: fixed; left: 6px; right: auto; bottom: auto;
-      top: calc(env(safe-area-inset-top) + 42px); z-index: 250;
+      position: absolute; left: 0; right: auto; bottom: auto; top: 100%; margin-top: 6px;
+      z-index: 250;
       display: none; flex-direction: column; align-items: stretch; gap: 2px;
       width: min(250px, calc(100vw - 24px)); max-height: 76vh; overflow-y: auto;
       background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
@@ -5107,12 +5123,15 @@
      third of a phone's width */
   @media (max-width: 640px) {
     .wrap {
-      /* top padding must still clear the corner icons (33-drawer top-left, search/theme
-         top-right -- all position:absolute inside #wrap, top:6px, 30px tall). Bottom no
-         longer reserves ~70px for the bottom nav bar -- that bar is gone (folded into
-         the top-left drawer, see the #categoryTabs drawer block), so just safe-area. */
-      padding: max(32px, calc(env(safe-area-inset-top) + 28px)) env(safe-area-inset-right)
-               calc(14px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+      /* 2026-08-04 (Step 2): SUPERSEDES the old top-padding value here. It used to exist
+         only to clear the corner icons back when they were position:absolute floating
+         chrome, top:6px, 30px tall -- confirmed via getBoundingClientRect that leaving it
+         in place after moving those icons into .nav-tiers' own real-flow safe-area padding
+         (above) double-stacked the clearance (32px here + ~10-47px there), pushing every
+         page's content down by an extra 32px for no reason. .nav-tiers now owns the
+         safe-area-top clearance for every page; .wrap needs none of its own. Bottom
+         still just clears the home-indicator safe area, unchanged from before. */
+      padding: 0 env(safe-area-inset-right) calc(14px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
     }
     /* 2026-08-02 (Linh, screenshot of the live preview: "wasted space on top and on
        sides"): the wrap padding above trims the outer frame; the page's OWN padding
@@ -5237,35 +5256,51 @@
     .day-row2 { gap: 8px; }
     .day-row2 #tilesDate .tile-grp { margin-bottom: 0; }
     #wrap { position: relative; }
-    /* .nav-tiers is a CLOSER positioned ancestor of #jumpBtn than #wrap (its own
-       position:relative, needed on desktop for the old dropdown-menu anchor -- both
-       its mobile dependants, the bottom-nav's own menu and the old jump-btn spot,
-       already moved to position:fixed for phone widths, so nothing mobile still
-       needs it) -- neutralising it here is what makes #jumpBtn's absolute offsets
-       resolve against #wrap instead of against nav-tiers' collapsed, centred,
-       zero-size box. */
-    /* 2026-08-03 (Linh: "the strip above the day/date row is a slightly different
-       shade... visible seam"): traced via getBoundingClientRect -- #wrap is a flex
-       column with gap:10px; even at position:static, .nav-tiers still generated a
-       real (zero-height) flex item, so its OWN gap before/after it still opened up a
-       10px band of plain #wrap/html background between the icon row and .page's own
-       background, one shade off from .page's --paper. display:contents removes it
-       from flex layout entirely (no box, no gap) while jumpBtn below -- its only
-       child that still needs a positioning ancestor -- keeps resolving against
-       #wrap's position:relative exactly as it already did (display:contents, like
-       position:static, isn't a positioned ancestor either). */
-    .nav-tiers { display: contents; }
-    /* 2026-08-03 (light mode restored): theme-toggle is back, reclaiming its original
-       right:6 corner slot -- jump-btn goes back to right:42 (its own pre-removal
-       position) so the two sit side by side instead of colliding. */
+    /* 2026-08-04 (Step 2, GCal-style header rebuild -- Linh: "the top features overlap
+       and the top is cut off... add safe-area top padding so the header sits below the
+       phone's status bar... stop the BK33 pill overlapping the date/day"): SUPERSEDES
+       the display:contents + position:fixed/absolute-against-#wrap approach this block
+       used to take. That approach floated BK33/search/theme OVER whatever page content
+       happened to render at the same pixel offset, which only ever worked by other rules
+       matching those offsets exactly -- confirmed via getBoundingClientRect that it had
+       already broken: #dayRow2 (the date/weekday/UD row) was rendering at top:-4, clipped
+       above the viewport, because a negative margin elsewhere was pulling it up onto the
+       floating icons' line instead of sitting below them. .nav-tiers is now a REAL flex
+       row, first in #wrap's normal document flow, holding BK33 + the dropdown trigger +
+       search + theme-toggle together (see the markup move above) -- it just pushes page
+       content down instead of overlapping it, on EVERY page, not only Day. Safe-area
+       padding lives here once, so every page's header clears the status bar/notch, not
+       just a per-page guess. */
+    .nav-tiers {
+      display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+      gap: 8px; width: 100%;
+      /* 2026-08-04 (CLAUDE.md compliance pass, "only 4/8/12/16/24/32px"): was
+         max(10px, ...) -- off the scale, fixed to 8px, matching the bar's own
+         padding-bottom already below. */
+      padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+      position: relative; z-index: 210;
+      /* #wrap's own gap:10px (rule above) would otherwise leave a 10px strip of #wrap's
+         transparent background exposed between this bar and .page right after it -- the
+         exact same "colour seam" shape fixed once already this session, just moved one
+         level up now that this is a real box again instead of display:contents. Cancel
+         that one gap; .page's own 8px top padding (unaffected) still gives the date row
+         its breathing room, just inside .page's own background instead of outside it. */
+      margin-bottom: -10px;
+    }
+    :root[data-theme="dark"] .nav-tiers { background: color-mix(in srgb, var(--paper) 72%, transparent); }
+    :root[data-theme="light"] .nav-tiers { background: color-mix(in srgb, var(--paper) 88%, transparent); }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
     .theme-toggle {
-      position: absolute; top: 6px; right: 6px; left: auto;
+      position: static;
       width: 30px; height: 30px; font-size: 13px;
     }
     .jump-btn {
-      position: absolute; top: 6px; right: 42px; left: auto;
+      position: static;
       width: 30px; height: 30px;
     }
+    /* legacy sub-tabs row: retired on mobile (categories live in the BK33 drawer
+       instead), never populated here -- keep an empty box from eating space in the row. */
+    .nav-tiers #subTabs:empty { display: none; }
   }
   /* 2026-08-02 (Linh, three rounds in, still "ugly": "why are you ignoring my request
      to use google cal ui design for calendar vs everything else" -- the last three
@@ -5341,25 +5376,16 @@
   }
   /* 2026-08-02 (Linh mockup: "BK33  2 Aug Sat • UD11 • PY11 🐴 • UY1   🔍 ⚙️" all on
      one line): date/weekday leads, then UD, then the PY/horse/UY pill -- reordered via
-     flex `order` (no markup change). The BK33 drawer button and search/theme icons are
-     global chrome shared by every page (position:absolute, top:6px) -- rather than
-     duplicate them into this Day-only row, the row is pulled up to share their exact
-     line instead of sitting in its own strip underneath. Side padding clears both
-     button clusters so text never sits under them. */
+     flex `order` (no markup change).
+     2026-08-04 (Step 2): SUPERSEDES the "share the icons' exact line" approach the note
+     above used to describe -- BK33/search/theme now live in their OWN real-flow row
+     (.nav-tiers, rewritten above) instead of floating over this one, so #dayRow2 no
+     longer needs the negative margin + huge side padding that used to pull it up onto
+     the icons' line and dodge their footprint. It just sits in .page's normal flow now,
+     like every other row. */
   @media (max-width: 640px) {
-    #wrap[data-view="day"] { padding-top: 6px; }
-    #dayPage { padding-top: 0; }
     #dayRow2 {
-      min-height: 30px; margin: -10px 0 6px; padding: 0 76px 0 66px; align-items: center;
-      /* 2026-08-03: right padding widened 70->76 -- theme-toggle reclaimed right:6,
-         pushing search to right:42 (its pre-removal slot), so the right icon cluster
-         now spans to ~72px from the edge instead of 36px. */
-      /* 2026-08-02 (header cleanup, "disorganised"): #dayRow2 sits inside .page's own
-         flow (page has its own 8px top padding on mobile), while the BK33/search icons
-         either side of it are position:absolute against #wrap and land 10px higher —
-         measured via getBoundingClientRect (icons centre at y21, this row was centring
-         at y31). The negative margin pulls this row up onto the icons' own centreline
-         instead of sitting visibly lower than them. */
+      min-height: 30px; margin: 0 0 6px; padding: 0 4px; align-items: center;
     }
     /* .weekday-moon-row and .date-row are each still real boxes (only .day-hero-more,
        .date-block, .page-head and #tilesDate were flattened by the earlier passes) --
@@ -5434,6 +5460,14 @@
     .day-main > .patients-above-day .patients-nudge { align-self: auto; }
     .day-main > .patients-above-day .add-row { display: none; }
     .day-main > .section-head h2, .day-main > .section-head .rule { display: none; }
+    /* 2026-08-04 (Step 2 -- "the calendar its own separate area beneath [the header],
+       nothing from the header should overlap or bleed into the calendar grid"): this is
+       the last header-cluster row (order:-150, right after Today/‹›/Today's-Patients)
+       before the hour timeline begins at its default order. One hairline here is the
+       GCal-style seam between "header" and "the calendar", not a colour change --
+       .page's background stays continuous across it on purpose (a second background
+       would be the exact seam bug fixed elsewhere in this file, just self-inflicted). */
+    .day-main > .section-head { border-bottom: 1px solid var(--note-line); padding-bottom: 8px; }
     #qaSlotDay { order: -200; }
   }
   /* 2026-08-02 (Linh code44: "cant read" -> "colour contrast poor"): .mini-cal-wrap
@@ -6260,15 +6294,6 @@
 
 <div class="wrap" id="wrap" data-view="day">
 
-  <!-- 2026-08-03: restored with the rest of light mode. -->
-  <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
-  <!-- 2026-08-02 (Linh: "move these to top left corner of screen represented by a
-       Book33 icon" -- the 5 bottom-nav tabs replaced by a hamburger-style drawer,
-       see the mobile #categoryTabs rewrite ~line 4799): phone-only (desktop keeps its
-       dropdown pills in .nav-tiers, this button stays hidden there via .nav-drawer-btn
-       {display:none} base rule). -->
-  <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">BK33</button>
-
   <div class="astro">
     <!-- 2026-08-02 (Linh: "at the top of the app... remove that row, replace it with the
          title book thirty three"): #astroLine (UY/zodiac-year/solar-month/sun-sign/moon)
@@ -6280,10 +6305,26 @@
     <div class="app-title">Book 33</div>
   </div>
 
+  <!-- 2026-08-04 (Step 2, GCal-style header rebuild -- "the top features overlap and are
+       cut off"): BK33/search/theme-toggle used to be position:absolute/fixed chrome
+       floating OVER whatever page content happened to render underneath at the same
+       y-coordinate -- confirmed via getBoundingClientRect that this is exactly why the
+       date row was rendering at top:-4 (clipped above the viewport) and colliding with
+       the BK33 pill. Moved into .nav-tiers as real flex children so they occupy their
+       OWN row and push page content down instead of floating over it. Desktop is
+       untouched by this move: .nav-drawer-btn stays display:none there, .theme-toggle
+       stays its own position:fixed circle, .jump-btn stays nav-tiers' existing absolute
+       corner -- none of those rules care where the element sits in the DOM tree, only
+       the new mobile-only rules below read this nesting. -->
   <div class="nav-tiers">
+    <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">BK33</button>
     <div class="view-tabs" role="tablist" aria-label="Section" id="categoryTabs"></div>
     <div class="sub-tabs" role="tablist" aria-label="View" id="subTabs"></div>
-    <button type="button" class="jump-btn" id="jumpBtn" title="Jump to any page — press /" aria-label="Jump to any page">⌕</button>
+    <div class="topbar-right">
+      <button type="button" class="jump-btn" id="jumpBtn" title="Jump to any page — press /" aria-label="Jump to any page">⌕</button>
+      <!-- 2026-08-03: restored with the rest of light mode. -->
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
+    </div>
   </div>
 
   <div class="jump-overlay" id="jumpOverlay" hidden>
@@ -8193,13 +8234,15 @@
           <span class="nhl-when">${next.getDate()} ${MON_SHORT[next.getMonth()]} · ${when}${p.relation ? ` · ${esc(p.relation)}` : ""}</span></span>
       </div>`;
     }).join("");
-    // 2026-08-03 (Linh: "the popover... not cut off or overlapping"): checked via
-    // getBoundingClientRect on a 375px viewport -- birthdayHover sits early enough in
-    // the reorganised panel's full-width attribute row (left ~83px) that the default
-    // LEFT-anchored .num-hover-pop (230px wide) already fits before the right edge;
-    // measured first rather than assuming, since the first attempt here (--right, by
-    // analogy with imprintHover below) actually pushed it OFF the left edge instead.
-    return `<div class="num-hover-pop"><div class="df-tile">
+    // 2026-08-04 (Step 2 re-check, header rebuild changed #dayRow2's side padding):
+    // re-measured via getBoundingClientRect at 360px -- birthdayHover now sits at
+    // left:189/right:281 (the row's simplified padding shifted every trigger's x
+    // position), so the OLD default-left anchor now overflows the right edge by ~29px.
+    // Swapped to --right (popover's right edge = trigger's right edge, grows leftward)
+    // -- landed at left:81/right:281, fully on-screen. Whichever anchor is correct here
+    // depends on the trigger's real position at the time, not a fixed rule -- re-measure
+    // if this row's layout changes again.
+    return `<div class="num-hover-pop num-hover-pop--right"><div class="df-tile">
       <div class="t-label">Upcoming birthdays</div>
       ${rows}
     </div></div>`;
@@ -8221,10 +8264,13 @@
       : MONTHS[im.getMonth()];
     const btnName = MONTHS[im.getMonth()];
     const dayList = a => a.map(dd => `<b>${dd.getDate()}${dd.getMonth() !== im.getMonth() ? " " + MON_SHORT[dd.getMonth()] : ""}</b>`).join(" · ");
-    // 2026-08-03: imprintHover sits further right (~185px on a 375px viewport, per
-    // getBoundingClientRect) -- default left anchoring would run a 230px popover past
-    // the right edge, so --right anchors it to the trigger's own right edge instead.
-    return `<div class="num-hover-pop num-hover-pop--right"><div class="df-tile">
+    // 2026-08-04 (Step 2 re-check, header rebuild changed #dayRow2's side padding):
+    // re-measured via getBoundingClientRect at 360px -- imprintHover now sits at
+    // left:21/right:99 (the row's simplified padding shifted every trigger's x
+    // position, swapping its relative order with birthdayHover above), so the OLD
+    // --right anchor now overflows the LEFT edge by ~101px. Default left anchor lands
+    // at left:21/right:221, fully on-screen.
+    return `<div class="num-hover-pop"><div class="df-tile">
       <div class="t-label">🔥 Imprint month — ${esc(mName)}</div>
       <div class="t-sub">${inMonth
         ? `It's here — Personal Month <b>1</b> of your Personal Year ${esc(masterLabel(py))}.`
@@ -10239,6 +10285,17 @@
       actions.push(`<button type="button" data-del="${e.id}" aria-label="Delete ${esc(e.title)}">🗑</button>`);
     } else if (e.rtTaskId) {
       actions.push(`<button type="button" data-rt-open="${e.rtTaskId}" aria-label="Edit routine ${esc(e.title)}" title="Edit this routine">✎</button>`);
+    } else if (e.id.indexOf("fitcal-") === 0) {
+      // 2026-08-04 (Step 7, Linh: "no way to edit or delete it" -- Pilates fitness-log
+      // entry): fitcal- items are a DISPLAY-ONLY projection of a FIT_LOG session onto the
+      // Day timeline (see fitCalendarEventsFor) -- generated:true with no rtTaskId, so
+      // they fell through both branches above and got zero action buttons. Edit reopens
+      // the SAME inline field-editing row the Fitness widget already has (FIT_EDIT_OPEN),
+      // same reuse-not-reinvent pattern as the routine branch above, rather than building
+      // a second edit form; Delete calls the existing removeFitSession().
+      const sessId = e.id.slice(7);
+      actions.push(`<button type="button" data-fitcal-edit="${sessId}" aria-label="Edit ${esc(e.title)} session">✎</button>`);
+      actions.push(`<button type="button" data-fitcal-del="${sessId}" aria-label="Delete ${esc(e.title)} session">🗑</button>`);
     }
     document.getElementById("tlDetailHeadActions").innerHTML = actions.join("");
   }
@@ -10301,6 +10358,41 @@
   // at the end of every renderDay()) already auto-closes once the item is gone.
   document.getElementById("tlDetailHeadActions").addEventListener("click", e => {
     if (e.target.closest("[data-edit], [data-rt-open]")) closeTlDetail();
+    // 2026-08-04 (Step 7): fitness-log items' Edit/Delete -- see renderTlDetailHeadActions.
+    // Edit navigates to the Habits page's fitness section (#fitSelectedDetail) -- same
+    // "Open Fitness tab" state.fitYear/fitSelectedDate pattern already used by
+    // #fitOpenTab below -- because that's the ONLY still-live place these fields are
+    // editable. There used to be a second, inline copy of this editor directly on the
+    // Day page (#fitLinkTile / FIT_EDIT_OPEN toggle) but it was removed in an earlier
+    // "simplified Wellness glance" pass and its host no longer exists -- confirmed via
+    // getElementById returning null -- so reopening it here would silently do nothing.
+    const fcEdit = e.target.closest("[data-fitcal-edit]");
+    if (fcEdit) {
+      state.fitYear = state.anchor.getFullYear();
+      state.fitSelectedDate = keyOf(state.anchor);
+      state.view = "habits";
+      closeTlDetail();
+      render();
+      const detail = document.getElementById("fitSelectedDetail");
+      if (detail) detail.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    const fcDel = e.target.closest("[data-fitcal-del]");
+    if (fcDel) {
+      const sessId = fcDel.dataset.fitcalDel;
+      const victim = fitSessionsOn(state.anchor).find(s => s.id === sessId);
+      // 2026-08-04 (Linh: "Delete removes the item, asking me to confirm first"):
+      // confirm() already used elsewhere in this file for a destructive one-click
+      // delete (the routine-task delete, added after an accidental delete) -- same
+      // pattern here. This app deploys straight to GitHub Pages, not a sandboxed
+      // artifact iframe, so the native dialog works.
+      if (victim && !confirm(`Delete this ${victim.type} session?`)) return;
+      removeFitSession(state.anchor, sessId);
+      delete DONE[`fitcal-${sessId}`];
+      saveDone(DONE);
+      renderDay();
+      return;
+    }
   });
   document.getElementById("tlDetailOverlay").addEventListener("click", e => {
     if (!e.target.closest(".tl-detail-sheet")) closeTlDetail();
@@ -17997,6 +18089,13 @@
     // delete a hand-written event
     const del = e.target.closest("[data-del]");
     if (del) {
+      // 2026-08-04 (Linh, Step 7: "Delete removes the item, asking me to confirm
+      // first" -- applies to every item that opens the tl-detail popup): this path
+      // is shared by the popup's own Delete button and the compact block's inline
+      // × icon, so both get the same confirm now. Matches the existing routine-task
+      // delete confirm() elsewhere in this file.
+      const victim = EVENTS.find(ev => ev.id === del.dataset.del);
+      if (victim && !confirm(`Delete "${victim.title}"?`)) return;
       EVENTS = EVENTS.filter(ev => ev.id !== del.dataset.del);
       delete DONE[del.dataset.del];
       saveEvents(EVENTS); saveDone(DONE); renderDay(); return;
@@ -19324,7 +19423,43 @@
     const chip = e.target.closest("[data-eid]");
     if (chip && chip.dataset.eid && editFromOtherView(chip.dataset.eid)) e.preventDefault();
   });
+  // 2026-08-04 (Step 9, Linh: "tapping an hour row expands it [opens the add-event
+  // form], but when I scroll the calendar it often expands an hour by mistake"): the
+  // click handler below had no way to tell a genuine tap from the tail end of a scroll
+  // gesture -- on touch devices the browser can still fire a synthetic `click` on
+  // touchend even after the finger travelled a real distance first. Tracks where the
+  // touch started/ended, how long it was held, and whether the timeline itself scrolled
+  // during it; the click handler bails out early on any of those (a real scroll, a
+  // long-press, or >~10px of finger movement in any direction) so it never mistakes a
+  // scroll for a tap. Mouse users never fire touchstart at all, so hoursWasTap simply
+  // stays at its default true and clicks behave exactly as before. Genuine taps get no
+  // added delay -- this only ever suppresses the click, never defers it.
+  let hoursWasTap = true;
+  (function () {
+    const hoursEl = document.getElementById("hours");
+    const scrollerEl = document.getElementById("timelineScroll");
+    const TAP_MOVE_PX = 10, TAP_MAX_MS = 600;
+    let startX = 0, startY = 0, startTime = 0, startScrollTop = 0;
+    hoursEl.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1) { hoursWasTap = false; return; }
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY; startTime = Date.now();
+      startScrollTop = scrollerEl ? scrollerEl.scrollTop : 0;
+      hoursWasTap = true;
+    }, { passive: true });
+    hoursEl.addEventListener("touchmove", e => {
+      if (!hoursWasTap || !e.touches.length) return;
+      const t = e.touches[0];
+      if (Math.abs(t.clientX - startX) > TAP_MOVE_PX || Math.abs(t.clientY - startY) > TAP_MOVE_PX) hoursWasTap = false;
+    }, { passive: true });
+    hoursEl.addEventListener("touchend", () => {
+      if (!hoursWasTap) return;
+      if (Date.now() - startTime > TAP_MAX_MS) hoursWasTap = false;
+      if (scrollerEl && scrollerEl.scrollTop !== startScrollTop) hoursWasTap = false;
+    }, { passive: true });
+  })();
   document.getElementById("hours").addEventListener("click", e => {
+    if (!hoursWasTap) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const H = HOUR_H();
     // 2026-08-02 (code44 per-block expand): minForTop is the piecewise inverse of
@@ -19710,8 +19845,14 @@
       // 2026-08-03 (light mode restored): theme-toggle reclaimed right:6, pushing
       // search to right:42 (its own pre-removal slot) -- the dot moves past BOTH now
       // (was only clearing search alone), or it'd land under the toggle's left edge.
+      // 2026-08-04 (Step 2, GCal-style header rebuild): search+theme are now real flex
+      // items inside .nav-tiers instead of fixed pixel offsets -- measured via
+      // getBoundingClientRect at 360px width, the search icon's left edge landed at 280,
+      // which put the dot's old right:80 flush against it with a 0px gap. Bumped to
+      // right:88 for an 8px gap (the file's own spacing scale), still comfortably clear
+      // of the BK33 pill on the left at every width this bar actually reflows at.
       dot.style.top = "max(14px, calc(env(safe-area-inset-top) + 14px))";
-      dot.style.right = "max(80px, calc(env(safe-area-inset-right) + 80px))";
+      dot.style.right = "max(88px, calc(env(safe-area-inset-right) + 88px))";
       dot.style.left = "auto"; dot.style.bottom = "auto";
     } else {
       dot.style.bottom = "12px"; dot.style.top = "auto";
