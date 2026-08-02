@@ -424,6 +424,18 @@
 
   /* wide screens: timeline on the left, to-do tiles as a right-hand rail */
   .day-layout { display: grid; grid-template-columns: 1fr 340px; gap: 30px; align-items: start; margin-top: 6px; }
+  /* 2026-08-02 (Linh mockup, merging Today/prev-next + Today's Patients + Earlier/Later
+     onto one row): .day-main becomes a wrap-row flex container UNIVERSALLY (desktop
+     included) so .toprow -- now physically nested inside .day-main, right above
+     .patients-above-day, for the mobile merge below -- can be pinned back to its
+     original desktop position purely with `order`, with zero visible desktop change.
+     Every child defaults to flex-basis:100% (its own full-width line, same as plain
+     block stacking) so nothing else in this column is affected; only .toprow gets an
+     explicit order here. The mobile-only override that actually merges the three
+     blocks onto one shared line lives with the rest of the Day mobile pass below. */
+  .day-main { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+  .day-main > * { flex: 1 1 100%; min-width: 0; }
+  .day-main > .toprow { order: -100; }
   @media (max-width: 900px) {
     .day-layout { grid-template-columns: 1fr; }
     /* 2026-07-26 (Linh): "put 2 tiles side by side" on mobile — the Day-page side cards go
@@ -688,8 +700,14 @@
   .day-hero-more { display: contents; }
   .day-hero-toggle { display: none; }
   @media (max-width: 640px) {
-    .day-hero-more { display: none; }
-    #tilesDate.expanded .day-hero-more { display: contents; }
+    /* 2026-08-02 (Linh mockup: "2 Aug Sat" -- the weekday joins the always-visible
+       date/UD strip instead of staying behind the tap-to-expand toggle; moon phase,
+       PM, sun-sign/solar-month animal, birthday and imprint stay collapsed exactly
+       as before -- only .weekday escapes the group. */
+    .day-hero-more { display: contents; }
+    .day-hero-more .moon-badge, .day-hero-more .num-group-strip { display: none; }
+    #tilesDate.expanded .day-hero-more .moon-badge { display: inline-flex; }
+    #tilesDate.expanded .day-hero-more .num-group-strip { display: flex; }
     /* 2026-08-02 (Linh code44: "simplify" the round toggle -- the circle read as extra
        busy chrome sitting right next to the UD badge once the two rows below became
        one inline strip). Same button, same click target, just a bare chevron now. */
@@ -4821,7 +4839,7 @@
     .nav-drawer-btn {
       display: flex; align-items: center; justify-content: center;
       position: absolute; top: 6px; left: 6px; z-index: 260;
-      width: 30px; height: 30px; border-radius: 50%;
+      width: auto; min-width: 30px; height: 30px; padding: 0 10px; border-radius: 15px;
       border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
       font-size: 12px; font-weight: 800; letter-spacing: -0.02em; cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.12);
@@ -5017,14 +5035,25 @@
        screens down. Capping it keeps the nav compact so the timeline (what she said she
        wants right after the date strip) arrives sooner. */
     .day-row2 .mini-cal { width: 240px; max-width: 100%; }
-    .quick-add { flex-wrap: wrap; border-radius: 20px; padding: 10px 10px; row-gap: 7px; }
-    .qa-field { flex: 1 1 100%; }
-    #quickAddInput { flex: 1 1 120px; min-width: 0; font-size: 15px; }
-    /* 2026-08-02 (Linh, GCal screenshot: "too spaced out... prioritise the calendar
-       like google"): the 3 buttons at flex:1 1 45% wrapped Add+Search onto one row and
-       Best-day onto its own second row -- one flex:1 1 0 row instead, same buttons,
-       same tap targets, ~50px shorter. */
-    .quick-add .qa-btn { flex: 1 1 0; padding: 9px 6px; font-size: 11.5px; }
+    .quick-add { flex-wrap: nowrap; align-items: center; border-radius: 20px; padding: 6px 6px 6px 14px; }
+    .qa-field { flex: 1 1 auto; min-width: 0; }
+    #quickAddInput { flex: 1 1 auto; min-width: 0; font-size: 15px; }
+    /* 2026-08-02 (Linh mockup: "[ (sparkle) Add, search, log...      + ]" -- one input,
+       one trailing "+"): SUPERSEDES the 3-button row below it (the GCal screenshot pass
+       that put Add/Search/Best-day on one row). Search still works by typing into the
+       same field (its own placeholder already says "search or jump"); Best day is a
+       less-used feature dropped from this compact row -- both are one CSS line away
+       from coming back if that's wrong. The Add button becomes the trailing round "+"
+       (text visually swapped for a glyph via ::after, "Add" itself untouched for
+       desktop/screen readers). */
+    .quick-add .qa-btn.qa-secondary { display: none; }
+    .quick-add .qa-btn:not(.qa-secondary) {
+      flex: 0 0 auto; width: 34px; height: 34px; padding: 0; border-radius: 50%;
+      font-size: 0; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .quick-add .qa-btn:not(.qa-secondary)::after {
+      content: "+"; font-size: 20px; line-height: 1; font-weight: 700;
+    }
     :root { --gutter: 46px; }
     .hour-row .hour-label { width: 30px; }
   }
@@ -5154,6 +5183,56 @@
     .day-row2 #tilesDate .tile-grp { display: none; }
     .day-row2 .mini-cal-wrap { display: contents; }
     .mini-cal-mascot { padding: 4px 9px; }
+  }
+  /* 2026-08-02 (Linh mockup: "BK33  2 Aug Sat • UD11 • PY11 🐴 • UY1   🔍 ⚙️" all on
+     one line): date/weekday leads, then UD, then the PY/horse/UY pill -- reordered via
+     flex `order` (no markup change). The BK33 drawer button and search/theme icons are
+     global chrome shared by every page (position:absolute, top:6px) -- rather than
+     duplicate them into this Day-only row, the row is pulled up to share their exact
+     line instead of sitting in its own strip underneath. Side padding clears both
+     button clusters so text never sits under them. */
+  @media (max-width: 640px) {
+    #wrap[data-view="day"] { padding-top: 6px; }
+    #dayPage { padding-top: 0; }
+    #dayRow2 {
+      min-height: 30px; margin: 0 0 6px; padding: 0 70px 0 66px; align-items: center;
+    }
+    /* .weekday-moon-row and .date-row are each still real boxes (only .day-hero-more,
+       .date-block, .page-head and #tilesDate were flattened by the earlier passes) --
+       without flattening these two as well, `order` below only reshuffles items WITHIN
+       each of those two boxes, not against each other or against the mascot pill. */
+    .day-row2 .weekday-moon-row { display: contents; }
+    .day-row2 .date-row { display: contents; }
+    .day-row2 .date-big { order: 1; }
+    .day-row2 .weekday { order: 2; font-size: 10.5px; }
+    .day-row2 .ud-badge { order: 3; }
+    .day-row2 .ud-badge::before {
+      content: "\2022"; margin-right: 8px; color: var(--ink-faint); font-size: 11px;
+    }
+    .day-row2 .day-hero-toggle { order: 4; }
+    .day-row2 .mini-cal-mascot { order: 5; position: relative; padding-left: 17px; }
+    .day-row2 .mini-cal-mascot::before {
+      content: "\2022"; position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      color: var(--ink-faint); font-size: 11px;
+    }
+  }
+  /* 2026-08-02 (Linh mockup: "─────" divider, then "(prev) Today (next)  Today's
+     Patients   Earlier (down)  Later (down)" all on one line): .toprow, now DOM-adjacent
+     to .patients-above-day (see the markup comment there), and .section-head right after
+     it, share an `order` so row-wrap puts all three on one line -- flex:0 0 auto lets
+     each shrink to its own content instead of the universal 100%-basis default. "Add to
+     this day" and the "The day" heading drop out of the row per the mockup (not deleted,
+     just hidden -- #addRow's form still opens the same way from wherever else it's
+     wired); Earlier/Later stay since they were explicitly drawn in. */
+  @media (max-width: 640px) {
+    .day-main > .toprow {
+      order: -150; flex: 0 0 auto;
+      border-top: 1px solid var(--note-line); padding-top: 10px; margin-top: 2px;
+    }
+    .day-main > .patients-above-day, .day-main > .section-head { order: -150; flex: 0 0 auto; }
+    .day-main > .patients-above-day .add-row { display: none; }
+    .day-main > .section-head h2, .day-main > .section-head .rule { display: none; }
+    #qaSlotDay { order: -200; }
   }
   /* 2026-08-02 (Linh code44: "cant read" -> "colour contrast poor"): .mini-cal-wrap
      and .num-group-strip re-scope --ink/--ink-soft/--ink-faint/--paper etc to a
@@ -5988,7 +6067,7 @@
        see the mobile #categoryTabs rewrite ~line 4799): phone-only (desktop keeps its
        dropdown pills in .nav-tiers, this button stays hidden there via .nav-drawer-btn
        {display:none} base rule). -->
-  <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">33</button>
+  <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">BK33</button>
 
   <div class="astro">
     <!-- 2026-08-02 (Linh: "at the top of the app... remove that row, replace it with the
@@ -7013,14 +7092,6 @@
       </div>
     </div>
 
-    <div class="toprow">
-      <div class="head-controls">
-        <button class="nav-arrow" id="prevDay" aria-label="Previous day">‹</button>
-        <button class="today-pill" id="todayPill">Today</button>
-        <button class="nav-arrow" id="nextDay" aria-label="Next day">›</button>
-      </div>
-    </div>
-
     <div class="day-layout">
       <div class="day-main">
         <!-- ONE travelling quick-add — render() docks this zone (bar + note + Best-day
@@ -7076,6 +7147,21 @@
              the bottom of .day-side, the right-hand rail, easy to lose track of. #addForm
              itself stays put physically (it's position:fixed when open, see task #200 —
              DOM location doesn't affect where it displays), only the trigger row moved. -->
+        <!-- 2026-08-02 (Linh mockup: "(prev) Today (next)  Today's Patients   Earlier
+             (down) Later (down)" all on one line): .toprow physically moved from above
+             the quick-add bar (where desktop still shows it -- see the universal
+             .day-main > .toprow{order:-100} rule that pins it back to the top of this
+             column) down to sit directly adjacent to .patients-above-day, with nothing
+             visible between them (#tilesAbove above is [hidden]) so the mobile-only
+             inline-flex rule can merge all three onto one wrapped line without any
+             further DOM changes. -->
+        <div class="toprow">
+          <div class="head-controls">
+            <button class="nav-arrow" id="prevDay" aria-label="Previous day">‹</button>
+            <button class="today-pill" id="todayPill">Today</button>
+            <button class="nav-arrow" id="nextDay" aria-label="Next day">›</button>
+          </div>
+        </div>
         <div class="patients-above-day">
           <button type="button" class="patients-nudge" id="patientsNudge" title="Ask Claude: /patients">🩺 Today's Patients
             <span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span>
