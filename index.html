@@ -335,6 +335,22 @@
      backdrop (stars at night, sun glow by day) — cards on top stay opaque for reading */
   :root[data-theme="dark"] .page { background: color-mix(in srgb, var(--paper) 72%, transparent); }
   :root[data-theme="light"] .page { background: color-mix(in srgb, var(--paper) 88%, transparent); }
+  /* 2026-08-02 (Linh, GCal reference screenshot: "i dont like this" (the cream/gold wash)
+     -> "i like the new direction" on the neutral mockup, viewed as a PHONE mockup):
+     Day page ONLY, light mode ONLY, PHONE WIDTHS ONLY -- same scope as the rest of this
+     mobile pass (hero collapse, FAB), since the reference/approval were both phone
+     screenshots and desktop's light Day page was never shown as part of this change.
+     Redefining these custom properties here cascades into everything inside #dayPage
+     that reads var(--paper)/var(--desk)/etc (the .page rule above included), without
+     touching the warm Ink & Brass tokens anywhere else (Week/Month/other chapters, dark
+     mode, or the desktop Day page). --margin-rule (the gold accent used for badges/
+     borders/the FAB) is deliberately NOT overridden — gold-as-accent was never the
+     complaint, gold-as-background-wash was. */
+  @media (max-width: 640px) {
+    :root[data-theme="light"] #dayPage {
+      --desk: #F1F0EE; --paper: #FFFFFF; --note-bg: #F6F6F5; --field-bg: #FBFBFA;
+    }
+  }
   /* day mode: a warm glowing sun rising from the top-right corner, breathing slowly */
   :root[data-theme="light"] body { background: transparent; }
   :root[data-theme="light"] body::before {
@@ -519,6 +535,26 @@
      sitting alone under a long list) — override both for this inline pairing. */
   .patients-above-day #addRow { margin: 0; }
   .patients-above-day #addRow .add-btn { padding: 4px 14px; font-size: 12px; }
+  /* 2026-08-02 (Linh, GCal-reference mobile pass): on phone widths the quick-add row and
+     the Today's Patients/Add-to-this-day row both collapse behind #dayFab — reappear
+     when #dayPage carries .fab-open. #qaSlotDay is the DAY page's own docking slot for
+     the travelling #qaZone (Week/Month have their own qaSlot* ids, untouched by this). */
+  .day-fab { display: none; }
+  @media (max-width: 640px) {
+    #dayPage #qaSlotDay, #dayPage .patients-above-day { display: none; }
+    #dayPage.fab-open #qaSlotDay, #dayPage.fab-open .patients-above-day { display: block; }
+    #dayPage.fab-open .patients-above-day { display: flex; }
+    .day-fab {
+      display: flex; align-items: center; justify-content: center;
+      position: fixed; right: 18px; bottom: calc(70px + env(safe-area-inset-bottom) + 14px);
+      width: 52px; height: 52px; min-width: 44px; min-height: 44px; border-radius: 50%; z-index: 240;
+      background: var(--margin-rule); color: var(--accent-on); border: none; cursor: pointer;
+      font-size: 26px; font-weight: 600; line-height: 1; padding: 0;
+      box-shadow: 0 8px 24px -8px rgba(0,0,0,0.45);
+      transition: transform 0.15s ease;
+    }
+    #dayPage.fab-open .day-fab { transform: rotate(45deg); }
+  }
   .mini-cal {
     /* 2026-08-02 ("i dont like this empty space" → "shrink the calendar"): the date
        column next to this is a short two-line block, so a full-size mini calendar left a
@@ -593,6 +629,16 @@
   }
   .num-group-strip .date-pm b { color: var(--cosmic-gold); font-weight: 800; text-transform: none; }
   .num-group-strip .date-pm:empty { display: none; }
+  /* 2026-08-02 (Linh: "i like the dot divider" — pointing at the Leo·Goat dot already
+     hardcoded inside #dayAstroBits): extend the same "·" language between the strip's
+     other pieces (PM, birthday, imprint) instead of relying on bare gap spacing there.
+     Assumes PM is always present (personalMonth() is never actually null for a real
+     date) so day-astro-bits' dot doesn't need its own conditional on .date-pm. */
+  .num-group-strip > .day-astro-bits:not(:empty)::before,
+  .num-group-strip > #birthdayHover:not([hidden])::before,
+  .num-group-strip > #imprintHover:not([hidden])::before {
+    content: "\00b7"; margin-right: 6px; color: var(--ink-soft);
+  }
 
   .date-row { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
   .ud-badge {
@@ -614,7 +660,34 @@
      in the num-group-strip rather than carrying its old oversized-digit treatment. */
   .weekday-moon-row .ud-badge { font-size: 11px; gap: 4px; }
   .weekday-moon-row .ud-badge .n { font-size: 13px; font-weight: 800; color: var(--cosmic-gold, var(--margin-rule)); }
-  .weekday-moon-row .ud-badge[data-master="true"] .n { padding: 0 8px; font-size: 12px; }
+  .weekday-moon-row .ud-badge[data-master="true"] .n {
+    /* the plain (non-master) number above is styled gold-on-transparent, but master
+       numbers (11/22/33) sit on a solid gold pill (.ud-badge[data-master] background)
+       -- without this override that gold rule wins on specificity+source order and the
+       digit vanishes into its own background. Match .n's non-scoped master rule instead:
+       dark ink on the gold fill, same contrast pairing used everywhere else gold is a fill. */
+    padding: 0 8px; font-size: 12px; color: var(--accent-on);
+  }
+  /* 2026-08-02 (Linh, GCal-reference mobile pass, "i like the new direction"): on phone
+     widths the full weekday/moon/PM/sun-sign/animal/birthday/imprint hero collapses
+     behind a tap — UD stays as the always-visible summary. display:contents keeps the
+     collapsed group's children as normal flex items of .weekday-moon-row when expanded
+     (no relayout needed, just a display toggle on the wrapper). Desktop is untouched:
+     .day-hero-more stays display:contents always, .day-hero-toggle stays hidden. */
+  .day-hero-more { display: contents; }
+  .day-hero-toggle { display: none; }
+  @media (max-width: 640px) {
+    .day-hero-more { display: none; }
+    #tilesDate.expanded .day-hero-more { display: contents; }
+    .day-hero-toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; min-width: 26px; border-radius: 50%;
+      border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft);
+      font-size: 10px; cursor: pointer; margin-left: auto; padding: 0;
+      transition: transform 0.15s ease;
+    }
+    #tilesDate.expanded .day-hero-toggle { transform: rotate(180deg); }
+  }
   /* 2026-08-02 (Linh code44: "keep it and make it subtle"): a hairline outline + small
      colour dot instead of a solid loud fill, same "info via a quiet accent, not a block
      of colour" language as the numerology tiles' folded rows. The dot keeps the
@@ -4583,7 +4656,13 @@
       flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 2px; min-height: 44px; padding: 4px 2px; border-radius: 12px;
     }
-    .nav-cat-parent[aria-pressed="true"] {
+    /* 2026-08-02 (Linh: "outline looks cut off" on the active bottom-nav tab) — the
+       desktop pill rule (.view-tabs button[aria-pressed="true"]) is MORE specific than
+       a bare .nav-cat-parent[aria-pressed] override (it also matches the "button"
+       element), so the gold fill + glow shadow meant for a floating desktop pill were
+       still winning here and getting clipped at the screen's bottom edge. #categoryTabs
+       in front makes this win outright instead of relying on source order. */
+    #categoryTabs .nav-cat-parent[aria-pressed="true"] {
       background: transparent; box-shadow: none; color: var(--nav-active); font-weight: 700;
     }
     #categoryTabs .nav-cat-full { display: none; }
@@ -6467,6 +6546,14 @@
 
   <!-- ================= DAY ================= -->
   <div class="page" id="dayPage">
+    <!-- 2026-08-02 (Linh, GCal-reference mobile pass: "task button can be widget button"
+         -> "i like the new direction"): on phone widths the quick-add row (Add/Search/
+         Best day) + the Today's Patients/Add-to-this-day row below it collapse behind
+         this single FAB (#dayPage.fab-open reveals both — see CSS). Fixed position, so
+         DOM placement here is just for source-order convenience, same pattern as
+         #addForm noted elsewhere in this file. Desktop: hidden entirely, rows show as
+         they always have. -->
+    <button type="button" class="day-fab" id="dayFab" aria-expanded="false" aria-label="Add, search, or find the best day">+</button>
     <!-- 2026-08-02 (Linh: "[numerology] should be next to the horse logo. move horse to
          RHS") — SUPERSEDES the 2026-07-31 note below: the big centred #astroMotif hero
          is gone from here. Its mini twin (#astroMotifMini, --mini variant, was already
@@ -6504,16 +6591,25 @@
                  astrology), so UD moves out of .date-row to sit with them here. The
                  num-group-strip below is unchanged — PM/sun-sign/solar-month-animal/
                  birthday/imprint are all MONTH-level and were already one unit. -->
+            <!-- 2026-08-02 (Linh, GCal-reference mobile pass: "i like the new direction" —
+                 compact date + tap-to-expand numerology): UD stays the always-visible
+                 summary piece (moved first); weekday/moon/PM/sun-sign/animal/birthday/
+                 imprint move into .day-hero-more, collapsed by default on phone widths
+                 via CSS (desktop: display:contents keeps them inline exactly as before,
+                 unaffected). #dayHeroToggle flips #tilesDate.expanded. -->
             <div class="weekday-moon-row">
-              <div class="weekday" id="weekday"></div>
-              <div class="moon-badge" id="moonBadge"></div>
               <span class="ud-badge" id="udBadge"></span>
-              <div class="num-group-strip" id="numGroupStrip">
-                <span class="date-pm num-hover-trigger" id="pmHover" tabindex="0"></span>
-                <div class="day-astro-bits" id="dayAstroBits"></div>
-                <span class="date-mini-badge num-hover-trigger" id="birthdayHover" hidden tabindex="0"></span>
-                <span class="date-mini-badge num-hover-trigger" id="imprintHover" hidden tabindex="0"></span>
+              <div class="day-hero-more">
+                <div class="weekday" id="weekday"></div>
+                <div class="moon-badge" id="moonBadge"></div>
+                <div class="num-group-strip" id="numGroupStrip">
+                  <span class="date-pm num-hover-trigger" id="pmHover" tabindex="0"></span>
+                  <div class="day-astro-bits" id="dayAstroBits"></div>
+                  <span class="date-mini-badge num-hover-trigger" id="birthdayHover" hidden tabindex="0"></span>
+                  <span class="date-mini-badge num-hover-trigger" id="imprintHover" hidden tabindex="0"></span>
+                </div>
               </div>
+              <button type="button" class="day-hero-toggle" id="dayHeroToggle" aria-expanded="false" aria-label="Show numerology and astrology details">▾</button>
             </div>
             <div class="date-row">
               <span class="date-big" id="dateBig"></span>
@@ -6963,6 +7059,31 @@
   ];
   const dowIndex = d => (d.getDay() + 6) % 7;
   const planetOf = d => PLANETS[dowIndex(d)];
+  // 2026-08-02 ("add tasks for leo hover" code44 follow-up): same real-source-only rule
+  // as SIGN_INFO above. Her GG33 library only has dedicated files for two of the seven
+  // day-rulers (Astrology\Western Astrology\1 Most Important Planets\{Saturn,Venus}.docx)
+  // -- Moon/Mars/Mercury/Jupiter/Sun stay on the plain popover. Saturn's own source is
+  // just three words ("Father time. Karma. Restrictions.") so its trait/acts are a tight
+  // paraphrase of that, not padded out; Venus's file is a per-sign compatibility table
+  // rather than a trait description, so its line is the general theme the whole file
+  // circles around (love/beauty/connection) rather than a lifted phrase.
+  const PLANET_INFO = {
+    Saturn: { trait: "Karma, limits, the long game",
+      acts: ["Play the long game", "Settle what's owed", "Accept a limit"] },
+    Venus: { trait: "Love, beauty, connection",
+      acts: ["Plan time with a partner", "Make something beautiful", "Reach out with love"] },
+  };
+  function dayRulerPopoverHtml(pl) {
+    const info = PLANET_INFO[pl.planet];
+    if (!info) return plainPopoverHtml("Day ruler", pl.planet);
+    const chip = x => `<span data-add-action="${esc(x)}" title="Add “${esc(x)}” to this day" role="button" tabindex="0">${esc(x)}</span>`;
+    return `<div class="num-hover-pop"><div class="df-tile">
+      <div class="t-label">Day ruler</div>
+      <div class="t-head"><span class="t-value">${pl.icon}</span><span class="t-title">${esc(pl.planet)}</span></div>
+      <div class="t-sub">${esc(info.trait)}</div>
+      <div class="df-lean theme-acts">${info.acts.slice(0, 3).map(chip).join("")}</div>
+    </div></div>`;
+  }
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
@@ -7103,6 +7224,37 @@
     { name:"Scorpio",    gl:"♏", el:"water", from:[10,23] },
     { name:"Sagittarius",gl:"♐", el:"fire",  from:[11,22] },
   ];
+  // 2026-08-02 ("add tasks for leo hover"): unlike the day-ruler planet/moon (genuinely
+  // no real data to show), sun signs have real source material -- her GG33 library's own
+  // Western Astrology notes (GG33 Astrology\Western Astrology\{Sign}.docx). Only Leo is
+  // populated so far (from her file); the other 11 stay on the plain hover in
+  // sunSignPopoverHtml() below until she supplies their notes too -- no invented traits.
+  const SIGN_INFO = {
+    Aries: { trait: "Bold starter, restless finisher",
+      acts: ["Start something new", "Take the lead", "Move fast, don't overthink"] },
+    Taurus: { trait: "Steady, practical, loyal",
+      acts: ["Follow through on plans", "Review finances", "Invest in what matters"] },
+    Gemini: { trait: "Curious talker, craves stimulation",
+      acts: ["Have a real conversation", "Learn something new", "Mix it up, avoid boredom"] },
+    Cancer: { trait: "Nurturing and deeply loyal",
+      acts: ["Check in on family", "Tend to home", "Trust your gut"] },
+    Leo: { trait: "Center-stage and generous",
+      acts: ["Take the spotlight", "Host / entertain", "Chase adventure"] },
+    Virgo: { trait: "Meticulous and hardworking",
+      acts: ["Tidy & organise", "Refine the details", "Offer honest feedback"] },
+    Libra: { trait: "Balance-seeking mediator",
+      acts: ["Mediate or make peace", "Weigh both sides", "Balance give and take"] },
+    Scorpio: { trait: "Intense, private, deeply loyal",
+      acts: ["Go deep on one thing", "Protect your privacy", "Invest in a close bond"] },
+    Sagittarius: { trait: "Adventurous, bluntly honest",
+      acts: ["Plan a trip", "Speak your mind", "Move your body, get outside"] },
+    Capricorn: { trait: "Disciplined and money-minded",
+      acts: ["Review money matters", "Put in the work", "Invest in close ties"] },
+    Aquarius: { trait: "Independent connector, inventive",
+      acts: ["Reach out, network", "Try something unconventional", "Protect your independence"] },
+    Pisces: { trait: "Dreamy, intuitive, empathetic",
+      acts: ["Journal or dream big", "Be there for someone", "Protect your energy"] },
+  };
   function sunSign(d) {
     const m = d.getMonth() + 1, day = d.getDate();
     // walk signs in calendar order, take the last one that has started
@@ -7340,6 +7492,21 @@
     return `<div class="num-hover-pop${extraClass ? " " + extraClass : ""}"><div class="df-tile">
       <div class="t-label">${esc(label)}</div>
       <div class="t-head"><span class="t-title">${esc(name)}</span></div>
+    </div></div>`;
+  }
+  // 2026-08-02 ("add tasks for leo hover"): same df-tile/theme-acts shape as the Chinese
+  // zodiac popovers, but only for signs with real notes in SIGN_INFO above -- the other
+  // 11 keep falling back to plainPopoverHtml's bare name, same "no fabricated content"
+  // rule that put sun signs on the plain popover in the first place.
+  function sunSignPopoverHtml(sign) {
+    const info = SIGN_INFO[sign.name];
+    if (!info) return plainPopoverHtml("Sun sign", sign.name);
+    const chip = x => `<span data-add-action="${esc(x)}" title="Add “${esc(x)}” to this day" role="button" tabindex="0">${esc(x)}</span>`;
+    return `<div class="num-hover-pop"><div class="df-tile">
+      <div class="t-label">Sun sign</div>
+      <div class="t-head"><span class="t-value">${sign.gl}</span><span class="t-title">${esc(sign.name)}</span></div>
+      <div class="t-sub">${esc(info.trait)}</div>
+      <div class="df-lean theme-acts">${info.acts.slice(0, 3).map(chip).join("")}</div>
     </div></div>`;
   }
 
@@ -10633,7 +10800,7 @@
     renderPileUp();
     const pl = planetOf(d);
     document.getElementById("weekday").innerHTML =
-      `<span class="planet num-hover-trigger" tabindex="0">${pl.icon}${plainPopoverHtml("Day ruler", pl.planet)}</span>${WD_FULL[dowIndex(d)]}`;
+      `<span class="planet num-hover-trigger" tabindex="0">${pl.icon}${dayRulerPopoverHtml(pl)}</span>${WD_FULL[dowIndex(d)]}`;
     document.getElementById("dateBig").innerHTML =
       `<span class="date-num">${d.getDate()}</span><span class="date-mon">${MON_SHORT[d.getMonth()]}</span>`;
     // 2026-08-02 (Linh: "shown when mouse hovers over PM9"): focusPopoverHtml() reuses
@@ -10653,7 +10820,7 @@
     const astroBits = astroFor(d);
     const cmInfo = ANIMAL_INFO[astroBits.cm.animal];
     document.getElementById("dayAstroBits").innerHTML =
-      `<span class="gl num-hover-trigger" tabindex="0">${astroBits.sign.gl}${plainPopoverHtml("Sun sign", astroBits.sign.name)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
+      `<span class="gl num-hover-trigger" tabindex="0">${astroBits.sign.gl}${sunSignPopoverHtml(astroBits.sign)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
 
     renderMiniCal();
     const mPhase = moonIndex(d);
@@ -11100,7 +11267,7 @@
           <div class="wk-dow">${WD_FULL[i].slice(0,3)}</div>
           <div class="wk-num">${d.getDate()}</div>
           <span class="wk-ud" data-master="${wkUd.master}" title="Universal Day">UD ${wkUd.value}</span>
-          <div class="wk-sign"><span class="gl">${sign.gl}</span> ${sign.name}</div>
+          <div class="wk-sign num-hover-trigger" tabindex="0"><span class="gl">${sign.gl}</span> ${sign.name}${sunSignPopoverHtml(sign)}</div>
           ${wkBdays.length ? `<div class="wk-bday" title="${esc(wkBdays.map(b => b.title).join(" · "))}">🎂 ${wkBdays.length === 1 ? esc(bdName(wkBdays[0].title)) : "×" + wkBdays.length}</div>` : ""}
           ${ps || cd || isOvu || isFertile ? `<div class="wk-cyc">
             ${ps ? `<span class="wk-period" data-predicted="${!!ps.predicted}" style="${ps.logged ? `background:var(${FLOW_VAR[ps.flow]});border-color:var(${FLOW_VAR[ps.flow]})` : ""}">🩸${ps.logged ? "" : " exp."}</span>` : ""}
@@ -11603,7 +11770,7 @@
         </div>
         ${cd ? `<span class="mo-cd" title="${moPhaseInfo ? moPhaseInfo.label : ""}">CD${cd}${moPhaseInfo ? " " + moPhaseInfo.icon : ""}</span>` : ""}
         ${lny ? `<span class="mo-lny"><span class="sg">${ANIMAL_INFO[incoming.animal].em}</span>Lunar New Year</span>` : ""}
-        ${sign.name !== prevSign.name ? `<span class="mo-ingress"><span class="sg">${sign.gl}</span>${sign.name}</span>` : ""}
+        ${sign.name !== prevSign.name ? `<span class="mo-ingress num-hover-trigger" tabindex="0"><span class="sg">${sign.gl}</span>${sign.name}${sunSignPopoverHtml(sign)}</span>` : ""}
         ${cm.animal !== prevCm.animal ? `<span class="mo-ingress cn"><span class="sg">${CN_EMOJI[cm.animal]}</span> month</span>` : ""}
         ${(() => {
           // 2026-07-31 (Linh): "PM only begins after day of birth e.g. 15" — PM turns
@@ -15254,6 +15421,26 @@
     syncThemeToggleIcon();
   });
 
+  // 2026-08-02 (mobile hero collapse): #tilesDate persists across day navigation
+  // (renderDay only repopulates the ID'd children inside it, never recreates the
+  // node), so this class toggle naturally stays put as she moves between days —
+  // no extra state to track.
+  document.getElementById("dayHeroToggle").addEventListener("click", () => {
+    const el = document.getElementById("tilesDate");
+    const open = el.classList.toggle("expanded");
+    document.getElementById("dayHeroToggle").setAttribute("aria-expanded", String(open));
+  });
+
+  // 2026-08-02 (mobile FAB): reveals the quick-add row + Today's Patients/Add-to-this-day
+  // row rather than rebuilding them — same widgets, just hidden until she taps in.
+  const dayFabBtn = document.getElementById("dayFab");
+  dayFabBtn.addEventListener("click", () => {
+    const p = document.getElementById("dayPage");
+    const open = p.classList.toggle("fab-open");
+    dayFabBtn.setAttribute("aria-expanded", String(open));
+    if (open) document.getElementById("quickAddInput").focus();
+  });
+
   document.getElementById("toHealthTab")?.addEventListener("click", () => { state.view = "health"; render(); });
   document.getElementById("toFamilyTab")?.addEventListener("click", () => { state.view = "family"; render(); });
   document.getElementById("toTrackerTab")?.addEventListener("click", () => { state.view = "habits"; render(); });
@@ -18494,7 +18681,31 @@
     setTimeout(function () { if (pendingReload && !isEditing()) location.reload(); }, 500);
   }, true);
 
-  /* ---- little live indicator ------------------------------------------ */
+  /* ---- little live indicator ------------------------------------------- */
+  // 2026-08-02 (Linh, three rounds: "i dont like sign out page its intrusive" ->
+  // (after tap-to-reveal-behind-the-dot) "the sign up button is covering other
+  // buttons" -> (after repositioning it) "place the sign out button somewhere
+  // else more discrete"). Floating chrome was never going to read as discreet no
+  // matter which corner it sat in -- it's still a box competing with the rest of
+  // the UI. SUPERSEDES all of the above: Sign out is no longer fixed/floating at
+  // all. It's a small muted text link in NORMAL DOCUMENT FLOW at the very end of
+  // the page content -- only seen if she scrolls all the way down, same place a
+  // web app's account/sign-out link conventionally lives. The sync dot keeps its
+  // small fixed top-left spot (just a status light, never flagged as a problem).
+  var MOBILE_MQ = "(max-width: 640px)";
+  function isMobile() { return window.matchMedia(MOBILE_MQ).matches; }
+  function positionDot() {
+    var dot = document.getElementById("b33Live");
+    if (!dot) return;
+    if (isMobile()) {
+      dot.style.top = "max(20px, calc(env(safe-area-inset-top) + 20px))";
+      dot.style.left = "max(14px, env(safe-area-inset-left))";
+      dot.style.right = "auto"; dot.style.bottom = "auto";
+    } else {
+      dot.style.bottom = "12px"; dot.style.top = "auto";
+      dot.style.right = "12px"; dot.style.left = "auto";
+    }
+  }
   function setLive(on) {
     var d = document.getElementById("b33Live"); if (!d) return;
     d.style.background = on ? "#8fd6b4" : "#c98b6b";
@@ -18504,25 +18715,27 @@
     if (document.getElementById("b33Live")) return;
     var b = document.createElement("div");
     b.id = "b33Live";
-    b.style.cssText = "position:fixed;right:12px;bottom:12px;width:11px;height:11px;border-radius:50%;background:#c98b6b;z-index:2147483000;box-shadow:0 0 0 3px rgba(0,0,0,.12)";
+    b.style.cssText = "position:fixed;width:13px;height:13px;border-radius:50%;background:#c98b6b;z-index:2147483000;box-shadow:0 0 0 3px rgba(0,0,0,.12)";
     document.documentElement.appendChild(b);
+    positionDot();
+    window.addEventListener("resize", positionDot);
   }
   // Sign out → switch login. signOut() clears the session; onAuthStateChange then
   // drops straight to sign-in (baked config stays, so no Connect step).
   function signoutBtn() {
     if (document.getElementById("b33Signout")) return;
-    var b = document.createElement("button");
+    var b = document.createElement("a");
     b.id = "b33Signout";
-    b.type = "button";
-    b.textContent = "⎋ Sign out";
-    b.title = "Sign out of Book33";
-    b.style.cssText = "position:fixed;right:30px;bottom:8px;z-index:2147483200;font:500 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#d8b979;background:#241a2e;border:1px solid #4a3a5c;border-radius:8px;padding:5px 11px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)";
-    b.onclick = function () {
-      b.disabled = true; b.textContent = "Signing out…";
+    b.href = "#";
+    b.textContent = "Sign out of Book33";
+    b.style.cssText = "display:block;text-align:center;margin:36px auto 44px;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#6a5a7c;text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    b.onclick = function (e) {
+      e.preventDefault();
+      b.textContent = "Signing out…";
       var done = function () { try { b.remove(); } catch (e) {} };
       if (sb) sb.auth.signOut().then(done, done); else done();
     };
-    document.documentElement.appendChild(b);
+    (document.querySelector(".wrap") || document.body).appendChild(b);
   }
 
   /* ---- overlay (auth / import) ---------------------------------------- */
