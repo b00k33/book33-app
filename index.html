@@ -605,6 +605,12 @@
   }
   .day-astro-bits .gl { font-family: var(--font-emoji); font-size: 13px; }
   .day-astro-bits:empty { display: none; }
+  /* 2026-08-03 (Linh: "personal month (e.g. Leo) and its animal (goat)... birthday,
+     imprint month" -- the visible value text her list names, added alongside the
+     existing glyphs for sun sign/solar-month animal (day-astro-bits) and the
+     birthday/imprint icons (date-mini-badge), which previously showed no text at
+     all outside their tap popover. */
+  .dab-name { font-size: 12px; font-weight: 600; }
   .moon-badge .gl { font-family: var(--font-emoji); font-size: 14px; }
   /* 2026-08-02 (book44, "group PM/Leo/Goat with Birthday/Imprint"): one framed strip,
      same cosmic-gold rescope + card language as .day-row2 .mini-cal-wrap, so this and
@@ -692,6 +698,54 @@
       transition: transform 0.15s ease;
     }
     #tilesDate.expanded .day-hero-toggle { transform: rotate(180deg); }
+    /* 2026-08-03 (Linh: "the date dropdown panel is disorganised" -- date belongs at
+       the TOP, attributes below as one consistent aligned set):
+       .weekday-moon-row/.date-row/.mini-cal-wrap were all flattened to display:contents
+       against #dayRow2 by an earlier pass (so the collapsed date/UD/PY-UY strip could
+       share one line) -- that leaves every numerology piece, expanded or not, as ONE
+       shared flex-wrap pool at the #dayRow2 level with no sub-grouping of its own. Origin
+       of "the date sits in the middle": weekday/moon-badge/num-group-strip never had an
+       explicit `order` (defaults to 0), so once expanded they sorted AHEAD of date-big
+       (order:2 from the collapsed-line rules above) -- moon phase and the whole PM/sign/
+       animal/birthday/imprint strip rendered first, date fourth of seven. Fixed here by
+       giving every piece an explicit order (date+UD lead, everything else follows).
+       Selectors are #tilesDate.expanded DESCENDANT (date-big/ud-badge/weekday/moon-badge/
+       num-group-strip all nest INSIDE #tilesDate) except mini-cal-mascot, which is a
+       SIBLING of #tilesDate (lives in .mini-cal-wrap next to it, not inside it) -- same
+       ancestor-direction mistake caught once already this session on the ud-badge/mascot
+       expand rule, repeated and re-fixed here: a `#tilesDate.expanded .day-row2 ...`
+       prefix can never match, since .day-row2 is #tilesDate's ANCESTOR not its
+       descendant -- verified this time by reading the actual computed `order` back out
+       via getBoundingClientRect/getComputedStyle before moving on, not just by eye.
+       flex-basis:100% on each trailing item forces its own line-wrap on its own --
+       no separate spacer element needed. */
+    #tilesDate.expanded .date-big { order: 1; }
+    #tilesDate.expanded .ud-badge { order: 2; }
+    #tilesDate.expanded .day-hero-toggle { order: 3; }
+    #tilesDate.expanded .weekday,
+    #tilesDate.expanded .moon-badge,
+    #tilesDate.expanded .num-group-strip {
+      flex-basis: 100%; width: 100%; margin-left: 0;
+    }
+    #tilesDate.expanded ~ .mini-cal-wrap .mini-cal-mascot {
+      flex-basis: 100%; width: 100%; margin-top: 4px; order: 8;
+    }
+    #tilesDate.expanded .weekday { order: 5; padding: 2px 2px; }
+    #tilesDate.expanded .moon-badge { order: 6; padding: 2px 2px; }
+    #tilesDate.expanded .num-group-strip { order: 7; }
+    /* one label/value size for every attribute in the stacked list -- PM, sign, animal,
+       birthday and imprint (all inside .num-group-strip) plus weekday and moon phase
+       above it were 3 different sizes (11px/12px/13px circle) before this; 12px value
+       text + a matching .dab-name label (added alongside the sign/animal glyphs and the
+       birthday/imprint icons, which used to carry NO visible text at all -- see
+       renderDay()/renderBirthdayWidget()/renderImprint()) now reads as one consistent set. */
+    #tilesDate.expanded .weekday,
+    #tilesDate.expanded .moon-badge,
+    #tilesDate.expanded .num-group-strip .date-pm,
+    #tilesDate.expanded .day-astro-bits,
+    #tilesDate.expanded .date-mini-badge {
+      font-size: 12px;
+    }
   }
   /* 2026-08-02 (Linh code44: "keep it and make it subtle"): a hairline outline + small
      colour dot instead of a solid loud fill, same "info via a quiet accent, not a block
@@ -763,6 +817,20 @@
        normal-case task-chip text doesn't come out shouting in caps. */
     text-transform: none; letter-spacing: normal;
   }
+  /* 2026-08-03 (design-rules doc: "any popup/dropdown/panel MUST fit within the visible
+     screen"): safety clamp on top of the --right fix above -- caps the popover at
+     viewport width minus a 12px margin either side so a trigger sitting anywhere near
+     an edge can no longer push it past the screen, whichever direction it's anchored. */
+  @media (max-width: 640px) {
+    /* 2026-08-03: the PY/horse/UY mascot row's middle trigger (astroMotifMini) checked
+       out overflowing BOTH ways at the base 230px width -- 14px past the right edge
+       left-anchored, 49px past the left edge --right-anchored -- because it sits
+       roughly centred on a 375px screen where neither pure edge-anchor lands cleanly.
+       Narrowing to 200px on mobile (still fits every popover's actual content;
+       verified per-trigger via getBoundingClientRect below) closes that gap without
+       needing a third centred-anchor variant. */
+    .num-hover-pop { max-width: calc(100vw - 24px); width: 200px; }
+  }
   .num-hover-pop--right { left: auto; right: 0; }
   .num-hover-trigger:hover .num-hover-pop,
   .num-hover-trigger:focus-within .num-hover-pop,
@@ -806,11 +874,14 @@
   .num-hover-pop .imprint-plan:hover { background: var(--cosmic-gold) !important; color: #17130A !important; }
   /* small emoji triggers living in the date row itself — birthdays/imprint month used to
      be full standalone widgets; now they're a hover away, right next to the date. */
+  /* 2026-08-03: was a fixed 23px circle sized for a bare emoji -- now that
+     birthdayHover/imprintHover carry a .dab-name label too (see above), width/height
+     are auto so the pill grows with its text instead of clipping it; kept as a plain
+     icon+text pairing (no separate chip fill) to match .date-pm/.day-astro-bits right
+     next to it in .num-group-strip, rather than becoming a fourth, differently-styled
+     box inside that shared card. */
   .date-mini-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 23px; height: 23px; border-radius: 50%; font-size: 13px; align-self: center;
-    background: color-mix(in oklab, var(--cosmic-gold) 12%, transparent);
-    border: 1px solid color-mix(in oklab, var(--cosmic-gold) 32%, transparent);
+    display: inline-flex; align-items: center; gap: 5px; font-size: 13px; align-self: center;
   }
   .nav-arrow {
     width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--note-line);
@@ -5030,9 +5101,18 @@
        screens down. Capping it keeps the nav compact so the timeline (what she said she
        wants right after the date strip) arrives sooner. */
     .day-row2 .mini-cal { width: 240px; max-width: 100%; }
-    .quick-add { flex-wrap: nowrap; align-items: center; border-radius: 20px; padding: 6px 6px 6px 14px; }
-    .qa-field { flex: 1 1 auto; min-width: 0; }
-    #quickAddInput { flex: 1 1 auto; min-width: 0; font-size: 15px; }
+    /* 2026-08-03 (Linh: "the command bar is too big... out of proportion"): measured
+       via getBoundingClientRect -- the bar was 54px tall because .qa-field, a second
+       padded/bordered/backgrounded box, sat NESTED inside .quick-add's own padded box
+       (9px+16px padding on top of the outer bar's own) -- two stacked "fields" reading
+       as one oversized one. .qa-field goes flat/borderless on mobile here (the outer
+       bar is already the only visible boundary this needs); 44px total height keeps
+       it at this file's own minimum tap target, not below it. */
+    .quick-add { flex-wrap: nowrap; align-items: center; border-radius: 16px; padding: 4px 4px 4px 14px; }
+    .qa-field {
+      flex: 1 1 auto; min-width: 0; background: transparent; border: none; padding: 0;
+    }
+    #quickAddInput { flex: 1 1 auto; min-width: 0; font-size: 14px; }
     /* 2026-08-02 (Linh mockup: "[ (sparkle) Add, search, log...      + ]" -- one input,
        one trailing "+"): SUPERSEDES the 3-button row below it (the GCal screenshot pass
        that put Add/Search/Best-day on one row). Search still works by typing into the
@@ -5114,7 +5194,17 @@
        resolve against #wrap instead of against nav-tiers' collapsed, centred,
        zero-size box. Now the only top-right icon (theme-toggle removed with light
        mode), it takes the corner slot theme-toggle used to sit in. */
-    .nav-tiers { position: static; }
+    /* 2026-08-03 (Linh: "the strip above the day/date row is a slightly different
+       shade... visible seam"): traced via getBoundingClientRect -- #wrap is a flex
+       column with gap:10px; even at position:static, .nav-tiers still generated a
+       real (zero-height) flex item, so its OWN gap before/after it still opened up a
+       10px band of plain #wrap/html background between the icon row and .page's own
+       background, one shade off from .page's --paper. display:contents removes it
+       from flex layout entirely (no box, no gap) while jumpBtn below -- its only
+       child that still needs a positioning ancestor -- keeps resolving against
+       #wrap's position:relative exactly as it already did (display:contents, like
+       position:static, isn't a positioned ancestor either). */
+    .nav-tiers { display: contents; }
     .jump-btn {
       position: absolute; top: 6px; right: 6px; left: auto;
       width: 30px; height: 30px;
@@ -8030,6 +8120,12 @@
           <span class="nhl-when">${next.getDate()} ${MON_SHORT[next.getMonth()]} · ${when}${p.relation ? ` · ${esc(p.relation)}` : ""}</span></span>
       </div>`;
     }).join("");
+    // 2026-08-03 (Linh: "the popover... not cut off or overlapping"): checked via
+    // getBoundingClientRect on a 375px viewport -- birthdayHover sits early enough in
+    // the reorganised panel's full-width attribute row (left ~83px) that the default
+    // LEFT-anchored .num-hover-pop (230px wide) already fits before the right edge;
+    // measured first rather than assuming, since the first attempt here (--right, by
+    // analogy with imprintHover below) actually pushed it OFF the left edge instead.
     return `<div class="num-hover-pop"><div class="df-tile">
       <div class="t-label">Upcoming birthdays</div>
       ${rows}
@@ -8052,7 +8148,10 @@
       : MONTHS[im.getMonth()];
     const btnName = MONTHS[im.getMonth()];
     const dayList = a => a.map(dd => `<b>${dd.getDate()}${dd.getMonth() !== im.getMonth() ? " " + MON_SHORT[dd.getMonth()] : ""}</b>`).join(" · ");
-    return `<div class="num-hover-pop"><div class="df-tile">
+    // 2026-08-03: imprintHover sits further right (~185px on a 375px viewport, per
+    // getBoundingClientRect) -- default left anchoring would run a 230px popover past
+    // the right edge, so --right anchors it to the trigger's own right edge instead.
+    return `<div class="num-hover-pop num-hover-pop--right"><div class="df-tile">
       <div class="t-label">🔥 Imprint month — ${esc(mName)}</div>
       <div class="t-sub">${inMonth
         ? `It's here — Personal Month <b>1</b> of your Personal Year ${esc(masterLabel(py))}.`
@@ -8148,8 +8247,13 @@
     // num-hover-trigger (see its static template classes in the weekday-moon-row markup)
     // — this just (re)fills the glyph + a freshly-built popover on every render, same
     // split as #numGrpPy just below it.
+    // 2026-08-03: was --right; this trigger sits roughly mid-row now (between PY and
+    // UY on the reorganised panel's full-width mascot row) where neither pure edge
+    // anchor lands cleanly at 230px wide -- checked via getBoundingClientRect and
+    // dropping the popover to 200px (see .num-hover-pop's mobile width rule) let
+    // default left-anchoring fit it within the screen without needing a third variant.
     const motifMiniEl = document.getElementById("astroMotifMini");
-    if (motifMiniEl) motifMiniEl.innerHTML = mascotHTML(yi.em, 19) + zodiacYearPopoverHtml(d, "num-hover-pop--right");
+    if (motifMiniEl) motifMiniEl.innerHTML = mascotHTML(yi.em, 19) + zodiacYearPopoverHtml(d);
   }
 
   /* --- Family Dinh Admin: user-managed, checkable, optionally recurring tasks ---
@@ -9160,7 +9264,7 @@
     if (!el) return;
     const pop = imprintPopoverHtml();
     el.hidden = !pop;
-    if (pop) el.innerHTML = `🌒${pop}`;
+    if (pop) el.innerHTML = `🌒<span class="dab-name">Imprint</span>${pop}`;
   }
   // herb stock alert: reads the pharmacy's shelf straight from storage and speaks only
   // when something needs her — out of stock, below its low mark, or on her order list.
@@ -9401,7 +9505,7 @@
     // ([[project_book33_series_structure]], 22 = master builder → compiling &
     // organising) — "Calendar" replaced everywhere, not just labelled alongside
     // it. id stays "calendar" (routing key, untouched) — only what she READS changes.
-    { id: "calendar", label: "Chapter 22", short: "CH22", icon: "📅", views: [
+    { id: "calendar", label: "CH22", short: "CH22", icon: "📅", views: [
         { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" },
         { id: "us", label: "Us", sep: true },
         { id: "birthdays", label: "Birthdays" }, { id: "events", label: "Events" },
@@ -9412,9 +9516,9 @@
         { id: "review", label: "Weekly Review" } ] },
     // 2026-08-02 (Linh: "Move Money to Chapter 8") — its own chapter now, split out of
     // Chapter 22. view id stays "money" (routing key, untouched); only its category changed.
-    { id: "chapter8", label: "Chapter 8", short: "CH8", icon: "💰", views: [{ id: "money", label: "Money" }] },
+    { id: "chapter8", label: "CH8", short: "CH8", icon: "💰", views: [{ id: "money", label: "Money" }] },
     // Work: the clinic — dispensary, professional development, procedures
-    { id: "work", label: "Work", short: "CH4", icon: "🩺", views: [
+    { id: "work", label: "CH4", short: "CH4", icon: "🩺", views: [
         { id: "cpd", label: "CPD Points" },
         { id: "workManual", label: "Work Manual" } ] },
     // Chapter 5 (her Book33 series numbering) = Health & Wellness. Beauty folded in
@@ -9422,14 +9526,14 @@
     // live under a separate Beauty tab from where their tracking happened (Habits);
     // one home for all of it now, with Today as the first thing she sees instead of
     // a year-view/dot-grid.
-    { id: "wellness", label: "Chapter 5", short: "CH5", icon: "🌸", views: [
+    { id: "wellness", label: "CH5", short: "CH5", icon: "🌸", views: [
         { id: "today", label: "Today" },
         { id: "habits", label: "Habits" },
         { id: "hair", label: "Hair" }, { id: "skinNails", label: "Skin & Nails" },
         { id: "health", label: "Fasting" }, { id: "cycle", label: "Cycle" },
         { id: "supplements", label: "Supplements" },
         { id: "food", label: "Food" }, { id: "nutrition", label: "Nutrition" } ] },
-    { id: "genealogy", label: "People", short: "People", icon: "👥", views: [{ id: "people", label: "People" }] },
+    { id: "genealogy", label: "CH6", short: "CH6", icon: "👥", views: [{ id: "people", label: "People" }] },
   ];
   const categoryOf = viewId => CATEGORIES.find(c => c.views.some(v => v.id === viewId));
 
@@ -10859,7 +10963,7 @@
     if (!el) return;
     const pop = birthdayPopoverHtml();
     el.hidden = !pop;
-    if (pop) el.innerHTML = `🎂${pop}`;
+    if (pop) el.innerHTML = `🎂<span class="dab-name">Birthdays</span>${pop}`;
   }
 
   /* ================= Day-tile manager =================
@@ -11531,8 +11635,12 @@
     // sun sign + solar-month animal, moved here from the retired global #astroLine).
     const astroBits = astroFor(d);
     const cmInfo = ANIMAL_INFO[astroBits.cm.animal];
+    // 2026-08-03 (Linh: "personal month (e.g. Leo) and its animal (goat)" -- the panel
+    // only ever showed the bare glyphs (♌ · 🐐), the actual names lived in the
+    // tap-only popover. Added as visible text so the value reads without a tap,
+    // matching the label/value pairing the rest of the reorganised panel now uses.
     document.getElementById("dayAstroBits").innerHTML =
-      `<span class="gl num-hover-trigger" tabindex="0">${astroBits.sign.gl}${sunSignPopoverHtml(astroBits.sign)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
+      `<span class="num-hover-trigger" tabindex="0"><span class="gl">${astroBits.sign.gl}</span><span class="dab-name">${esc(astroBits.sign.name)}</span>${sunSignPopoverHtml(astroBits.sign)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span><span class="dab-name">${esc(astroBits.cm.animal)}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
 
     renderMiniCal();
     const mPhase = moonIndex(d);
@@ -11631,10 +11739,14 @@
         const pyFocus = focusFor(masterLabel(pyForMascot));
         pyEl.classList.add("num-hover-trigger");
         pyEl.tabIndex = 0;
-        // --right: this badge sits at the card's RIGHT edge (next to the horse mascot),
-        // unlike PM/UD which sit left-ish — opening the popover leftward here keeps it
-        // on-card instead of overflowing past the page edge.
-        pyEl.innerHTML = `PY&nbsp;<b>${esc(String(masterLabel(pyForMascot)))}</b>${focusPopoverHtml(`Personal Year · ${d.getFullYear()}`, masterLabel(pyForMascot), pyFocus, "num-hover-pop--right")}`;
+        // 2026-08-03: was --right ("this badge sits at the card's RIGHT edge") -- true
+        // under the old cramped inline layout, no longer true since the reorganised
+        // date panel made .mini-cal-mascot a full-width row (see #tilesDate.expanded
+        // .mini-cal-mascot above): PY is now the FIRST/leftmost item in that row, so
+        // --right was opening the popover leftward off the edge instead of onto it
+        // (checked via getBoundingClientRect: left:-78 before this fix). Default
+        // left-anchor now, same as PM/UD.
+        pyEl.innerHTML = `PY&nbsp;<b>${esc(String(masterLabel(pyForMascot)))}</b>${focusPopoverHtml(`Personal Year · ${d.getFullYear()}`, masterLabel(pyForMascot), pyFocus)}`;
       } else {
         pyEl.innerHTML = "";
       }
@@ -15545,16 +15657,12 @@
     }
     const parent = e.target.closest("[data-navcat]");
     if (parent) {
-      // clicking in from ANOTHER category jumps straight to its first view (e.g.
-      // Health & Wellness → Today) instead of just popping the menu open with
-      // nothing chosen yet; clicking it again while already inside just toggles
-      // the dropdown, same as before
-      const cat = CATEGORIES.find(c => c.id === parent.dataset.navcat);
-      const isActiveCat = cat && categoryOf(state.view) && cat.id === categoryOf(state.view).id;
-      if (cat && !isActiveCat) {
-        document.querySelectorAll("#categoryTabs .nav-navwrap.open").forEach(w => w.classList.remove("open"));
-        state.view = cat.views[0].id; render(); return;
-      }
+      // 2026-08-03 (Linh: "tapping BK33 should open a DROPDOWN... right now it skips
+      // the menu and jumps straight to the CH22 page"): SUPERSEDES the auto-jump this
+      // used to do when tapping in from a different category (straight to that
+      // category's first view, no menu shown) — every category tap now just opens/
+      // closes its own page list; picking an actual page (.nav-menu-item, above) is
+      // the only thing that navigates.
       const wrap = parent.closest(".nav-navwrap");
       const willOpen = !wrap.classList.contains("open");
       document.querySelectorAll("#categoryTabs .nav-navwrap.open").forEach(w => w.classList.remove("open"));
@@ -15587,17 +15695,6 @@
       }
       closeDrawer();
     });
-    // jumping to another category's first page navigates without a .nav-menu-item tap
-    // (see the !isActiveCat branch in the #categoryTabs handler above) -- catch that too.
-    // Capture phase: must read state.view BEFORE that handler runs and changes it,
-    // otherwise the "is this a different category" comparison is always false by the
-    // time this fires.
-    tabs.addEventListener("click", e => {
-      const parent = e.target.closest("[data-navcat]");
-      if (!parent) return;
-      const cat = CATEGORIES.find(c => c.id === parent.dataset.navcat);
-      if (cat && categoryOf(state.view) && cat.id !== categoryOf(state.view).id) closeDrawer();
-    }, true);
   }
   // legacy sub-tabs row is retired but its handler stays harmless if ever repopulated
   document.getElementById("subTabs").addEventListener("click", e => {
