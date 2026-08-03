@@ -439,17 +439,12 @@
   /* wide screens: timeline on the left, to-do tiles as a right-hand rail */
   .day-layout { display: grid; grid-template-columns: 1fr 340px; gap: 30px; align-items: start; margin-top: 6px; }
   /* 2026-08-02 (Linh mockup, merging Today/prev-next + Today's Patients + Earlier/Later
-     onto one row): .day-main becomes a wrap-row flex container UNIVERSALLY (desktop
-     included) so .toprow -- now physically nested inside .day-main, right above
-     .patients-above-day, for the mobile merge below -- can be pinned back to its
-     original desktop position purely with `order`, with zero visible desktop change.
-     Every child defaults to flex-basis:100% (its own full-width line, same as plain
-     block stacking) so nothing else in this column is affected; only .toprow gets an
-     explicit order here. The mobile-only override that actually merges the three
-     blocks onto one shared line lives with the rest of the Day mobile pass below. */
+     onto one row): .day-main is a wrap-row flex container UNIVERSALLY (desktop included)
+     so individual children can be reordered with `order` (see #qaSlotDay, mobile below)
+     with zero visible desktop change otherwise -- every child defaults to flex-basis:100%
+     (its own full-width line, same as plain block stacking). */
   .day-main { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
   .day-main > * { flex: 1 1 100%; min-width: 0; }
-  .day-main > .toprow { order: -100; }
   @media (max-width: 900px) {
     .day-layout { grid-template-columns: 1fr; }
     /* 2026-07-26 (Linh): "put 2 tiles side by side" on mobile — the Day-page side cards go
@@ -566,7 +561,6 @@
   .day-row2 .date-block { text-align: left; }
   .day-row2 .date-block .weekday { justify-content: flex-start; }
   .day-row2 .date-row { justify-content: flex-start; }
-  .head-controls { display: flex; align-items: center; gap: 8px; flex: none; }
 
   /* 2026-08-02 (code44, "i dont like this design" -> "its the whole layout"): first tried
      fusing the numerology card and mini-cal into one shared-border card (single bg/border
@@ -915,7 +909,14 @@
     box-shadow: var(--page-shadow); padding: 8px; display: flex; flex-direction: column;
     align-items: stretch; gap: 8px; text-align: left; cursor: default;
   }
-  .date-drop-pop .today-pill, .date-drop-pop .patients-nudge { width: 100%; justify-content: center; }
+  .date-drop-pop .patients-nudge { width: 100%; justify-content: center; }
+  /* 2026-08-06 (Linh: "move the arrows to Today when opened from tapping day date"):
+     #prevDay/#nextDay flank #todayPill in their own row, above Today's Patients --
+     today-pill fills the remaining space between the two fixed-size nav-arrow circles
+     instead of the old width:100% (which only worked when it was the pop's sole
+     full-width row). */
+  .date-drop-nav { display: flex; align-items: center; gap: 8px; }
+  .date-drop-nav .today-pill { flex: 1; display: flex; justify-content: center; }
   .num-hover-pop {
     display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 230px;
     /* triggers like .date-pm set their own text-transform/letter-spacing, which is
@@ -1045,7 +1046,6 @@
   }
   .date-block .date-big .date-pm b { color: var(--cosmic-gold); font-weight: 800; text-transform: none; }
 
-  .toprow { display: flex; align-items: center; justify-content: flex-start; gap: 16px; margin: 16px 0 20px; flex-wrap: wrap; }
   .today-pill {
     border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft);
     border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer; font-family: var(--font-body);
@@ -1145,18 +1145,10 @@
   /* --- timeline --- */
   .timeline-wrap { position: relative; margin-bottom: 10px; }
   /* 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I can still
-     scroll up to earlier times normally"): SUPERSEDES the old "6am-10pm, both toggles
-     closed" base value — the early side is never clipped any more (only Later hours
-     still has its own toggle), so the un-toggled default is the FULL early range
-     (START_HOUR, 3am) through 10pm now: 19h + a little buffer for the trailing
-     end-of-day label. .timeline-wrap itself still keeps its full natural 3am-12am height
-     underneath regardless (presentation-only clip, same as before — nothing about event
-     placement/drag-resize/sky/now-line math changes). applyTlWindow() (below the
-     timeline JS, now runs on every renderDay()) overrides this inline once real hour
-     heights are known and reflects the Later toggle's actual state — this CSS value is
-     just what's visible for the brief window before that first JS pass. */
+     scroll up to earlier times normally") + 2026-08-06 (Linh: "remove later hours button
+     completely"): neither end of the timeline is clipped any more — full natural height
+     (3am-12am), plain scroll reaches any hour, no toggle needed either direction. */
   .timeline-scroll {
-    max-height: calc(var(--hour-h) * 19 + 26px);
     overflow-y: auto; overflow-x: hidden; border-radius: var(--radius-md);
     scrollbar-width: thin; scrollbar-color: rgba(233,200,119,0.35) transparent;
     /* 2026-08-02 (Linh: "allow for pinching screen to expand hour blocks... i have a
@@ -1167,22 +1159,6 @@
   }
   .timeline-scroll::-webkit-scrollbar { width: 6px; }
   .timeline-scroll::-webkit-scrollbar-thumb { background: rgba(233,200,119,0.35); border-radius: 999px; }
-  .timeline-scroll.tl-full { max-height: none; overflow: visible; }
-  .tl-window-btn {
-    /* 2026-08-06: margin-left:auto dropped -- was pushing this to the far end of
-       .section-head (where .rule's own flex:1 already did that job). Now that the
-       button lives in .toprow next to the day arrows (Linh: "later hours and the
-       arrows in line"), auto-margin here would shove it away from them instead of
-       grouping them -- the live-sync dot carries the far-right auto-margin instead
-       (.toprow .b33-live-frame, near badge()). */
-    display: inline-flex; align-items: center; gap: 4px;
-    border: 1px solid var(--note-line); background: none; color: var(--ink-soft);
-    font-size: 11px; font-family: var(--font-body); letter-spacing: 0.02em;
-    padding: 4px 10px; border-radius: 999px; cursor: pointer; opacity: 0.75;
-    transition: opacity .15s ease, color .15s ease, border-color .15s ease;
-  }
-  .tl-window-btn:hover { opacity: 1; color: var(--margin-rule); border-color: var(--margin-rule); }
-  .tl-window-btn[aria-pressed="true"] { opacity: 1; color: var(--margin-rule); }
   /* preset day template — sleep/work/home backdrop, sits under everything else; real events render on top.
      spans the FULL width (including the time-label gutter) so the band colour is continuous across the
      whole row — otherwise the gutter stays dark and reads as a "gap" next to the coloured main area. */
@@ -5353,7 +5329,6 @@
     .wrap { gap: 10px; }
     .day-row2 { margin: 4px 0 6px; }
     .day-row2 .page-head { margin-bottom: 8px; }
-    .toprow { margin: 8px 0 10px; }
     .patients-above-day { margin: 0 0 6px; }
     .section-head { margin-bottom: 6px; }
   }
@@ -5429,22 +5404,6 @@
     :root[data-theme="dark"] .nav-tiers { background: color-mix(in srgb, var(--paper) 72%, transparent); }
     :root[data-theme="light"] .nav-tiers { background: color-mix(in srgb, var(--paper) 88%, transparent); }
     .topbar-right { display: flex; align-items: center; gap: 8px; }
-    /* 2026-08-04 (Linh: "the three top-right icons... one aligned set — same size and
-       style, evenly spaced"): frame for the sync-status dot, same 30px circular
-       footprint as .jump-btn/.theme-toggle, the actual dot inside stays small/
-       purposeful (9px), matching her explicit "keep it small".
-       2026-08-06 (Linh: "move the online button to that same level [as the day arrows
-       and Later hours], far right"): SUPERSEDES the placement half of the note above --
-       badge() now inserts this frame into .toprow instead of .nav-tiers (see badge()),
-       so it's no longer part of the search/theme-toggle trio; the frame/dot styling
-       itself is unchanged. margin-left:auto pushes it to the row's far end, past the
-       day arrows and Later hours which stay grouped on the left. */
-    .b33-live-frame {
-      display: flex; align-items: center; justify-content: center; position: relative;
-      width: 30px; height: 30px; border-radius: 50%;
-      background: var(--paper); border: 1px solid var(--note-line);
-    }
-    .toprow .b33-live-frame { margin-left: auto; }
     .theme-toggle {
       position: static;
       width: 30px; height: 30px; font-size: 13px;
@@ -5452,9 +5411,9 @@
     /* 2026-08-05 (Linh: "the three top-right icons must be one aligned set — same size
        and style, evenly spaced"): search stood out from its two neighbours -- it kept
        its DESKTOP treatment (gold ring, transparent fill, from the base .jump-btn rule
-       up top) instead of matching the frame/theme-toggle's dark-fill + hairline-border
-       look. Same border/background/color as .theme-toggle and .b33-live-frame now, so
-       the set reads as one style, not "two normal + one highlighted." */
+       up top) instead of matching theme-toggle's dark-fill + hairline-border look.
+       Same border/background/color as .theme-toggle now, so the set reads as one
+       style, not "two normal + one highlighted." */
     .jump-btn {
       position: static;
       width: 30px; height: 30px; font-size: 13px;
@@ -5531,24 +5490,24 @@
     .page { border: none; border-radius: 0; box-shadow: none; }
     .today-pill, .nav-arrow, .patients-above-day .add-btn,
     .quick-add .qa-btn.qa-secondary,
-    .patients-nudge, .tl-window-btn {
+    .patients-nudge {
       background: var(--field-bg); color: var(--ink); border: 1px solid var(--note-line);
       font-weight: 600; box-shadow: none;
     }
     .today-pill:hover, .nav-arrow:hover, .patients-above-day .add-btn:hover,
     .quick-add .qa-btn.qa-secondary:hover,
-    .patients-nudge:hover, .tl-window-btn:hover {
+    .patients-nudge:hover {
       background: var(--note-bg); color: var(--ink); box-shadow: none;
     }
     /* 2026-08-02 (header cleanup, "give the pill buttons the same height, corner radius
        and spacing"): Today/Earlier/Later/Today's-Patients were four different button
        styles before this pass (patients-nudge was a small uppercase work-blue badge with
-       its own hover popover, tl-window-btn sat at opacity:0.75 until pressed) -- same
-       fixed height + radius + padding scale on all of them now, on top of the shared
-       neutral colours just above. patients-nudge keeps its popover behaviour, just not
-       its bespoke look; nav-arrow (the ‹ › circles) is exempt from the height rule, it's
-       already a 34px circle which reads as the same size at a glance. */
-    .today-pill, .patients-nudge, .tl-window-btn {
+       its own hover popover) -- same fixed height + radius + padding scale on all of
+       them now, on top of the shared neutral colours just above. patients-nudge keeps
+       its popover behaviour, just not its bespoke look; nav-arrow (the ‹ › circles) is
+       exempt from the height rule, it's already a 34px circle which reads as the same
+       size at a glance. */
+    .today-pill, .patients-nudge {
       height: 32px; box-sizing: border-box; display: inline-flex; align-items: center;
       border-radius: 999px; padding: 0 14px; font-size: 12px; text-transform: none;
       letter-spacing: normal; opacity: 1;
@@ -5658,33 +5617,14 @@
        below it in the file, since both match at equal specificity and this block used
        to come later -- see the .num-group-strip .mini-cal-mascot rule instead). */
   }
-  /* 2026-08-02 (Linh mockup: "─────" divider, then "(prev) Today (next)  Today's
-     Patients   Earlier (down)  Later (down)" all on one line): .toprow, now DOM-adjacent
-     to .patients-above-day (see the markup comment there), and .section-head right after
-     it, share an `order` so row-wrap puts all three on one line -- flex:0 0 auto lets
-     each shrink to its own content instead of the universal 100%-basis default. "Add to
-     this day" and the "The day" heading drop out of the row per the mockup (not deleted,
-     just hidden -- #addRow's form still opens the same way from wherever else it's
-     wired); Earlier/Later stay since they were explicitly drawn in.
-     2026-08-06 (Linh: "make later hours and the date shuffling arrows in line, they're
-     irregular. Move the online button to that same level, far right"): SUPERSEDES the
-     "three boxes coincidentally sharing a line" approach above -- ‹›, Later hours and the
-     live-sync dot are genuine DOM siblings inside .toprow now (see the DAY page markup
-     and badge()'s mobile insertion point), sharing ONE flex row with a real
-     align-items:center instead of three separately-padded boxes that happened to land at
-     the same order value -- that's what read as "irregular": each box set its own
-     top/bottom spacing independently, so their content never actually lined up on one
-     baseline even when they wrapped onto the same visual row. .patients-above-day and
-     .section-head are both empty here now (Today's Patients moved to the date dropdown
-     already; Later hours moves out below) so both just collapse -- .toprow becomes the
-     sole visible row at this order and picks up .section-head's old bottom-seam hairline
-     too, since it's now the last header-cluster row before the calendar. */
+  /* 2026-08-06 (Linh: "move the arrows to Today when opened from tapping day date" +
+     "remove later hours button completely"): .toprow is gone (see the DAY page markup),
+     so there's no third row to merge here any more -- .patients-above-day and
+     .section-head stay collapsed on mobile (Today's Patients lives in the date dropdown,
+     "The day" heading/Add-to-this-day trigger were already hidden here before this pass),
+     and the timeline (#qaSlotDay's sibling) just follows directly after the date/
+     numerology header. */
   @media (max-width: 640px) {
-    .day-main > .toprow {
-      order: -150; flex: 1 1 100%;
-      border-top: 1px solid var(--note-line); border-bottom: 1px solid var(--note-line);
-      padding: 10px 0 8px; margin: 2px 0 6px;
-    }
     .day-main > .patients-above-day, .day-main > .section-head { display: none; }
     #qaSlotDay { order: -200; }
   }
@@ -7565,11 +7505,21 @@
                    outside-tap, viewport clamping) rather than building a new popover
                    system — same one every other cosmic dropdown in this header uses.
                    #todayPill/#patientsNudge keep their own ids/listeners, just moved
-                   here from the old .toprow/.patients-above-day rows below. -->
+                   here from the old .toprow/.patients-above-day rows below.
+                   2026-08-06 (Linh: "move the arrows to Today when opened from tapping
+                   day date"): #prevDay/#nextDay physically relocated in here too, from
+                   the now-deleted .toprow (see the DAY page markup further down) — same
+                   ids, same click listeners (still just document.getElementById lookups),
+                   just a different parent, flanking Today so the dropdown reads as one
+                   "navigate the day" menu: ‹ Today ›, then Today's Patients below it. -->
               <span class="date-trigger num-hover-trigger" id="dateTrigger" tabindex="0">
                 <span class="date-big" id="dateBig"></span>
                 <div class="num-hover-pop date-drop-pop">
-                  <button class="today-pill" id="todayPill">Today</button>
+                  <div class="date-drop-nav">
+                    <button class="nav-arrow" id="prevDay" aria-label="Previous day">‹</button>
+                    <button class="today-pill" id="todayPill">Today</button>
+                    <button class="nav-arrow" id="nextDay" aria-label="Next day">›</button>
+                  </div>
                   <button type="button" class="patients-nudge" id="patientsNudge" title="Ask Claude: /patients">🩺 Today's Patients
                     <span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span>
                   </button>
@@ -7657,34 +7607,15 @@
              the bottom of .day-side, the right-hand rail, easy to lose track of. #addForm
              itself stays put physically (it's position:fixed when open, see task #200 —
              DOM location doesn't affect where it displays), only the trigger row moved. -->
-        <!-- 2026-08-02 (Linh mockup: "(prev) Today (next)  Today's Patients   Earlier
-             (down) Later (down)" all on one line): .toprow physically moved from above
-             the quick-add bar (where desktop still shows it -- see the universal
-             .day-main > .toprow{order:-100} rule that pins it back to the top of this
-             column) down to sit directly adjacent to .patients-above-day, with nothing
-             visible between them (#tilesAbove above is [hidden]) so the mobile-only
-             inline-flex rule can merge all three onto one wrapped line without any
-             further DOM changes. -->
-        <!-- 2026-08-05 (Linh: "move Today and Today's Patients into the date
-             dropdown"): both buttons live in #dateTrigger's dropdown now (see .date-row
-             above) — SUPERSEDES this row's own copies of them. The ‹ › day arrows stay
-             here per her explicit "the day arrows can stay where they are".
-             2026-08-06 (Linh: "make later hours and the date shuffling arrows in line,
-             they're irregular. Move the online button to that same level, far right"):
-             #tlWindowBtnLater moved in here from .section-head below (see the comments
-             it left behind there) so it's a real DOM sibling of the day arrows, sharing
-             one flex row/baseline instead of two separately-padded boxes that only
-             coincidentally lined up. The live-sync dot (badge(), near the bottom of the
-             script) now appends its frame here too, pushed to the far right via
-             margin-left:auto (CSS, .toprow .b33-live-frame). -->
-        <div class="toprow">
-          <div class="head-controls">
-            <button class="nav-arrow" id="prevDay" aria-label="Previous day">‹</button>
-            <button class="nav-arrow" id="nextDay" aria-label="Next day">›</button>
-          </div>
-          <button type="button" class="tl-window-btn" id="tlWindowBtnLater" aria-pressed="false"
-            title="Show hours after 10pm">▾ Later hours</button>
-        </div>
+        <!-- 2026-08-06 (Linh: "move the arrows to Today when opened from tapping day
+             date" + "remove later hours button completely"): .toprow (day arrows +
+             Later-hours toggle + the live-sync dot) is gone -- the arrows now live inside
+             #dateTrigger's dropdown (see .date-row above), Later-hours is deleted outright
+             (see .timeline-scroll's own note -- the 10pm clip it toggled is gone too, same
+             "remove completely" treatment the Earlier-hours button already got), and the
+             live dot moved to a fixed bottom-right position (see badge()) --
+             nothing left to occupy this row, so the row itself is deleted rather than left
+             standing empty. -->
         <div class="patients-above-day">
           <div class="add-row" id="addRow">
             <button class="add-btn" id="addBtn">✎ Add to this day</button>
@@ -7709,15 +7640,13 @@
           <button type="button" class="expand-mode-btn" id="expandModeBtn" hidden
             aria-pressed="false" title="Tap, then tap a 2-hour block to expand it">⤢ <span class="emb-label">Expand hours</span></button>
           <!-- 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I
-               can still scroll up to earlier times normally"): SUPERSEDES the button that
-               used to live here (#tlWindowBtn) — the early side of the timeline is never
-               clipped now (see applyTlWindow()), so a normal scroll up always reaches it,
-               no separate toggle needed. Later hours (below) is untouched — she only
-               named the early one.
-               2026-08-06: Later hours itself moved out to .toprow above, alongside the
-               day arrows -- see the comment there. Nothing left in this section-head on
-               mobile (h2/rule already hidden there too), so it collapses outright
-               (CSS, .day-main > .section-head { display:none }). -->
+               can still scroll up to earlier times normally") + 2026-08-06 (Linh: "remove
+               later hours button completely"): both toggle buttons that used to live here
+               (#tlWindowBtn, #tlWindowBtnLater) are gone — the timeline is never clipped
+               on either end now (see .timeline-scroll's own note), a normal scroll reaches
+               any hour, no toggle needed. Nothing left in this section-head on mobile
+               (h2/rule already hidden there too), so it collapses outright (CSS,
+               .day-main > .section-head { display:none }). -->
         </div>
         <div class="timeline-scroll" id="timelineScroll">
         <div class="timeline-wrap">
@@ -8100,8 +8029,7 @@
   // she floated a future "view more" button to expand this on demand — not built yet.
   // 2026-08-02 (Linh code44: "10pm-12am only visible from scrolling"): was 22 (10pm) —
   // the day literally had no rows past 10pm before this. Now goes to midnight; the
-  // 6am-10pm default clip + tlWindowBtnLater toggle (applyTlWindow()) hide 10pm-12am
-  // until asked for, same pattern as the existing 3am-6am "Earlier hours" toggle.
+  // timeline is never clipped (see .timeline-scroll's own note), plain scroll reaches it.
   const START_HOUR = 3, END_HOUR = 24;
   const START_MIN = START_HOUR * 60, END_MIN = END_HOUR * 60;
   const ANIMAL_BAND_START = START_HOUR % 2 === 0 ? START_HOUR - 1 : START_HOUR;   // keep 2h bands aligned to real shí chén boundaries (odd hours), even when the visible window starts on an even hour
@@ -12227,17 +12155,9 @@
     // its old heights while events/bands/etc (which already read state.expandedBlocks
     // directly) render in their new, correct positions.
     buildHours();
-    // 2026-08-05: runs every renderDay() now (cheap — just a maxHeight/class toggle) so
-    // the real HOUR_H()-based window height is in place from the very first render,
-    // instead of only ever being computed reactively after a Later-hours click or a
-    // pinch-zoom — see applyTlWindow()'s own comment for why that mattered once the
-    // Earlier-hours toggle (and its half of this logic) was removed.
-    applyTlWindow();
-    // 2026-08-02 (Linh: "the day time view shows 6am-10pm and beyond that is only valid
-    // from an expandable button"): scroll the clipped viewport to 6am once, the first
-    // time the Day page renders — not on every renderDay() call (adding an event, ticking
-    // a task, etc. all call this too, and re-scrolling every time would yank the view out
-    // from under her mid-use).
+    // 2026-08-02: scroll the timeline to 6am once, the first time the Day page renders —
+    // not on every renderDay() call (adding an event, ticking a task, etc. all call this
+    // too, and re-scrolling every time would yank the view out from under her mid-use).
     if (!tlScrollInit) {
       const scroller = document.getElementById("timelineScroll");
       if (scroller) scroller.scrollTop = topForMin(6 * 60);
@@ -19812,38 +19732,10 @@
       pinching = false;
       try { localStorage.setItem(HOUR_H_KEY, HOUR_H().toFixed(1)); } catch (e) {}
       renderDay();
-      applyTlWindow();
     };
     scroller.addEventListener("touchend", endPinch);
     scroller.addEventListener("touchcancel", endPinch);
   })();
-  // 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I can still
-  // scroll up to earlier times normally"): SUPERSEDES the dataset.earlier half of this —
-  // the early side of the clip is gone outright, the window always starts at START_HOUR
-  // now, so a plain scroll up always reaches it with no separate toggle. Later hours
-  // (dataset.later, its own independent button) is untouched — she only named the early
-  // one. tl-full now just means "later is open too" (both ends already un-clipped).
-  function applyTlWindow() {
-    const scroller = document.getElementById("timelineScroll");
-    const later = scroller.dataset.later === "true";
-    if (later) {
-      scroller.classList.add("tl-full");
-      scroller.style.maxHeight = "";
-    } else {
-      scroller.classList.remove("tl-full");
-      scroller.style.maxHeight = `${(22 - START_HOUR) * HOUR_H() + 26}px`;
-    }
-  }
-  document.getElementById("tlWindowBtnLater").addEventListener("click", e => {
-    const scroller = document.getElementById("timelineScroll");
-    const btn = e.currentTarget;
-    const open = scroller.dataset.later !== "true";
-    scroller.dataset.later = String(open);
-    applyTlWindow();
-    btn.setAttribute("aria-pressed", String(open));
-    btn.innerHTML = open ? "▴ Hide later hours" : "▾ Later hours";
-    scroller.scrollTop = open ? scroller.scrollHeight : topForMin(6 * 60);
-  });
   document.addEventListener("click", () => document.getElementById("patientsNudge")?.classList.remove("open"));
   document.getElementById("dayHealthBody").addEventListener("click", e => {
     if (e.target.closest("[data-cyc-close]")) closeCycleLog();
@@ -20534,20 +20426,16 @@
       if (calWrap.parentElement !== row) row.appendChild(calWrap);
     }
   }
+  // 2026-08-06 (Linh: "move the online button to bottom right of mobile screen page"):
+  // SUPERSEDES the mobile-only early-return + every earlier "live inside the header row"
+  // placement this dot has cycled through (.nav-tiers, .topbar-right, .toprow) — now a
+  // fixed bottom-right dot on EVERY screen size, same treatment desktop already had.
   function positionDot() {
     var dot = document.getElementById("b33Live");
     if (!dot) return;
-    // 2026-08-04 (Linh: "the three top-right icons... must be one aligned set — same
-    // size and style, evenly spaced"): SUPERSEDES every hand-tuned pixel offset this
-    // function used to compute for mobile (the whole history is worth keeping as a
-    // cautionary note: top:20/left:14 → moved off BK33 → right:44 → right:80 → right:88,
-    // re-tuned again every single time something else in the row changed width). The
-    // dot is now a real flex item inside .topbar-right on mobile (see badge() below),
-    // so flexbox gives it genuinely even spacing for free -- nothing left to position
-    // here. Desktop, which was never part of this complaint, is unchanged.
-    if (isMobile()) return;
-    dot.style.bottom = "12px"; dot.style.top = "auto";
-    dot.style.right = "12px"; dot.style.left = "auto";
+    dot.style.top = "auto"; dot.style.left = "auto";
+    dot.style.right = "max(12px, env(safe-area-inset-right))";
+    dot.style.bottom = "max(12px, env(safe-area-inset-bottom))";
   }
   function setLive(on) {
     var d = document.getElementById("b33Live"); if (!d) return;
@@ -20564,22 +20452,19 @@
   // — see setLive() above), not leftover chrome, so it stays; tapping it now reveals a
   // small text label naming what it means, same disclosure pattern as the Today's
   // Patients nudge-pop below, instead of relying on a hover title that phones can't show.
+  // 2026-08-06 (Linh: "move the online button to bottom right of mobile screen page"):
+  // SUPERSEDES every earlier mobile placement (the dot has lived in .nav-tiers,
+  // .topbar-right, then .toprow across this session) — mobile now gets the exact same
+  // fixed dot desktop always had (see positionDot()), so there's one code path instead
+  // of a mobile/desktop branch. Global again (every page, not just Day), same as before
+  // it ever moved into page-specific chrome.
   function badge() {
     if (document.getElementById("b33Live")) return;
-    var mobile = isMobile();
     var b = document.createElement("div");
     b.id = "b33Live";
     b.setAttribute("role", "status");
     b.setAttribute("tabindex", "0");
-    // 2026-08-04: on mobile the dot lives inside a 30px .b33-live-frame (CSS, near
-    // .topbar-right) matching search/theme-toggle's own footprint, so the three read
-    // as one set -- the dot itself stays small (9px) INSIDE that frame, per her
-    // explicit "keep it small and purposeful": same status light, same click-for-
-    // label behaviour, just sized/placed to belong instead of floating loose.
-    // Desktop keeps its original fixed 13px bottom-right dot, unchanged.
-    b.style.cssText = mobile
-      ? "position:static;width:9px;height:9px;border-radius:50%;background:#c98b6b;cursor:pointer"
-      : "position:fixed;width:13px;height:13px;border-radius:50%;background:#c98b6b;z-index:2147483000;box-shadow:0 0 0 3px rgba(0,0,0,.12);cursor:pointer";
+    b.style.cssText = "position:fixed;width:13px;height:13px;border-radius:50%;background:#c98b6b;z-index:2147483000;box-shadow:0 0 0 3px rgba(0,0,0,.12);cursor:pointer";
     var pop = document.createElement("span");
     pop.id = "b33LiveLabel";
     pop.style.cssText = "position:absolute;top:calc(100% + 8px);right:0;display:none;white-space:nowrap;background:var(--paper,#251D13);color:var(--ink,#F0E6D4);border:1px solid var(--note-line,rgba(240,230,212,.26));border-radius:8px;padding:5px 10px;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)";
@@ -20592,34 +20477,8 @@
       if (pop.style.display === "block") hideTimer = setTimeout(function () { pop.style.display = "none"; }, 2600);
     });
     document.addEventListener("click", function () { pop.style.display = "none"; });
-    if (mobile) {
-      var frame = document.createElement("span");
-      frame.className = "b33-live-frame";
-      frame.appendChild(b);
-      // 2026-08-05 (Part A, "move the live dot out of the busy top-right cluster... to
-      // a spot with spare space, small and unobtrusive"): SUPERSEDES the .topbar-right
-      // placement this replaced (search + theme-toggle live there) — moved into
-      // .nav-tiers, right after BK33.
-      // 2026-08-06 (Linh: "move the online button to that same level [as the day arrows
-      // and Later hours], far right"): SUPERSEDES the .nav-tiers placement above —
-      // .nav-tiers was global chrome (visible on every page); #dayPage .toprow is not,
-      // so this is a real behaviour change, not just a repaint: the dot now only shows
-      // while she's on the Day page, since #dayPage (and its .toprow) sits hidden
-      // behind other views the rest of the time. Asked for and implemented as literally
-      // requested -- flagged to her in the round's summary rather than second-guessed
-      // here. .toprow .b33-live-frame's own margin-left:auto (CSS) pushes the frame to
-      // the row's far end, past the arrows/Later hours which stay grouped on the left.
-      var toprow = document.querySelector("#dayPage .toprow");
-      if (toprow) toprow.appendChild(frame);
-      else {
-        var topbarRight = document.querySelector(".topbar-right");
-        if (topbarRight) topbarRight.insertBefore(frame, topbarRight.firstChild);
-        else document.documentElement.appendChild(b); // fallback if that markup ever changes
-      }
-    } else {
-      document.documentElement.appendChild(b);
-      positionDot();
-    }
+    document.documentElement.appendChild(b);
+    positionDot();
     window.addEventListener("resize", positionDot);
   }
   // Sign out → switch login. signOut() clears the session; onAuthStateChange then
