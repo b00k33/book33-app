@@ -3304,6 +3304,61 @@
   .allday-row input { width: 16px; height: 16px; accent-color: var(--margin-rule); }
   .allday-row label { font-size: 13px; color: var(--ink-soft); }
   .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 2px; }
+  /* 2026-08-06 (Linh: "too boxy and too long... remove the heavy outline around every
+     field, separate with spacing/tone not boxes"): the main Day-page add form gets the
+     same flat treatment #rtnAddForm already has (identical spirit, independently scoped
+     -- .field input/.track-picker/.track-opt are shared base classes used by a dozen
+     OTHER forms app-wide: Goals, People, Family, Work Manual, Supplements. Restyling
+     those globally would ripple far past this one form). */
+  #addForm .field input[type="text"], #addForm .field input[type="time"],
+  #addForm .field input[type="number"], #addForm .field input[type="date"],
+  #addForm .field select, #addForm .field textarea, #addForm .who-summary-btn {
+    border: none; background: var(--field-bg);
+  }
+  #addForm .field textarea {
+    font-family: var(--font-body); font-size: 14px; color: var(--ink);
+    border-radius: 3px; padding: 8px 10px; width: 100%; resize: vertical;
+  }
+  /* Part of life + Whose job: compact colour chips, natural width instead of flex:1
+     stretching to fill the row, wrapping into tidy rows; a filled high-contrast
+     "selected" state (gold fill, dark text) replaces the thin inset ring. */
+  #addForm #trackPicker.track-picker, #addForm #whoPicker.track-picker { flex-wrap: wrap; gap: 6px; }
+  #addForm #trackPicker .track-opt, #addForm #whoPicker .track-opt {
+    flex: 0 0 auto; border: 1px solid var(--note-line); background: none;
+    border-radius: 999px; padding: 4px 12px; font-size: 12px;
+  }
+  #addForm #trackPicker .track-opt[aria-pressed="true"], #addForm #whoPicker .track-opt[aria-pressed="true"] {
+    background: var(--margin-rule); border-color: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
+  }
+  /* Type: a true joined segmented control (Task / Event / Routine), one-line labels
+     with a leading icon standing in for the old round/square dot -- the dot doesn't
+     read as "joined" the way a shared track shape does. */
+  #kindPicker.track-picker { background: var(--field-bg); border-radius: 999px; padding: 3px; gap: 2px; flex-wrap: nowrap; }
+  #kindPicker .kind-opt {
+    flex: 1; border: none; background: none; border-radius: 999px; padding: 7px 4px;
+    font-size: 12px; white-space: nowrap; color: var(--ink-soft);
+  }
+  #kindPicker .kind-opt::before { display: none; }
+  #kindPicker .kind-opt[aria-pressed="true"] {
+    background: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
+  }
+  /* More options: collapsed by default so the essentials (What / Part of life / Type /
+     Day / Starts) are the whole form most of the time. display:contents when open lets
+     the tucked fields lay out as direct children of #addForm's own 2-col grid -- no
+     nested grid to keep in sync with the outer one. */
+  .more-opts-toggle {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 4px;
+    border: none; border-top: 1px solid var(--note-line); background: none; margin-top: 4px;
+    padding: 10px 0 2px; font-family: var(--font-body); font-size: 12px; color: var(--ink-soft); cursor: pointer;
+  }
+  .more-opts-toggle:hover, .more-opts-toggle:focus-visible { color: var(--margin-rule); }
+  .more-opts-toggle .moreopts-chevron { display: inline-block; transition: transform 0.15s ease; }
+  .more-opts-toggle[aria-expanded="true"] .moreopts-chevron { transform: rotate(90deg); }
+  .addform-more[hidden] { display: none; }
+  .addform-more:not([hidden]) { display: contents; }
+  /* Day sits alone on its row once Starts is hidden (Type = Routine) instead of
+     leaving an empty half-column beside it. */
+  #addForm:has(#fStartField[hidden]) #fDateField { grid-column: 1 / -1; }
   .btn-save, .btn-cancel { border-radius: 999px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: var(--font-body); }
   .btn-save { border: 1px solid var(--margin-rule); background: var(--margin-rule); color: var(--accent-on); }
   .btn-save:hover { filter: brightness(1.06); }
@@ -8041,57 +8096,70 @@
           <div class="field full">
             <label>Type</label>
             <div class="track-picker" id="kindPicker" role="group" aria-label="Type">
-              <button type="button" class="track-opt kind-opt" data-kind="task" aria-pressed="true">Task — tick it off</button>
-              <button type="button" class="track-opt kind-opt" data-kind="event" aria-pressed="false">Event — appointment</button>
-              <button type="button" class="track-opt kind-opt" id="kindRoutineBtn" data-kind="routine" aria-pressed="false">↻ Routine — an existing one</button>
+              <button type="button" class="track-opt kind-opt" data-kind="task" aria-pressed="true">✓ Task</button>
+              <button type="button" class="track-opt kind-opt" data-kind="event" aria-pressed="false">📅 Event</button>
+              <button type="button" class="track-opt kind-opt" id="kindRoutineBtn" data-kind="routine" aria-pressed="false">↻ Routine</button>
             </div>
           </div>
           <div class="field full" id="fRoutineField" hidden>
             <label for="fRoutine">Which routine <span class="field-hint">stays in sync with the routine</span></label>
             <select id="fRoutine"></select>
           </div>
-          <!-- two-person system (Linh 2026-07-27): every item can be hers, his, or shared.
-               2026-08-02 (code44, "easier to read and fill in" — she almost always picks
-               "Mine" per her own answer): collapsed to a one-line summary by default; tap
-               "change" to reveal the full picker. See syncWho()/whoSummaryBtn wiring. -->
-          <div class="field full" id="fWhoField">
-            <label>Whose job</label>
-            <button type="button" class="who-summary-btn" id="whoSummaryBtn" aria-expanded="false">
-              <span id="whoSummaryText">🙋‍♀️ Mine</span><span class="who-edit">Change ›</span>
-            </button>
-            <div class="track-picker" id="whoPicker" role="group" aria-label="Whose job" hidden>
-              <button type="button" class="track-opt who-opt" data-who="me" aria-pressed="true">🙋‍♀️ Mine</button>
-              <button type="button" class="track-opt who-opt" data-who="partner" aria-pressed="false">🙋‍♂️ <span class="who-name">David</span></button>
-              <button type="button" class="track-opt who-opt" data-who="both" aria-pressed="false">👫 Both of us</button>
-            </div>
-          </div>
-          <div class="field full" id="fStagesField">
-            <label for="fStages">Follow-ups <span class="field-hint">optional — one per line, add "~15m" to a line to time it</span></label>
-            <textarea id="fStages" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
-          </div>
-          <div class="field full" id="fEstField">
-            <label for="fEst">Honestly, how long? <span class="field-hint">minutes, optional</span></label>
-            <input type="number" id="fEst" min="5" step="5" placeholder="e.g. 30" style="max-width:140px">
-          </div>
-          <div class="field full"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" style="max-width:180px"></div>
+          <div class="field" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate"></div>
           <div class="field" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart"></div>
-          <div class="field" id="fEndField"><label for="fEnd">Ends <span class="field-hint">optional</span></label><input type="time" id="fEnd"></div>
-          <div class="field full" id="fDurField"><label for="fDur">Or duration <span class="field-hint">fills in Ends</span></label><input type="number" id="fDur" min="5" step="5" placeholder="e.g. 45" style="max-width:140px"></div>
-          <div class="allday-row" id="fAllDayRow">
-            <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
-          </div>
-          <div class="field full" id="fCatField">
-            <label for="fCat">Category <span class="field-hint">optional</span></label>
-            <input type="text" id="fCat" placeholder="e.g. Birthdays, Work" list="catList" autocomplete="off">
-            <datalist id="catList">
-              <option value="Birthdays"></option><option value="Work"></option>
-            </datalist>
-          </div>
-          <div class="field full" id="fLocField">
-            <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
-            <input type="text" id="fLoc" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
-            <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
-            <datalist id="locList"></datalist>
+          <!-- 2026-08-06 (Linh: "too boxy and too long... tuck OPTIONAL fields behind a
+               small 'More options' toggle so the form is short by default"): everything
+               below is real, unchanged functionality -- just collapsed out of the way
+               until she wants it. #addFormMore uses display:contents when open (see CSS)
+               so its children lay out directly in the outer 2-col grid, exactly as if
+               they were still flat siblings -- no nested grid to keep in sync. Auto-opens
+               in openFormForEdit() when the event being edited already has data in any of
+               these fields, so editing never hides something she'd already filled in. -->
+          <button type="button" class="more-opts-toggle full" id="moreOptsToggle" aria-expanded="false" aria-controls="addFormMore">
+            <span id="moreOptsLabel">More options</span><span class="moreopts-chevron">›</span>
+          </button>
+          <div class="addform-more" id="addFormMore" hidden>
+            <!-- two-person system (Linh 2026-07-27): every item can be hers, his, or shared.
+                 2026-08-02 (code44, "easier to read and fill in" — she almost always picks
+                 "Mine" per her own answer): collapsed to a one-line summary by default; tap
+                 "change" to reveal the full picker. See syncWho()/whoSummaryBtn wiring. -->
+            <div class="field full" id="fWhoField">
+              <label>Whose job</label>
+              <button type="button" class="who-summary-btn" id="whoSummaryBtn" aria-expanded="false">
+                <span id="whoSummaryText">🙋‍♀️ Mine</span><span class="who-edit">Change ›</span>
+              </button>
+              <div class="track-picker" id="whoPicker" role="group" aria-label="Whose job" hidden>
+                <button type="button" class="track-opt who-opt" data-who="me" aria-pressed="true">🙋‍♀️ Mine</button>
+                <button type="button" class="track-opt who-opt" data-who="partner" aria-pressed="false">🙋‍♂️ <span class="who-name">David</span></button>
+                <button type="button" class="track-opt who-opt" data-who="both" aria-pressed="false">👫 Both of us</button>
+              </div>
+            </div>
+            <div class="field full" id="fStagesField">
+              <label for="fStages">Follow-ups <span class="field-hint">one per line, add "~15m" to time it</span></label>
+              <textarea id="fStages" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
+            </div>
+            <div class="field full" id="fEstField">
+              <label for="fEst">Honestly, how long? <span class="field-hint">minutes</span></label>
+              <input type="number" id="fEst" min="5" step="5" placeholder="e.g. 30" style="max-width:140px">
+            </div>
+            <div class="field" id="fEndField"><label for="fEnd">Ends</label><input type="time" id="fEnd"></div>
+            <div class="field" id="fDurField"><label for="fDur">Or duration <span class="field-hint">fills in Ends</span></label><input type="number" id="fDur" min="5" step="5" placeholder="e.g. 45"></div>
+            <div class="allday-row" id="fAllDayRow">
+              <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
+            </div>
+            <div class="field full" id="fCatField">
+              <label for="fCat">Category <span class="field-hint">optional</span></label>
+              <input type="text" id="fCat" placeholder="e.g. Birthdays, Work" list="catList" autocomplete="off">
+              <datalist id="catList">
+                <option value="Birthdays"></option><option value="Work"></option>
+              </datalist>
+            </div>
+            <div class="field full" id="fLocField">
+              <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
+              <input type="text" id="fLoc" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
+              <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
+              <datalist id="locList"></datalist>
+            </div>
           </div>
           <div class="form-actions">
             <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
@@ -19780,6 +19848,21 @@
   // if something was filled"): true the instant any field is touched (see the form's
   // "input"/"change" delegation below), reset false every time the form opens fresh.
   let formDirty = false;
+  // 2026-08-06 ("tuck OPTIONAL fields behind a small 'More options' toggle"): the
+  // collapsible wrapper's own open/closed state — closed on every fresh open, but
+  // openFormForEdit() below re-opens it automatically when the event being edited
+  // already has data tucked inside, so editing never hides something already filled in.
+  function setMoreOptionsOpen(open) {
+    const wrap = document.getElementById("addFormMore");
+    const btn = document.getElementById("moreOptsToggle");
+    if (!wrap || !btn) return;
+    wrap.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    document.getElementById("moreOptsLabel").textContent = open ? "Fewer options" : "More options";
+  }
+  document.getElementById("moreOptsToggle").addEventListener("click", () => {
+    setMoreOptionsOpen(document.getElementById("addFormMore").hidden);
+  });
   function closeForm() {
     form.hidden = true; addRow.hidden = false;
     document.getElementById("addFormBackdrop").hidden = true;
@@ -19790,6 +19873,7 @@
     fStart.disabled = false; fEnd.disabled = false; fDur.disabled = false;
     eventEditId = null;
     formDirty = false;
+    setMoreOptionsOpen(false);
     document.getElementById("eventSubmitBtn").textContent = "Write it in";
   }
   function syncTrack() {
@@ -19806,6 +19890,7 @@
     formWho = prefWho || "me"; syncWho();
     if (prefStart) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; fStart.value = prefStart; }
     if (prefLoc && prefLoc.length) fLoc.value = prefLoc.join(" > ");
+    setMoreOptionsOpen(false);
     fTitle.focus();
   }
   function openFormForEdit(ev) {
@@ -19831,6 +19916,11 @@
     fEnd.value = ev.allDay ? "" : (ev.end || "");
     fDur.value = !ev.allDay && ev.start && ev.end ? String(toMin(ev.end) - toMin(ev.start)) : "";
     document.getElementById("fEst").value = ev.estMin || "";
+    // auto-open More options if the event being edited already has data tucked in
+    // there — editing should never hide something she'd already filled in.
+    const hasExtra = whoOf(ev) !== "me" || (ev.stages && ev.stages.length) || ev.estMin
+      || (!ev.allDay && ev.end) || ev.allDay || ev.category || (ev.locPath && ev.locPath.length);
+    setMoreOptionsOpen(!!hasExtra);
     fTitle.focus();
   }
   /* ============ MONEY — spending log feeding the Financial management page ============ */
