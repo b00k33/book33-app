@@ -2566,6 +2566,63 @@
     0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
     100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.4); opacity: 0; }
   }
+  /* ============================================================
+     REWARD LAYER — instant delight, visible progress, kind streaks.
+     The confetti burst above is positional (tied to a tap point);
+     everything here is screen-level (message/haptic/sound don't
+     need coordinates) — hooked once into toggleDone(), so every
+     tick surface app-wide gets it for free, nothing duplicated
+     per call site.
+     ============================================================ */
+  .reward-toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 14px);
+    max-width: calc(100vw - 32px); text-align: center;
+    background: var(--paper); border: 1px solid var(--note-line); color: var(--ink);
+    font-family: var(--font-body); font-size: 13px; font-weight: 700;
+    padding: 10px 20px; border-radius: 999px; box-shadow: 0 10px 30px -8px rgba(0,0,0,.4);
+    opacity: 0; pointer-events: none; z-index: 500;
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .reward-toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .reward-toast[data-scale="routine"] {
+    border-color: var(--margin-rule);
+    box-shadow: 0 0 20px -4px var(--margin-rule), 0 10px 30px -8px rgba(0,0,0,.4);
+  }
+  .reward-toast[data-scale="day"], .reward-toast[data-scale="milestone"] {
+    background: color-mix(in oklab, var(--nav-active) 85%, var(--paper)); color: var(--nav-active-ink);
+    border-color: var(--nav-active); font-size: 14px;
+    box-shadow: 0 0 28px -2px var(--nav-active), 0 10px 30px -8px rgba(0,0,0,.4);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reward-toast { transition: opacity .2s ease; transform: translate(-50%, 0) !important; }
+  }
+  /* today's progress ring — sits in the day-side rail, right above the to-do
+     list it's summarising; tap it to open a small end-of-day recap in place */
+  .dp-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 12px;
+    border: 1px solid var(--note-line); border-radius: var(--radius-md); background: var(--note-bg);
+  }
+  .dp-ring-btn { flex: none; position: relative; width: 52px; height: 52px; padding: 0; border: none; background: none; cursor: pointer; }
+  .dp-ring-svg { width: 100%; height: 100%; }
+  .dp-ring-track { fill: none; stroke: var(--dot-empty); stroke-width: 5; }
+  .dp-ring-prog { fill: none; stroke: var(--margin-rule); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .3s ease; }
+  .dp-ring-prog[data-complete="true"] { stroke: var(--fit-workout); }
+  .dp-ring-center {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .dp-info { flex: 1; min-width: 0; }
+  .dp-label { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+  .dp-streaks { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
+  .dp-sound-toggle {
+    flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--note-line);
+    background: var(--field-bg); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .dp-sound-toggle[aria-pressed="true"] { border-color: var(--margin-rule); }
+  .dp-recap { padding: 4px 2px 14px; }
+  .dp-recap-row { font-size: 12.5px; color: var(--ink-soft); padding: 3px 0; }
+  .dp-recap-left { font-size: 12px; color: var(--ink-soft); font-style: italic; margin-top: 6px; }
+  .dp-recap-left.dp-recap-clear { color: var(--fit-workout); font-style: normal; font-weight: 700; }
   /* TASKS keep soft rounded mochi corners + a round gold tick;
      ROUTINES are tasks on a schedule — rounded, tickable, gold ↻, steps + minutes in the meta;
      EVENTS (appointments/occasions) are rounded pills too (2026-08-01: SUPERSEDED the
@@ -3815,7 +3872,7 @@
 
   /* ============ GROWTH (Chapter 9 — real data + what it's building) ============ */
   .gr-lead { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; margin: -4px 0 16px; }
-  .gr-empty-note { font-size: 12px; color: var(--ink-faint); font-style: italic; }
+  .gr-empty-note { font-size: 12px; color: var(--ink-soft); font-style: italic; }
   .gr-benefit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .gr-benefit-card { border: 1px solid var(--note-line); border-radius: var(--radius-md); padding: 16px; background: var(--note-bg); }
   .gr-benefit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -3825,7 +3882,7 @@
   .gr-benefit-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
   .gr-benefit-list li { font-size: 12px; color: var(--ink-soft); line-height: 1.4; padding-left: 16px; position: relative; }
   .gr-benefit-list li::before { content: "✦"; position: absolute; left: 0; top: 2px; color: var(--margin-rule); font-size: 10px; }
-  .gr-disclaimer { font-size: 10.5px; color: var(--ink-faint); font-style: italic; margin-top: 16px; line-height: 1.5; }
+  .gr-disclaimer { font-size: 10.5px; color: var(--ink-soft); font-style: italic; margin-top: 16px; line-height: 1.5; }
   .gr-milestones { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
   .gr-milestone {
     display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-md);
@@ -7807,6 +7864,7 @@
           <div class="pileup-sub">Slipped past their day — do it, move it, or let it go.</div>
           <div id="pileupList"></div>
         </div>
+        <div id="dayProgress"></div>
         <div id="alsoToday"></div>
 
         <!-- #addRow (the "Add to this day" trigger) moved above "The day" section-head,
@@ -9857,6 +9915,7 @@
   function toggleDone(id, on) {
     if (on) DONE[id] = true; else delete DONE[id];
     saveDone(DONE);
+    if (on) fireReward(id);
   }
   /* 2026-08-06 (Linh: "when I tick something off, play a quick, delightful UI response
      -- a little confetti burst or a springy check with a soft colour pop"): a fixed-
@@ -9897,6 +9956,236 @@
     const r = el.getBoundingClientRect();
     celebrateTickAt(r.left + r.width / 2, r.top + r.height / 2);
   }
+
+  /* ============================================================
+     REWARD LAYER — instant delight, visible progress, kind streaks,
+     milestones, affirming micro-copy, an end-of-day recap. Hooked
+     ONCE into toggleDone() below (see its final line) rather than
+     at each tick call site, so tasks/events/habits/routines all get
+     the exact same reward through the one place they already share
+     — no duplicate completion mechanism, nothing to wire per screen.
+     ============================================================ */
+  // everything tickable today — generated recurring items (routines, hair, family
+  // admin, supplements) plus hand-written events/tasks, minus birthdays (not
+  // completable) and forward-looking previews (not actually due yet).
+  function dayTickables(date) {
+    const k = keyOf(date);
+    return [...generatedFor(date).filter(e => !e.preview && e.category !== "Birthdays"),
+            ...EVENTS.filter(e => e.date === k)];
+  }
+  function dayProgress(date) {
+    const items = dayTickables(date);
+    return { done: items.filter(e => isDone(e.id)).length, total: items.length, items };
+  }
+  // ONE grace miss per streak — a missed scheduled day doesn't zero it out on its
+  // own; only a SECOND miss (before a completed day comes along) does. Kind by
+  // design (her ask: "one miss doesn't reset me to zero, never shame a missed
+  // day") — isScheduledFn decides whether a date is even "on the hook" for this
+  // habit at all; unscheduled days are simply skipped, counted neither way.
+  function streakWithGrace(isScheduledFn, isDoneFn, maxLookback) {
+    let streak = 0, graceUsed = false;
+    for (let i = 0; i < (maxLookback || 200); i++) {
+      const d = addDays(TODAY, -i);
+      if (!isScheduledFn(d)) continue;
+      if (isDoneFn(d)) { streak++; continue; }
+      if (i === 0) continue; // today — still open, not a miss yet
+      if (!graceUsed) { graceUsed = true; continue; }
+      break;
+    }
+    return streak;
+  }
+  // Fitness (Pilates + F45 + Bouldering + Stretching together, since fitWeekTarget/
+  // fitWeekProgress are already type-agnostic) streaks WEEKS, not days — her own
+  // rule is fulfilment over day-streaks (a week that met its planned sessions
+  // counts, "every single day" was never the ask), so the streak-with-grace idea
+  // applies one level up: one under-target week is forgiven, a second in a row
+  // ends it. Reads as "a Pilates streak" in practice since that's what she logs
+  // most, without literally requiring Pilates over her other workout types.
+  function fitnessWeekStreak() {
+    let streak = 0, graceUsed = false;
+    for (let i = 0; i < 104; i++) {
+      const wk = addDays(startOfWeek(TODAY), -7 * i);
+      const target = fitWeekTarget(wk);
+      if (!target) continue; // no plan that far back (before she started) — skip
+      if (fitWeekProgress(wk) >= target) { streak++; continue; }
+      if (i === 0) continue; // this week isn't over yet
+      if (!graceUsed) { graceUsed = true; continue; }
+      break;
+    }
+    return streak;
+  }
+  // the single longest-running ROUTINE_TASKS streak right now (hair wash types
+  // excluded — they already have their own dedicated tracker/streak on the Habits
+  // page; showing the same number twice under two names would just read as odd).
+  function bestRoutineStreak() {
+    let best = null;
+    ROUTINE_TASKS.forEach(t => {
+      if (t.calOn === false || HAIR_TYPE_IDS.has(t.id)) return;
+      const streak = streakWithGrace(d => routineOccursOn(t, d), d => isDone(`rt-${t.id}-${keyOf(d)}`), 200);
+      if (streak >= 3 && (!best || streak > best.streak)) best = { title: t.title, streak };
+    });
+    return best;
+  }
+  // sound is OFF by default (her explicit ask) — synthesized on the fly (a couple
+  // of soft sine notes with a quick decay) so there's no audio asset to bundle;
+  // AudioContext is created lazily on first real use, always inside a user
+  // gesture (a tick), so autoplay restrictions never bite.
+  const REWARD_SOUND_KEY = "daybook-reward-sound";
+  let rewardSoundOn = localStorage.getItem(REWARD_SOUND_KEY) === "1";
+  function setRewardSound(on) {
+    rewardSoundOn = !!on;
+    try { localStorage.setItem(REWARD_SOUND_KEY, rewardSoundOn ? "1" : "0"); } catch (e) {}
+  }
+  let rewardAudioCtx = null;
+  function playRewardSound(scale) {
+    if (!rewardSoundOn) return;
+    try {
+      rewardAudioCtx = rewardAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = rewardAudioCtx;
+      if (ctx.state === "suspended") ctx.resume();
+      const notes = scale === "day" || scale === "milestone" ? [523.25, 659.25, 783.99]
+        : scale === "routine" ? [523.25, 659.25] : [587.33];
+      notes.forEach((freq, i) => {
+        const t0 = ctx.currentTime + i * 0.09;
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type = "sine"; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(0.12, t0 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(t0); osc.stop(t0 + 0.24);
+      });
+    } catch (e) {}
+  }
+  // scaled to the win — one quiet pulse for a single item, a couple pulses for a
+  // whole routine, a day, or a milestone. Feature-detected + try/caught, so a
+  // browser/device without the Vibration API just silently gets no haptic.
+  function rewardHaptic(scale) {
+    if (!navigator.vibrate) return;
+    try {
+      if (scale === "day" || scale === "milestone") navigator.vibrate([22, 55, 22, 55, 35]);
+      else if (scale === "routine") navigator.vibrate([18, 45, 26]);
+      else navigator.vibrate(16);
+    } catch (e) {}
+  }
+  // varied on purpose (her ask: "vary the animation/message slightly each time so
+  // it stays fresh") — never repeats the same line twice in a row within a tier.
+  const REWARD_MSGS = {
+    small: ["Done.", "That's done.", "Nice.", "Ticked off.", "Good.", "You showed up.", "One more down.", "Noted."],
+    routine: ["Routine complete.", "That's the whole thing, done.", "All of it — done.", "You finished the routine.", "Full routine, done."],
+    day: ["Everything, today.", "Today's list — clear.", "You did it all today.", "A full day, done.", "Nothing left today."],
+  };
+  const rewardLastMsg = {};
+  function pickRewardMsg(scale) {
+    const arr = REWARD_MSGS[scale] || REWARD_MSGS.small;
+    let idx;
+    do { idx = Math.floor(Math.random() * arr.length); } while (arr.length > 1 && idx === rewardLastMsg[scale]);
+    rewardLastMsg[scale] = idx;
+    return arr[idx];
+  }
+  let rewardToastTimer = null;
+  function rewardToast(msg, scale) {
+    let el = document.getElementById("rewardToast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "rewardToast";
+      el.className = "reward-toast";
+      el.setAttribute("aria-live", "polite");
+      document.body.appendChild(el);
+    }
+    el.dataset.scale = scale;
+    el.textContent = msg;
+    el.classList.remove("show");
+    void el.offsetWidth; // restart the fade if a toast is already mid-flight
+    el.classList.add("show");
+    clearTimeout(rewardToastTimer);
+    const dur = scale === "day" || scale === "milestone" ? 2600 : scale === "routine" ? 2200 : 1600;
+    rewardToastTimer = setTimeout(() => el.classList.remove("show"), dur);
+  }
+  // real thresholds crossed BY this exact tick — checked against live totals, so
+  // it only ever fires the moment a count actually lands on 7/30/50/100/200/365
+  // (GROWTH_MILESTONES, shared with the Growth page — one source of truth), not
+  // on every tick after. Ticking something unrelated to Pilates/fasting/a routine
+  // never changes those totals, so this stays silent then, same as it should.
+  function checkRewardMilestones() {
+    const pilTotal = Object.values(FIT_LOG).flat().filter(s => s.type === "Pilates").length;
+    if (GROWTH_MILESTONES.includes(pilTotal)) return `🏋️ ${pilTotal} Pilates sessions — milestone reached.`;
+    const rec = fastRecords();
+    if (rec && GROWTH_MILESTONES.includes(rec.current)) return `🔥 ${rec.current}-day fasting streak — milestone reached.`;
+    const fitWeeks = fitnessWeekStreak();
+    if ([4, 8, 12, 26, 52].includes(fitWeeks)) return `🔥 ${fitWeeks} weeks of fitness fulfilment in a row.`;
+    const best = bestRoutineStreak();
+    if (best && GROWTH_MILESTONES.includes(best.streak)) return `🔥 ${best.streak}-day streak on "${best.title}".`;
+    return null;
+  }
+  // the one hook — called from toggleDone() only when something turns ON, so
+  // every tick surface app-wide (Day timeline, Week chips, Habits, Routines,
+  // staged tasks' final stage) gets the identical reward for free, and anything
+  // ticked off later inherits it automatically with no extra wiring.
+  function fireReward(id) {
+    const { done, total } = dayProgress(TODAY);
+    const dayComplete = total > 0 && done >= total;
+    const isRoutine = /^(rt|hair)-/.test(id);
+    const milestoneMsg = checkRewardMilestones();
+    const scale = milestoneMsg ? "milestone" : dayComplete ? "day" : isRoutine ? "routine" : "small";
+    rewardHaptic(scale);
+    playRewardSound(scale);
+    rewardToast(milestoneMsg || pickRewardMsg(scale === "milestone" ? "day" : scale), scale);
+  }
+  // small, satisfying, closure-not-guilt (her ask): what's done reads as a plain
+  // checked list; what's left is one soft line, never itemised — a nudge-free
+  // "no rush" beats a list of everything still outstanding.
+  function dayRecapHTML(items) {
+    if (!items.length) return `<div class="dp-recap-left">Nothing tickable on today's page yet.</div>`;
+    const doneItems = items.filter(e => isDone(e.id));
+    const left = items.length - doneItems.length;
+    return `
+      ${doneItems.length ? doneItems.map(e => `<div class="dp-recap-row">✓ ${esc(e.title)}</div>`).join("")
+        : `<div class="dp-recap-left">Nothing ticked off yet today — whenever you're ready.</div>`}
+      ${left > 0 ? `<div class="dp-recap-left">${left} left for today — no rush.</div>`
+        : `<div class="dp-recap-left dp-recap-clear">Everything's done. Nicely closed out.</div>`}
+    `;
+  }
+  // goal-gradient ring (her ask: "seeing it near full pulls me to finish") — tap
+  // it to open the recap in place, same widget doing double duty rather than two.
+  let dpRecapOpen = false;
+  function renderDayProgress() {
+    const host = document.getElementById("dayProgress");
+    if (!host) return;
+    const { done, total, items } = dayProgress(TODAY);
+    const pct = total ? done / total : 0;
+    const size = 52, sw = 5, r = (size - sw) / 2, c = 2 * Math.PI * r;
+    const off = (c * (1 - pct)).toFixed(1);
+    const complete = total > 0 && done >= total;
+    const streakBits = [];
+    const fitWeeks = fitnessWeekStreak();
+    if (fitWeeks >= 2) streakBits.push(`🔥 ${fitWeeks}-week fitness streak`);
+    const bestRtn = bestRoutineStreak();
+    if (bestRtn) streakBits.push(`🔥 ${bestRtn.streak}-day ${esc(bestRtn.title)}`);
+    host.innerHTML = `<div class="dp-card">
+      <button type="button" class="dp-ring-btn" id="dpToggle" aria-expanded="${dpRecapOpen}" aria-label="Today's progress — tap for a recap">
+        <svg viewBox="0 0 ${size} ${size}" class="dp-ring-svg">
+          <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="dp-ring-track"/>
+          <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="dp-ring-prog" data-complete="${complete}"
+            transform="rotate(-90 ${size / 2} ${size / 2})" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off}"/>
+        </svg>
+        <span class="dp-ring-center">${total ? `${done}/${total}` : "—"}</span>
+      </button>
+      <div class="dp-info">
+        <div class="dp-label">${complete ? "Today — all done" : total ? "Today's progress" : "Nothing tickable today"}</div>
+        ${streakBits.length ? `<div class="dp-streaks">${streakBits.join(" · ")}</div>` : ""}
+      </div>
+      <button type="button" class="dp-sound-toggle" id="dpSoundToggle" aria-pressed="${rewardSoundOn}"
+        aria-label="${rewardSoundOn ? "Turn off completion sound" : "Turn on completion sound"}"
+        title="${rewardSoundOn ? "Sound on completion — on" : "Sound on completion — off"}">${rewardSoundOn ? "🔔" : "🔕"}</button>
+    </div>
+    <div class="dp-recap"${dpRecapOpen ? "" : " hidden"}>${dayRecapHTML(items)}</div>`;
+  }
+  document.getElementById("dayProgress").addEventListener("click", e => {
+    if (e.target.closest("#dpToggle")) { dpRecapOpen = !dpRecapOpen; renderDayProgress(); return; }
+    if (e.target.closest("#dpSoundToggle")) { setRewardSound(!rewardSoundOn); renderDayProgress(); return; }
+  });
+
   // staged tasks — for the ones she finishes in pieces: the task carries follow-up
   // stages, and ticking it advances to the next stage instead of vanishing.
   // Full chain = [title, ...stages]; stageAt = how many steps are already behind her.
@@ -12447,6 +12736,7 @@
     renderBodyWidget();
     renderWellnessGlance();
     renderDayHealth();
+    renderDayProgress();
     renderDayFitLink();
     renderBiomechTip();
     renderShopping(d);
@@ -14724,6 +15014,7 @@
     }
     document.getElementById("fitStats").innerHTML = `<div class="h-stats">
       <div class="h-stat"><div class="n">${sessions}</div><div class="l">Sessions this year</div></div>
+      <div class="h-stat"><div class="n">🔥 ${fitnessWeekStreak()}</div><div class="l">Week streak</div></div>
       <div class="h-stat"><div class="n">${weeksFulfilled}</div><div class="l">Weeks fulfilled</div></div>
       <div class="h-stat"><div class="n">${weekProgress}/${fitWeekTarget(TODAY)}</div><div class="l">This week's plan</div></div>
       ${favourite ? `<div class="h-stat"><div class="n">${favourite[0]}</div><div class="l">Most logged</div></div>` : ""}
