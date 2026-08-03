@@ -759,12 +759,42 @@
        width row each, kept here. mini-cal-mascot is still a SIBLING of #tilesDate (lives
        in .mini-cal-wrap next to it), not a descendant -- same ancestor-direction note as
        before, still correct, still worth re-stating since it's an easy mistake to redo. */
-    #tilesDate.expanded ~ .mini-cal-wrap .mini-cal-mascot {
-      display: inline-flex; flex-basis: 100%; width: 100%; margin-top: 4px; order: 8;
-    }
+    /* 2026-08-05 (Part 1 header redo, "expanding shows the cosmic details... as a panel
+       that FLOATS OVER the calendar — the calendar must NOT move or shrink... tap
+       outside to close"): SUPERSEDES the pair of rules this replaced, which gave
+       num-group-strip and mini-cal-mascot each their own IN-FLOW full-width row --
+       exactly the "pushes the calendar into the bottom third" shape she flagged (every
+       tap added ~130px of real height above the schedule). Two changes make this one
+       floating panel instead of two flow rows:
+       (1) mini-cal-mascot (PY/horse/UY) is reparented via JS into #numGroupStrip on
+       mobile only (see the isMobile() branch near badge()/positionDot()) -- desktop's
+       static HTML position (beside the mini-cal grid) is untouched, only the mobile DOM
+       gets the move, so this is the one non-CSS piece of "styling" in this pass: same
+       ids, same content, same click/hover bindings, just a different parent so both
+       pieces of cosmic content can share ONE panel box and ONE background instead of
+       being two separately-bordered cards (nested-box smell, see CLAUDE.md "flat, not
+       boxy"). Its own rule (flex-basis:100%) is right below.
+       (2) #numGroupStrip itself goes from a normal-flow item to position:absolute,
+       anchored to .day-row2 (the nearest real box -- see position:relative added above)
+       at top:100%, so it now overlays whatever is below instead of pushing it down.
+       #tilesDate never grows; the schedule underneath never moves. Tap-outside-to-close
+       is a small document click listener near the existing #dayHeroToggle handler. */
     #tilesDate.expanded .day-hero-more .num-group-strip {
-      display: flex; flex-basis: 100%; width: 100%; margin-left: 0; order: 7;
+      display: flex; position: absolute; top: 100%; left: 0; right: 0; margin-top: 8px;
+      z-index: 220; width: auto;
+      box-shadow: 0 16px 40px -12px rgba(0,0,0,0.55);
     }
+    /* mascot now lives INSIDE numGroupStrip (mobile, via JS) -- flex-basis:100% drops it
+       to its own line under the PM/sign/animal/birthday/imprint row (that row keeps its
+       normal flex-wrap), and its own border/background come off since the panel's own
+       background (rule above, inherited from the base .num-group-strip rule) already
+       gives the whole thing one shared surface -- two nested boxes would just be the
+       same "boxy" pattern this pass is meant to remove. */
+    .num-group-strip .mini-cal-mascot {
+      flex-basis: 100%; margin-top: 8px; padding: 0; background: none; border: none;
+      justify-content: flex-start; position: static;
+    }
+    .num-group-strip .mini-cal-mascot::before { content: none; }
     /* one label/value size for every attribute in the cosmic-panel rows -- PM, sign,
        animal, birthday and imprint (all inside .num-group-strip) were 3 different sizes
        before this; 12px value text + a matching .dab-name label now reads as one
@@ -1537,11 +1567,12 @@
   .tl-detail-body { padding: 4px 22px 26px; overflow-y: auto; }
   .tl-detail-icon { width: 14px; height: 14px; border-radius: 4px; display: inline-block; margin-right: 10px; vertical-align: middle; }
   .tl-detail-title { font-size: 21px; font-weight: 700; color: var(--ink); line-height: 1.25; margin: 2px 0 14px; }
+  /* 2026-08-05 (Part 2, whole-app flat pass, "separate... with spacing, NOT... divider
+     lines"): rows used to be split by a hairline border-top -- gap/padding alone is
+     enough separation on a single-tone sheet, so the lines come out. */
   .tl-detail-row {
     display: flex; align-items: flex-start; gap: 14px; padding: 9px 0; font-size: 14px; color: var(--ink);
-    border-top: 1px solid var(--note-line);
   }
-  .tl-detail-row:first-of-type { border-top: none; }
   .tl-detail-row .tl-detail-em { flex: none; width: 18px; text-align: center; color: var(--ink-faint); }
   .tl-detail-row .tl-detail-sub { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
   .tl-detail-done-btn {
@@ -1550,7 +1581,7 @@
     color: var(--margin-rule); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .tl-detail-done-btn.done { background: var(--margin-rule); color: var(--accent-on); }
-  .tl-detail-steps { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-top: 1px solid var(--note-line); }
+  .tl-detail-steps { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; }
   .tl-detail-step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--ink); }
   .tl-detail-step input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: var(--margin-rule); cursor: pointer; }
   .tl-detail-step .tl-step-t { flex: 1; min-width: 120px; }
@@ -4590,13 +4621,52 @@
   }
   /* 2026-07-31 ("doesn't look cohesive"): thinned from a 45%-gold glowing border + halo
      on every card to a quiet hairline — glow is now reserved for the handful of widgets
-     with their own signature colour (fasting, biomech, herb, imprint). */
+     with their own signature colour (fasting, biomech, herb, imprint).
+     2026-08-05 (Part 2, whole-app flat pass, "flat, not boxy: separate and group with
+     background colour/tone and spacing, NOT borders, outlines, divider lines, or nested
+     boxes"): SUPERSEDES the hairline-border call above -- every class in this list
+     already carries its own distinct fill (var(--note-bg) or var(--paper), see each
+     class's own rule), so the border was pure decoration once the shadow was already
+     gone; removing it too still leaves every card visibly separated from the page by
+     its own tone, exactly the "colour/tone, not borders" language she's asking for.
+     This one shared selector is also why this is a single edit instead of 25 -- these
+     classes were already being co-styled as one group. */
   .also-today, .add-form, .daypicker, .shop-box, .mini-cal, .df-tile,
   .pg-card, .goal-card, .rv-card, .dinner-card, .mp-cell, .week-col, .wr-pop,
   .dish, .tree-card, .fam-item, .bd-next, .fridge, .h-card, .sp-card, .wm-card,
   .recipe-card, .supp-card, .cyc-pop, .prod-card, .bc-card {
-    border-color: color-mix(in srgb, var(--nav-active) 16%, var(--note-line));
+    border: none;
     box-shadow: none;
+  }
+  /* 2026-08-05 (Part 2, whole-app flat pass): more page-level cards that weren't part of
+     the original 25-selector sweep above -- same reasoning, each already has its own
+     fill (var(--note-bg)/var(--field-bg)) so the border was pure decoration. .rtn-row
+     also had a colour-carrying background of its own (--field-bg), so it stays visibly
+     a "row" without the outline. */
+  .today-glance, .cyc-detail, .beauty-card, .wt-box, .bday-detail, .rtn-row,
+  .ppl-table tbody tr {
+    border: none;
+    box-shadow: none;
+  }
+  /* 2026-08-05 (Part 2, "separate... with spacing, NOT... divider lines"): this whole
+     family used a hairline border-top between rows (with :first-of-type stripping it off
+     the first one) as its only separator -- same list-row pattern already sharing a hover
+     tint at .log-row:hover etc above, so removing the static line and leaning on that
+     hover tint + each row's own padding keeps them scannable without a literal divider. */
+  .log-row, .bd-row, .fridge-item, .supp-today-item, .shop-item, .fam-def-row,
+  .p-item, .pileup-item, .ppl-rel-row {
+    border-top: none;
+  }
+  /* 2026-08-05 (Part 2, same "spacing, not divider lines" pass): the same border-top
+     hairline shows up as an INTERNAL section break inside single cards too (e.g. the
+     fasting widget's notes/fitness/body sections, the event-detail sheet's "extra" block,
+     biomech's sections, weight tracker's "booked" note) -- each of these already has its
+     own margin-top/padding-top doing the real spacing work, so the line itself was the
+     only "boxy" part. .p-group + .p-group is the gap BETWEEN groups, same treatment. */
+  .head-note-sec, .head-fit-sec, .head-body, .tl-detail-extra, .p-item,
+  .p-group + .p-group, .evl-import, .wm-item, .cpd-prev-year, .recipe-row,
+  .bc-section, .dh-row, .wt-booked, .shelf-item, .week-rows .wr-cap, .week-fast .wr-cap {
+    border-top: none;
   }
 
   /* ---- starry jewel-box pass (2026-07-23): the WHOLE BOOK goes black-with-stars.
@@ -5292,9 +5362,16 @@
       position: static;
       width: 30px; height: 30px; font-size: 13px;
     }
+    /* 2026-08-05 (Linh: "the three top-right icons must be one aligned set — same size
+       and style, evenly spaced"): search stood out from its two neighbours -- it kept
+       its DESKTOP treatment (gold ring, transparent fill, from the base .jump-btn rule
+       up top) instead of matching the frame/theme-toggle's dark-fill + hairline-border
+       look. Same border/background/color as .theme-toggle and .b33-live-frame now, so
+       the set reads as one style, not "two normal + one highlighted." */
     .jump-btn {
       position: static;
-      width: 30px; height: 30px;
+      width: 30px; height: 30px; font-size: 13px;
+      border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
     }
     /* legacy sub-tabs row: retired on mobile (categories live in the BK33 drawer
        instead), never populated here -- keep an empty box from eating space in the row. */
@@ -5365,6 +5442,12 @@
   @media (max-width: 640px) {
     .day-row2 {
       display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+      /* 2026-08-05 (Part 1 header redo, "expanding shows the cosmic details as a panel
+         that FLOATS OVER the calendar — the calendar must NOT move or shrink"): every
+         ancestor between #numGroupStrip and here is display:contents (see the rules
+         right below), so .day-row2 is the nearest real box left -- the positioned
+         ancestor the floating panel below anchors to. */
+      position: relative;
     }
     .day-row2 #tilesDate { display: contents; }
     .day-row2 .page-head { display: contents; }
@@ -5431,14 +5514,12 @@
     }
     .day-row2 .day-hero-more .moon-badge { order: 4; display: inline-flex; font-size: 12px; }
     .day-row2 .day-hero-toggle { order: 5; }
-    .day-row2 .mini-cal-mascot { order: 8; display: none; position: relative; padding-left: 17px; }
-    .day-row2 .mini-cal-mascot::before {
-      content: "\2022"; position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
-      color: var(--ink-faint); font-size: 11px;
-    }
-    /* mini-cal-mascot's expanded-visible rule (display/flex-basis/width/order) already
-       lives with the rest of the #tilesDate.expanded cosmic-panel rules above -- no
-       separate copy needed here. */
+    /* 2026-08-05: mini-cal-mascot no longer sits in this flattened flex pool at all on
+       mobile -- JS reparents it inside #numGroupStrip (see the floating-panel block
+       above), so its default display:none there and its position/order here would just
+       be dead weight (and, worse, would win the cascade over the new nested-mascot rule
+       below it in the file, since both match at equal specificity and this block used
+       to come later -- see the .num-group-strip .mini-cal-mascot rule instead). */
   }
   /* 2026-08-02 (Linh mockup: "─────" divider, then "(prev) Today (next)  Today's
      Patients   Earlier (down)  Later (down)" all on one line): .toprow, now DOM-adjacent
@@ -14073,9 +14154,17 @@
     return `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`;
   }
   // fitness sessions that have a time set, shaped like a calendar event so they can be
-  // merged into the Day page's Personal list (which already supports timed items + location)
+  // merged into the Day page's Personal list (which already supports timed items + location).
+  // 2026-08-03 (Linh: "marking Pilates done creates a NEW Pilates event"): any day a
+  // routine with a matching fitLink occurs, that routine's OWN occurrence in generatedFor()
+  // is already the calendar block for it — rendering the fitness-log session again here
+  // doubled it up (confirmed live: her "Piles" routine + a separate logged "Pilates"
+  // block stacking on the same day). Only sessions with no same-day/type routine — the
+  // quick-log button or "pilates done" via the command bar on a day the routine doesn't
+  // run — still need a block of their own here.
   function fitCalendarEventsFor(date) {
-    return fitSessionsOn(date).filter(s => s.time).map(s => ({
+    const routineFitLinks = new Set(routinesOn(date).map(t => t.fitLink).filter(Boolean));
+    return fitSessionsOn(date).filter(s => s.time && !routineFitLinks.has(s.type)).map(s => ({
       id: `fitcal-${s.id}`, title: s.type, track: "personal", category: "Fitness",
       icon: "🏋️", start: s.time, end: s.durationMin ? addMinutesToTimeStr(s.time, s.durationMin) : "",
       loc: s.location || "", generated: true, noRecurIcon: true,
@@ -16477,10 +16566,23 @@
   // (renderDay only repopulates the ID'd children inside it, never recreates the
   // node), so this class toggle naturally stays put as she moves between days —
   // no extra state to track.
-  document.getElementById("dayHeroToggle").addEventListener("click", () => {
+  document.getElementById("dayHeroToggle").addEventListener("click", (e) => {
+    e.stopPropagation();
     const el = document.getElementById("tilesDate");
     const open = el.classList.toggle("expanded");
     document.getElementById("dayHeroToggle").setAttribute("aria-expanded", String(open));
+  });
+  // 2026-08-05 (Part 1 header redo, "tap outside to close"): the cosmic panel now floats
+  // over the schedule (see the #numGroupStrip position:absolute rule) instead of pushing
+  // it down, so it needs its own dismiss -- a tap anywhere outside #tilesDate closes it.
+  // stopPropagation() on the toggle button above keeps its own open/close click from
+  // reaching this listener and immediately re-closing what it just opened.
+  document.addEventListener("click", (e) => {
+    const el = document.getElementById("tilesDate");
+    if (!el || !el.classList.contains("expanded")) return;
+    if (el.contains(e.target)) return;
+    el.classList.remove("expanded");
+    document.getElementById("dayHeroToggle")?.setAttribute("aria-expanded", "false");
   });
 
 
@@ -19851,6 +19953,27 @@
   // small fixed top-left spot (just a status light, never flagged as a problem).
   var MOBILE_MQ = "(max-width: 640px)";
   function isMobile() { return window.matchMedia(MOBILE_MQ).matches; }
+  // 2026-08-05 (Part 1 header redo, "the cosmic details float over the calendar as ONE
+  // panel"): on mobile only, moves the PY/horse/UY mascot pill from its static desktop
+  // home (beside the mini-cal grid, in .mini-cal-wrap) into #numGroupStrip, so it and
+  // the PM/sun-sign/animal/birthday/imprint row share one floating panel + one
+  // background instead of being two separately-positioned/bordered pieces. Pure DOM
+  // relocation -- no ids, content, or click/hover bindings change, so nothing about
+  // what she can tap or how it's stored is different, only which parent element it
+  // renders inside. Desktop's HTML is never touched (this never runs there), so the
+  // existing side-by-side-with-the-calendar desktop layout is unaffected. Idempotent
+  // (checks .contains first) so it's safe to call from both boot and resize.
+  function placeCosmicMascot() {
+    var strip = document.getElementById("numGroupStrip");
+    var mascot = document.querySelector(".mini-cal-wrap .mini-cal-mascot, .num-group-strip .mini-cal-mascot");
+    if (!strip || !mascot) return;
+    if (isMobile()) {
+      if (!strip.contains(mascot)) strip.appendChild(mascot);
+    } else if (strip.contains(mascot)) {
+      var wrap = document.querySelector(".mini-cal-wrap");
+      if (wrap) wrap.insertBefore(mascot, wrap.firstChild);
+    }
+  }
   function positionDot() {
     var dot = document.getElementById("b33Live");
     if (!dot) return;
@@ -20051,6 +20174,8 @@
   function go() {
     ready = true; lastPushed = JSON.stringify(gather());
     hideOverlay(); badge(); signoutBtn(); subscribe();
+    placeCosmicMascot();
+    window.addEventListener("resize", placeCosmicMascot);
     // catch up on anything that changed while this device was away
     fetchCloud().then(function (row) { if (row) reconcile(row); });
   }
