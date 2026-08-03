@@ -10220,6 +10220,25 @@
     document.getElementById("resizeHandleLayer").innerHTML = html;
   }
 
+  // 2026-08-04 (Linh: "Pilates shows as a thin sliver instead of a 7:30-8:15
+  // block"): a start with no end/duration used to fall straight through to
+  // isBlock=false in renderTimeline below, landing on the generic 20px task-pill
+  // meant for an untimed to-do — wrong for anything that actually occupies real
+  // clock time. Give it a real end instead: a fitness-linked routine/session uses
+  // its class length (FIT_PRESETS), everything else with a start gets a sensible
+  // default block length. Shared by renderTimeline (block sizing) and
+  // renderTlDetailBody (the time label in its detail sheet) so the two never
+  // disagree about how long something runs. Render-only — e.end itself is never
+  // written back, so nothing about how the item is stored changes, just how it's
+  // drawn. Returns null only when the item has no start at all.
+  function itemEndMin(e) {
+    const s = toMin(e.start);
+    if (s === null) return null;
+    const real = toMin(e.end);
+    if (real !== null) return real;
+    const fitDur = e.fitLink && FIT_PRESETS[e.fitLink] ? FIT_PRESETS[e.fitLink].durationMin : null;
+    return s + (e.durationMin || fitDur || 30);
+  }
   // full item objects for every id currently on the timeline, so the detail sheet
   // (openTlDetail, further below) can look one back up by id — generated items
   // (routines, hair, etc.) exist nowhere else queryable once a render pass is done
@@ -10232,14 +10251,18 @@
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
-      const eEnd = toMin(e.end);
-      if (s >= END_MIN || (eEnd !== null && eEnd <= START_MIN)) { outside.push(e); return; }
+      const eEnd = itemEndMin(e);
+      if (s >= END_MIN || eEnd <= START_MIN) { outside.push(e); return; }
       const cs = Math.max(s, START_MIN);
-      const ce = eEnd !== null ? Math.min(eEnd, END_MIN) : null;
+      const ce = Math.min(eEnd, END_MIN);
       // routines with steps are always blocks (they expand to hold their tickable
       // sub-tasks), even when the routine itself is shorter than 30 min
       const hasSteps = e.steps && e.steps.length;
-      placed.push({ e, cs, ce, isBlock: (ce !== null && ce - cs >= 30) || !!hasSteps });
+      // trueEnd is the UNCLAMPED end (real end, or the fallback above) — kept
+      // separate from ce (clamped to the visible window, for positioning/height
+      // math only) so the time label below still reads the item's real end time
+      // even when it runs past the bottom of the visible hours.
+      placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps });
     });
 
     /* overlapping items share the hour side-by-side, so a crowded slot shows
@@ -10289,13 +10312,18 @@
     if (cluster.length) closeCluster();
 
     layer.innerHTML = placed.length ? placed.map(p => {
-      const { e, ce, isBlock } = p;
+      const { e, ce, trueEnd, isBlock } = p;
       const kind = eventKind(e);
       // 2026-08-02 (Linh, GCal-mobile redesign, code44: "show only the title and the
       // time below it"): location/steps-count/duration-estimate dropped from the card
       // face — location and steps are both still in the detail sheet (renderTlDetailBody
       // below), one tap away; nothing here is deleted, just not duplicated on the card.
-      const meta = ce !== null ? `${fmtTime(e.start)} – ${fmtTime(e.end)}` : fmtTime(e.start);
+      // 2026-08-04: every placed item has a start by construction (s === null items
+      // never make it into `placed`, see above) and now always has a real or derived
+      // end too (trueEnd), so the range always shows — reads e.end when it's real,
+      // falling back to the derived trueEnd so an item with no stored end still
+      // shows its actual end time instead of a blank dash.
+      const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}`;
       const actions = !e.generated ? `
         <button class="tl-edit" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>
         <button class="tl-del" data-del="${e.id}" aria-label="Remove ${esc(e.title)}">×</button>`
@@ -10399,7 +10427,11 @@
     const path = locOf(e);
     const hasSteps = kind === "routine" && e.steps && e.steps.length;
     const hasRtnExtras = kind === "routine" && !!e.fromRoutine;
-    const timeLabel = e.end ? `${fmtTime(e.start)} – ${fmtTime(e.end)}` : e.start ? fmtTime(e.start) : "All day";
+    // 2026-08-04: same real-or-derived end as the calendar block (itemEndMin), so
+    // this sheet never shows a bare start time for something that's rendering as a
+    // full-duration block just above it.
+    const detailEnd = e.start ? itemEndMin(e) : null;
+    const timeLabel = e.start ? `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(detailEnd))}` : "All day";
     const freqLabel = e.freq && ROUTINE_FREQ_LABEL[e.freq] ? `Repeats ${ROUTINE_FREQ_LABEL[e.freq].toLowerCase()}` : "";
     const stepsHtml = hasSteps ? `<div class="tl-detail-steps">${e.steps.map((s, i) => {
       const stepId = `${e.id}::step::${i}`;
@@ -19473,6 +19505,50 @@
     closeCycleLog();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeCycleLog(); });
+  // 2026-08-04 (Linh: "tap-info popovers open off-screen and get cut off" — PY,
+  // Imprint, Leo, Goat, Birthdays etc.): every hover/tap info popover in the app
+  // (.num-hover-pop, .wcard-hover-pop, .wrn-hover-pop, .mo-hover-pop) is placed by
+  // static CSS chosen per-instance — left:0, a --right variant, or a centred
+  // translateX(-50%) — which only happens to fit when the trigger sits away from
+  // the screen edge. This measures the popover's ACTUAL rendered box after CSS has
+  // placed it and nudges it back inside the viewport: horizontally by adding an
+  // extra translateX on top of whatever the CSS already applied (so a centred or
+  // right-anchored popover keeps working, just corrected), vertically by flipping
+  // it above the trigger if there's more room there, then capping height + scrolling
+  // internally as a last resort if it still can't fit. trig is passed separately
+  // because the flip decision needs the TRIGGER's position (top: calc(100%+Npx) is
+  // relative to it), not the popover's own pre-correction box.
+  function clampPopoverToViewport(trig, pop) {
+    if (!trig || !pop) return;
+    pop.style.transform = ""; pop.style.top = ""; pop.style.bottom = "";
+    pop.style.maxHeight = ""; pop.style.overflowY = "";
+    const margin = 10;
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    let rect = pop.getBoundingClientRect();
+    let dx = 0;
+    if (rect.right > vw - margin) dx = (vw - margin) - rect.right;
+    if (rect.left + dx < margin) dx = margin - rect.left;
+    if (dx) {
+      const cs = getComputedStyle(pop).transform;
+      let baseX = 0;
+      if (cs && cs !== "none") { try { baseX = new DOMMatrixReadOnly(cs).m41; } catch (err) {} }
+      pop.style.transform = `translateX(${Math.round(baseX + dx)}px)`;
+      rect = pop.getBoundingClientRect();
+    }
+    const trigRect = trig.getBoundingClientRect();
+    if (rect.bottom > vh - margin && trigRect.top > vh - trigRect.bottom) {
+      pop.style.top = "auto";
+      pop.style.bottom = "calc(100% + 8px)";
+      rect = pop.getBoundingClientRect();
+    }
+    if (rect.top < margin || rect.bottom > vh - margin || rect.height > vh - margin * 2) {
+      const top = Math.max(rect.top, margin);
+      const bottom = Math.min(rect.bottom, vh - margin);
+      pop.style.maxHeight = Math.max(80, bottom - top) + "px";
+      pop.style.overflowY = "auto";
+    }
+  }
   // 2026-08-02 ("how to get the same hover effect on mobile?"): .num-hover-trigger's
   // popovers are pure CSS :hover/:focus-within — touch devices have no real hover, so
   // every numerology/zodiac/wellness hover card in the app was undiscoverable on
@@ -19483,7 +19559,27 @@
     document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => {
       if (el !== trig) el.classList.remove("pop-open");
     });
-    if (trig) trig.classList.toggle("pop-open");
+    if (trig) {
+      trig.classList.toggle("pop-open");
+      if (trig.classList.contains("pop-open")) {
+        clampPopoverToViewport(trig, trig.querySelector(".num-hover-pop, .wcard-hover-pop"));
+      }
+    }
+  });
+  // desktop hover + keyboard focus open these same popovers via pure CSS with no JS
+  // in the loop at all (including .wrn/.mo-cell-wrap, which never got the tap-toggle
+  // above since focus-on-tap already reaches them) — still needs the same correction
+  // the moment each one becomes visible, or it clips exactly like the tap path did.
+  const POP_TRIGGER_SEL = ".num-hover-trigger, .wrn, .mo-cell-wrap";
+  const POP_SEL = ".num-hover-pop, .wcard-hover-pop, .wrn-hover-pop, .mo-hover-pop";
+  document.addEventListener("mouseover", e => {
+    const trig = e.target.closest(POP_TRIGGER_SEL);
+    if (!trig || trig.contains(e.relatedTarget)) return;
+    clampPopoverToViewport(trig, trig.querySelector(POP_SEL));
+  });
+  document.addEventListener("focusin", e => {
+    const trig = e.target.closest(POP_TRIGGER_SEL);
+    if (trig) clampPopoverToViewport(trig, trig.querySelector(POP_SEL));
   });
   document.getElementById("eventsLayer").addEventListener("click", e => {
     if (e.target.closest(".tl-item")) return;   // an existing event handles its own clicks
