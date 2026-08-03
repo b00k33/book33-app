@@ -1595,6 +1595,11 @@
      panel it opens only exists on the Day page, so it has no job on any other page either.
      Un-hidden inside the mobile media query below, gated to body[data-view="day"]. */
   .num-star-btn { display: none; }
+  /* 2026-08-04: search moved into #categoryTabs' own drawer as its last row -- see
+     #navSearchBtn's mobile rule near .nav-cat-parent. Desktop has no equivalent single
+     vertical list to append a "last item" to (chapters are an always-visible pill row),
+     so it just stays hidden there; "/" still opens search from anywhere on any width. */
+  #navSearchBtn { display: none; }
   .jump-overlay {
     position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 45%, transparent);
     backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
@@ -5431,6 +5436,14 @@
       display: flex; align-items: center; justify-content: center;
       width: 20px; font-size: 16px; line-height: 1; flex: none;
     }
+    /* last row in the drawer, below every chapter -- .nav-cat-parent already gives it the
+       same row look; this just re-enables it here (base rule hides it) and sets it apart
+       with a hairline + a little extra breathing room above, same divider treatment
+       .nav-menu-sep uses between groups inside a chapter's own submenu. */
+    #navSearchBtn {
+      display: flex; margin-top: 5px; padding-top: 11px;
+      border-top: 1px solid var(--note-line); color: var(--ink-soft);
+    }
     #categoryTabs .nav-cat-short { display: none; }
     #categoryTabs .nav-menu {
       position: static; transform: none; margin: 1px 0 4px 20px;
@@ -6852,7 +6865,12 @@
            body[data-view="day"] since the panel it opens only exists in the Day page's
            own markup -- showing it elsewhere would be a dead button). -->
       <button type="button" class="jump-btn num-star-btn" id="numStarBtn" title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
-      <button type="button" class="jump-btn" id="jumpBtn" title="Jump to any page — press /" aria-label="Jump to any page">⌕</button>
+      <!-- 2026-08-04 (Linh: "move the magnifier out of top-right, into the chapter
+           dropdown as the last item"): the ⌕ button that used to live here is gone --
+           search now lives at the bottom of #categoryTabs' own drawer (see
+           renderNav/#navSearchBtn near CATEGORIES.map). "/" still opens it from
+           anywhere (see the keydown listener near openJump), so nothing reachable
+           by keyboard was lost, only the icon's home moved. -->
       <!-- 2026-08-03: restored with the rest of light mode. -->
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
     </div>
@@ -17361,11 +17379,31 @@
         + `</button>`
         + (singleView ? "" : `<div class="nav-menu" role="menu">${menu}</div>`)
         + `</div>`;
-    }).join("");
+    }).join("")
+      // 2026-08-04 (Linh: "move the search magnifier into the chapter dropdown, as the
+      // LAST item below CH4"): not a real category (no CATEGORIES entry, no data-view --
+      // #categoryTabs' own click delegate below intercepts #navSearchBtn by id, before the
+      // generic [data-navcat] handling, and calls openJump() directly). Desktop-hidden
+      // (base rule) since the drawer/vertical-list presentation this "last item in the
+      // list" framing describes is mobile-only -- desktop's row of chapter pills has no
+      // equivalent single list to append to. Mobile picks up .nav-cat-parent's row styling
+      // for free via the shared class, same look as every chapter row above it.
+      + `<button type="button" class="nav-cat-parent" id="navSearchBtn" aria-label="Search">`
+      + `<span class="nav-cat-icon" aria-hidden="true">🔍</span>`
+      + `<span class="nav-cat-full">Search</span>`
+      + `</button>`;
     const sub = document.getElementById("subTabs");
     sub.hidden = true; sub.innerHTML = "";
   }
   document.getElementById("categoryTabs").addEventListener("click", e => {
+    // checked first, ahead of the generic [data-navcat] handling below -- it's not a
+    // real category (no data-view, not wrapped in .nav-navwrap), just an action row.
+    if (e.target.closest("#navSearchBtn")) {
+      document.getElementById("categoryTabs").classList.remove("drawer-open");
+      document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
+      openJump();
+      return;
+    }
     // a menu pick navigates and closes; a parent click pins/toggles its menu (hover opens it too).
     // scope to .nav-menu-item so a parent click doesn't bubble up to #wrap's own data-view.
     const item = e.target.closest(".nav-menu-item");
@@ -17453,7 +17491,8 @@
     inp.focus();
   }
   function closeJump() { document.getElementById("jumpOverlay").hidden = true; }
-  document.getElementById("jumpBtn").addEventListener("click", openJump);
+  // 2026-08-04: the ⌕ button this used to bind now lives inside #categoryTabs
+  // (#navSearchBtn) -- wired in that click delegate above, not here.
   // 2026-08-03 (Linh: "let me navigate QUICKLY to the habits tracking page ... a quick
   // way from the main navigation"): one tap, no dropdown, no typing.
   document.getElementById("habitsShortcutBtn").addEventListener("click", () => {
