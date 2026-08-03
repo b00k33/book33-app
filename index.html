@@ -60,6 +60,9 @@
       yellow) so a personal timeline block and a gold accent button never blur into each
       other, and dark enough that white event-card text clears ~5.6:1 contrast on it. */
     --accent-seed: #D4AF37;     /* metallic gold — fixed (2026-07-31: no longer recomputed per Chinese year element) */
+    --habit-done: #5f9e3f;      /* Habits Week grid only -- a done circle fills this plain
+      green everywhere regardless of category (Month's grid colours by category instead;
+      keeping the two visually distinct is deliberate, from the original approved mockup). */
     /* ============ TRACK + SUBCATEGORY TIMELINE FILLS — single source ============
        2026-08-02 (Linh: "my colour palette got lost in an earlier edit... define ALL
        track and category colours in ONE central place"). Archaeology: git history
@@ -3387,23 +3390,38 @@
      colour comes only from var(--work-seed)/--family-seed/--marriage-seed/
      --personal-seed, set inline per-row from each routine's own .track. */
   .hb-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 14px; color: var(--ink-soft); font-size: 13px; }
+  /* Month's grid (28-31 day-columns) genuinely can't fit 360px and still needs this --
+     Week's grid below no longer does (see the note there), so it just never triggers for it. */
   .hb-scroll { overflow-x: auto; padding-bottom: 6px; }
-  /* ---- Week ---- */
-  .hb-grid { display: grid; grid-template-columns: 92px repeat(7, minmax(30px, 1fr)) 34px; align-items: center; min-width: 420px; }
+  /* ---- Week ----
+     2026-08-04 ("missing day headers, circles don't line up, scrolls sideways"): two bugs.
+     (1) .hb-hl used to be grid-column:1/-1 -- its own full-width row -- which pushed every
+     day-cell that followed onto the row's column 1 (under the NAME column) instead of under
+     Monday, shifting the whole week one column left. It's now just the row's first column,
+     same row as its own 7 day-cells + count, so headers/cells/count all share one column
+     grid top to bottom. (2) .hb-grid had a hard-coded min-width:420px forcing horizontal
+     scroll on a 360px phone no matter what -- removed. The two fixed columns (name, WK
+     count) are narrow px, the 7 day columns are bare 1fr (day-cell content is a 12px dot,
+     nowhere near a column's fair share of ~35px, so they never force overflow); min-width:0
+     on .hb-hl + ellipsis on its text stops a long habit name from doing the same. */
+  .hb-grid { display: grid; grid-template-columns: 68px repeat(7, 1fr) 26px; align-items: center; width: 100%; }
   .hb-dh { text-align: center; font-size: 10px; color: var(--ink-faint); padding-bottom: 8px; }
   .hb-dh .hb-dd { display: block; font-size: 11px; color: var(--ink-soft); font-weight: 600; }
   .hb-dh.today, .hb-dh.today .hb-dd { color: var(--margin-rule); }
   .hb-cnth { font-size: 8px; color: var(--ink-faint); text-align: center; padding-bottom: 8px; }
   .hb-grp { grid-column: 1/-1; color: var(--margin-rule); font-size: 10.5px; letter-spacing: 0.11em; text-transform: uppercase; padding: 14px 4px 6px; }
-  .hb-hl { grid-column: 1/-1; padding: 6px 4px 2px; display: flex; flex-direction: column; cursor: pointer; }
-  .hb-hl .hb-nm { font-size: 13px; color: var(--ink); }
-  .hb-hl .hb-aim { font-size: 10px; color: var(--ink-faint); }
+  .hb-hl { min-width: 0; padding: 6px 4px 2px 0; display: flex; flex-direction: column; cursor: pointer; }
+  .hb-hl .hb-nm, .hb-hl .hb-aim { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hb-hl .hb-nm { font-size: 12px; color: var(--ink); }
+  .hb-hl .hb-aim { font-size: 9.5px; color: var(--ink-faint); }
   .hb-c { height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .hb-c.today { background: var(--note-bg); }
-  .hb-dot { width: 12px; height: 12px; border-radius: 50%; }
-  .hb-ring { width: 12px; height: 12px; border-radius: 50%; border: 1.6px solid; opacity: 0.55; }
+  /* plain green fill for "done" here (uniform, not category colour) -- Month's grid is
+     the one that colours by category; keeping the two visually distinct on purpose. */
+  .hb-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--habit-done); }
+  .hb-ring { width: 12px; height: 12px; border-radius: 50%; border: 1.6px solid var(--note-line); opacity: 0.8; }
   .hb-wtn { font-size: 11px; font-weight: 600; color: var(--personal-ink); }
-  .hb-cnt { height: 38px; display: flex; align-items: center; justify-content: flex-end; padding-right: 2px; font-size: 11px; font-weight: 700; color: var(--margin-rule); }
+  .hb-cnt { height: 38px; display: flex; align-items: center; justify-content: flex-end; padding-right: 2px; font-size: 10px; font-weight: 700; color: var(--margin-rule); overflow: hidden; }
   .hb-cnt.miss { color: var(--ink-faint); font-weight: 400; }
   /* ---- Month ---- */
   .hb-mgrid { display: grid; border-top: 1px solid var(--note-line); border-left: 1px solid var(--note-line); margin-top: 2px; min-width: 640px; }
@@ -13327,8 +13345,8 @@
         days.forEach(d => {
           const today = keyOf(d) === tKey, occId = `rt-${t.id}-${keyOf(d)}`, dn = isDone(occId);
           if (dn) doneCount++;
-          const inner = dn ? `<span class="hb-dot" style="background:var(--${t.track}-seed)"></span>`
-            : hbEligibleOn(t, d) ? `<span class="hb-ring" style="border-color:var(--${t.track}-seed)"></span>` : "";
+          const inner = dn ? `<span class="hb-dot"></span>`
+            : hbEligibleOn(t, d) ? `<span class="hb-ring"></span>` : "";
           g += `<div class="hb-c${today ? " today" : ""}" data-hb-tick="${occId}" data-hb-fitlink="${t.fitLink || ""}" data-hb-date="${keyOf(d)}">${inner}</div>`;
         });
         const target = hbWeekTarget(t, days);
