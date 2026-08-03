@@ -772,6 +772,11 @@
       transition: transform 0.15s ease;
     }
     #tilesDate.expanded .ud-chevron { transform: rotate(180deg); }
+    /* 2026-08-06 (Linh: "it is too small"): the chevron alone read as invisible at 8px
+       -- bumped to match the weekday-moon-row's own 11px text size and switched from
+       --ink-faint (barely-there) to --ink-soft so it actually registers as a tappable
+       cue instead of disappearing into the badge. */
+    .ud-chevron { font-size: 11px; color: var(--ink-soft); }
     /* 2026-08-04 (Step 2 re-do, Linh: "far too tall... put the date and day on ONE
        compact line, e.g. 'Mon 3 Aug · UD 3'... remove the orphaned moon emoji floating
        alone... keep the cosmic panels but make them compact"): SUPERSEDES the whole
@@ -1590,6 +1595,12 @@
     font-size: 16px; cursor: pointer; line-height: 1;
   }
   .jump-btn:hover { background: var(--nav-active); color: var(--nav-active-ink); box-shadow: 0 0 14px -2px var(--nav-active); }
+  /* 2026-08-06 (Linh: star icon next to search, opens the numerology panel): hidden by
+     default -- desktop's num-group-strip is always visible (nothing to toggle, same
+     reasoning as .ud-chevron) and the panel it opens only exists on the Day page, so it
+     has no job on any other page either. Un-hidden inside the mobile media query below,
+     gated to body[data-view="day"]. */
+  .num-star-btn { display: none; }
   .jump-overlay {
     position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 45%, transparent);
     backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
@@ -5465,6 +5476,15 @@
       width: 30px; height: 30px; font-size: 13px;
       border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
     }
+    /* 2026-08-06 (Linh: "the chevron is too small, give the panel an icon of a star next
+       to the search magnifying button"): shares .jump-btn's 30px circle (class is on the
+       element, see the DAY page markup) so it reads as part of the same icon set as
+       search/theme-toggle, not a one-off. Only un-hidden on the Day page -- the panel it
+       toggles (#tilesDate.expanded) doesn't exist anywhere else. Gold highlight while open
+       mirrors the chevron's own rotate-when-open cue, so either affordance tells you the
+       panel's current state. */
+    body[data-view="day"] .num-star-btn { display: inline-flex; align-items: center; justify-content: center; }
+    .num-star-btn[aria-pressed="true"] { color: var(--cosmic-gold); border-color: var(--cosmic-gold); }
     /* legacy sub-tabs row: retired on mobile (categories live in the BK33 drawer
        instead), never populated here -- keep an empty box from eating space in the row. */
     .nav-tiers #subTabs:empty { display: none; }
@@ -6545,6 +6565,14 @@
     <div class="sub-tabs" role="tablist" aria-label="View" id="subTabs"></div>
     <div class="topbar-right">
       <button type="button" class="jump-btn" id="jumpBtn" title="Jump to any page — press /" aria-label="Jump to any page">⌕</button>
+      <!-- 2026-08-06 (Linh: "the chevron is too small, give the panel an icon of a star
+           next to the search magnifying button"): a second, bigger way to open the same
+           #tilesDate.expanded numerology/astrology panel #udBadge already toggles -- see
+           the shared toggleNumPanel() near that listener. Day-page-only and mobile-only
+           (base .num-star-btn rule hides it; the mobile media query un-hides it, gated on
+           body[data-view="day"] since the panel it opens only exists in the Day page's
+           own markup -- showing it elsewhere would be a dead button). -->
+      <button type="button" class="jump-btn num-star-btn" id="numStarBtn" title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
       <!-- 2026-08-03: restored with the rest of light mode. -->
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
     </div>
@@ -16948,21 +16976,37 @@
   // this listener only intercepts the click (stopPropagation, before it reaches the
   // generic .num-hover-trigger delegate below) when isMobile(), so the two behaviours
   // don't collide: desktop keeps the little popover, mobile gets the panel toggle.
+  // 2026-08-06 (Linh: "give the panel an icon of a star next to the search button"):
+  // #udBadge and #numStarBtn now both open/close the SAME panel -- shared toggle so
+  // #numStarBtn's aria-pressed (its gold-highlight "open" cue, see the mobile CSS) always
+  // matches the panel's real state no matter which trigger (or the outside-click closer
+  // below) last changed it.
+  function toggleNumPanel() {
+    const el = document.getElementById("tilesDate");
+    if (!el) return;
+    const open = el.classList.toggle("expanded");
+    document.getElementById("numStarBtn")?.setAttribute("aria-pressed", String(open));
+  }
   document.getElementById("udBadge").addEventListener("click", (e) => {
     if (!isMobile()) return;
     e.stopPropagation();
-    document.getElementById("tilesDate").classList.toggle("expanded");
+    toggleNumPanel();
+  });
+  document.getElementById("numStarBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleNumPanel();
   });
   // 2026-08-05 (Part 1 header redo, "tap outside to close"): the cosmic panel now floats
   // over the schedule (see the #numGroupStrip position:absolute rule) instead of pushing
   // it down, so it needs its own dismiss -- a tap anywhere outside #tilesDate closes it.
-  // stopPropagation() on the toggle listener above keeps its own open/close click from
+  // stopPropagation() on the toggle listeners above keeps their own open/close click from
   // reaching this listener and immediately re-closing what it just opened.
   document.addEventListener("click", (e) => {
     const el = document.getElementById("tilesDate");
     if (!el || !el.classList.contains("expanded")) return;
     if (el.contains(e.target)) return;
     el.classList.remove("expanded");
+    document.getElementById("numStarBtn")?.setAttribute("aria-pressed", "false");
   });
 
 
