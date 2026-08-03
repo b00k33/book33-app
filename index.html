@@ -15,7 +15,10 @@
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!-- ONLINE SYNCED BOOK33 BUILD - generated from Book33.html by build-book33-synced.ps1; do not hand-edit -->
 <style id="book33-splash">html{background:#17131f}body{visibility:hidden}html::before{content:"Book33";position:fixed;inset:0;z-index:2147483500;background:#17131f;color:#d8b979;display:flex;align-items:center;justify-content:center;font-family:Georgia,"Cormorant Garamond",serif;font-size:34px;font-weight:600;letter-spacing:.01em}</style>
-<script>/* fail-safe: if the sync layer never runs (e.g. offline), reveal the app after a bit rather than leaving a stuck splash */window.__b33Splash=setTimeout(function(){var s=document.getElementById("book33-splash");if(s)s.remove();if(document.body)document.body.style.visibility="visible";},12000);</script>
+<script>/* hard fail-safe only -- the real splash-clear happens the instant the app finishes
+   its first render from localStorage (see the end of the main app script). This timer
+   is just a backstop in case that never runs (a JS error before it, etc.) so the splash
+   can never stick open, even offline. */window.__b33Splash=setTimeout(function(){var s=document.getElementById("book33-splash");if(s)s.remove();if(document.body)document.body.style.visibility="visible";},4000);</script>
 <style>
   /* Linh 2026-07-30: Day-page redesign — Cormorant Garamond (editorial serif, the
      Day One warmth, for titles/headings/identity text) + Inter (calm humanist sans,
@@ -21590,18 +21593,25 @@
   buildHours();
   syncTrack();
   render();
+  // offline-first boot: the app is now fully rendered from localStorage -- reveal it
+  // immediately. This never waits on network, sign-in, or Supabase (that layer loads
+  // separately below and only ever adds a background sync on top of what's already showing).
+  clearTimeout(window.__b33Splash);
+  const __b33SplashEl = document.getElementById("book33-splash");
+  if (__b33SplashEl) __b33SplashEl.remove();
+  if (document.body) document.body.style.visibility = "visible";
 })();
 </script>
 
 <script>window.__BOOK33_SYNC = true;</script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================================
    Book33 — cloud sync layer
    ----------------------------------------------------------------------------
    Wraps the full Book33 app (unchanged) with Supabase auth + cross-device sync
-   WITHOUT touching any of its features. Same idea as the pharmacy sync, with two
-   deliberate differences:
+   WITHOUT touching any of its features or ever gating them. Same idea as the
+   pharmacy sync, with two deliberate differences:
 
    • It stores the whole Book33 localStorage snapshot as one row in the `book33`
      table (NOT `settings` — that belongs to the pharmacy), so the two apps can
@@ -21609,14 +21619,24 @@
    • It EXCLUDES the pharmacy + prescription keys, so no patient/dispensing data
      is ever copied into the calendar app's cloud store.
 
+   2026-08-04 ("stuck on the loading page when opened offline"): this whole layer
+   is now purely ADDITIVE. The app above has already rendered from localStorage and
+   revealed itself by the time any of this runs. Nothing here may block that --
+   supabase-js loads `defer`red, every network call this file makes is time-boxed
+   (see withTimeout below) so a hung connection can never wedge anything, and a
+   failed/slow/absent connection just leaves the sync dot showing "offline" while
+   the app keeps working normally. Sign-in is user-invoked (tap the dot) rather
+   than an automatic screen, so a never-signed-in or offline device never sees any
+   overlay at all unless it asks for one.
+
    The main app only live-refreshes for pharmacy keys (its cross-tab handler), so
    when a change arrives from another DEVICE we write it into localStorage and
    reload the page — the app then re-reads everything on boot and shows it. A
    reload is skipped while she is typing in a field, and deferred until she's done.
 
-   Loaded only in the Netlify build (build-book33-synced.ps1 injects supabase-js +
-   this file + window.__BOOK33_SYNC). Absent from the offline artifacts, which stay
-   purely local. Single user, so last-write-wins on the whole snapshot is fine.
+   Loaded only in the Netlify/Pages build (window.__BOOK33_SYNC gates it). Absent
+   from the offline artifacts, which stay purely local. Single user, so
+   last-write-wins on the whole snapshot is fine.
    ========================================================================== */
 (function () {
   "use strict";
@@ -21630,6 +21650,15 @@
 
   var sb = null, ready = false, suppress = false, pushTimer = null, lastPushed = "", pendingReload = false;
 
+  // never let a hung connection wedge a network call forever -- every Supabase call
+  // this file makes during boot/sign-in goes through this.
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var t = setTimeout(function () { reject(new Error("timeout")); }, ms);
+      promise.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+    });
+  }
+
   /* ---- config ---------------------------------------------------------- */
   // Connection baked in (the anon/publishable key is public by design — safe to
   // embed; row-level security is what actually protects the data). Same project
@@ -21640,7 +21669,6 @@
     try { var c = JSON.parse(localStorage.getItem(CFG_KEY)); if (c && c.url && c.key) return c; } catch (e) {}
     return null;
   }
-  function saveCfg(c) { localStorage.setItem(CFG_KEY, JSON.stringify(c)); }
 
   /* ---- snapshot helpers ------------------------------------------------ */
   function gather() {
@@ -21852,8 +21880,12 @@
     pop.style.cssText = "position:absolute;top:calc(100% + 8px);right:0;display:none;white-space:nowrap;background:var(--paper,#251D13);color:var(--ink,#F0E6D4);border:1px solid var(--note-line,rgba(240,230,212,.26));border-radius:8px;padding:5px 10px;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)";
     b.appendChild(pop);
     var hideTimer;
+    // 2026-08-04 (offline-first rework): sign-in is no longer an automatic screen
+    // that blocks boot -- it's reached by tapping this dot. Not signed in yet? tap
+    // opens the sign-in sheet. Already synced? tap shows the same status label as before.
     b.addEventListener("click", function (e) {
       e.stopPropagation();
+      if (!ready) { screenAuth(); return; }
       pop.style.display = pop.style.display === "block" ? "none" : "block";
       clearTimeout(hideTimer);
       if (pop.style.display === "block") hideTimer = setTimeout(function () { pop.style.display = "none"; }, 2600);
@@ -21881,22 +21913,25 @@
     (document.querySelector(".wrap") || document.body).appendChild(b);
   }
 
-  /* ---- overlay (auth / import) ---------------------------------------- */
+  /* ---- overlay (sign-in) ------------------------------------------------
+     2026-08-04: this is now a dismissible sheet the app never shows on its own --
+     it only appears when she taps the sync dot to sign in. The app underneath is
+     always already visible and usable (localStorage-first), so the scrim is
+     translucent and both a close button and a backdrop tap dismiss it. */
   var ov;
   function overlay(html) {
     if (!ov) {
-      // hand off from the boot splash: drop it and reveal the (now covered) app
-      try { clearTimeout(window.__b33Splash); } catch (e) {}
-      var sp = document.getElementById("book33-splash"); if (sp) sp.remove();
-      if (document.body) document.body.style.visibility = "visible";
       ov = document.createElement("div");
       ov.id = "b33Overlay";
-      ov.style.cssText = "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:20px;background:#17131f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#efeaf3";
+      ov.style.cssText = "position:fixed;inset:0;z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(23,19,31,.88);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#efeaf3";
+      ov.addEventListener("click", function (e) { if (e.target === ov) hideOverlay(); });
       document.documentElement.appendChild(ov);
     }
     ov.innerHTML =
-      '<div style="width:100%;max-width:430px;background:#241a2e;border:1px solid #40304f;border-radius:18px;padding:30px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)">' +
+      '<div style="position:relative;width:100%;max-width:430px;background:#241a2e;border:1px solid #40304f;border-radius:18px;padding:30px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)">' +
+        '<button type="button" id="b33OverlayClose" aria-label="Close" style="position:absolute;top:10px;right:10px;width:32px;height:32px;border:none;background:none;color:#a98fc0;font-size:22px;line-height:1;cursor:pointer">×</button>' +
         '<div style="font-family:Georgia,\'Cormorant Garamond\',serif;font-size:32px;color:#d8b979;font-weight:600;margin-bottom:2px">Book33</div>' + html + '</div>';
+    document.getElementById("b33OverlayClose").onclick = hideOverlay;
   }
   function hideOverlay() { if (ov) { ov.remove(); ov = null; } }
   var F = { lbl: "display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#a98fc0;margin:16px 0 5px",
@@ -21906,114 +21941,90 @@
             note:"font-size:12.5px;color:#a98fc0;line-height:1.55;margin-top:14px" };
   function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
 
-  function screenConfig(msg) {
-    overlay(
-      '<p style="color:#cdbcda;font-size:14px;margin:2px 0 4px">One-time setup on this device.</p>' +
-      (msg ? '<div style="' + F.err + '">' + msg + '</div>' : '') +
-      '<label style="' + F.lbl + '">Supabase project URL</label><input id="b33Url" style="' + F.inp + '" placeholder="https://xxxx.supabase.co" autocomplete="off">' +
-      '<label style="' + F.lbl + '">Anon / public API key</label><input id="b33Key" style="' + F.inp + '" placeholder="sb_publishable_…" autocomplete="off">' +
-      '<button id="b33Go" style="' + F.btn + '">Connect</button>' +
-      '<p style="' + F.note + '">From Supabase → Settings → API. Use the <b>anon / public</b> key; never the service_role secret. Saved only on this device.</p>');
-    document.getElementById("b33Go").onclick = function () {
-      var url = val("b33Url").replace(/\/+$/, ""), key = val("b33Key");
-      if (!/^https:\/\/.+\.supabase\.co$/.test(url)) return screenConfig("The URL should look like https://xxxx.supabase.co");
-      if (key.length < 30) return screenConfig("That key looks too short — copy the whole thing.");
-      saveCfg({ url: url, key: key }); boot();
-    };
-  }
-
+  // Sign-in is always user-invoked (tap the sync dot) — never shown automatically.
+  // Your data already works fully offline before you ever see this.
   function screenAuth(msg) {
     overlay(
-      '<p style="color:#cdbcda;font-size:14px;margin:2px 0 4px">Sign in to your Book33.</p>' +
+      '<p style="color:#cdbcda;font-size:14px;margin:2px 0 4px">Sign in to sync across devices.</p>' +
       (msg ? '<div style="' + F.err + '">' + msg + '</div>' : '') +
       '<label style="' + F.lbl + '">Email</label><input id="b33Email" type="email" style="' + F.inp + '" autocomplete="username">' +
       '<label style="' + F.lbl + '">Password</label><input id="b33Pass" type="password" style="' + F.inp + '" autocomplete="current-password">' +
       '<button id="b33Signin" style="' + F.btn + '">Sign in</button>' +
-      '<p style="' + F.note + '">Same login you use for the pharmacy.</p>');
+      '<p style="' + F.note + '">Same login you use for the pharmacy. Everything here already works offline — this just keeps it in sync with your other devices.</p>');
     document.getElementById("b33Signin").onclick = function () {
       var btn = document.getElementById("b33Signin"); btn.disabled = true; btn.textContent = "Signing in…";
-      sb.auth.signInWithPassword({ email: val("b33Email"), password: val("b33Pass") }).then(function (r) {
+      withTimeout(sb.auth.signInWithPassword({ email: val("b33Email"), password: val("b33Pass") }), 10000).then(function (r) {
         btn.disabled = false; btn.textContent = "Sign in";
         if (r.error) screenAuth(/Invalid/.test(r.error.message) ? "Email or password not recognised." :
                                  /confirm/i.test(r.error.message) ? "This email isn't confirmed yet — confirm the user in Supabase → Authentication → Users." : r.error.message);
-        else afterAuth();
+        else finishAuth(false);
+      }, function () {
+        btn.disabled = false; btn.textContent = "Sign in";
+        screenAuth("Couldn't reach the database — check your connection and try again.");
       });
     };
   }
 
-  function screenImport(msg, busy) {
-    overlay(
-      '<p style="color:#cdbcda;font-size:14px;margin:2px 0 4px">Set up this device from your Book33 backup.</p>' +
-      (msg ? '<div style="' + (/✓/.test(msg) ? F.err.replace("#3a1c2a", "#1b3d2e").replace("#e88ca9", "#8fd6b4").replace("#6a2747", "#2f6a4e") : F.err) + '">' + msg + '</div>' : '') +
-      '<label style="' + F.lbl + '">Book33 backup .json</label>' +
-      '<input id="b33File" type="file" accept=".json,application/json" style="' + F.inp + ';padding:8px">' +
-      '<button id="b33Import" style="' + F.btn + '"' + (busy ? " disabled" : "") + '>' + (busy ? "Working…" : "Import my Book33 backup") + '</button>' +
-      '<p style="' + F.note + '">On your main device, open Book33 → <b>All Events</b> page → <b>⬇ Back up data</b> to make this file. It seeds the cloud once; after that every device just signs in and stays in sync. (Pharmacy data is skipped.)</p>');
-    if (!busy) document.getElementById("b33Import").onclick = doImport;
-  }
-  function doImport() {
-    var f = document.getElementById("b33File").files[0];
-    if (!f) return screenImport("Choose your backup .json first.");
-    screenImport("Reading…", true);
-    f.text().then(function (t) {
-      var backup; try { backup = JSON.parse(t); } catch (e) { return screenImport("That file isn't valid JSON."); }
-      var data = backup && backup.data ? backup.data : null;
-      if (!data || typeof data !== "object") return screenImport("That doesn't look like a Book33 backup.");
-      var keys = Object.keys(data).filter(function (k) { return k.indexOf("daybook") === 0 && !EXCLUDE[k]; });
-      if (!keys.length) return screenImport("No Book33 data found in that file.");
-      suppress = true;
-      try { keys.forEach(function (k) { _setItem.call(localStorage, k, typeof data[k] === "string" ? data[k] : JSON.stringify(data[k])); }); }
-      finally { suppress = false; }
-      sb.from(TABLE).upsert({ data: gather() }, { onConflict: "owner" }).select("updated_at").then(function (r) {
-        if (r.error) return screenImport("Couldn't save to the cloud — check your connection and try again.");
-        if (r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
-        location.reload();
-      }, function () { screenImport("Couldn't save to the cloud — check your connection and try again."); });
-    });
-  }
-
-  /* ---- flow ------------------------------------------------------------ */
-  function afterAuth() {
-    // Cloud is the source of truth. If it has data, adopt it; else offer first import.
-    overlay('<p style="color:#cdbcda;font-size:14px;margin:12px 0">Loading your Book33…</p>');
-    fetchCloud().then(function (row) {
+  /* ---- flow --------------------------------------------------------------
+     2026-08-04: nothing below may ever block or gate the app -- it's purely a
+     background sync attached to an app that's already up and running. `auto` is
+     true for the silent boot-time path (existing session, no UI shown yet) and
+     false for an explicit sign-in tap (overlay is open, errors surface in it). */
+  function finishAuth(auto) {
+    withTimeout(fetchCloud(), 6000).then(function (row) {
       var hasCloud = row && row.data && Object.keys(row.data).some(function (k) { return k.indexOf("daybook") === 0 && !EXCLUDE[k]; });
       if (hasCloud) {
-        var localHas = gather() && Object.keys(gather()).length > 0;
+        var localHas = Object.keys(gather()).length > 0;
         if (localHas && sessionStorage.getItem(APPLIED) === row.updated_at) { go(); return; }
         apply(row.data);
         sessionStorage.setItem(APPLIED, row.updated_at || "");
         location.reload();                                  // clean boot on the adopted data
       } else {
-        screenImport("");                                   // cloud empty → migrate from backup
+        // nothing in the cloud yet under this login -- this device's local data (even
+        // if empty) becomes the seed. No import step: local is already the source of truth.
+        sb.from(TABLE).upsert({ data: gather() }, { onConflict: "owner" }).select("updated_at").then(function (r) {
+          if (r && r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
+          lastPushed = JSON.stringify(gather());
+          go();
+        }, function () {
+          setLive(false);
+          if (!auto) screenAuth("Signed in, but couldn't reach the database to sync yet — it'll keep retrying.");
+        });
       }
-    }, function () { screenAuth("Couldn't reach the database — check the connection."); });
+    }, function () {
+      setLive(false);
+      if (!auto) screenAuth("Couldn't reach the database — check the connection.");
+      // silent on the auto path: app stays local-only, retries on the next 'online' event
+    });
   }
   function go() {
     ready = true; lastPushed = JSON.stringify(gather());
-    hideOverlay(); badge(); signoutBtn(); subscribe();
+    hideOverlay(); badge(); signoutBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
     window.addEventListener("resize", placeCosmicMascot);
     window.addEventListener("resize", placeDateLine);
     // catch up on anything that changed while this device was away
-    fetchCloud().then(function (row) { if (row) reconcile(row); });
+    withTimeout(fetchCloud(), 6000).then(function (row) { if (row) reconcile(row); }, function () {});
   }
 
+  // Boots silently in the background the instant the page is parsed -- never shows
+  // any UI on its own. badge() puts the status dot up immediately (tap it any time
+  // to sign in); everything past that is best-effort and time-boxed so a slow or
+  // absent connection just leaves the dot showing "offline" forever, harmlessly.
   function boot() {
+    badge();
     var cfg = loadCfg();
-    if (!cfg || !cfg.url || !cfg.key) { screenConfig(); return; }
+    if (!cfg || !cfg.url || !cfg.key) { setLive(false); return; }  // no baked config -- stays local-only
     try { sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true } }); }
-    catch (e) { return screenConfig("That URL/key didn't work — check them."); }
-    sb.auth.getSession().then(function (r) {
-      if (r.data && r.data.session) afterAuth(); else screenAuth();
-    });
-    sb.auth.onAuthStateChange(function (_e, s) { if (!s) { ready = false; screenAuth(); } });
+    catch (e) { setLive(false); return; }                          // supabase-js didn't load (offline) -- stays local-only
+    withTimeout(sb.auth.getSession(), 6000).then(function (r) {
+      if (r.data && r.data.session) finishAuth(true); else setLive(false);
+    }, function () { setLive(false); });                           // offline or timed out -- retry via 'online' event / next tap
+    sb.auth.onAuthStateChange(function (_e, s) { if (!s) { ready = false; setLive(false); } });
   }
 
-  // cover the app immediately, then start
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
-  function start() { overlay('<p style="color:#cdbcda;font-size:14px;margin:12px 0">Starting…</p>'); boot(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
 })();
 
 </script>
