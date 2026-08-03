@@ -680,11 +680,17 @@
      other pieces (PM, birthday, imprint) instead of relying on bare gap spacing there.
      Assumes PM is always present (personalMonth() is never actually null for a real
      date) so day-astro-bits' dot doesn't need its own conditional on .date-pm. */
-  .num-group-strip > .day-astro-bits:not(:empty)::before,
-  .num-group-strip > #birthdayHover:not([hidden])::before,
-  .num-group-strip > #imprintHover:not([hidden])::before {
+  .num-group-strip > .day-astro-bits:not(:empty)::before {
     content: "\00b7"; margin-right: 6px; color: var(--ink-soft);
   }
+  /* 2026-08-05 (Part B, "PM 9 · Leo · Goat [gap] [icons only]"): SUPERSEDES the shared
+     dot-prefix rule above for these two specifically -- now that they're bare icons
+     with no label, a "·" between them and the text reads as clutter, not a divider.
+     margin-left:auto on the first of the pair pushes both to the line's far end
+     (standard flex trick: everything before it stays put, this and everything after
+     get shoved to the row's end) -- reads as "PM · Leo · Goat", a clear gap, then the
+     icon pair, on the SAME line since .num-group-strip still wraps normally. */
+  .num-group-strip > #birthdayHover:not([hidden]) { margin-left: auto; }
 
   .date-row { display: flex; align-items: baseline; justify-content: center; gap: 14px; flex-wrap: wrap; }
   .ud-badge {
@@ -790,9 +796,17 @@
        background (rule above, inherited from the base .num-group-strip rule) already
        gives the whole thing one shared surface -- two nested boxes would just be the
        same "boxy" pattern this pass is meant to remove. */
+    /* 2026-08-05 (Part B, "TOP LINE, CENTRED: PY 11 [horse] · 2026 UY 1"): SUPERSEDES
+       the flex-start/margin-top pairing below, which put PY/horse/UY as the panel's
+       BOTTOM line, left-aligned (it was simply whatever order it got appended into the
+       DOM, via placeCosmicMascot()). order:-1 moves it above the PM/sign/animal row
+       without touching the DOM/JS at all -- flex `order` is purely visual. margin-top
+       moves from this element (was separating it from the row above) to the row below
+       instead, since this is now first. */
     .num-group-strip .mini-cal-mascot {
-      flex-basis: 100%; margin-top: 8px; padding: 0; background: none; border: none;
-      justify-content: flex-start; position: static;
+      flex-basis: 100%; order: -1; margin-top: 0; margin-bottom: 8px;
+      padding: 0; background: none; border: none;
+      justify-content: center; position: static;
     }
     .num-group-strip .mini-cal-mascot::before { content: none; }
     /* one label/value size for every attribute in the cosmic-panel rows -- PM, sign,
@@ -868,6 +882,21 @@
   .num-hover-trigger:hover .wcard-hover-pop,
   .num-hover-trigger:focus-within .wcard-hover-pop,
   .num-hover-trigger.pop-open .wcard-hover-pop { display: block; }
+  /* 2026-08-05 (date dropdown, "Today"/"Today's Patients"): base .num-hover-pop (below)
+     is a bare positioning shell with no card chrome of its own — every OTHER thing it
+     shows wraps its content in something like .df-tile for the actual background/
+     border/shadow. This is plain buttons, not a df-tile-shaped info card, so it gets
+     its own self-contained visual treatment instead — same card language as
+     .wcard-hover-pop just above (paper background, gold hairline, page shadow), stacked
+     as a tidy little menu instead of one wide row. */
+  .date-trigger { cursor: pointer; }
+  .date-drop-pop {
+    width: 200px; max-width: calc(100vw - 24px);
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+    box-shadow: var(--page-shadow); padding: 8px; display: flex; flex-direction: column;
+    align-items: stretch; gap: 8px; text-align: left; cursor: default;
+  }
+  .date-drop-pop .today-pill, .date-drop-pop .patients-nudge { width: 100%; justify-content: center; }
   .num-hover-pop {
     display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 230px;
     /* triggers like .date-pm set their own text-transform/letter-spacing, which is
@@ -1087,20 +1116,28 @@
   .block-resize-handle[data-expanded="true"]::after { opacity: 0.35; }
   .block-resize-handle:hover::after { opacity: 0.8; }
   body.resizing-block, body.resizing-block * { cursor: ns-resize !important; user-select: none !important; }
+  /* 2026-08-05 (Part D, press-and-hold drag-to-reschedule): a lifted look for the block
+     actively being dragged — same "cursor + no text-select" pattern as resizing-block
+     above, plus a soft shadow so it visually separates from the timeline underneath it
+     while it's being moved. */
+  .tl-item.tl-dragging { opacity: 0.9; box-shadow: 0 10px 28px -6px rgba(0,0,0,0.5); z-index: 30; }
+  body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-select: none !important; }
 
   /* --- timeline --- */
   .timeline-wrap { position: relative; margin-bottom: 10px; }
-  /* 2026-08-02 (Linh: "make it so that the day time view shows 6am-10pm and beyond that
-     is only valid from an expandable button"): #timelineScroll wraps .timeline-wrap and
-     clips/scrolls it to a 6am-10pm-tall viewport by default — .timeline-wrap itself keeps
-     its full natural 3am-12am height underneath (deliberately NOT touching START_HOUR or
-     any of the topForMin/minForTop position math — this is presentation only, so nothing
-     about event placement, drag-resize, sky, or the now-line changes). 16h + a little
-     buffer for the trailing end-of-day label — this base value is the "both closed"
-     state; applyTlWindow() (below the timeline JS) overrides it inline once either the
-     earlier- or later-hours button has been toggled at least once. */
+  /* 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I can still
+     scroll up to earlier times normally"): SUPERSEDES the old "6am-10pm, both toggles
+     closed" base value — the early side is never clipped any more (only Later hours
+     still has its own toggle), so the un-toggled default is the FULL early range
+     (START_HOUR, 3am) through 10pm now: 19h + a little buffer for the trailing
+     end-of-day label. .timeline-wrap itself still keeps its full natural 3am-12am height
+     underneath regardless (presentation-only clip, same as before — nothing about event
+     placement/drag-resize/sky/now-line math changes). applyTlWindow() (below the
+     timeline JS, now runs on every renderDay()) overrides this inline once real hour
+     heights are known and reflects the Later toggle's actual state — this CSS value is
+     just what's visible for the brief window before that first JS pass. */
   .timeline-scroll {
-    max-height: calc(var(--hour-h) * 16 + 26px);
+    max-height: calc(var(--hour-h) * 19 + 26px);
     overflow-y: auto; overflow-x: hidden; border-radius: var(--radius-md);
     scrollbar-width: thin; scrollbar-color: rgba(233,200,119,0.35) transparent;
     /* 2026-08-02 (Linh: "allow for pinching screen to expand hour blocks... i have a
@@ -1594,6 +1631,21 @@
     border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
   }
   .tl-detail-fitlink { font-size: 12.5px; color: var(--ink-faint); }
+  /* 2026-08-05 (Part D, Reschedule/Duplicate): reuses .tl-detail-extra's own
+     border-top/gap/padding rhythm (rule above) — same field look as .tl-rtn-note, same
+     bordered/gold-text button language as .tl-detail-done-btn, just flex:1 pairs
+     instead of one full-width row/button. */
+  .tl-detail-move-row { display: flex; gap: 8px; }
+  .tl-detail-move-row input {
+    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 8px 10px;
+    border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
+  }
+  .tl-detail-move-actions { display: flex; gap: 8px; }
+  .tl-move-btn {
+    flex: 1; padding: 9px 10px; border: 1px solid var(--margin-rule); border-radius: var(--radius-md);
+    background: transparent; color: var(--margin-rule); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .tl-move-btn:hover { background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
   #jumpList button span { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.07em; }
   #jumpList button:hover, #jumpList button:first-child { background: color-mix(in oklab, var(--nav-active) 18%, transparent); }
   .jump-empty { font-size: 12.5px; color: var(--ink-faint); padding: 10px 11px; }
@@ -5376,6 +5428,29 @@
     /* legacy sub-tabs row: retired on mobile (categories live in the BK33 drawer
        instead), never populated here -- keep an empty box from eating space in the row. */
     .nav-tiers #subTabs:empty { display: none; }
+    /* 2026-08-05 (Part A, "Mon 3 Aug · UD 3 on the SAME top row as BK33"): the middle
+       gap in .nav-tiers is genuinely empty on mobile (#categoryTabs sits position:
+       absolute here, out of flow -- see the rule above) so this slot just fills it.
+       placeDateLine() (JS, near placeCosmicMascot) reparents #dayRow2 in here. */
+    .nav-date-slot {
+      flex: 1 1 auto; min-width: 0; display: flex; align-items: center; overflow: hidden;
+    }
+    .nav-date-slot:empty { flex: none; }
+    /* #dayRow2 was sized for standing alone as a full page row (own min-height/margin/
+       padding, own gap) -- reset all of that once it's a guest inside the slim 30px
+       header row instead. ID-scoped so this always wins regardless of source order. */
+    #navDateSlot #dayRow2 {
+      min-height: 0; margin: 0; padding: 0; gap: 4px 8px; width: 100%;
+      /* the numerology dropdown (#numGroupStrip) anchors to the nearest positioned
+         ancestor -- static here (overriding the base .day-row2 position:relative)
+         so it bubbles up to .nav-tiers itself (already position:relative) instead of
+         this now-narrow slot, and opens the full width of the header bar, not just
+         this slot's share of it. */
+      position: static;
+    }
+    #navDateSlot .weekday-moon-row, #navDateSlot .date-row { font-size: 11px; }
+    #navDateSlot .date-big .date-num { font-size: 13px; }
+    #navDateSlot .date-big .date-mon { font-size: 9px; }
   }
   /* 2026-08-02 (Linh, three rounds in, still "ugly": "why are you ignoring my request
      to use google cal ui design for calendar vs everything else" -- the last three
@@ -5548,11 +5623,14 @@
        own puts its content -- now the same 32px-tall button as Today, see the height
        rule above -- on the identical line, "on its own row with the Today / ‹ ›
        controls" as asked, with nothing to cross. */
-    .day-main > .patients-above-day {
-      align-self: auto; margin: 2px 0 6px; padding-top: 11px;
-    }
-    .day-main > .patients-above-day .patients-nudge { align-self: auto; }
-    .day-main > .patients-above-day .add-row { display: none; }
+    /* 2026-08-05 (Linh: "move Today's Patients into the date dropdown"): SUPERSEDES
+       this row's own spacing below — .patients-nudge (the only thing that used to make
+       this row worth its margin/padding) lives in #dateTrigger's dropdown now, and
+       .add-row was already display:none here (mobile adds via the timeline directly) —
+       so this container has nothing left to show on mobile. Collapsing it outright
+       instead of leaving its old margin/padding as a blank gap where the button used
+       to sit. */
+    .day-main > .patients-above-day { display: none; }
     .day-main > .section-head h2, .day-main > .section-head .rule { display: none; }
     /* 2026-08-04 (Step 2 -- "the calendar its own separate area beneath [the header],
        nothing from the header should overlap or bleed into the calendar grid"): this is
@@ -6412,6 +6490,15 @@
        the new mobile-only rules below read this nesting. -->
   <div class="nav-tiers">
     <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false">BK33</button>
+    <!-- 2026-08-05 (Part A, "put Mon 3 Aug · UD 3 on the SAME top row as BK33"): empty
+         slot living in nav-tiers' own middle gap (real on mobile since #categoryTabs
+         is pulled out of flow there — see the position:absolute drawer rule). JS
+         (placeDateLine(), near placeCosmicMascot()) reparents #dayRow2 in here on
+         mobile only, so the Day page's own date/UD/moon line ends up sharing BK33's
+         row instead of sitting on its own line below — same "move an existing node
+         into shared chrome" pattern that mascot already uses. Desktop is untouched:
+         placeDateLine() no-ops there, this slot just stays empty. -->
+    <div class="nav-date-slot" id="navDateSlot"></div>
     <div class="view-tabs" role="tablist" aria-label="Section" id="categoryTabs"></div>
     <div class="sub-tabs" role="tablist" aria-label="View" id="subTabs"></div>
     <div class="topbar-right">
@@ -7361,6 +7448,10 @@
     <!-- 2026-07-31 (mockup "Direction A" — centred meta-line + hero, no side-by-side
          mini-cal): the date-block is now centred and stands alone; the mini-cal moved
          down to sit beside the Numerology & Astrology card in .day-row2 below. -->
+    <!-- 2026-08-05: marks #dayRow2's real (desktop) home so placeDateLine() can put it
+         back here when it's been reparented into #navDateSlot on mobile — same
+         anchor-marker trick as #dayRow2Home's sibling pattern used for the mascot. -->
+    <div id="dayRow2Home" hidden></div>
     <div class="day-row2" id="dayRow2">
       <div id="tilesDate" class="tile-shelf">
         <div class="page-head">
@@ -7399,7 +7490,26 @@
               <button type="button" class="day-hero-toggle" id="dayHeroToggle" aria-expanded="false" aria-label="Show numerology and astrology details">▾</button>
             </div>
             <div class="date-row">
-              <span class="date-big" id="dateBig"></span>
+              <!-- 2026-08-05 (Linh: "move Today and Today's Patients into the date
+                   dropdown — tapping the date opens a tidy dropdown with those
+                   actions"): #dateBig itself gets its innerHTML replaced wholesale every
+                   renderDay() (see that function), so the dropdown lives in a wrapping
+                   trigger SIBLING instead of inside dateBig — a render would otherwise
+                   wipe it out along with the date text. Reuses the existing
+                   .num-hover-trigger/.num-hover-pop mechanism (tap-toggle, close-on-
+                   outside-tap, viewport clamping) rather than building a new popover
+                   system — same one every other cosmic dropdown in this header uses.
+                   #todayPill/#patientsNudge keep their own ids/listeners, just moved
+                   here from the old .toprow/.patients-above-day rows below. -->
+              <span class="date-trigger num-hover-trigger" id="dateTrigger" tabindex="0">
+                <span class="date-big" id="dateBig"></span>
+                <div class="num-hover-pop date-drop-pop">
+                  <button class="today-pill" id="todayPill">Today</button>
+                  <button type="button" class="patients-nudge" id="patientsNudge" title="Ask Claude: /patients">🩺 Today's Patients
+                    <span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span>
+                  </button>
+                </div>
+              </span>
               <span class="period-badge" id="periodBadge" hidden title="Tap to log cycle data" role="button" tabindex="0"></span>
             </div>
           </div>
@@ -7490,17 +7600,17 @@
              visible between them (#tilesAbove above is [hidden]) so the mobile-only
              inline-flex rule can merge all three onto one wrapped line without any
              further DOM changes. -->
+        <!-- 2026-08-05 (Linh: "move Today and Today's Patients into the date
+             dropdown"): both buttons live in #dateTrigger's dropdown now (see .date-row
+             above) — SUPERSEDES this row's own copies of them. The ‹ › day arrows stay
+             here per her explicit "the day arrows can stay where they are". -->
         <div class="toprow">
           <div class="head-controls">
             <button class="nav-arrow" id="prevDay" aria-label="Previous day">‹</button>
-            <button class="today-pill" id="todayPill">Today</button>
             <button class="nav-arrow" id="nextDay" aria-label="Next day">›</button>
           </div>
         </div>
         <div class="patients-above-day">
-          <button type="button" class="patients-nudge" id="patientsNudge" title="Ask Claude: /patients">🩺 Today's Patients
-            <span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span>
-          </button>
           <div class="add-row" id="addRow">
             <button class="add-btn" id="addBtn">✎ Add to this day</button>
           </div>
@@ -7523,13 +7633,12 @@
                than deleted outright. -->
           <button type="button" class="expand-mode-btn" id="expandModeBtn" hidden
             aria-pressed="false" title="Tap, then tap a 2-hour block to expand it">⤢ <span class="emb-label">Expand hours</span></button>
-          <!-- 2026-08-02 (Linh: "make it so that the day time view shows 6am-10pm and
-               beyond that is only valid from an expandable button"): the timeline still
-               renders its full 3am-10pm range underneath (nothing removed, no change to
-               any of the position math) — #timelineScroll just clips/scrolls that content
-               to a 6am-10pm-tall viewport by default. This button toggles the clip. -->
-          <button type="button" class="tl-window-btn" id="tlWindowBtn" aria-pressed="false"
-            title="Show hours before 6am">▾ Earlier hours</button>
+          <!-- 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I
+               can still scroll up to earlier times normally"): SUPERSEDES the button that
+               used to live here (#tlWindowBtn) — the early side of the timeline is never
+               clipped now (see applyTlWindow()), so a normal scroll up always reaches it,
+               no separate toggle needed. Later hours (below) is untouched — she only
+               named the early one. -->
           <!-- 2026-08-02 (Linh code44: "make it so 10pm-12am only visible from scrolling",
                then "add a matching button"): mirrors tlWindowBtn above but for the far end
                of the day — independent toggle, so either end (or both) can be open without
@@ -8798,6 +8907,22 @@
   function saveRtnNotes() { try { localStorage.setItem(RTN_NOTES_KEY, JSON.stringify(ROUTINE_NOTES)); } catch (e) {} }
   let ROUTINE_NOTES = loadRtnNotes();
 
+  /* --- per-occurrence time/date override (Part D, 2026-08-05, "I can drag/edit a single
+     occurrence to a new time WITHOUT changing the routine template — that day overrides
+     only itself; future days keep following the routine"): same keyed-by-occId
+     convention as ROUTINE_NOTES right above, never touches ROUTINE_TASKS itself. Shape:
+     { [occId]: { fromDate, date, start, end } } — fromDate is the occurrence's normal
+     pattern date (where it would render with no override); date is where it now
+     actually renders (equal to fromDate for a same-day time-only nudge, different for a
+     day-to-day reschedule). See generatedFor()'s routine loop for how this is read. */
+  const RTN_TIME_OVR_KEY = "daybook-routine-time-overrides";
+  function loadRtnTimeOvr() {
+    try { const v = JSON.parse(localStorage.getItem(RTN_TIME_OVR_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveRtnTimeOvr() { try { localStorage.setItem(RTN_TIME_OVR_KEY, JSON.stringify(ROUTINE_TIME_OVR)); } catch (e) {} }
+  let ROUTINE_TIME_OVR = loadRtnTimeOvr();
+
   // actual minutes logged — id can be a whole routine's occId or one of its steps
   // (occId::step::i); estimate (subtask.min) stays untouched on the template, this is
   // what really happened. A timer stop ADDS to whatever's already logged (pause/resume).
@@ -9224,6 +9349,14 @@
       // falls back to it when she hasn't written anything for this specific occurrence
       const occId = `rt-${t.id}-${keyOf(date)}`;
       const occNote = ROUTINE_NOTES[occId];
+      // 2026-08-05 (Part D): a per-occurrence time/date override — see ROUTINE_TIME_OVR's
+      // own comment above. Moved to a DIFFERENT date -> this occurrence has relocated
+      // away from today's normal pattern slot, skip it here entirely; the injected pass
+      // right after this forEach renders it on its new date instead. Present with the
+      // SAME date (a same-day drag) -> substitute its start/end below, template
+      // untouched, every OTHER day this routine still follows its normal schedule.
+      const tOvr = ROUTINE_TIME_OVR[occId];
+      if (tOvr && tOvr.date && tOvr.date !== keyOf(date)) return;
       if (startMin != null && subs.length) {
         // the routine is ONE block spanning its real length, with its sub-tasks carried
         // inside as tickable steps (Linh 2026-07-26) — no longer exploded into mini-blocks;
@@ -9233,19 +9366,43 @@
           id: occId, generated: true, date: keyOf(date),
           track: t.track, category: t.category || "Routine", title: t.title,
           note: occNote != null ? occNote : t.note, freq: t.freq, kind: "routine", allDay: false, fromRoutine: true,
-          start: minToTime(startMin), end: minToTime(startMin + total),
+          start: tOvr ? tOvr.start : minToTime(startMin), end: tOvr ? tOvr.end : minToTime(startMin + total),
           steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null,
         });
       } else {
+        const start = tOvr ? tOvr.start : (t.start || "");
         out.push({
           id: occId, generated: true, date: keyOf(date),
           track: t.track, category: t.category || "Routine", title: t.title,
           note: occNote != null ? occNote : t.note, freq: t.freq, fromRoutine: true,
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
-          allDay: !t.start, start: t.start || "", end: t.end || "", fitLink: t.fitLink || null,
+          allDay: !start, start, end: (tOvr ? tOvr.end : t.end) || "", fitLink: t.fitLink || null,
         });
       }
+    });
+    // 2026-08-05 (Part D, cross-day reschedule): routineOccursOn()/routinesOn() above
+    // only ever look at a routine's own recurrence pattern, so a routine occurrence
+    // that's been dragged onto a day the pattern wouldn't normally place it would never
+    // render at all without this — scans every override for one that landed HERE. `.id`
+    // stays the ORIGINAL occurrence id (not rebuilt from the new date) so its done-state/
+    // notes/timer history, all keyed by that occId, keep following it to the new day,
+    // same as a real calendar item keeps its identity across a reschedule.
+    Object.keys(ROUTINE_TIME_OVR).forEach(occId => {
+      const ovr = ROUTINE_TIME_OVR[occId];
+      if (!ovr || !ovr.date || ovr.date !== k || ovr.fromDate === k) return;
+      const t = ROUTINE_TASKS.find(rt => occId === `rt-${rt.id}-${ovr.fromDate}`);
+      if (!t || t.calOn === false) return;
+      const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
+      const occNote = ROUTINE_NOTES[occId];
+      out.push({
+        id: occId, generated: true, date: k,
+        track: t.track, category: t.category || "Routine", title: t.title,
+        note: occNote != null ? occNote : t.note, freq: t.freq, fromRoutine: true,
+        kind: subs.length ? "routine" : undefined, allDay: !ovr.start,
+        start: ovr.start || "", end: ovr.end || "",
+        steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null,
+      });
     });
     SUPPLEMENTS.filter(s => supplementOccursOn(s, date)).forEach(s => {
       out.push({
@@ -9477,7 +9634,12 @@
     if (!el) return;
     const pop = imprintPopoverHtml();
     el.hidden = !pop;
-    if (pop) el.innerHTML = `🌒<span class="dab-name">Imprint</span>${pop}`;
+    // 2026-08-05 (Part B, "show ONLY icons for Birthdays/Imprint... a stamp/seal-style
+    // gold icon suits Imprint"): SUPERSEDES the moon glyph + "Imprint" text label --
+    // she wants the word gone and a gold medallion glyph instead of the moon (which was
+    // never about imprint month anyway, just a placeholder). Popover content (pop) is
+    // unchanged, still opens on tap same as every other .num-hover-trigger.
+    if (pop) el.innerHTML = `🥇${pop}`;
   }
   // herb stock alert: reads the pharmacy's shelf straight from storage and speaks only
   // when something needs her — out of stock, below its low mark, or on her order list.
@@ -10239,6 +10401,65 @@
     const fitDur = e.fitLink && FIT_PRESETS[e.fitLink] ? FIT_PRESETS[e.fitLink].durationMin : null;
     return s + (e.durationMin || fitDur || 30);
   }
+  // real-or-derived length in minutes — same fallback chain as itemEndMin, just
+  // returned as a duration instead of a clock time. Used by reschedule/duplicate/drag
+  // below so a moved or copied item keeps its original length instead of collapsing to
+  // the generic 30-min default every time.
+  function itemDurationMin(e) {
+    const s = toMin(e.start), end = itemEndMin(e);
+    return (s !== null && end !== null && end > s) ? end - s : 30;
+  }
+  // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
+  // day/time, or duplicate it to another day/time"): shared by the detail sheet's
+  // Reschedule/Duplicate buttons AND the press-and-hold drag handler further below, so
+  // every path that moves or copies a timeline item agrees on what that means for
+  // storage. A handwritten EVENT is a real row in EVENTS — reschedule edits it in place;
+  // duplicate clones it with a new id. A ROUTINE OCCURRENCE is never a stored row (see
+  // generatedFor()) — reschedule writes a ROUTINE_TIME_OVR entry (this occurrence only,
+  // template untouched, every other day keeps following the routine); duplicate detaches
+  // a plain one-off EVENT copy instead, since a "duplicate" of a recurring thing isn't
+  // part of the pattern any more — it's a new standalone booking.
+  function rescheduleItem(e, dateKey, timeStr) {
+    if (!e) return;
+    const dur = itemDurationMin(e);
+    const end = minToTime(Math.min(toMin(timeStr) + dur, 1439));
+    if (e.fromRoutine && e.rtTaskId) {
+      // e.id never changes across repeated moves (see generatedFor()'s injected pass —
+      // it's what lets done-state/notes keep following the occurrence), but e.date DOES
+      // — it's wherever the occurrence is CURRENTLY rendering. So on a second move,
+      // e.date is already the target of the FIRST move, not the routine's true pattern
+      // date — reuse the existing override's fromDate (the one thing that's still
+      // correct) rather than re-deriving it from e.date, or a re-drag would silently
+      // detach the occurrence from its real origin and it'd stop rendering anywhere.
+      const prev = ROUTINE_TIME_OVR[e.id];
+      const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
+      ROUTINE_TIME_OVR[e.id] = { fromDate, date: dateKey, start: timeStr, end };
+      saveRtnTimeOvr();
+    } else if (!e.generated) {
+      const ev = EVENTS.find(x => x.id === e.id);
+      if (!ev) return;
+      ev.date = dateKey; ev.allDay = false; ev.start = timeStr; ev.end = end;
+      saveEvents(EVENTS);
+    } else {
+      return; // other generated items (hair, birthdays, supplements…) aren't movable
+    }
+    if (dateKey !== keyOf(state.anchor)) state.anchor = parseKey(dateKey);
+    closeTlDetail();
+    render();
+  }
+  function duplicateItem(e, dateKey, timeStr) {
+    if (!e) return;
+    const dur = itemDurationMin(e);
+    EVENTS.push({
+      id: uid(), date: dateKey, track: e.track, title: e.title, category: e.category || "",
+      locPath: Array.isArray(e.locPath) ? e.locPath.slice() : [], allDay: false,
+      start: timeStr, end: minToTime(Math.min(toMin(timeStr) + dur, 1439)),
+    });
+    saveEvents(EVENTS);
+    if (dateKey !== keyOf(state.anchor)) state.anchor = parseKey(dateKey);
+    closeTlDetail();
+    render();
+  }
   // full item objects for every id currently on the timeline, so the detail sheet
   // (openTlDetail, further below) can look one back up by id — generated items
   // (routines, hair, etc.) exist nowhere else queryable once a render pass is done
@@ -10357,7 +10578,15 @@
       // marks blocks free to size to their own content (not lane-packed side-by-side)
       // so the width-equalising pass below knows which ones it's safe to touch
       const solo = isBlock && !colStyle ? ` data-solo="true"` : "";
-      return `<div class="tl-item ${cls}${done ? " done" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${solo} style="${style}"${e.generated ? "" : ` draggable="true" data-move-id="${e.id}" title="Drag to reschedule · right-click to edit"`}>
+      // 2026-08-05 (Part D, "press-and-hold a block, then drag... a single tap opens
+      // it"): SUPERSEDES draggable="true"/native HTML5 drag here — that fired on ANY
+      // mousedown-drag with no hold delay, which is exactly the "a scroll never drags a
+      // block by accident" problem on touch (a native drag and a scroll swipe are the
+      // identical gesture). The new press-and-hold-then-drag handler (near the pointer-
+      // events code further down) reads data-tl-detail directly, same id every block
+      // already carries — no draggable attribute needed for it to work. data-move-id
+      // stays: right-click-to-edit (the contextmenu listener below) still keys off it.
+      return `<div class="tl-item ${cls}${done ? " done" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
         <span class="tl-title">${tick}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}</span>
         <span class="tl-meta">${meta}</span>${actions}
       </div>`;
@@ -10447,6 +10676,23 @@
         <textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>
         ${e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : ""}
       </div>` : (e.note ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "");
+    // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
+    // day/time, and duplicate it to another day/time"): only for items rescheduleItem/
+    // duplicateItem actually know how to move — a handwritten event, or a routine
+    // occurrence (see those functions' own comment for why the other generated types,
+    // hair/birthdays/supplements/fitcal, don't get this). One date+time pair feeds
+    // both actions — pick a target, then choose Reschedule (move) or Duplicate (copy).
+    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId);
+    const moveHtml = canMove ? `<div class="tl-detail-extra tl-detail-move">
+        <div class="tl-detail-move-row">
+          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
+          <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
+        </div>
+        <div class="tl-detail-move-actions">
+          <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
+          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">Duplicate here</button>
+        </div>
+      </div>` : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
       <div class="tl-detail-row"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
@@ -10455,7 +10701,7 @@
       <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
         <span>${done ? "✓" : ""}</span>${done ? "Done" : "Mark done"}
       </button>
-      ${stepsHtml}${extraHtml}
+      ${stepsHtml}${extraHtml}${moveHtml}
     `;
   }
   function openTlDetail(id) {
@@ -10478,6 +10724,23 @@
     if (e) { renderTlDetailHeadActions(e); renderTlDetailBody(e); } else closeTlDetail();
   }
   document.getElementById("tlDetailClose").addEventListener("click", closeTlDetail);
+  // 2026-08-05 (Part D, "selecting a block gives options to reschedule or duplicate
+  // it"): reads whatever's currently in the date/time pair the two buttons share (see
+  // renderTlDetailBody's moveHtml) at the moment either is tapped, so no separate
+  // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
+  // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
+  document.getElementById("tlDetailBody").addEventListener("click", e => {
+    const btn = e.target.closest("[data-tl-reschedule], [data-tl-duplicate]");
+    if (!btn) return;
+    const id = btn.dataset.tlReschedule || btn.dataset.tlDuplicate;
+    const ev = TL_ITEMS_BY_ID[id];
+    if (!ev) return;
+    const dateVal = document.getElementById("tlMoveDate")?.value;
+    const timeVal = document.getElementById("tlMoveTime")?.value;
+    if (!dateVal || !timeVal) return;
+    if (btn.dataset.tlReschedule) rescheduleItem(ev, dateVal, timeVal);
+    else duplicateItem(ev, dateVal, timeVal);
+  });
   // Edit navigates away (to the Routines page, or opens the event-edit form overlay) —
   // close this sheet first so it isn't left floating over whatever opens next. Delete
   // needs no equivalent here: it stays on the Day page, and refreshOpenTlDetail() (run
@@ -11254,7 +11517,10 @@
     if (!el) return;
     const pop = birthdayPopoverHtml();
     el.hidden = !pop;
-    if (pop) el.innerHTML = `🎂<span class="dab-name">Birthdays</span>${pop}`;
+    // 2026-08-05 (Part B, "remove the word Birthdays, show ONLY the cake icon"):
+    // popover content (pop) unchanged, still opens on tap same as every other
+    // .num-hover-trigger — just the always-visible text label dropped.
+    if (pop) el.innerHTML = `🎂${pop}`;
   }
 
   /* ================= Day-tile manager =================
@@ -11888,6 +12154,12 @@
     // its old heights while events/bands/etc (which already read state.expandedBlocks
     // directly) render in their new, correct positions.
     buildHours();
+    // 2026-08-05: runs every renderDay() now (cheap — just a maxHeight/class toggle) so
+    // the real HOUR_H()-based window height is in place from the very first render,
+    // instead of only ever being computed reactively after a Later-hours click or a
+    // pinch-zoom — see applyTlWindow()'s own comment for why that mattered once the
+    // Earlier-hours toggle (and its half of this logic) was removed.
+    applyTlWindow();
     // 2026-08-02 (Linh: "the day time view shows 6am-10pm and beyond that is only valid
     // from an expandable button"): scroll the clipped viewport to 6am once, the first
     // time the Day page renders — not on every renderDay() call (adding an event, ticking
@@ -19442,37 +19714,23 @@
     scroller.addEventListener("touchend", endPinch);
     scroller.addEventListener("touchcancel", endPinch);
   })();
-  // 2026-08-02 (Linh: "make it so that the day time view shows 6am-10pm and beyond that
-  // is only valid from an expandable button"): #timelineScroll clips to 6am-10pm by
-  // default. SUPERSEDES the single tl-full toggle this used to be — Linh (code44) then
-  // asked for 10pm-12am to work the same way via its OWN matching button, independent of
-  // the earlier-hours one, so this is now two booleans (dataset.earlier/.later on the
-  // scroller) instead of one. Both open = tl-full (no clip, matches the old full-open
-  // look exactly); either alone = a custom pixel max-height for just that half.
+  // 2026-08-05 (Linh: "remove the Earlier hours button/feature completely — I can still
+  // scroll up to earlier times normally"): SUPERSEDES the dataset.earlier half of this —
+  // the early side of the clip is gone outright, the window always starts at START_HOUR
+  // now, so a plain scroll up always reaches it with no separate toggle. Later hours
+  // (dataset.later, its own independent button) is untouched — she only named the early
+  // one. tl-full now just means "later is open too" (both ends already un-clipped).
   function applyTlWindow() {
     const scroller = document.getElementById("timelineScroll");
-    const earlier = scroller.dataset.earlier === "true";
     const later = scroller.dataset.later === "true";
-    if (earlier && later) {
+    if (later) {
       scroller.classList.add("tl-full");
       scroller.style.maxHeight = "";
     } else {
       scroller.classList.remove("tl-full");
-      const winStart = earlier ? START_HOUR : 6;
-      const winEnd = later ? END_HOUR : 22;
-      scroller.style.maxHeight = `${(winEnd - winStart) * HOUR_H() + 26}px`;
+      scroller.style.maxHeight = `${(22 - START_HOUR) * HOUR_H() + 26}px`;
     }
   }
-  document.getElementById("tlWindowBtn").addEventListener("click", e => {
-    const scroller = document.getElementById("timelineScroll");
-    const btn = e.currentTarget;
-    const open = scroller.dataset.earlier !== "true";
-    scroller.dataset.earlier = String(open);
-    applyTlWindow();
-    btn.setAttribute("aria-pressed", String(open));
-    btn.innerHTML = open ? "▴ Hide earlier hours" : "▾ Earlier hours";
-    scroller.scrollTop = open ? 0 : topForMin(6 * 60);
-  });
   document.getElementById("tlWindowBtnLater").addEventListener("click", e => {
     const scroller = document.getElementById("timelineScroll");
     const btn = e.currentTarget;
@@ -19581,8 +19839,17 @@
     const trig = e.target.closest(POP_TRIGGER_SEL);
     if (trig) clampPopoverToViewport(trig, trig.querySelector(POP_SEL));
   });
+  // 2026-08-05 (Part D): the mouse half of the unified tap-to-add system further down
+  // (near the old hoursWasTap block) — mouse clicks are always deliberate (a mouse
+  // never "scrolls" by dragging over the timeline the way a finger does), so they keep
+  // single-click-to-add with no double-tap requirement. Touch/pen go through that
+  // pointerdown/pointerup system instead and fully handle their own add-event flow —
+  // lastPointerType (set on every pointerdown, declared with that system) is how this
+  // listener tells the two apart, since a plain `click` event's own .pointerType isn't
+  // reliably populated for touch across browsers (Safari leaves it undefined).
   document.getElementById("eventsLayer").addEventListener("click", e => {
     if (e.target.closest(".tl-item")) return;   // an existing event handles its own clicks
+    if (lastPointerType !== "mouse") return;
     const rect = e.currentTarget.getBoundingClientRect();
     const H = HOUR_H();
     // 2026-08-02 (code44 per-block expand): minForTop is the piecewise inverse of
@@ -19641,45 +19908,62 @@
     const chip = e.target.closest("[data-eid]");
     if (chip && chip.dataset.eid && editFromOtherView(chip.dataset.eid)) e.preventDefault();
   });
-  // 2026-08-04 (Step 9, Linh: "tapping an hour row expands it [opens the add-event
-  // form], but when I scroll the calendar it often expands an hour by mistake"): the
-  // click handler below had no way to tell a genuine tap from the tail end of a scroll
-  // gesture -- on touch devices the browser can still fire a synthetic `click` on
-  // touchend even after the finger travelled a real distance first. Tracks where the
-  // touch started/ended, how long it was held, and whether the timeline itself scrolled
-  // during it; the click handler bails out early on any of those (a real scroll, a
-  // long-press, or >~10px of finger movement in any direction) so it never mistakes a
-  // scroll for a tap. Mouse users never fire touchstart at all, so hoursWasTap simply
-  // stays at its default true and clicks behave exactly as before. Genuine taps get no
-  // added delay -- this only ever suppresses the click, never defers it.
-  let hoursWasTap = true;
+  // 2026-08-05 (Part D, "the old 10px-threshold fix isn't working -- replace it. SCROLL
+  // must never trigger the add-event action; EXPAND AN HOUR only on a deliberate action
+  // a scroll can't trigger -- a double-tap"): SUPERSEDES the whole hoursWasTap
+  // touchstart/move/end block this replaced, which only ever guarded #hours (the narrow
+  // hour-LABEL gutter) — #eventsLayer, the much bigger area the actual timeline occupies
+  // and the more likely place a scroll-swipe was still opening the add form, had no
+  // guard at all. One Pointer Events handler covers both layers now, and REQUIRES two
+  // taps close together in time+place with no scroll in between on touch/pen — a single
+  // continuous swipe-to-scroll is one pointerdown/pointerup pair, so it can never
+  // satisfy "two taps" by accident, no matter how it's threshold-tuned. Mouse is
+  // untouched: it never "scrolls" by dragging over the timeline, so it keeps instant
+  // single-click-to-add (see the two existing click listeners, now gated on
+  // lastPointerType so they defer to this system for touch/pen instead of double-firing).
+  let lastPointerType = "mouse";
   (function () {
-    const hoursEl = document.getElementById("hours");
+    const TAP_MOVE_PX = 10, TAP_MAX_MS = 500, DTAP_MAX_MS = 400, DTAP_MOVE_PX = 30;
     const scrollerEl = document.getElementById("timelineScroll");
-    const TAP_MOVE_PX = 10, TAP_MAX_MS = 600;
-    let startX = 0, startY = 0, startTime = 0, startScrollTop = 0;
-    hoursEl.addEventListener("touchstart", e => {
-      if (e.touches.length !== 1) { hoursWasTap = false; return; }
-      const t = e.touches[0];
-      startX = t.clientX; startY = t.clientY; startTime = Date.now();
-      startScrollTop = scrollerEl ? scrollerEl.scrollTop : 0;
-      hoursWasTap = true;
-    }, { passive: true });
-    hoursEl.addEventListener("touchmove", e => {
-      if (!hoursWasTap || !e.touches.length) return;
-      const t = e.touches[0];
-      if (Math.abs(t.clientX - startX) > TAP_MOVE_PX || Math.abs(t.clientY - startY) > TAP_MOVE_PX) hoursWasTap = false;
-    }, { passive: true });
-    hoursEl.addEventListener("touchend", () => {
-      if (!hoursWasTap) return;
-      if (Date.now() - startTime > TAP_MAX_MS) hoursWasTap = false;
-      if (scrollerEl && scrollerEl.scrollTop !== startScrollTop) hoursWasTap = false;
-    }, { passive: true });
+    let down = null, lastTap = null;
+    function openAt(clientY) {
+      const rect = document.getElementById("eventsLayer").getBoundingClientRect();
+      let minutes = Math.round(minForTop(clientY - rect.top) / 15) * 15;
+      minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
+      openForm(minToTime(minutes), locForMinute(minutes));
+    }
+    function bind(el) {
+      el.addEventListener("pointerdown", e => {
+        lastPointerType = e.pointerType;
+        if (e.pointerType === "mouse") return;
+        if (e.target.closest(".tl-item, .block-resize-handle")) { down = null; return; }
+        down = { x: e.clientX, y: e.clientY, t: Date.now(), scrollTop: scrollerEl ? scrollerEl.scrollTop : 0 };
+      });
+      el.addEventListener("pointerup", e => {
+        if (e.pointerType === "mouse" || !down) return;
+        const d = down; down = null;
+        const moved = Math.abs(e.clientX - d.x) > TAP_MOVE_PX || Math.abs(e.clientY - d.y) > TAP_MOVE_PX;
+        const scrolled = scrollerEl && scrollerEl.scrollTop !== d.scrollTop;
+        const tooSlow = Date.now() - d.t > TAP_MAX_MS;
+        if (moved || scrolled || tooSlow) { lastTap = null; return; }
+        const now = Date.now();
+        if (lastTap && now - lastTap.t <= DTAP_MAX_MS
+            && Math.abs(e.clientX - lastTap.x) <= DTAP_MOVE_PX && Math.abs(e.clientY - lastTap.y) <= DTAP_MOVE_PX) {
+          lastTap = null;
+          openAt(e.clientY);
+        } else {
+          lastTap = { x: e.clientX, y: e.clientY, t: now };
+        }
+      });
+    }
+    bind(document.getElementById("hours"));
+    bind(document.getElementById("eventsLayer"));
   })();
+  // mouse half of the #hours side (the hour-LABEL gutter #eventsLayer doesn't cover) —
+  // same lastPointerType gate as #eventsLayer's own click listener above.
   document.getElementById("hours").addEventListener("click", e => {
-    if (!hoursWasTap) return;
+    if (lastPointerType !== "mouse") return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const H = HOUR_H();
     // 2026-08-02 (code44 per-block expand): minForTop is the piecewise inverse of
     // topForMin, so a click/drag after an expanded block still resolves to the right
     // minute instead of drifting by however many blocks are expanded above it.
@@ -19688,17 +19972,73 @@
     openForm(minToTime(minutes));
   });
 
+  // 2026-08-05 (Part D, "press-and-hold a block, then drag to a new time; snaps to
+  // ~15-min steps and updates its start/end. Press-and-hold required so a scroll never
+  // drags a block by accident"): one Pointer Events long-press-then-drag, works
+  // identically for mouse and touch. Holding still for LONG_PRESS_MS is what arms drag
+  // mode — a quick swipe (real scroll intent) moves past MOVE_CANCEL_PX well before that
+  // timer fires and cancels it, so native scrolling on #timelineScroll is never
+  // interrupted by it; only a genuine hold reaches the point where dragging starts.
+  // Same-day only (this is the Day page's own single-day timeline) — a cross-day move
+  // goes through the detail sheet's Reschedule button instead (see renderTlDetailBody).
+  (function () {
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 8;
+    const layer = document.getElementById("eventsLayer");
+    let timer = null, pressX = 0, pressY = 0, drag = null;
+    function cancelPress() { clearTimeout(timer); timer = null; }
+    layer.addEventListener("pointerdown", e => {
+      const item = e.target.closest(".tl-item");
+      if (!item || e.target.closest(".tl-tick, .tl-edit, .tl-del")) return;
+      pressX = e.clientX; pressY = e.clientY;
+      const id = item.dataset.tlDetail, pointerId = e.pointerId;
+      timer = setTimeout(() => {
+        timer = null;
+        const ev = TL_ITEMS_BY_ID[id];
+        // only real events + routine occurrences can move — other generated items
+        // (hair, birthdays, supplements…) have no stored home to move them into
+        if (!ev || (ev.generated && !(ev.fromRoutine && ev.rtTaskId))) return;
+        drag = { id, el: item, origTop: parseFloat(item.style.top) || 0 };
+        try { item.setPointerCapture(pointerId); } catch (err) {}
+        item.classList.add("tl-dragging");
+        document.body.classList.add("dragging-block");
+      }, LONG_PRESS_MS);
+    });
+    layer.addEventListener("pointermove", e => {
+      if (timer && (Math.abs(e.clientX - pressX) > MOVE_CANCEL_PX || Math.abs(e.clientY - pressY) > MOVE_CANCEL_PX)) cancelPress();
+      if (!drag) return;
+      e.preventDefault();
+      drag.el.style.top = `${drag.origTop + (e.clientY - pressY)}px`;
+    }, { passive: false });
+    function endDrag(e) {
+      cancelPress();
+      if (!drag) return;
+      const d = drag; drag = null;
+      d.el.classList.remove("tl-dragging");
+      document.body.classList.remove("dragging-block");
+      let minutes = Math.round(minForTop(d.origTop + (e.clientY - pressY)) / 15) * 15;
+      minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
+      const ev = TL_ITEMS_BY_ID[d.id];
+      if (ev) rescheduleItem(ev, ev.date, minToTime(minutes)); else renderDay();
+    }
+    layer.addEventListener("pointerup", endDrag);
+    layer.addEventListener("pointercancel", () => {
+      cancelPress();
+      if (!drag) return;
+      drag.el.classList.remove("tl-dragging");
+      document.body.classList.remove("dragging-block");
+      drag = null;
+      renderDay();
+    });
+  })();
+
   /* ---- drag any sidebar to-do (Personal list, Also today) onto the timeline:
      the drop position sets the time, and the day template at that time fills in
      the location (clinic during work hours, Home otherwise, studio during class) ---- */
   document.getElementById("dayPage").addEventListener("dragstart", e => {
-    // an event already on the calendar → dragging MOVES it (reschedule, no re-typing)
-    const mover = e.target.closest("[data-move-id]");
-    if (mover) {
-      e.dataTransfer.setData("application/x-daybook-move", mover.dataset.moveId);
-      e.dataTransfer.effectAllowed = "move";
-      return;
-    }
+    // 2026-08-05 (Part D): SUPERSEDES the "[data-move-id] -> native drag reschedule"
+    // branch that used to live here — replaced by the press-and-hold pointer-drag
+    // handler near the block template (no native draggable attribute left to trigger
+    // this any more). data-move-id itself stays on the block only for right-click-edit.
     const chip = e.target.closest("[data-drag-title]");
     if (!chip) return;
     e.dataTransfer.setData("text/plain", chip.dataset.dragTitle);
@@ -19713,11 +20053,16 @@
     return [];
   }
   const eventsLayerEl = document.getElementById("eventsLayer");
-  const dndTypeOk = dt => dt.types.includes("application/x-daybook-track") || dt.types.includes("application/x-daybook-move");
+  // 2026-08-05 (Part D): SUPERSEDES the "application/x-daybook-move" branch that used to
+  // live in both this check and the drop handler below — an existing block's reschedule
+  // now goes through the press-and-hold pointer-drag handler instead of native HTML5
+  // drag, so this only ever needs to recognise the sidebar-chip "schedule a new item"
+  // drag any more.
+  const dndTypeOk = dt => dt.types.includes("application/x-daybook-track");
   eventsLayerEl.addEventListener("dragover", e => {
     if (!dndTypeOk(e.dataTransfer)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = e.dataTransfer.types.includes("application/x-daybook-move") ? "move" : "copy";
+    e.dataTransfer.dropEffect = "copy";
     eventsLayerEl.dataset.dragOver = "true";
   });
   eventsLayerEl.addEventListener("dragleave", () => { delete eventsLayerEl.dataset.dragOver; });
@@ -19732,21 +20077,6 @@
     // minute instead of drifting by however many blocks are expanded above it.
     let minutes = Math.round(minForTop(e.clientY - rect.top) / 15) * 15;
     minutes = Math.max(START_MIN, Math.min(END_MIN - 30, minutes));
-    // rescheduling an existing calendar event — keep its duration, refresh time + location
-    const moveId = e.dataTransfer.getData("application/x-daybook-move");
-    if (moveId) {
-      const ev = EVENTS.find(x => x.id === moveId);
-      if (ev) {
-        const oldS = toMin(ev.start), oldE = toMin(ev.end);
-        const dur = (oldS != null && oldE != null && oldE > oldS) ? oldE - oldS : 30;
-        ev.allDay = false;
-        ev.start = minToTime(minutes);
-        ev.end = minToTime(Math.min(minutes + dur, 1439));
-        ev.locPath = locForMinute(minutes);
-        saveEvents(EVENTS); renderDay();
-      }
-      return;
-    }
     const title = e.dataTransfer.getData("text/plain");
     const track = e.dataTransfer.getData("application/x-daybook-track") || "personal";
     if (!title) return;
@@ -20070,6 +20400,37 @@
       if (wrap) wrap.insertBefore(mascot, wrap.firstChild);
     }
   }
+  // 2026-08-05 (Part A, "put Mon 3 Aug · UD 3 on the SAME top row as BK33, not on its
+  // own line below"): moves #dayRow2 (the date/UD/moon line + its numerology dropdown)
+  // into the new #navDateSlot inside .nav-tiers on mobile only, same idempotent
+  // reparent-and-restore pattern as placeCosmicMascot() right above. Pure DOM relocation
+  // — ids, content, and every click/hover binding (all delegated on document or on ids
+  // that don't change) keep working wherever the node currently lives, so nothing about
+  // what she can tap or how it's stored changes, only which parent element it renders
+  // inside. #dayRow2Home marks #dayRow2's real desktop position.
+  //
+  // .mini-cal-wrap (the actual mini-calendar GRID + Today's-Patients button) is a real,
+  // always-visible widget on mobile today (confirmed: .day-row2 .mini-cal-wrap is only
+  // display:contents, never display:none, so it's not gated behind the collapse toggle
+  // like the numerology panel is) — moving #dayRow2 wholesale would drag a full month
+  // grid into the 30px header row right along with it. Detached back OUT to #dayRow2Home
+  // (dayRow2's own original spot in the page flow) first, so only the compact date line
+  // + its expand panel end up in the header; the calendar grid stays exactly where it's
+  // always lived, just without the date line sitting above it any more.
+  function placeDateLine() {
+    var slot = document.getElementById("navDateSlot");
+    var row = document.getElementById("dayRow2");
+    var home = document.getElementById("dayRow2Home");
+    var calWrap = document.querySelector(".mini-cal-wrap");
+    if (!slot || !row || !home || !calWrap) return;
+    if (isMobile()) {
+      if (calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
+      if (row.parentElement !== slot) slot.appendChild(row);
+    } else {
+      if (row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
+      if (calWrap.parentElement !== row) row.appendChild(calWrap);
+    }
+  }
   function positionDot() {
     var dot = document.getElementById("b33Live");
     if (!dot) return;
@@ -20132,9 +20493,19 @@
       var frame = document.createElement("span");
       frame.className = "b33-live-frame";
       frame.appendChild(b);
-      var topbarRight = document.querySelector(".topbar-right");
-      if (topbarRight) topbarRight.insertBefore(frame, topbarRight.firstChild);
-      else document.documentElement.appendChild(b); // fallback if that markup ever changes
+      // 2026-08-05 (Part A, "move the live dot out of the busy top-right cluster... to
+      // a spot with spare space, small and unobtrusive"): SUPERSEDES the .topbar-right
+      // placement above (search + theme-toggle live there, and now that .nav-date-slot
+      // shares the row too the cluster only gets busier) — sits right after BK33
+      // instead, the one genuinely quiet gap in the row, still its own small frame.
+      var navTiers = document.querySelector(".nav-tiers");
+      var dateSlot = document.getElementById("navDateSlot");
+      if (navTiers && dateSlot) navTiers.insertBefore(frame, dateSlot);
+      else {
+        var topbarRight = document.querySelector(".topbar-right");
+        if (topbarRight) topbarRight.insertBefore(frame, topbarRight.firstChild);
+        else document.documentElement.appendChild(b); // fallback if that markup ever changes
+      }
     } else {
       document.documentElement.appendChild(b);
       positionDot();
@@ -20271,7 +20642,9 @@
     ready = true; lastPushed = JSON.stringify(gather());
     hideOverlay(); badge(); signoutBtn(); subscribe();
     placeCosmicMascot();
+    placeDateLine();
     window.addEventListener("resize", placeCosmicMascot);
+    window.addEventListener("resize", placeDateLine);
     // catch up on anything that changed while this device was away
     fetchCloud().then(function (row) { if (row) reconcile(row); });
   }
