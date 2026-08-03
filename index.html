@@ -2534,11 +2534,40 @@
   .tl-point .tl-tick { width: 12px; height: 12px; margin-right: 5px; font-size: 8px; vertical-align: -1px; }
   .tl-item.done { opacity: 0.55; }
   .tl-item.done .tl-title { text-decoration: line-through; }
-  /* EVENTS (appointments/occasions) read as sharp SQUARE blocks with no tick;
-     TASKS keep soft rounded mochi corners + a round gold tick;
-     ROUTINES are tasks on a schedule — rounded, tickable, gold ↻, steps + minutes in the meta */
-  /* 2026-08-01: sharp-square events (task #102, 2026-07-25) SUPERSEDED by the mockup's
-     uniformly rounded pills + her own "every box soft-cornered, no exceptions" rule. */
+  /* 2026-08-06 (Linh: "a little confetti burst or a springy check with a soft colour
+     pop"): celebrateTickAt() (JS, near toggleDone) appends one of these per tick-to-
+     done, positioned via inline left/top rather than any ancestor -- fixed, so it reads
+     at the right screen spot regardless of which scrollable list it was ticked in
+     (Day timeline, Week chip, or a plain checkbox list elsewhere). pointer-events:none
+     so it never intercepts the next tap. */
+  .tick-burst { position: fixed; width: 0; height: 0; z-index: 400; pointer-events: none; }
+  .tick-burst-pop {
+    position: absolute; top: 0; left: 0; width: 22px; height: 22px; border-radius: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    background: radial-gradient(circle, color-mix(in oklab, var(--cosmic-gold) 70%, transparent) 0%, transparent 72%);
+    animation: tick-pop 420ms cubic-bezier(.34,1.56,.64,1) forwards;
+  }
+  .tick-burst-p {
+    position: absolute; top: 0; left: 0; width: 5px; height: 5px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: tick-fly 480ms cubic-bezier(.2,.8,.3,1) forwards;
+  }
+  @keyframes tick-pop {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0.9; }
+    55% { transform: translate(-50%, -50%) scale(1.5); opacity: 0.55; }
+    100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; }
+  }
+  @keyframes tick-fly {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.4); opacity: 0; }
+  }
+  /* TASKS keep soft rounded mochi corners + a round gold tick;
+     ROUTINES are tasks on a schedule — rounded, tickable, gold ↻, steps + minutes in the meta;
+     EVENTS (appointments/occasions) are rounded pills too (2026-08-01: SUPERSEDED the
+     original sharp-square treatment -- the mockup's uniformly rounded pills + her own
+     "every box soft-cornered, no exceptions" rule) and, since 2026-07-27, tick off the
+     same as the other two -- "no tick" was never true past that point, just a stale
+     line in this comment that outlived the code it described. */
   .tl-item[data-kind="event"] { border-radius: 10px; }
   .tl-item[data-kind="routine"] .recur { color: var(--margin-rule); }
   /* 2026-08-02 (Linh's GCal reference — "use this when i select event"): tapping ANY
@@ -3476,7 +3505,7 @@
      truncated — instead of the old time-on-its-own-line block that made long titles
      wrap to 3-4 lines and read as clutter. Same solid-fill language as .tl-block. */
   .wk-ev {
-    display: flex; align-items: baseline; gap: 5px; border-radius: 10px;
+    display: flex; align-items: center; gap: 5px; border-radius: 10px;
     padding: 5px 9px; font-size: 10.5px; line-height: 1.3;
     font-weight: 600; box-shadow: none; white-space: nowrap; overflow: hidden;
   }
@@ -3485,6 +3514,25 @@
   .wk-ev[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
   .wk-ev[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
   .wk-ev .wk-ev-ttl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* 2026-08-06: same tiny circular tick as .tl-point .tl-tick (the Day timeline's own
+     compact variant) -- this chip has even less room, so it borrows that size rather
+     than the full 15px base .tl-tick. currentColor keeps it legible against every
+     track's own fill colour above instead of one fixed hex. */
+  .wk-ev-tick {
+    width: 12px; height: 12px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+    border: 1.5px solid currentColor; border-radius: 50%; background: transparent;
+    color: inherit; font-size: 8px; line-height: 1; font-weight: 800; cursor: pointer; padding: 0; opacity: 0.75;
+  }
+  .wk-ev-tick:hover { opacity: 1; }
+  /* ticked fill/text is each track's own title/bg pair swapped -- same contrast
+     guarantee the untouched chip already relies on, just inverted, instead of a fixed
+     colour that would go invisible-on-invisible against currentColor for some tracks. */
+  .wk-ev[data-track="work"]     .wk-ev-tick[data-on="true"] { background: var(--tl-work-title);     color: var(--tl-work-bg); opacity: 1; }
+  .wk-ev[data-track="family"]   .wk-ev-tick[data-on="true"] { background: var(--tl-family-title);   color: var(--tl-family-bg); opacity: 1; }
+  .wk-ev[data-track="marriage"] .wk-ev-tick[data-on="true"] { background: var(--tl-marriage-title); color: var(--tl-marriage-bg); opacity: 1; }
+  .wk-ev[data-track="personal"] .wk-ev-tick[data-on="true"] { background: var(--tl-personal-title); color: var(--tl-personal-bg); opacity: 1; }
+  .wk-ev.done { opacity: 0.55; }
+  .wk-ev.done .wk-ev-ttl { text-decoration: line-through; }
   /* 2026-08-01: at 7-columns-in-one-viewport width there's only ~60px per pill —
      time-of-day above the title (old layout) or even inline (first attempt) left
      almost nothing for the one thing that actually matters at a glance: WHAT the
@@ -5183,7 +5231,21 @@
     background: color-mix(in oklab, var(--margin-rule) 6%, transparent);
     box-shadow: 0 0 14px -4px color-mix(in oklab, var(--margin-rule) 60%, transparent);
   }
-  .qa-prev-main { font-family: var(--font-body); font-size: 14.5px; margin-bottom: 8px; }
+  .qa-prev-main { font-family: var(--font-body); font-size: 14.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .qa-prev-icon { flex: none; }
+  /* 2026-08-06 (Linh: "I can't edit the appointment title" -- the parsed title used to
+     render as plain <b> text with no way to change it, so a mis-parsed title meant
+     cancelling and retyping the whole line differently and hoping for better luck. An
+     actual input, wired straight to qaDraft.p.title (see the #qaPreview "input"
+     delegate) so it survives every other chip's full box.innerHTML re-render without
+     losing focus/cursor. Dashed underline (same "tap me" language as .qa-chip.ask)
+     signals it's editable; solid gold on focus. */
+  .qa-title-edit {
+    flex: 1 1 auto; min-width: 0; font: inherit; font-weight: 700; color: var(--ink);
+    background: none; border: none; border-bottom: 1.5px dashed color-mix(in oklab, var(--margin-rule) 55%, transparent);
+    padding: 1px 0 2px; border-radius: 0;
+  }
+  .qa-title-edit:focus { outline: none; border-bottom-style: solid; border-bottom-color: var(--margin-rule); }
   .qa-prev-chips, .qa-prev-opts { display: flex; flex-wrap: wrap; gap: 6px; }
   .qa-prev-opts { margin-top: 8px; }
   .qa-chip, .qa-opt {
@@ -9744,6 +9806,45 @@
     if (on) DONE[id] = true; else delete DONE[id];
     saveDone(DONE);
   }
+  /* 2026-08-06 (Linh: "when I tick something off, play a quick, delightful UI response
+     -- a little confetti burst or a springy check with a soft colour pop"): a fixed-
+     position overlay anchored to SCREEN COORDINATES rather than the tapped element
+     itself -- every tick call site re-renders its list right after tickTask() (see the
+     click delegates below), which destroys/replaces the clicked button synchronously,
+     so an animation riding on the element's own class list would never get a chance to
+     paint. Capturing cx/cy from getBoundingClientRect() BEFORE that re-render and
+     passing plain numbers here sidesteps the element's lifecycle entirely -- appended
+     straight to <body>, self-removing, independent of whatever the re-render does.
+     Respects prefers-reduced-motion (skips outright, no fallback flash needed -- the
+     tick's own filled/struck-through state already carries the "done" feedback).
+     Kept fast on purpose (~500ms total) per her explicit "never slow or annoying". */
+  function celebrateTickAt(cx, cy) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const COLORS = ["var(--cosmic-gold)", "var(--margin-rule)", "#8fd6b4", "#F2EDDF"];
+    const N = 6;
+    let particles = "";
+    for (let i = 0; i < N; i++) {
+      const angle = (Math.PI * 2 * i) / N + (Math.random() - 0.5) * 0.5;
+      const dist = 16 + Math.random() * 12;
+      const tx = (Math.cos(angle) * dist).toFixed(1), ty = (Math.sin(angle) * dist).toFixed(1);
+      particles += `<span class="tick-burst-p" style="--tx:${tx}px;--ty:${ty}px;background:${COLORS[i % COLORS.length]};animation-delay:${Math.round(Math.random() * 30)}ms"></span>`;
+    }
+    const burst = document.createElement("div");
+    burst.className = "tick-burst";
+    burst.style.cssText = `left:${cx}px;top:${cy}px`;
+    burst.innerHTML = `<span class="tick-burst-pop"></span>${particles}`;
+    document.body.appendChild(burst);
+    setTimeout(() => burst.remove(), 650);
+  }
+  // captures the tapped tick control's centre point and, if it's about to turn ON
+  // (never on un-tick — celebration is a completion reward, not a toggle-either-way
+  // effect), fires the burst above. Shared by every tick surface below so they can't
+  // drift out of sync with each other or with celebrateTickAt's own contract.
+  function celebrateIfDone(el, willBeOn) {
+    if (!willBeOn || !el) return;
+    const r = el.getBoundingClientRect();
+    celebrateTickAt(r.left + r.width / 2, r.top + r.height / 2);
+  }
   // staged tasks — for the ones she finishes in pieces: the task carries follow-up
   // stages, and ticking it advances to the next stage instead of vanishing.
   // Full chain = [title, ...stages]; stageAt = how many steps are already behind her.
@@ -12136,7 +12237,7 @@
   });
   document.addEventListener("change", e => {
     const t = e.target.closest("[data-us-tick]");
-    if (t) { tickTask(t.dataset.usTick, t.checked); render(); }
+    if (t) { celebrateIfDone(t, t.checked); tickTask(t.dataset.usTick, t.checked); render(); }
   });
   document.addEventListener("keydown", e => {
     if (e.key !== "Enter") return;
@@ -12683,10 +12784,19 @@
             const isRoutine = e => e.generated && e.allDay && e.category !== "Birthdays";
             const routines = evs.filter(isRoutine);
             const shown = evs.filter(e => !isRoutine(e));
+            // 2026-08-06 (Linh: "give ALL events a tick-off control, not just routines
+            // and tasks"): the Day timeline already ticks off every kind (2026-07-27) --
+            // this chip was the one real gap. Same isDone/tickTask registry as
+            // everywhere else (keyed by id, never mutates/duplicates the event itself),
+            // wired through #weekGrid's own click delegate below rather than the generic
+            // document-level one, so it can call renderWeek() (not renderDay()) and
+            // return before the chip's own data-jump handler fires.
             const chips = shown.slice(0, 6).map(e => {
               const time = e.allDay ? "All day" : fmtTime(e.start);
               const tip = `${time} · ${e.title}${e.generated ? "" : " — right-click to edit"}`;
-              return `<div class="wk-ev" data-track="${e.track}"${e.generated ? "" : ` data-eid="${e.id}"`} title="${esc(tip)}">
+              const done = isDone(e.id);
+              return `<div class="wk-ev${done ? " done" : ""}" data-track="${e.track}"${e.generated ? "" : ` data-eid="${e.id}"`} title="${esc(tip)}">
+                <button type="button" class="wk-ev-tick" data-tick-ev="${e.id}" data-on="${done}" aria-label="${done ? "Un-tick" : "Tick off"} ${esc(e.title)}">${done ? "✓" : ""}</button>
                 <span class="t">${time}</span><span class="wk-ev-ttl">${e.icon ? e.icon + " " : ""}${esc(e.title)}</span>
               </div>`;
             }).join("");
@@ -16374,6 +16484,20 @@
   document.getElementById("wkNext").addEventListener("click", () => { state.weekAnchor = addDays(state.weekAnchor, 7); renderWeek(); });
   document.getElementById("wkToday").addEventListener("click", () => { state.weekAnchor = new Date(TODAY); renderWeek(); });
   document.getElementById("weekGrid").addEventListener("click", e => {
+    // 2026-08-06 (Linh: "give ALL events a tick-off control"): checked FIRST and with
+    // its own stopPropagation -- .wk-ev-tick sits INSIDE a .week-col that also carries
+    // data-jump (tap anywhere in the column opens that day), so without this a tick tap
+    // would both toggle AND navigate away. renderWeek() (not the generic renderDay()
+    // the document-level [data-tick-ev] delegate calls) keeps this on the Week grid.
+    const tick = e.target.closest("[data-tick-ev]");
+    if (tick) {
+      e.stopPropagation();
+      const willBeOn = tick.dataset.on !== "true";
+      celebrateIfDone(tick, willBeOn);
+      tickTask(tick.dataset.tickEv, willBeOn);
+      renderWeek();
+      return;
+    }
     const col = e.target.closest("[data-jump]"); if (!col) return;
     state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
   });
@@ -16559,6 +16683,7 @@
     }
     const stepBox = e.target.closest("[data-step-tick]");
     if (stepBox) {
+      celebrateIfDone(stepBox, stepBox.checked);
       toggleDone(stepBox.dataset.stepTick, stepBox.checked);
       const itemId = stepBox.dataset.item, count = parseInt(stepBox.dataset.stepCount, 10);
       const allStepsDone = Array.from({ length: count }, (_, i) => isDone(`${itemId}::step::${i}`)).every(Boolean);
@@ -16566,7 +16691,7 @@
       reRenderCurrent(); return;
     }
     const box = e.target.closest("[data-tick]");
-    if (box) { tickTask(box.dataset.tick, box.checked, box.dataset.fitLink, box.dataset.fitDate); reRenderCurrent(); return; }
+    if (box) { celebrateIfDone(box, box.checked); tickTask(box.dataset.tick, box.checked, box.dataset.fitLink, box.dataset.fitDate); reRenderCurrent(); return; }
     const bought = e.target.closest("[data-bought]");
     if (bought) {
       const item = SHOP.find(s => s.id === bought.dataset.bought);
@@ -18525,9 +18650,16 @@
       openTlDetail(tlDetail.dataset.tlDetail);
       return;
     }
-    // tick a calendar item straight on the timeline
+    // tick a calendar item straight on the timeline (covers both the compact .tl-tick
+    // card button and the detail sheet's .tl-detail-done-btn — same data-tick-ev)
     const tickEv = e.target.closest("[data-tick-ev]");
-    if (tickEv) { tickTask(tickEv.dataset.tickEv, tickEv.dataset.on !== "true", tickEv.dataset.fitLink, tickEv.dataset.fitDate); renderDay(); return; }
+    if (tickEv) {
+      const willBeOn = tickEv.dataset.on !== "true";
+      celebrateIfDone(tickEv, willBeOn);   // reads the still-attached node's position before renderDay() replaces it
+      tickTask(tickEv.dataset.tickEv, willBeOn, tickEv.dataset.fitLink, tickEv.dataset.fitDate);
+      renderDay();
+      return;
+    }
     // edit a hand-written event
     const edit = e.target.closest("[data-edit]");
     if (edit) {
@@ -18970,6 +19102,167 @@
     if ((kind === "event" && !p.start) || bareHour) d.open = "time";   // the one gap worth asking about
     return d;
   }
+
+  /* ---- 2026-08-06 (Linh: "let me paste an SMS or email appointment confirmation...
+     pull out the key details and pre-fill a new event — INCLUDING a smart title"):
+     paste-to-parse. A confirmation reads nothing like her own quick-add shorthand
+     ("Dinner Fri 7pm") — it's a paragraph of clutter (greeting, business signature,
+     legal footer) around the handful of facts that actually matter — so this is a
+     SEPARATE, more liberal extractor rather than a stretch of parseQuickAdd itself;
+     reusing that would risk regressing the shorthand parsing she uses every day.
+     Runs entirely locally (regex/keyword pattern-matching, no network, no AI) per her
+     explicit ask. Gated behind QA_CONFIRM_HINTS so an ordinary multi-line plan paste
+     (her existing bulk-add feature, right below) is never intercepted by mistake —
+     real confirmations almost always say "appointment"/"confirmed"/"booking" etc.,
+     a plain list of her own tasks almost never does. */
+  const QA_CONFIRM_HINTS = /\b(confirm(?:ed|ation)?|appointment|booking|booked|reservation|reserved|scheduled|reminder|check-?in|see you (?:on|at|then))\b/i;
+  // service/appointment type → clean display label. Checked in order, first match wins,
+  // so more specific words (acupuncture) are listed ahead of broad catch-alls (doctor).
+  const QA_APPT_TYPES = [
+    [/\bacupuncture\b/i, "Acupuncture"],
+    [/\bdent(?:ist|al)\b/i, "Dentist"],
+    [/\bphysio(?:therapy|therapist)?\b/i, "Physio"],
+    [/\bchiro(?:practic|practor)?\b/i, "Chiropractic"],
+    [/\bmassage\b/i, "Massage"],
+    [/\bhair(?:dresser|cut)?\b|\bsalon\b|\bbalayage\b/i, "Hair"],
+    [/\bnails?\b|\bmanicure\b|\bpedicure\b/i, "Nails"],
+    [/\bfacial\b|\bskin\s*care\b|\bderma(?:tolog\w*)?\b/i, "Skin"],
+    [/\boptometrist\b|\beye\s*test\b/i, "Optometrist"],
+    [/\bvet(?:erinary|erinarian)?\b/i, "Vet"],
+    [/\bgp\b|\bdoctor\b|\bphysician\b|\bmedical\s*cent(?:re|er)\b/i, "Doctor"],
+    [/\bmechanic\b|\bcar\s*service\b/i, "Car Service"],
+    [/\bconsult(?:ation)?\b/i, "Consultation"],
+    [/\bmeeting\b/i, "Meeting"],
+    [/\btable\s+for\b|\bdinner\b/i, "Dinner"],
+    [/\blunch\b/i, "Lunch"],
+    [/\bbreakfast\b/i, "Breakfast"],
+    [/\bcoffee\b/i, "Coffee"],
+  ];
+  const qaExtractApptType = text => { for (const [re, lbl] of QA_APPT_TYPES) if (re.test(text)) return lbl; return null; };
+  const qaCleanName = s => s.replace(/\s+/g, " ").replace(/[.,;:]+$/, "").trim();
+  // business/provider name — "from X" (SMS reminder phrasing), "at X" (booking-line
+  // phrasing), or a standalone line that ends in a recognisable business-type word
+  // (email signatures often sit on their own line).
+  function qaExtractApptBusiness(text) {
+    const NAME = "[A-Z][\\w&'’.]*(?:\\s+(?:of|the|and|&|[A-Z][\\w&'’.]*)){0,4}";
+    let m = text.match(new RegExp(`\\bfrom\\s+(${NAME})`));
+    if (m) return qaCleanName(m[1]);
+    m = text.match(new RegExp(`\\bat\\s+(${NAME})`));
+    if (m) return qaCleanName(m[1]);
+    m = text.match(/^([A-Z][\w&'’. -]{2,40}\b(?:Clinic|Centre|Center|Dental|Medical|Salon|Studio|Practice|Spa|Hospital|Pharmacy|Healing|Physio|Health))\.?$/m);
+    if (m) return qaCleanName(m[1]);
+    return null;
+  }
+  // "with David" / "with Dr Smith" — excludes "with you/your/us" (lowercase, never
+  // matches the capital-letter start) and a short stop-list for stray capitalised
+  // sentence-starts ("With The team...").
+  function qaExtractApptPerson(text) {
+    const m = text.match(/\bwith\s+((?:Dr\.?\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/);
+    if (!m) return null;
+    if (/^(you|your|us|the|a|an)$/i.test(m[1].replace(/^Dr\.?\s+/, ""))) return null;
+    return m[1].trim();
+  }
+  function qaExtractApptLocation(text) {
+    let m = text.match(/\b(?:location|address|where)\s*[:]\s*([^\n]+)/i);
+    if (m) return qaCleanName(m[1]);
+    m = text.match(/\b\d+[a-zA-Z]?\s+[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,3}\s+(?:St|Street|Rd|Road|Ave|Avenue|Dr|Drive|Cres|Crescent|Pl|Place|Ln|Lane|Way|Hwy|Highway|Pde|Parade)\b[^\n]*/i);
+    if (m) return qaCleanName(m[0]);
+    return null;
+  }
+  // more liberal than parseQuickAdd's own date reading — confirmations spell dates out
+  // in full ("Monday, 11 August 2026", "11/08/2026", ISO "2026-08-11") where her own
+  // shorthand never does.
+  function qaExtractApptDate(text) {
+    const MON_NAMES = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+    const MON_RE = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?";
+    const monIdx = name => MON_NAMES.indexOf(name.slice(0, 3).toLowerCase());
+    let m = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = text.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+${MON_RE}(?:,?\\s+(\\d{4}))?\\b`, "i"));
+    if (m) {
+      const d = new Date(m[3] ? +m[3] : TODAY.getFullYear(), monIdx(m[2]), +m[1]);
+      if (!m[3] && d < TODAY) d.setFullYear(d.getFullYear() + 1);
+      return d;
+    }
+    m = text.match(new RegExp(`\\b${MON_RE}\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`, "i"));
+    if (m) {
+      const d = new Date(m[3] ? +m[3] : TODAY.getFullYear(), monIdx(m[1]), +m[2]);
+      if (!m[3] && d < TODAY) d.setFullYear(d.getFullYear() + 1);
+      return d;
+    }
+    m = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?\b/);
+    if (m && +m[1] <= 31 && +m[2] <= 12) {
+      const y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : TODAY.getFullYear();
+      const d = new Date(y, +m[2] - 1, +m[1]);
+      if (!m[3] && d < TODAY) d.setFullYear(d.getFullYear() + 1);
+      return d;
+    }
+    if (/\btoday\b/i.test(text)) return new Date(TODAY);
+    if (/\btomorrow\b/i.test(text)) return new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 1);
+    m = text.match(/\b(sun(?:day)?|mon(?:day)?|tues?(?:day)?|wed(?:nesday)?|thur?s?(?:day)?|fri(?:day)?|sat(?:urday)?)\b/i);
+    if (m) {
+      const map = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+      const delta = (map[m[1].slice(0, 3).toLowerCase()] - TODAY.getDay() + 7) % 7;
+      return new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + delta);
+    }
+    return null;
+  }
+  // liberal time reading — a range ("2pm - 3pm", "between 2 and 3pm") or a single start
+  // time plus an optionally-separate duration ("(30 min)", "for 45 minutes").
+  function qaExtractApptTime(text) {
+    const to24 = (h, mi, ap) => {
+      h = parseInt(h, 10); mi = mi ? parseInt(mi, 10) : 0;
+      if (ap) { ap = ap.toLowerCase(); if (ap === "pm" && h < 12) h += 12; if (ap === "am" && h === 12) h = 0; }
+      return `${pad(h)}:${pad(mi)}`;
+    };
+    let m = text.match(/(?:between\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|–|—|to|and|until)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (m && (m[2] || m[3] || m[5] || m[6])) return { start: to24(m[1], m[2], m[3] || m[6]), end: to24(m[4], m[5], m[6] || m[3]) };
+    m = text.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?\b/i) || text.match(/\b(\d{1,2})()\s*(am|pm)\b/i);
+    if (!m) return null;
+    const start = to24(m[1], m[2], m[3]);
+    const dm = text.match(/\b(?:for|duration:?|lasts?)\s*[:]?\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes?)\b/i)
+      || text.match(/\((\d+)\s*(min(?:ute)?s?)\)/i);
+    let end = "";
+    if (dm) end = minToTime(Math.min(toMin(start) + Math.round(/^h/i.test(dm[2]) ? parseFloat(dm[1]) * 60 : parseFloat(dm[1])), 1439));
+    return { start, end };
+  }
+  // title logic straight from her spec: type+business → "Acupuncture — Lotus Healing";
+  // type alone → "Dentist appointment"; business/person alone as a fallback.
+  function qaApptTitle(apptType, business, person) {
+    if (apptType && business) return `${apptType} — ${business}`;
+    if (apptType && person) return `${apptType} with ${person}`;
+    if (apptType) return `${apptType} appointment`;
+    if (business) return business;
+    if (person) return `Appointment with ${person}`;
+    return null;
+  }
+  // orchestrates the extractors above into a qaDraft-shaped object qaRenderPreview()
+  // can show straight away — same "review before it saves" flow as a typed line, and
+  // she can tweak ANY field (including the title, now editable — see qaRenderPreview)
+  // before confirming. Returns null (falls through to normal paste handling) unless it
+  // both smells like a real confirmation AND found a usable date or time — a bare "low
+  // confidence" match with neither would just paste a useless empty-looking draft.
+  function qaParseConfirmation(raw) {
+    if (!QA_CONFIRM_HINTS.test(raw)) return null;
+    const text = raw.replace(/\r\n/g, "\n");
+    const date = qaExtractApptDate(text);
+    const time = qaExtractApptTime(text);
+    if (!date && !time) return null;
+    const apptType = qaExtractApptType(text);
+    const business = qaExtractApptBusiness(text);
+    const person = business ? null : qaExtractApptPerson(text);   // avoid "Dentist — Bondi Dental with David" doubling up
+    const location = qaExtractApptLocation(text) || business;
+    let title = qaApptTitle(apptType, business, person);
+    if (!title) {
+      const firstLine = text.split(/\n/).map(s => s.trim()).find(s => s.length > 3 && s.length < 60 && !QA_CONFIRM_HINTS.test(s));
+      title = firstLine ? firstLine.replace(/[.:,;]+$/, "") : "Appointment";
+    }
+    let track = "personal";
+    for (const h of QA_TRACK_HINTS) if (h.re.test(text)) { track = h.track; break; }
+    const p = { title, start: time?.start || "", end: time?.end || "", date: date || new Date(TODAY), locPath: location ? [location] : [], track };
+    return { raw, p, rec: null, spendAmount: null, kind: "event", bareHour: null, estMin: null, who: "me", open: p.start ? "" : "time" };
+  }
+
   function qaTopPlaces(n) {
     const counts = new Map();
     EVENTS.forEach(e => { const l = (e.locPath || [])[0]; if (l) counts.set(l, (counts.get(l) || 0) + 1); });
@@ -19022,7 +19315,8 @@
     }
     box.hidden = false;
     box.innerHTML = `<div class="qa-prev">
-      <div class="qa-prev-main">${rec ? "↻" : kind === "event" ? "📅" : "☑"} <b>${esc(p.title)}</b></div>
+      <div class="qa-prev-main"><span class="qa-prev-icon">${rec ? "↻" : kind === "event" ? "📅" : "☑"}</span><input
+        type="text" class="qa-title-edit" id="qaTitleEdit" value="${esc(p.title)}" autocomplete="off" aria-label="Title — tap to edit"></div>
       <div class="qa-prev-chips">
         ${chip("kind", kindLbl)}
         ${rec ? "" : chip("date", `📆 ${qaDayLbl(p.date)}`)}
@@ -19390,10 +19684,42 @@
     if (e.target.closest("[data-qa-confirm]")) { document.getElementById("quickAddInput").value = ""; qaCommit(); return; }
     if (e.target.closest("[data-qa-cancel]")) { qaDraft = null; qaRenderPreview(); }
   });
+  // 2026-08-06 (Linh: "I can't edit the appointment title"): delegated on #qaPreview
+  // itself (a stable container that outlives every chip-triggered box.innerHTML rebuild
+  // above) rather than on #qaTitleEdit directly -- a listener bound to the input would
+  // be destroyed the instant any OTHER chip re-renders the box. Writes straight to
+  // qaDraft.p.title with no re-render of its own, so focus/cursor position survive
+  // every keystroke; the next re-render from any other chip just picks up the edit.
+  document.getElementById("qaPreview").addEventListener("input", e => {
+    if (!qaDraft) return;
+    if (e.target.id === "qaTitleEdit") qaDraft.p.title = e.target.value;
+  });
+  document.getElementById("qaPreview").addEventListener("keydown", e => {
+    if (e.target.id !== "qaTitleEdit") return;
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("quickAddInput").value = ""; qaCommit(); }
+    else if (e.key === "Escape") { e.target.blur(); }
+  });
   // paste a whole plan: every non-empty line becomes its own event/routine
   document.getElementById("quickAddInput").addEventListener("paste", e => {
     const txt = (e.clipboardData || window.clipboardData)?.getData("text") || "";
-    if (!/\n/.test(txt.trim())) return;
+    const trimmed = txt.trim();
+    if (!trimmed) return;
+    // 2026-08-06 (Linh: "let me paste an SMS or email appointment confirmation"):
+    // checked FIRST, before the line-count branch below — a confirmation can be one
+    // SMS line or a whole multi-line email, but either way it's ONE event to review,
+    // not a list of separate ones. qaParseConfirmation() already gates hard on
+    // confirmation-ish wording (QA_CONFIRM_HINTS) so an ordinary multi-line plan paste
+    // (no "appointment"/"confirmed"/etc in it) falls straight through to the existing
+    // bulk-add behaviour just below, untouched.
+    const appt = qaParseConfirmation(trimmed);
+    if (appt) {
+      e.preventDefault();
+      qaDraft = appt;
+      qaRenderPreview();
+      document.getElementById("quickAddInput").value = "";
+      return;
+    }
+    if (!/\n/.test(trimmed)) return;
     e.preventDefault();
     const lines = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     const made = lines.map(quickAddOne).filter(Boolean);
