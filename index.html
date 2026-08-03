@@ -5282,35 +5282,65 @@
        did, gaining safe-area padding of its own). Anchored to .nav-tiers itself instead
        (position:relative on .nav-tiers is a global base rule, not mobile-only) so the
        dropdown always opens flush under the bar regardless of its actual height. */
+    /* 2026-08-06 (Linh: "redesign my chapter dropdown -- ugly, proportions off, I
+       can't expand CH22"): SUPERSEDES the bordered/shadow-heavy panel below -- flat
+       like the rest of the app (colour + space carrying the separation, not a boxed
+       outline), one row height for every chapter pill, one smaller row height for
+       every page inside an open chapter, and a left guide-line instead of deep
+       indent padding so a page's label lines up close to its chapter's own label
+       above it. ROOT CAUSE of the expand bug: this panel used to be a horizontal
+       pill row and picked up `.view-tabs { flex-wrap: wrap }` (~line 5454, the old
+       "pills wrap into rows on a narrow phone" fix) back from that era. Once it
+       became a vertical accordion, that inherited wrap (plus its sibling
+       justify-content: center from the same old rule) turned into two compounding
+       bugs the instant an open submenu's height pushed the column past max-height:
+       flex-wrap started a SECOND column to the right instead of just scrolling
+       (shoving the opened chapter almost entirely off the visible panel edge), and
+       justify-content centered the whole (now-overflowing) column vertically, so
+       even at scrollTop 0 the first item or two sat pushed up above the visible
+       top. CH22 has by far the longest page list, so it was the one guaranteed to
+       hit this. flex-wrap: nowrap + justify-content: flex-start here (higher
+       specificity, always win for these two properties) fix both for good;
+       overflow-y: auto below already handles anything taller than the panel. */
     #categoryTabs.view-tabs {
       position: absolute; left: 0; right: auto; bottom: auto; top: 100%; margin-top: 6px;
       z-index: 250;
-      display: none; flex-direction: column; align-items: stretch; gap: 2px;
-      width: min(250px, calc(100vw - 24px)); max-height: 76vh; overflow-y: auto;
-      background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
-      box-shadow: 0 18px 48px -12px rgba(0,0,0,0.35); padding: 8px;
+      display: none; flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+      justify-content: flex-start; gap: 1px;
+      width: min(224px, calc(100vw - 24px)); max-height: 76vh; overflow-y: auto;
+      background: var(--paper); border: none; border-radius: 14px;
+      box-shadow: 0 16px 40px -14px rgba(0,0,0,0.5); padding: 6px;
     }
     #categoryTabs.view-tabs.drawer-open { display: flex; }
     #categoryTabs .nav-navwrap { display: flex; flex-direction: column; width: 100%; }
     .nav-cat-parent {
       display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
-      gap: 10px; min-height: 44px; padding: 8px 10px; border-radius: 10px;
+      gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 10px;
       width: 100%; text-align: left;
     }
     /* (carried over from the bottom-bar era, still needed: the desktop pill rule
        .view-tabs button[aria-pressed="true"] is more specific than a bare class, so
        the gold fill/glow would leak into the drawer without #categoryTabs in front.) */
     #categoryTabs .nav-cat-parent[aria-pressed="true"] {
-      background: transparent; box-shadow: none; color: var(--nav-active); font-weight: 700;
+      background: color-mix(in oklab, var(--nav-active) 14%, transparent);
+      box-shadow: none; color: var(--nav-active); font-weight: 700;
     }
     #categoryTabs .nav-cat-full { display: inline; font-size: 13.5px; }
-    #categoryTabs .nav-cat-icon { display: block; font-size: 17px; line-height: 1; }
+    #categoryTabs .nav-cat-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 20px; font-size: 16px; line-height: 1; flex: none;
+    }
     #categoryTabs .nav-cat-short { display: none; }
     #categoryTabs .nav-menu {
-      position: static; transform: none; margin: 0 0 4px; padding: 0 0 2px 36px;
-      min-width: 0; max-width: none; border: none; box-shadow: none; background: transparent;
+      position: static; transform: none; margin: 1px 0 4px 20px;
+      padding: 2px 0 2px 12px; border-left: 1px solid var(--note-line);
+      min-width: 0; max-width: none; border-top: none; border-right: none; border-bottom: none;
+      box-shadow: none; background: transparent;
     }
     #categoryTabs .nav-menu::before { display: none; }
+    #categoryTabs .nav-menu-item {
+      display: flex; align-items: center; min-height: 38px; padding: 0 10px; font-size: 12.5px;
+    }
   }
 
   /* ---- 2026-07-24: glowing text boxes for calendar events + tasks ----
@@ -10393,24 +10423,10 @@
     : "";
 
   /* ---- navigation structure: categories group related views ---- */
+  // 2026-08-06 (Linh: "order the chapters ascending by number"): CH4, CH5, CH6, CH8,
+  // CH22 — SUPERSEDES the old grouping order (calendar/CH22 used to lead since it's
+  // her most-used chapter); ids/routing keys below are untouched, only array order.
   const CATEGORIES = [
-    // Calendar: time/astrology pages first (Numerology holds the 8 Days reference), then lists & tasks, then Goals
-    // her ask 2026-07-30: the planner is "Chapter 22" in her Book33 series
-    // ([[project_book33_series_structure]], 22 = master builder → compiling &
-    // organising) — "Calendar" replaced everywhere, not just labelled alongside
-    // it. id stays "calendar" (routing key, untouched) — only what she READS changes.
-    { id: "calendar", label: "CH22", short: "CH22", icon: "📅", views: [
-        { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" },
-        { id: "us", label: "Us", sep: true },
-        { id: "birthdays", label: "Birthdays" }, { id: "events", label: "Events" },
-        { id: "eightDays", label: "Numerology" },
-        { id: "shopping", label: "Shopping List", sep: true },
-        { id: "family", label: "Family Dinh" }, { id: "routines", label: "Routines" },
-        { id: "goals", label: "Goals", sep: true },
-        { id: "review", label: "Weekly Review" } ] },
-    // 2026-08-02 (Linh: "Move Money to Chapter 8") — its own chapter now, split out of
-    // Chapter 22. view id stays "money" (routing key, untouched); only its category changed.
-    { id: "chapter8", label: "CH8", short: "CH8", icon: "💰", views: [{ id: "money", label: "Money" }] },
     // Work: the clinic — dispensary, professional development, procedures
     { id: "work", label: "CH4", short: "CH4", icon: "🩺", views: [
         { id: "cpd", label: "CPD Points" },
@@ -10429,6 +10445,23 @@
         { id: "food", label: "Food" }, { id: "nutrition", label: "Nutrition" },
         { id: "growth", label: "Growth" } ] },
     { id: "genealogy", label: "CH6", short: "CH6", icon: "👥", views: [{ id: "people", label: "People" }] },
+    // 2026-08-02 (Linh: "Move Money to Chapter 8") — its own chapter now, split out of
+    // Chapter 22. view id stays "money" (routing key, untouched); only its category changed.
+    { id: "chapter8", label: "CH8", short: "CH8", icon: "💰", views: [{ id: "money", label: "Money" }] },
+    // Calendar: time/astrology pages first (Numerology holds the 8 Days reference), then lists & tasks, then Goals
+    // her ask 2026-07-30: the planner is "Chapter 22" in her Book33 series
+    // ([[project_book33_series_structure]], 22 = master builder → compiling &
+    // organising) — "Calendar" replaced everywhere, not just labelled alongside
+    // it. id stays "calendar" (routing key, untouched) — only what she READS changes.
+    { id: "calendar", label: "CH22", short: "CH22", icon: "📅", views: [
+        { id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" },
+        { id: "us", label: "Us", sep: true },
+        { id: "birthdays", label: "Birthdays" }, { id: "events", label: "Events" },
+        { id: "eightDays", label: "Numerology" },
+        { id: "shopping", label: "Shopping List", sep: true },
+        { id: "family", label: "Family Dinh" }, { id: "routines", label: "Routines" },
+        { id: "goals", label: "Goals", sep: true },
+        { id: "review", label: "Weekly Review" } ] },
   ];
   const categoryOf = viewId => CATEGORIES.find(c => c.views.some(v => v.id === viewId));
 
@@ -17097,18 +17130,23 @@
     const activeCat = categoryOf(state.view);
     // each section pill is now a dropdown parent; its menu holds the section's pages,
     // opening on hover OR click (the pharmacy nav Linh liked). The old sub-tabs row retires.
+    // 2026-08-06 (Linh: "chapters with no sub-items shouldn't show a caret"): a
+    // category with exactly one view has nothing to expand -- its pill carries
+    // data-view directly and navigates on tap, same as picking a menu item, instead
+    // of opening a one-item accordion.
     document.getElementById("categoryTabs").innerHTML = CATEGORIES.map(c => {
-      const menu = c.views.map(v =>
+      const singleView = c.views.length === 1 ? c.views[0] : null;
+      const menu = singleView ? "" : c.views.map(v =>
         `${v.sep ? `<div class="nav-menu-sep" aria-hidden="true"></div>` : ""}`
         + `<button type="button" class="nav-menu-item${v.id === state.view ? " on" : ""}" role="menuitem" data-view="${v.id}">${esc(v.label)}</button>`
       ).join("");
       return `<div class="nav-navwrap">`
-        + `<button role="tab" class="nav-cat-parent" data-navcat="${c.id}" aria-pressed="${c.id === activeCat.id}" aria-haspopup="true">`
+        + `<button role="tab" class="nav-cat-parent" data-navcat="${c.id}"${singleView ? ` data-view="${singleView.id}"` : ""} aria-pressed="${c.id === activeCat.id}" aria-haspopup="${singleView ? "false" : "true"}">`
         + `<span class="nav-cat-icon" aria-hidden="true">${c.icon}</span>`
-        + `<span class="nav-cat-full">${esc(c.label)}<span class="nav-caret" aria-hidden="true">▾</span></span>`
+        + `<span class="nav-cat-full">${esc(c.label)}${singleView ? "" : `<span class="nav-caret" aria-hidden="true">▾</span>`}</span>`
         + `<span class="nav-cat-short">${esc(c.short)}</span>`
         + `</button>`
-        + `<div class="nav-menu" role="menu">${menu}</div>`
+        + (singleView ? "" : `<div class="nav-menu" role="menu">${menu}</div>`)
         + `</div>`;
     }).join("");
     const sub = document.getElementById("subTabs");
@@ -17124,6 +17162,11 @@
     }
     const parent = e.target.closest("[data-navcat]");
     if (parent) {
+      // single-view category (no menu, no caret) -- the pill itself navigates.
+      if (parent.dataset.view) {
+        document.querySelectorAll("#categoryTabs .nav-navwrap.open").forEach(w => w.classList.remove("open"));
+        state.view = parent.dataset.view; render(); return;
+      }
       // 2026-08-03 (Linh: "tapping BK33 should open a DROPDOWN... right now it skips
       // the menu and jumps straight to the CH22 page"): SUPERSEDES the auto-jump this
       // used to do when tapping in from a different category (straight to that
@@ -17133,7 +17176,18 @@
       const wrap = parent.closest(".nav-navwrap");
       const willOpen = !wrap.classList.contains("open");
       document.querySelectorAll("#categoryTabs .nav-navwrap.open").forEach(w => w.classList.remove("open"));
-      if (willOpen) wrap.classList.add("open");
+      if (willOpen) {
+        wrap.classList.add("open");
+        // 2026-08-06 (Linh: "I can't expand CH22"): a long submenu (CH22 has 12
+        // pages) opening can be taller than the drawer itself -- scrollIntoView's
+        // "nearest" leaves it alone once ANY part is visible, so the tap looked
+        // like it did nothing. Scroll the drawer so the tapped chapter lands right
+        // at its top instead, guaranteeing something visibly moves.
+        requestAnimationFrame(() => {
+          const drawerEl = document.getElementById("categoryTabs");
+          drawerEl.scrollTop = Math.max(0, wrap.offsetTop - 6);
+        });
+      }
     }
   });
   // click anywhere outside an open section menu closes it (pinned-open menus)
@@ -17157,7 +17211,8 @@
     document.addEventListener("click", e => {
       if (!tabs.classList.contains("drawer-open")) return;
       if (e.target.closest("#categoryTabs")) {
-        if (e.target.closest(".nav-menu-item")) closeDrawer();  // navigated -- close behind it
+        // navigated (a page pick, or a single-view chapter's direct-nav pill) -- close behind it
+        if (e.target.closest(".nav-menu-item") || e.target.closest("[data-navcat][data-view]")) closeDrawer();
         return;                                                 // accordion tap -- stay open
       }
       closeDrawer();
