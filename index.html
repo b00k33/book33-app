@@ -842,6 +842,11 @@
      of colour" language as the numerology tiles' folded rows. The dot keeps the
      flow/phase colour-coding; nothing else changes. (The standalone #dayCycleWidget card
      this comment used to reference was removed 2026-08-02 — this chip stands alone now.) */
+  /* 2026-08-06: invisible pass-through everywhere by default (desktop, and mobile
+     until the media-query override below turns it into the CD chip's own centred
+     line) -- #periodBadge stays a normal flex-item sibling of #dateTrigger inside
+     .date-row wherever this wrapper isn't given a real box. */
+  .period-badge-row { display: contents; }
   .period-badge {
     display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600;
     color: var(--ink-faint); letter-spacing: 0.04em; text-transform: uppercase;
@@ -5586,6 +5591,21 @@
     .day-row2 .date-block { display: contents; }
     .day-row2 .weekday-moon-row { gap: 4px; align-items: center; }
     .day-row2 .date-row { gap: 4px; align-items: center; }
+    /* 2026-08-06 (Linh: "centre the CD chip in the numerology bar, like the top
+       PY/UY row"): .date-row is display:contents on mobile, so the CD chip is
+       really a direct flex item of #dayRow2 -- the same flattened, wrapping bar
+       that also holds the date and weekday/UD (all reparented into the shared
+       BK33 top row by placeDateLine()). A bare flex-basis:100% on the chip
+       itself doesn't work here -- basis IS the item's final size with no grow
+       needed, so it renders the chip stretched edge-to-edge instead of centred
+       (learned the hard way testing this locally). #period-badge-row (new,
+       tiny wrapper added around #periodBadge in the DAY markup -- display:
+       contents everywhere else, including desktop, so it's invisible until
+       this rule) is the box that takes flex-basis:100% instead, forcing IT onto
+       its own full-width line; justify-content: center then centres the actual
+       (content-width) chip inside that line -- same two-layer shape
+       .num-group-strip already uses for .mini-cal-mascot / the PY/UY row. */
+    .period-badge-row { display: flex; flex-basis: 100%; justify-content: center; margin-top: 2px; }
     .date-block .date-big { margin-top: 0; align-items: center; }
     .date-block .date-big .date-num { font-size: 19px; }
     .date-block .date-big .date-mon { font-size: 9.5px; }
@@ -7793,7 +7813,9 @@
                   </button>
                 </div>
               </span>
-              <span class="period-badge" id="periodBadge" hidden title="Tap to log cycle data" role="button" tabindex="0"></span>
+              <span class="period-badge-row">
+                <span class="period-badge" id="periodBadge" hidden title="Tap to log cycle data" role="button" tabindex="0"></span>
+              </span>
             </div>
           </div>
         </div>
@@ -10656,6 +10678,19 @@
     if (SLEEP_END_MIN > START_MIN && SLEEP_END_MIN < END_MIN) {
       const top = topForMin(SLEEP_END_MIN) - 16;
       html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
+      // 2026-08-06 (Linh: "also show the CD in the calendar at 6am every day... same
+      // phase icon as the numerology chip... update to whichever day I'm viewing"):
+      // a second quiet italic .lbl line, same #sleepBand/.lbl treatment as Sleep ->
+      // 6am right above it (no event block, not tappable) -- state.anchor (not
+      // "today") so it's always the viewed day's cycle day, same cycleDayFor()/
+      // phaseOn()/CYCLE_PHASE_INFO the CD chip (#periodBadge) and Week/Month cycle
+      // chips already use, so the icon always matches hers exactly.
+      const cd = cycleDayFor(state.anchor);
+      if (cd) {
+        const phase = phaseOn(state.anchor, cyclePrediction());
+        const icon = phase && CYCLE_PHASE_INFO[phase] ? CYCLE_PHASE_INFO[phase].icon + " " : "";
+        html += `<span class="lbl" style="top:${top + 14}px">${icon}CD ${cd}</span>`;
+      }
     }
     el.innerHTML = html;
   }
