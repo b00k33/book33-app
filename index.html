@@ -1639,7 +1639,6 @@
   .tl-detail-step .tl-step-t { flex: 1; min-width: 120px; }
   .tl-detail-step.done .tl-step-t { text-decoration: line-through; opacity: 0.55; }
   .tl-detail-step .tl-step-m { flex: none; font-size: 11px; color: var(--ink-faint); }
-  .tl-detail-actual { display: flex; align-items: center; gap: 8px; flex: none; width: 100%; padding-left: 24px; }
   .tl-detail-extra { padding: 12px 0 2px; border-top: 1px solid var(--note-line); display: flex; flex-direction: column; gap: 10px; }
   .tl-detail-extra .tl-rtn-note {
     width: 100%; resize: vertical; min-height: 44px; font: inherit; font-size: 13px; padding: 8px 10px;
@@ -2640,24 +2639,10 @@
      timeline item now opens the #tlDetailOverlay sheet (see its markup/CSS near
      #jumpOverlay, and openTlDetail() in JS) rather than growing the block in place —
      SUPERSEDES the old .tl-routine.expanded inline-checklist rules that used to live
-     here. Steps/notes/timer controls below are still used, just inside the sheet now. */
+     here. Steps/notes below are still used, just inside the sheet now. (The actual-
+     time timer/minutes controls that used to sit here too were removed 2026-08-03,
+     Linh: "I don't use it".) */
   .tl-item[data-kind="routine"], .tl-item[data-kind="event"], .tl-item[data-kind="task"] { cursor: pointer; }
-  /* actual-time timer/minutes controls (2026-08-02: "time recording for routines in
-     addition to sub tasks") — shared components used inside #tlDetailBody's step rows
-     and its own routine-level time row. */
-  .tl-timer-btn {
-    flex: none; width: 24px; height: 24px; min-width: 24px; min-height: 24px; border-radius: 50%;
-    border: 1px solid var(--margin-rule); background: transparent; color: var(--margin-rule);
-    font-size: 10px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
-  .tl-timer-btn.running { background: var(--margin-rule); color: var(--accent-on); }
-  .tl-detail-step .tl-timer-btn { width: 20px; height: 20px; min-width: 20px; min-height: 20px; font-size: 8px; }
-  .tl-timer-live { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--margin-rule); min-width: 28px; }
-  .tl-time-input {
-    flex: none; width: 46px; font-size: 12px; padding: 3px 5px; border: 1px solid var(--note-line);
-    border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
-  }
-  .tl-time-unit { font-size: 11px; color: var(--ink-faint); }
   /* square gold bullet marking an Event in the sidebar lists (no tick — events aren't ticked off) */
   .kind-sq {
     width: 11px; height: 11px; flex: none; display: inline-block; margin: 2px;
@@ -9111,54 +9096,6 @@
   function saveRtnTimeOvr() { try { localStorage.setItem(RTN_TIME_OVR_KEY, JSON.stringify(ROUTINE_TIME_OVR)); } catch (e) {} }
   let ROUTINE_TIME_OVR = loadRtnTimeOvr();
 
-  // actual minutes logged — id can be a whole routine's occId or one of its steps
-  // (occId::step::i); estimate (subtask.min) stays untouched on the template, this is
-  // what really happened. A timer stop ADDS to whatever's already logged (pause/resume).
-  const RTN_TIME_KEY = "daybook-routine-time";
-  function loadRtnTime() {
-    try { const v = JSON.parse(localStorage.getItem(RTN_TIME_KEY)); return v && typeof v === "object" ? v : {}; }
-    catch (e) { return {}; }
-  }
-  function saveRtnTime() { try { localStorage.setItem(RTN_TIME_KEY, JSON.stringify(ROUTINE_TIME)); } catch (e) {} }
-  let ROUTINE_TIME = loadRtnTime();
-
-  // a running start/stop timer, persisted so it survives closing the tab/app mid-session
-  const RTN_TIMER_KEY = "daybook-routine-timers";
-  function loadRtnTimers() {
-    try { const v = JSON.parse(localStorage.getItem(RTN_TIMER_KEY)); return v && typeof v === "object" ? v : {}; }
-    catch (e) { return {}; }
-  }
-  function saveRtnTimers() { try { localStorage.setItem(RTN_TIMER_KEY, JSON.stringify(ROUTINE_TIMERS)); } catch (e) {} }
-  let ROUTINE_TIMERS = loadRtnTimers();   // { [id]: startTimestampMs }
-  function startRtnTimer(id) { ROUTINE_TIMERS[id] = Date.now(); saveRtnTimers(); syncRtnTimerDisplay(); }
-  function stopRtnTimer(id) {
-    const started = ROUTINE_TIMERS[id];
-    if (!started) return;
-    const addedMin = Math.max(1, Math.round((Date.now() - started) / 60000));
-    ROUTINE_TIME[id] = (ROUTINE_TIME[id] || 0) + addedMin;
-    delete ROUTINE_TIMERS[id];
-    saveRtnTime(); saveRtnTimers(); syncRtnTimerDisplay();
-  }
-  const rtnLiveElapsed = id => {
-    const started = ROUTINE_TIMERS[id];
-    if (!started) return "";
-    const s = Math.max(0, Math.floor((Date.now() - started) / 1000));
-    return `${Math.floor(s / 60)}:${pad(s % 60)}`;
-  };
-  // live ticking display while any routine/step timer is running — same pattern as
-  // syncFastTimer/tickFastDisplays for the fasting timer elsewhere in this file
-  let rtnTimerInterval = null;
-  function tickRtnTimerDisplays() {
-    document.querySelectorAll('.tl-timer-live[data-timer-running="true"]').forEach(el => {
-      el.textContent = rtnLiveElapsed(el.dataset.timerId);
-    });
-  }
-  function syncRtnTimerDisplay() {
-    clearInterval(rtnTimerInterval);
-    if (Object.keys(ROUTINE_TIMERS).length) rtnTimerInterval = setInterval(tickRtnTimerDisplays, 1000);
-  }
-  syncRtnTimerDisplay();
-
   /* --- Fitness auto-link: which FIT_LOG session (if any) a tick on this id created,
      so un-ticking removes exactly that session and nothing she logged by hand
      (Linh 2026-08-02: "register events like pilates linked to the fitness tracking
@@ -11100,18 +11037,11 @@
      TIMELINE DETAIL SHEET — 2026-08-02 (Linh, GCal reference screenshot: "use this
      when i select event", confirmed "everything" via multiple-choice): tapping any
      Day-timeline item (event, routine, or task) opens this read-focused sheet instead
-     of the old cramped inline expand. Reuses the same timer/notes/steps machinery
-     built for routines — ROUTINE_NOTES/ROUTINE_TIME/ROUTINE_TIMERS/applyFitLink —
-     just rendered here instead of squeezed into the block itself.
+     of the old cramped inline expand. Reuses the same notes/steps machinery built
+     for routines — ROUTINE_NOTES/applyFitLink — just rendered here instead of
+     squeezed into the block itself. (The actual-time timer/minutes control that
+     used to live here was removed 2026-08-03, Linh: "I don't use it".)
      ============================================================ */
-  function timerCtlHtml(id, label) {
-    const running = !!ROUTINE_TIMERS[id];
-    return `<button type="button" class="tl-timer-btn${running ? " running" : ""}" data-timer="${id}"
-        aria-label="${running ? "Stop" : "Start"} timer for ${esc(label)}">${running ? "⏸" : "▶"}</button>
-      <span class="tl-timer-live" data-timer-running="${running}" data-timer-id="${id}">${running ? rtnLiveElapsed(id) : ""}</span>
-      <input type="number" class="tl-time-input" data-time-min="${id}" min="0" inputmode="numeric" placeholder="min"
-        value="${ROUTINE_TIME[id] ?? ""}" aria-label="Actual minutes for ${esc(label)}">`;
-  }
   function renderTlDetailHeadActions(e) {
     const actions = [];
     if (!e.generated) {
@@ -11151,11 +11081,9 @@
       return `<label class="tl-detail-step${sd ? " done" : ""}">
         <input type="checkbox" class="step-check" data-step-tick="${stepId}" data-item="${e.id}" data-step-count="${e.steps.length}" ${sd ? "checked" : ""} aria-label="Mark ${esc(stepLabel(s))} done">
         <span class="tl-step-t">${esc(stepLabel(s))}</span><span class="tl-step-m">${stepMinOf(s)}m</span>
-        ${hasRtnExtras ? `<span class="tl-detail-actual">${timerCtlHtml(stepId, stepLabel(s))}</span>` : ""}
       </label>`;
     }).join("")}</div>` : "";
     const extraHtml = hasRtnExtras ? `<div class="tl-detail-extra">
-        <div class="tl-rtn-time-row">${timerCtlHtml(e.id, e.title)}<span class="tl-time-unit">min actual</span></div>
         <textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>
         ${e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : ""}
       </div>` : (e.note ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "");
@@ -17268,12 +17196,6 @@
       if (val) ROUTINE_NOTES[occId] = val; else delete ROUTINE_NOTES[occId];
       saveRtnNotes(); return;
     }
-    const rtnTimeField = e.target.closest("[data-time-min]");
-    if (rtnTimeField) {
-      const id = rtnTimeField.dataset.timeMin, val = rtnTimeField.value === "" ? null : Math.max(0, +rtnTimeField.value || 0);
-      if (val == null) delete ROUTINE_TIME[id]; else ROUTINE_TIME[id] = val;
-      saveRtnTime(); return;
-    }
     const stepBox = e.target.closest("[data-step-tick]");
     if (stepBox) {
       celebrateIfDone(stepBox, stepBox.checked);
@@ -19226,14 +19148,6 @@
         if (form) form.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       return;
-    }
-    // start/stop a routine or step's actual-time timer (Linh 2026-08-02: "allow for
-    // time recording for routines in addition to sub tasks" — timer option)
-    const timerBtn = e.target.closest("[data-timer]");
-    if (timerBtn) {
-      const id = timerBtn.dataset.timer;
-      if (ROUTINE_TIMERS[id]) stopRtnTimer(id); else startRtnTimer(id);
-      renderDay(); return;
     }
     // tap a timeline block (event, routine, or task) to open its detail sheet — not
     // when the tap lands on the tick button or an edit/delete action already on the
