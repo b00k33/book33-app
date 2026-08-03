@@ -486,7 +486,12 @@
   /* Shopping list lives in the Day-page right-hand rail — full width, natural height */
   .day-side .shop-box { aspect-ratio: auto; width: 100%; }
   .day-side .add-row { margin-top: 0; }
-  .day-side .add-form { grid-template-columns: 1fr; margin-top: 0; }
+  /* pre-dates #addForm's 2026-08-02 conversion to a centred floating modal (position:
+     fixed; width:min(480px,92vw)) -- back when it rendered inline in this narrow rail,
+     forcing 1 column made sense; the modal has plenty of room for 2, and "Day + Starts"
+     pairing below needs it restored to actually pair up instead of silently stacking
+     full-width. */
+  .day-side .add-form { margin-top: 0; }
 
   /* --- view tabs --- */
   .view-tabs { display: inline-flex; background: var(--paper); border: none; border-radius: 999px; padding: 4px 6px; gap: 3px; box-shadow: 0 6px 20px -10px rgba(0,0,0,0.7); }
@@ -3308,20 +3313,26 @@
   .allday-row label { font-size: 13px; color: var(--ink-soft); }
   .form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; margin-top: 2px; }
   /* 2026-08-06 (Linh: "too boxy and too long... remove the heavy outline around every
-     field, separate with spacing/tone not boxes"): the main Day-page add form gets the
-     same flat treatment #rtnAddForm already has (identical spirit, independently scoped
-     -- .field input/.track-picker/.track-opt are shared base classes used by a dozen
-     OTHER forms app-wide: Goals, People, Family, Work Manual, Supplements. Restyling
-     those globally would ripple far past this one form). */
-  #addForm .field input[type="text"], #addForm .field input[type="time"],
-  #addForm .field input[type="number"], #addForm .field input[type="date"],
-  #addForm .field select, #addForm .field textarea, #addForm .who-summary-btn {
-    border: none; background: var(--field-bg);
+     field, separate with spacing/tone not boxes"): #addForm's own card is already the
+     visible field boundary (background: var(--note-bg) + its own border), so a border on
+     every input inside it too is literally "a box drawn inside a box" -- exactly what the
+     ONE FIELD LANGUAGE law's own .field-bare escape hatch exists for (see that law's
+     comment above input:is(...):not(.field-bare)... -- its !important outranks a plain
+     border:none override, so .field-bare is the only real way out, not a style choice).
+     Mirrors the law's own shape-by-type + spacing tokens (--field-radius/-sm/-area,
+     --field-pad-y/-x), minus the border, so these stay part of the same field family
+     app-wide, just flatter -- not a one-off. */
+  #addForm .field-bare {
+    font-family: inherit; font-size: 15px; color: var(--ink); background: var(--field-bg);
+    border: none; width: 100%; padding: var(--field-pad-y) var(--field-pad-x);
+    border-radius: var(--field-radius); transition: box-shadow 0.15s ease;
   }
-  #addForm .field textarea {
-    font-family: var(--font-body); font-size: 14px; color: var(--ink);
-    border-radius: 3px; padding: 8px 10px; width: 100%; resize: vertical;
-  }
+  #addForm input.field-bare[type="number"], #addForm input.field-bare[type="date"],
+  #addForm input.field-bare[type="time"] { border-radius: var(--field-radius-sm); padding: 7px 10px; }
+  #addForm textarea.field-bare { border-radius: var(--field-radius-area); font-size: 14px; line-height: 1.5; resize: vertical; }
+  #addForm .field-bare::placeholder { color: var(--ink-faint); opacity: 1; }
+  #addForm .field-bare:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
+  #addForm .who-summary-btn { border: none; background: var(--field-bg); }
   /* Part of life + Whose job: compact colour chips, natural width instead of flex:1
      stretching to fill the row, wrapping into tidy rows; a filled high-contrast
      "selected" state (gold fill, dark text) replaces the thin inset ring. */
@@ -8085,7 +8096,7 @@
         <form class="add-form" id="addForm" hidden>
           <div class="field full" id="fTitleField">
             <label for="fTitle">What</label>
-            <input type="text" id="fTitle" placeholder="e.g. Clinic hours, Date night, Gym" autocomplete="off" required>
+            <input type="text" id="fTitle" class="field-bare" placeholder="e.g. Clinic hours, Date night, Gym" autocomplete="off" required>
           </div>
           <div class="field full" id="fTrackField">
             <label>Part of life</label>
@@ -8106,10 +8117,10 @@
           </div>
           <div class="field full" id="fRoutineField" hidden>
             <label for="fRoutine">Which routine <span class="field-hint">stays in sync with the routine</span></label>
-            <select id="fRoutine"></select>
+            <select id="fRoutine" class="field-bare"></select>
           </div>
-          <div class="field" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate"></div>
-          <div class="field" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart"></div>
+          <div class="field" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" class="field-bare"></div>
+          <div class="field" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart" class="field-bare"></div>
           <!-- 2026-08-06 (Linh: "too boxy and too long... tuck OPTIONAL fields behind a
                small 'More options' toggle so the form is short by default"): everything
                below is real, unchanged functionality -- just collapsed out of the way
@@ -8139,27 +8150,27 @@
             </div>
             <div class="field full" id="fStagesField">
               <label for="fStages">Follow-ups <span class="field-hint">one per line, add "~15m" to time it</span></label>
-              <textarea id="fStages" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
+              <textarea id="fStages" class="field-bare" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
             </div>
             <div class="field full" id="fEstField">
               <label for="fEst">Honestly, how long? <span class="field-hint">minutes</span></label>
-              <input type="number" id="fEst" min="5" step="5" placeholder="e.g. 30" style="max-width:140px">
+              <input type="number" id="fEst" class="field-bare" min="5" step="5" placeholder="e.g. 30" style="max-width:140px">
             </div>
-            <div class="field" id="fEndField"><label for="fEnd">Ends</label><input type="time" id="fEnd"></div>
-            <div class="field" id="fDurField"><label for="fDur">Or duration <span class="field-hint">fills in Ends</span></label><input type="number" id="fDur" min="5" step="5" placeholder="e.g. 45"></div>
+            <div class="field" id="fEndField"><label for="fEnd">Ends</label><input type="time" id="fEnd" class="field-bare"></div>
+            <div class="field" id="fDurField"><label for="fDur">Or duration <span class="field-hint">fills in Ends</span></label><input type="number" id="fDur" class="field-bare" min="5" step="5" placeholder="e.g. 45"></div>
             <div class="allday-row" id="fAllDayRow">
               <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
             </div>
             <div class="field full" id="fCatField">
               <label for="fCat">Category <span class="field-hint">optional</span></label>
-              <input type="text" id="fCat" placeholder="e.g. Birthdays, Work" list="catList" autocomplete="off">
+              <input type="text" id="fCat" class="field-bare" placeholder="e.g. Birthdays, Work" list="catList" autocomplete="off">
               <datalist id="catList">
                 <option value="Birthdays"></option><option value="Work"></option>
               </datalist>
             </div>
             <div class="field full" id="fLocField">
               <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
-              <input type="text" id="fLoc" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
+              <input type="text" id="fLoc" class="field-bare" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
               <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
               <datalist id="locList"></datalist>
             </div>
