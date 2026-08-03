@@ -1657,9 +1657,18 @@
   .tl-detail-move-actions { display: flex; gap: 8px; }
   .tl-move-btn {
     flex: 1; padding: 9px 10px; border: 1px solid var(--margin-rule); border-radius: var(--radius-md);
-    background: transparent; color: var(--margin-rule); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .tl-move-btn:hover { background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
+  /* 2026-08-03 (Linh: "let me RATE Pilates out of 5" + "let me navigate quickly to the
+     habits tracking page"): one row inside the same .tl-detail-extra divider/padding
+     the move controls above use — stars left, the Habits jump-link right. */
+  .tl-detail-fitrate { flex-direction: row !important; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  /* .tab-link's shared rule (used app-wide) sets gold text on a transparent ground,
+     which measures ~2.5:1 in light mode -- a pre-existing condition too broad to fix
+     here without re-auditing every other place .tab-link appears. Scoped override so
+     at least this new instance is solid, without touching the shared rule. */
+  .tl-detail-fitrate .tab-link { color: var(--ink); }
   #jumpList button span { font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.07em; }
   #jumpList button:hover, #jumpList button:first-child { background: color-mix(in oklab, var(--nav-active) 18%, transparent); }
   .jump-empty { font-size: 12.5px; color: var(--ink-faint); padding: 10px 11px; }
@@ -6649,6 +6658,10 @@
            body[data-view="day"] since the panel it opens only exists in the Day page's
            own markup -- showing it elsewhere would be a dead button). -->
       <button type="button" class="jump-btn num-star-btn" id="numStarBtn" title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
+      <!-- 2026-08-03 (Linh: "let me navigate QUICKLY to the habits tracking page ...
+           plus a quick way from the main navigation"): one tap from anywhere, no
+           dropdown/search needed — CH5 → Habits is otherwise two taps deep. -->
+      <button type="button" class="jump-btn" id="habitsShortcutBtn" title="Habits tracking" aria-label="Jump to habits tracking">🔥</button>
       <button type="button" class="jump-btn" id="jumpBtn" title="Jump to any page — press /" aria-label="Jump to any page">⌕</button>
       <!-- 2026-08-03: restored with the rest of light mode. -->
       <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
@@ -9096,6 +9109,21 @@
   function saveRtnTimeOvr() { try { localStorage.setItem(RTN_TIME_OVR_KEY, JSON.stringify(ROUTINE_TIME_OVR)); } catch (e) {} }
   let ROUTINE_TIME_OVR = loadRtnTimeOvr();
 
+  /* one-off cancellations — "delete" on a single routine occurrence (Linh 2026-08-03:
+     "I can't ... delete ... [Pilates]") never touches the recurring template (that's what
+     the Routines page's own delete is for); it just skips this ONE date, every other
+     occurrence keeps following the pattern. Keyed by occId, same convention as
+     ROUTINE_NOTES/ROUTINE_TIME_OVR above — checked in generatedFor()'s routine loop
+     (both the normal pass and the cross-day-reschedule injected pass, so a moved-then-
+     deleted occurrence doesn't reappear on its new date either). */
+  const RTN_SKIP_KEY = "daybook-routine-skips";
+  function loadRtnSkips() {
+    try { const v = JSON.parse(localStorage.getItem(RTN_SKIP_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveRtnSkips() { try { localStorage.setItem(RTN_SKIP_KEY, JSON.stringify(ROUTINE_SKIPS)); } catch (e) {} }
+  let ROUTINE_SKIPS = loadRtnSkips();
+
   /* --- Fitness auto-link: which FIT_LOG session (if any) a tick on this id created,
      so un-ticking removes exactly that session and nothing she logged by hand
      (Linh 2026-08-02: "register events like pilates linked to the fitness tracking
@@ -9473,6 +9501,7 @@
       // per-day note override (ROUTINE_NOTES) never touches the template's own t.note —
       // falls back to it when she hasn't written anything for this specific occurrence
       const occId = `rt-${t.id}-${keyOf(date)}`;
+      if (ROUTINE_SKIPS[occId]) return;   // this ONE occurrence was deleted — template untouched
       const occNote = ROUTINE_NOTES[occId];
       // 2026-08-05 (Part D): a per-occurrence time/date override — see ROUTINE_TIME_OVR's
       // own comment above. Moved to a DIFFERENT date -> this occurrence has relocated
@@ -9500,6 +9529,14 @@
           id: occId, generated: true, date: keyOf(date),
           track: t.track, category: t.category || "Routine", title: t.title,
           note: occNote != null ? occNote : t.note, freq: t.freq, fromRoutine: true,
+          // 2026-08-03 (Linh: "when I open Pilates, I can't reschedule, delete, or book
+          // another like it"): this branch (a routine with NO subtasks, e.g. a simple
+          // fixed-time class booking like Pilates/F45) was the one place rtTaskId got
+          // dropped -- the WITH-steps branch above always set it. Every consumer that
+          // gates on it (renderTlDetailHeadActions' "Edit routine" button, canMove for
+          // reschedule/duplicate, the press-and-hold drag gate) silently treated a
+          // Pilates-shaped routine as un-editable because of this one missing field.
+          rtTaskId: t.id,
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
           allDay: !start, start, end: (tOvr ? tOvr.end : t.end) || "", fitLink: t.fitLink || null,
@@ -9516,6 +9553,7 @@
     Object.keys(ROUTINE_TIME_OVR).forEach(occId => {
       const ovr = ROUTINE_TIME_OVR[occId];
       if (!ovr || !ovr.date || ovr.date !== k || ovr.fromDate === k) return;
+      if (ROUTINE_SKIPS[occId]) return;   // moved, then deleted — don't resurrect it on the new date
       const t = ROUTINE_TASKS.find(rt => occId === `rt-${rt.id}-${ovr.fromDate}`);
       if (!t || t.calOn === false) return;
       const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
@@ -10212,6 +10250,27 @@
       saveLinkedFit();
     }
   }
+  // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
+  // the real FIT_LOG session a timeline item's rating control should read/write, for
+  // BOTH shapes an item can arrive in — a bare fitcal- entry (the session itself, no
+  // routine involved) or a routine occurrence that's already been ticked done (its
+  // linked session id lives in LINKED_FIT, same registry applyFitLink above writes).
+  // Returns null before she's actually logged one — rating "the Pilates session" makes
+  // no sense until one exists, so the control simply doesn't render yet.
+  function resolveFitSessionFor(e) {
+    if (!e) return null;
+    if (e.id.indexOf("fitcal-") === 0) {
+      const sessId = e.id.slice(7), date = parseKey(e.date);
+      const sess = fitSessionsOn(date).find(s => s.id === sessId);
+      return sess ? { date, sess } : null;
+    }
+    if (e.fromRoutine && e.fitLink && LINKED_FIT[e.id]) {
+      const date = parseKey(e.date);
+      const sess = fitSessionsOn(date).find(s => s.id === LINKED_FIT[e.id]);
+      return sess ? { date, sess } : null;
+    }
+    return null;
+  }
   // one place decides what a calendar item IS — her taxonomy:
   //   Routine = has sub-tasks and/or comes from a recurring engine (hair, Routines, Family, Supplements)
   //   Event   = an appointment/occasion (explicitly chosen on the form, or categorised e.g. Work, Birthdays)
@@ -10829,6 +10888,23 @@
     const s = toMin(e.start), end = itemEndMin(e);
     return (s !== null && end !== null && end > s) ? end - s : 30;
   }
+  // relocates one FIT_LOG session between days, preserving everything about it
+  // (rating/notes/location) except time/duration — shared by rescheduleItem's fitcal-
+  // and routine-with-a-linked-session branches below, so a moved item's fitness history
+  // doesn't quietly stay pinned to the day it used to be on.
+  function moveFitLogSession(sessId, oldK, newK, newTime, newDur) {
+    const idx = (FIT_LOG[oldK] || []).findIndex(s => s.id === sessId);
+    if (idx === -1) return null;
+    const sess = FIT_LOG[oldK][idx];
+    FIT_LOG[oldK].splice(idx, 1);
+    if (!FIT_LOG[oldK].length) delete FIT_LOG[oldK];
+    sess.time = newTime;
+    if (newDur != null) sess.durationMin = newDur;
+    if (!FIT_LOG[newK]) FIT_LOG[newK] = [];
+    FIT_LOG[newK].push(sess);
+    saveFitLog();
+    return sess;
+  }
   // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
   // day/time, or duplicate it to another day/time"): shared by the detail sheet's
   // Reschedule/Duplicate buttons AND the press-and-hold drag handler further below, so
@@ -10839,11 +10915,19 @@
   // template untouched, every other day keeps following the routine); duplicate detaches
   // a plain one-off EVENT copy instead, since a "duplicate" of a recurring thing isn't
   // part of the pattern any more — it's a new standalone booking.
+  // 2026-08-03 (Linh: "I can't reschedule, delete, or book another like it" [Pilates]):
+  // extended for the two fitness shapes — a bare fitcal- entry (the FIT_LOG session
+  // itself, no routine involved) and a routine occurrence with a fitLink (Pilates-as-
+  // routine). Both now move/duplicate the real FIT_LOG session, not just a calendar
+  // decoration, so an extra logged Pilates class actually counts toward her fitness
+  // tracking (streaks/Growth page) the same way ticking the routine itself does.
   function rescheduleItem(e, dateKey, timeStr) {
     if (!e) return;
     const dur = itemDurationMin(e);
     const end = minToTime(Math.min(toMin(timeStr) + dur, 1439));
-    if (e.fromRoutine && e.rtTaskId) {
+    if (e.id.indexOf("fitcal-") === 0) {
+      if (!moveFitLogSession(e.id.slice(7), e.date, dateKey, timeStr, dur)) return;
+    } else if (e.fromRoutine && e.rtTaskId) {
       // e.id never changes across repeated moves (see generatedFor()'s injected pass —
       // it's what lets done-state/notes keep following the occurrence), but e.date DOES
       // — it's wherever the occurrence is CURRENTLY rendering. So on a second move,
@@ -10855,6 +10939,10 @@
       const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
       ROUTINE_TIME_OVR[e.id] = { fromDate, date: dateKey, start: timeStr, end };
       saveRtnTimeOvr();
+      // already-ticked-done routine occurrence carries a linked FIT_LOG session (see
+      // applyFitLink) — move it along too, or her fitness history would silently stay
+      // pinned to the day she moved the occurrence AWAY from.
+      if (LINKED_FIT[e.id]) moveFitLogSession(LINKED_FIT[e.id], e.date, dateKey, timeStr, dur);
     } else if (!e.generated) {
       const ev = EVENTS.find(x => x.id === e.id);
       if (!ev) return;
@@ -10870,12 +10958,28 @@
   function duplicateItem(e, dateKey, timeStr) {
     if (!e) return;
     const dur = itemDurationMin(e);
-    EVENTS.push({
-      id: uid(), date: dateKey, track: e.track, title: e.title, category: e.category || "",
-      locPath: Array.isArray(e.locPath) ? e.locPath.slice() : [], allDay: false,
-      start: timeStr, end: minToTime(Math.min(toMin(timeStr) + dur, 1439)),
-    });
-    saveEvents(EVENTS);
+    if (e.id.indexOf("fitcal-") === 0 || (e.fromRoutine && e.fitLink)) {
+      // "book another [Pilates] like it" should log a real second session, not a
+      // decorative calendar-only copy — same FIT_PRESETS defaults addFitSession uses,
+      // but keeping the picked date/time instead of the preset's own.
+      const type = e.id.indexOf("fitcal-") === 0
+        ? (fitSessionsOn(parseKey(e.date)).find(s => s.id === e.id.slice(7))?.type || e.title)
+        : e.fitLink;
+      const preset = FIT_PRESETS[type] || {};
+      if (!FIT_LOG[dateKey]) FIT_LOG[dateKey] = [];
+      FIT_LOG[dateKey].push({
+        id: uid(), type, rating: 0, notes: "",
+        time: timeStr, durationMin: dur || preset.durationMin || null, location: preset.location || "",
+      });
+      saveFitLog();
+    } else {
+      EVENTS.push({
+        id: uid(), date: dateKey, track: e.track, title: e.title, category: e.category || "",
+        locPath: Array.isArray(e.locPath) ? e.locPath.slice() : [], allDay: false,
+        start: timeStr, end: minToTime(Math.min(toMin(timeStr) + dur, 1439)),
+      });
+      saveEvents(EVENTS);
+    }
     if (dateKey !== keyOf(state.anchor)) state.anchor = parseKey(dateKey);
     closeTlDetail();
     render();
@@ -11048,7 +11152,14 @@
       actions.push(`<button type="button" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>`);
       actions.push(`<button type="button" data-del="${e.id}" aria-label="Delete ${esc(e.title)}">🗑</button>`);
     } else if (e.rtTaskId) {
+      // 2026-08-03 (Linh: "when I open Pilates, I can't reschedule, delete, or book
+      // another like it"): "Edit routine" only ever edited the recurring TEMPLATE (every
+      // occurrence, forever) — there was no way to cancel just today's. data-rt-occ-del
+      // writes a ROUTINE_SKIPS entry for this occId alone (see its own comment near
+      // ROUTINE_TIME_OVR) rather than touching ROUTINE_TASKS, so every other occurrence
+      // keeps following the pattern untouched.
       actions.push(`<button type="button" data-rt-open="${e.rtTaskId}" aria-label="Edit routine ${esc(e.title)}" title="Edit this routine">✎</button>`);
+      actions.push(`<button type="button" data-rt-occ-del="${e.id}" aria-label="Delete this occurrence of ${esc(e.title)}" title="Delete just this occurrence">🗑</button>`);
     } else if (e.id.indexOf("fitcal-") === 0) {
       // 2026-08-04 (Step 7, Linh: "no way to edit or delete it" -- Pilates fitness-log
       // entry): fitcal- items are a DISPLAY-ONLY projection of a FIT_LOG session onto the
@@ -11089,11 +11200,12 @@
       </div>` : (e.note ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "");
     // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
     // day/time, and duplicate it to another day/time"): only for items rescheduleItem/
-    // duplicateItem actually know how to move — a handwritten event, or a routine
-    // occurrence (see those functions' own comment for why the other generated types,
-    // hair/birthdays/supplements/fitcal, don't get this). One date+time pair feeds
-    // both actions — pick a target, then choose Reschedule (move) or Duplicate (copy).
-    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId);
+    // duplicateItem actually know how to move — a handwritten event, a routine
+    // occurrence, or a fitcal- fitness-log entry (2026-08-03: added — see those
+    // functions' own comment for why the other generated types, hair/birthdays/
+    // supplements, still don't get this). One date+time pair feeds both actions — pick
+    // a target, then choose Reschedule (move) or Duplicate (copy).
+    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0;
     const moveHtml = canMove ? `<div class="tl-detail-extra tl-detail-move">
         <div class="tl-detail-move-row">
           <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
@@ -11101,8 +11213,21 @@
         </div>
         <div class="tl-detail-move-actions">
           <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
-          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">Duplicate here</button>
+          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
         </div>
+      </div>` : "";
+    // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log" +
+    // "let me navigate quickly to the habits tracking page"): only renders once a real
+    // FIT_LOG session exists for this item (resolveFitSessionFor) — same .fit-stars
+    // markup/data-fit-star convention as the Habits page's own rating control, wired to
+    // the SAME setSessionRating(), so a rating set from either place stays in sync.
+    const fitResolved = resolveFitSessionFor(e);
+    const fitSessionHtml = fitResolved ? `<div class="tl-detail-extra tl-detail-fitrate">
+        <div class="fit-stars" role="group" aria-label="Rate this ${esc(fitResolved.sess.type)} session">
+          ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fit-star" data-tl-fit-star="${fitResolved.sess.id}:${n}"
+              aria-pressed="${(fitResolved.sess.rating || 0) >= n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}
+        </div>
+        <button type="button" class="tab-link" data-tl-open-habits="${keyOf(fitResolved.date)}">Open in Habits →</button>
       </div>` : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
@@ -11112,6 +11237,7 @@
       <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
         <span>${done ? "✓" : ""}</span>${done ? "Done" : "Mark done"}
       </button>
+      ${fitSessionHtml}
       ${stepsHtml}${extraHtml}${moveHtml}
     `;
   }
@@ -11141,6 +11267,33 @@
   // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
   // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
   document.getElementById("tlDetailBody").addEventListener("click", e => {
+    // 2026-08-03 ("let me RATE Pilates out of 5"): reads/writes the SAME FIT_LOG
+    // session + setSessionRating() the Habits page's own stars use, so a rating set
+    // from either place stays in sync — renderDay() below re-runs refreshOpenTlDetail()
+    // (and the Wellness widget) so both pick up the change immediately.
+    const starBtn = e.target.closest("[data-tl-fit-star]");
+    if (starBtn) {
+      const [sid, n] = starBtn.dataset.tlFitStar.split(":");
+      const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
+      const resolved = item && resolveFitSessionFor(item);
+      if (resolved) { setSessionRating(resolved.date, sid, +n); renderDay(); }
+      return;
+    }
+    // 2026-08-03 ("let me navigate quickly to the habits tracking page"): same jump
+    // target/pattern as the fitcal-edit action above (state.fitYear/fitSelectedDate +
+    // scroll to #fitSelectedDetail) — this one's just reachable without going through Edit.
+    const openHabits = e.target.closest("[data-tl-open-habits]");
+    if (openHabits) {
+      const dk = openHabits.dataset.tlOpenHabits;
+      state.fitYear = parseKey(dk).getFullYear();
+      state.fitSelectedDate = dk;
+      state.view = "habits";
+      closeTlDetail();
+      render();
+      const detail = document.getElementById("fitSelectedDetail");
+      if (detail) detail.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const btn = e.target.closest("[data-tl-reschedule], [data-tl-duplicate]");
     if (!btn) return;
     const id = btn.dataset.tlReschedule || btn.dataset.tlDuplicate;
@@ -11190,6 +11343,19 @@
       removeFitSession(state.anchor, sessId);
       delete DONE[`fitcal-${sessId}`];
       saveDone(DONE);
+      renderDay();
+      return;
+    }
+    // 2026-08-03 (Linh: "I can't ... delete [Pilates]"): cancel just THIS occurrence —
+    // same confirm pattern as fitcal-del above, template (ROUTINE_TASKS) untouched.
+    const rtOccDel = e.target.closest("[data-rt-occ-del]");
+    if (rtOccDel) {
+      const occId = rtOccDel.dataset.rtOccDel;
+      const item = TL_ITEMS_BY_ID[occId];
+      if (!confirm(`Delete this occurrence of ${item ? item.title : "this routine"}? The rest of the routine keeps repeating as usual.`)) return;
+      ROUTINE_SKIPS[occId] = true;
+      saveRtnSkips();
+      closeTlDetail();
       renderDay();
       return;
     }
@@ -14892,7 +15058,10 @@
     return fitSessionsOn(date).filter(s => s.time && !routineFitLinks.has(s.type)).map(s => ({
       id: `fitcal-${s.id}`, title: s.type, track: "personal", category: "Fitness",
       icon: "🏋️", start: s.time, end: s.durationMin ? addMinutesToTimeStr(s.time, s.durationMin) : "",
-      loc: s.location || "", generated: true, noRecurIcon: true,
+      // 2026-08-03: date wasn't carried before — harmless while every reader just assumed
+      // "whatever day is being rendered" (state.anchor), but the detail sheet's reschedule/
+      // duplicate/rating additions need a real per-item date to be self-contained.
+      loc: s.location || "", generated: true, noRecurIcon: true, date: keyOf(date),
     }));
   }
 
@@ -16929,6 +17098,12 @@
   }
   function closeJump() { document.getElementById("jumpOverlay").hidden = true; }
   document.getElementById("jumpBtn").addEventListener("click", openJump);
+  // 2026-08-03 (Linh: "let me navigate QUICKLY to the habits tracking page ... a quick
+  // way from the main navigation"): one tap, no dropdown, no typing.
+  document.getElementById("habitsShortcutBtn").addEventListener("click", () => {
+    state.view = "habits";
+    render();
+  });
   document.getElementById("jumpInput").addEventListener("input", e => renderJumpList(e.target.value));
   document.getElementById("jumpInput").addEventListener("keydown", e => {
     if (e.key === "Enter") { document.querySelector("#jumpList [data-jumpview]")?.click(); }
