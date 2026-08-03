@@ -3813,6 +3813,34 @@
     border: 1px solid var(--note-line); border-radius: 7px; padding: 5px 7px; text-align: center; font-variant-numeric: tabular-nums;
   }
 
+  /* ============ GROWTH (Chapter 9 — real data + what it's building) ============ */
+  .gr-lead { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; margin: -4px 0 16px; }
+  .gr-empty-note { font-size: 12px; color: var(--ink-faint); font-style: italic; }
+  .gr-benefit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .gr-benefit-card { border: 1px solid var(--note-line); border-radius: var(--radius-md); padding: 16px; background: var(--note-bg); }
+  .gr-benefit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .gr-benefit-icon { font-family: var(--font-emoji); font-size: 20px; flex: none; }
+  .gr-benefit-title { font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--ink); }
+  .gr-benefit-stat { font-size: 11.5px; color: var(--margin-rule); font-weight: 700; margin-bottom: 10px; }
+  .gr-benefit-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .gr-benefit-list li { font-size: 12px; color: var(--ink-soft); line-height: 1.4; padding-left: 16px; position: relative; }
+  .gr-benefit-list li::before { content: "✦"; position: absolute; left: 0; top: 2px; color: var(--margin-rule); font-size: 10px; }
+  .gr-disclaimer { font-size: 10.5px; color: var(--ink-faint); font-style: italic; margin-top: 16px; line-height: 1.5; }
+  .gr-milestones { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .gr-milestone {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--nav-active) 12%, var(--note-bg)); border: 1px solid var(--note-line);
+  }
+  .gr-milestone-badge {
+    font-family: var(--font-display); font-size: 16px; flex: none; width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; background: var(--nav-active); color: var(--nav-active-ink);
+  }
+  .gr-milestone-text { font-size: 12.5px; color: var(--ink); line-height: 1.4; }
+  .gr-milestone-text b { color: var(--margin-rule); }
+  .gr-next-list { display: flex; flex-direction: column; gap: 8px; }
+  .gr-next-row { font-size: 12.5px; color: var(--ink-soft); padding: 10px 14px; border-radius: var(--radius-sm); background: var(--field-bg); border: 1px solid var(--note-line); }
+  .gr-next-row b { color: var(--ink); }
+
   /* ============ HEALTH ============ */
   .h-card {
     border: 1px solid var(--note-line); border-radius: 4px; padding: 16px 18px;
@@ -6724,6 +6752,25 @@
 
     <div class="section-head" style="margin-top:26px"><h2>Recent days</h2><span class="rule"></span></div>
     <div id="nutHistory"></div>
+  </div>
+
+  <!-- ================= GROWTH — Chapter 9: progress, proof, what's next ================= -->
+  <div class="page" id="growthPage" hidden>
+    <div class="bd-head">
+      <div class="eyebrow">Chapter 9 — what your consistency is building</div>
+      <h1>Growth</h1>
+    </div>
+    <div class="gr-lead">Real numbers from what you've actually logged — not just the scale, the whole
+      picture: strength, rhythm, and how far you've come.</div>
+
+    <div class="section-head"><h2>My progress</h2><span class="rule"></span></div>
+    <div id="grProgress"></div>
+
+    <div class="section-head" style="margin-top:26px"><h2>What your consistency is building</h2><span class="rule"></span></div>
+    <div id="grBenefits"></div>
+
+    <div class="section-head" style="margin-top:26px"><h2>Growing, learning, improving</h2><span class="rule"></span></div>
+    <div id="grTrajectory"></div>
   </div>
 
   <!-- ================= HEALTH ================= -->
@@ -10014,7 +10061,8 @@
         { id: "hair", label: "Hair" }, { id: "skinNails", label: "Skin & Nails" },
         { id: "health", label: "Fasting" }, { id: "cycle", label: "Cycle" },
         { id: "supplements", label: "Supplements" },
-        { id: "food", label: "Food" }, { id: "nutrition", label: "Nutrition" } ] },
+        { id: "food", label: "Food" }, { id: "nutrition", label: "Nutrition" },
+        { id: "growth", label: "Growth" } ] },
     { id: "genealogy", label: "CH6", short: "CH6", icon: "👥", views: [{ id: "people", label: "People" }] },
   ];
   const categoryOf = viewId => CATEGORIES.find(c => c.views.some(v => v.id === viewId));
@@ -14765,6 +14813,210 @@
   }
 
   /* ============================================================
+     GROWTH — Chapter 9 (complete & release): her real logged data,
+     paired with the accurate, general benefit her consistency is
+     building. Every number here reads straight off HEALTH/FIT_LOG/
+     NUTRITION — nothing is invented, and a habit with zero real
+     entries shows a plain "start logging" note instead of a card.
+     Framed around trend/effort, never a missed-day count — a dip or
+     a quiet week is never called out, only forward momentum is.
+     ============================================================ */
+  const GROWTH_MILESTONES = [7, 30, 50, 100, 200, 365];
+  function growthMilestone(count) {
+    const reached = GROWTH_MILESTONES.filter(m => count >= m).pop() || null;
+    const next = GROWTH_MILESTONES.find(m => m > count) || null;
+    return { reached, next, toGo: next ? next - count : null };
+  }
+  // last n Monday-start weeks (oldest first, ending with the current week) — same
+  // week-boundary convention as fitWeekProgress, just plotted across several weeks
+  // instead of judged against one.
+  function growthPilatesWeeks(n) {
+    const weeks = [];
+    let mon = startOfWeek(TODAY);
+    for (let i = 0; i < n; i++) { weeks.unshift(mon); mon = addDays(mon, -7); }
+    return weeks.map(w => {
+      let count = 0;
+      for (let i = 0; i < 7; i++) if (fitTypesOn(addDays(w, i)).includes("Pilates")) count++;
+      return { weekStart: w, count };
+    });
+  }
+  // same shape as fastRecords' "current streak" walk — today not-yet-logged never
+  // breaks it, since the day isn't over.
+  function growthNutritionStreak() {
+    let streak = 0;
+    for (let i = 0; i < 400; i++) {
+      const k = keyOf(addDays(TODAY, -i));
+      const has = NUTRITION.log[k] && Object.keys(NUTRITION.log[k]).length > 0;
+      if (has) streak++;
+      else if (i === 0) continue;
+      else break;
+    }
+    return streak;
+  }
+  // small weekly bar chart, same rounded-bar/gold-dashed-target grammar as the
+  // fasting hours chart above, generalised to any weekly count instead of hours.
+  function growthWeeklyBarChart(weeks, opts) {
+    if (!weeks.some(w => w.count > 0)) return `<div class="h-empty">${opts.empty}</div>`;
+    const W = 560, H = 140, PL = 10, PR = 10, PT = 14, PB = 22;
+    const iw = W - PL - PR, ih = H - PT - PB;
+    const maxV = Math.max(opts.target || 0, ...weeks.map(w => w.count), 1);
+    const bw = iw / weeks.length;
+    const y = v => PT + ih - (v / maxV) * ih;
+    const bars = weeks.map((w, i) => {
+      const h = Math.max((w.count / maxV) * ih, w.count > 0 ? 2 : 0);
+      const met = opts.target ? w.count >= opts.target : w.count > 0;
+      const cx = (PL + i * bw + bw / 2).toFixed(1);
+      const label = `${w.weekStart.getDate()}/${w.weekStart.getMonth() + 1}`;
+      return `<rect x="${(PL + i * bw + bw * 0.2).toFixed(1)}" y="${(PT + ih - h).toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${h.toFixed(1)}" rx="3"
+          fill="${met ? `var(${opts.colorVar})` : `color-mix(in oklab, var(${opts.colorVar}) 40%, transparent)`}">
+          <title>Week of ${label} — ${w.count} session${w.count === 1 ? "" : "s"}</title>
+        </rect>
+        ${w.count > 0 ? `<text x="${cx}" y="${(y(w.count) - 4).toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--ink)">${w.count}</text>` : ""}
+        <text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="8.5" fill="var(--ink-faint)">${label}</text>`;
+    }).join("");
+    const targetLine = opts.target
+      ? `<line x1="${PL}" y1="${y(opts.target).toFixed(1)}" x2="${W - PR}" y2="${y(opts.target).toFixed(1)}" stroke="var(--margin-rule)" stroke-width="1.3" stroke-dasharray="4 3"/>`
+      : "";
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria || "chart")}">${targetLine}${bars}</svg>`;
+  }
+
+  function renderGrowth() {
+    const ws = HEALTH.weights.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const pilTotal = Object.values(FIT_LOG).flat().filter(s => s.type === "Pilates").length;
+    const pilWeeks = growthPilatesWeeks(8);
+    const rec = fastRecords();
+    const nutDays = Object.keys(NUTRITION.log).length;
+    const nStreak = nutDays ? growthNutritionStreak() : 0;
+
+    /* ---------- MY PROGRESS ---------- */
+    const cards = [];
+
+    if (ws.length) {
+      const first = ws[0], last = ws[ws.length - 1];
+      const delta = last.kg - first.kg;
+      const wPts = ws.map(w => ({ v: w.kg, label: `${new Date(w.date).getDate()} ${MON_SHORT[new Date(w.date).getMonth()]}`,
+        col: weightZone(w.kg) ? zoneCol(weightZone(w.kg)) : "var(--ink)" }));
+      cards.push(`<div class="h-card">
+        <div class="section-head"><h2>Weight</h2><span class="rule"></span></div>
+        ${ws.length > 1 ? `<div class="h-stats">
+          <div class="h-stat"><div class="n">${first.kg}kg</div><div class="l">${shortDate(first.date)}</div></div>
+          <div class="h-stat"><div class="n">${last.kg}kg</div><div class="l">Now — ${shortDate(last.date)}</div></div>
+          <div class="h-stat"><div class="n">${delta === 0 ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}kg`}</div><div class="l">Since you started</div></div>
+          <div class="h-stat"><div class="n">${ws.length}</div><div class="l">Weigh-ins logged</div></div>
+        </div>` : `<div class="gr-empty-note">One entry logged so far (${last.kg}kg, ${shortDate(last.date)}) — the trend fills in as you keep going.</div>`}
+        <div class="chart-wrap">${lineChart(wPts, { empty: "", aria: "Weight over time" })}</div>
+      </div>`);
+    } else {
+      cards.push(`<div class="h-card"><div class="section-head"><h2>Weight</h2><span class="rule"></span></div>
+        <div class="gr-empty-note">Log a weight on the Fasting page to start your trend here.</div></div>`);
+    }
+
+    cards.push(`<div class="h-card">
+      <div class="section-head"><h2>Pilates</h2><span class="rule"></span></div>
+      ${pilTotal ? `<div class="h-stats">
+        <div class="h-stat"><div class="n">${pilWeeks[pilWeeks.length - 1].count}</div><div class="l">This week</div></div>
+        <div class="h-stat"><div class="n">${pilTotal}</div><div class="l">Sessions, all time</div></div>
+        <div class="h-stat"><div class="n">${fitWeekProgress(TODAY)}/${fitWeekTarget(TODAY)}</div><div class="l">This week's plan</div></div>
+      </div>
+      <div class="chart-wrap">${growthWeeklyBarChart(pilWeeks, { colorVar: "--work-ink", aria: "Pilates sessions per week, last 8 weeks", empty: "" })}</div>`
+      : `<div class="gr-empty-note">Log a Pilates session (Habits → Fitness) to see your weekly rhythm here.</div>`}
+    </div>`);
+
+    if (rec) {
+      const goalH = HEALTH.fastGoalHours || 16;
+      let metDays = 0, loggedDays = 0;
+      for (let i = 0; i < 30; i++) { const h = fastedHoursOn(addDays(TODAY, -i)); if (h > 0) { loggedDays++; if (h >= goalH) metDays++; } }
+      cards.push(`<div class="h-card">
+        <div class="section-head"><h2>Fasting rhythm</h2><span class="rule"></span></div>
+        <div class="h-stats">
+          <div class="h-stat"><div class="n">🔥 ${rec.current}</div><div class="l">Current streak</div></div>
+          <div class="h-stat"><div class="n">${rec.best}</div><div class="l">Best streak</div></div>
+          <div class="h-stat"><div class="n">${metDays}/${loggedDays}</div><div class="l">Goal met, last 30 logged days</div></div>
+        </div>
+      </div>`);
+    }
+
+    if (nutDays) {
+      let logged30 = 0;
+      for (let i = 0; i < 30; i++) { const k = keyOf(addDays(TODAY, -i)); if (NUTRITION.log[k] && Object.keys(NUTRITION.log[k]).length) logged30++; }
+      cards.push(`<div class="h-card">
+        <div class="section-head"><h2>Nutrition logging</h2><span class="rule"></span></div>
+        <div class="h-stats">
+          <div class="h-stat"><div class="n">${nStreak}</div><div class="l">Day streak</div></div>
+          <div class="h-stat"><div class="n">${logged30}/30</div><div class="l">Days logged</div></div>
+          <div class="h-stat"><div class="n">${nutDays}</div><div class="l">Total days tracked</div></div>
+        </div>
+      </div>`);
+    }
+
+    document.getElementById("grProgress").innerHTML = cards.join("");
+
+    /* ---------- WHAT YOUR CONSISTENCY IS BUILDING ---------- */
+    const benefits = [];
+    if (pilTotal > 0) benefits.push({
+      icon: "🧘", title: "Pilates & movement",
+      stat: `${pilTotal} session${pilTotal === 1 ? "" : "s"} logged`,
+      lines: ["Builds core strength and stability", "Supports posture and spinal alignment",
+              "Improves balance and flexibility", "Weight-bearing work supports bone density"],
+    });
+    if (rec) benefits.push({
+      icon: "⏳", title: "Fasting rhythm",
+      stat: rec.current >= 1 ? `${rec.current}-day current streak` : `${HEALTH.fasts.length} fast${HEALTH.fasts.length === 1 ? "" : "s"} logged`,
+      lines: ["Supports metabolic flexibility", "Gives digestion regular, predictable rest",
+              "Builds a steady daily rhythm you can rely on"],
+    });
+    if (nutDays > 0) benefits.push({
+      icon: "🥗", title: "Nutrition logging",
+      stat: `${nutDays} day${nutDays === 1 ? "" : "s"} tracked`,
+      lines: ["Keeps iron, protein, choline and vitamin C visible", "Builds awareness of what actually fuels your energy",
+              "Makes patterns easier to spot and gently adjust"],
+    });
+    if (ws.length > 0) benefits.push({
+      icon: "⚖️", title: "Weight tracking",
+      stat: `${ws.length} entr${ws.length === 1 ? "y" : "ies"} logged`,
+      lines: ["Builds honest self-awareness over time", "The trend matters far more than any single number",
+              "Showing up to log it is the actual win"],
+    });
+
+    document.getElementById("grBenefits").innerHTML = benefits.length
+      ? `<div class="gr-benefit-grid">${benefits.map(b => `<div class="gr-benefit-card">
+          <div class="gr-benefit-head"><span class="gr-benefit-icon">${b.icon}</span><span class="gr-benefit-title">${b.title}</span></div>
+          <div class="gr-benefit-stat">${esc(b.stat)}</div>
+          <ul class="gr-benefit-list">${b.lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul>
+        </div>`).join("")}</div>
+        <div class="gr-disclaimer">General, evidence-based education — not personalised medical advice.</div>`
+      : `<div class="gr-empty-note">Log a session, a fast, or a meal and this section fills in with what it's building.</div>`;
+
+    /* ---------- GROWING, LEARNING, IMPROVING ---------- */
+    const milestones = [];
+    if (pilTotal > 0) {
+      const m = growthMilestone(pilTotal);
+      if (m.reached) milestones.push(`🏋️ <b>${m.reached} Pilates sessions</b> — milestone reached.`);
+    }
+    if (rec && rec.best >= 7) milestones.push(`🔥 <b>${rec.best}-day fasting streak</b> — your best on record.`);
+    if (rec && rec.current > 0 && rec.current === rec.best && rec.best >= 3)
+      milestones.push(`🏆 Your current fasting streak is tied for your <b>best ever</b> — still climbing.`);
+    if (nStreak >= 7) milestones.push(`🥗 <b>${nStreak}-day nutrition logging streak</b>.`);
+
+    const nextUp = [];
+    if (pilTotal > 0) { const m = growthMilestone(pilTotal); if (m.next) nextUp.push(`<b>${m.toGo}</b> more Pilates session${m.toGo === 1 ? "" : "s"} to reach ${m.next}.`); }
+
+    const spans = [];
+    if (ws.length) spans.push(`weight since ${shortDate(ws[0].date)}`);
+    const fitKeys = Object.keys(FIT_LOG).filter(k => FIT_LOG[k].length).sort();
+    if (fitKeys.length) spans.push(`fitness since ${shortDate(fitKeys[0])}`);
+    if (nutDays) spans.push(`nutrition since ${shortDate(Object.keys(NUTRITION.log).sort()[0])}`);
+
+    document.getElementById("grTrajectory").innerHTML = `
+      ${spans.length ? `<div class="gr-lead" style="margin-top:0">Tracking ${spans.join(" · ")} — every entry adds to the picture.</div>` : ""}
+      ${milestones.length ? `<div class="gr-milestones">${milestones.map(m => `<div class="gr-milestone"><span class="gr-milestone-badge">✦</span><span class="gr-milestone-text">${m}</span></div>`).join("")}</div>` : ""}
+      ${nextUp.length ? `<div class="section-head" style="margin-top:4px"><h2>Gently, what's next</h2><span class="rule"></span></div>
+        <div class="gr-next-list">${nextUp.map(n => `<div class="gr-next-row">${n}</div>`).join("")}</div>` : ""}
+      ${!spans.length ? `<div class="gr-empty-note">Your growth story starts with the first log — nothing to show yet, and that's OK.</div>` : ""}
+    `;
+  }
+
+  /* ============================================================
      SUPPLEMENTS & HERBS — daily-checkable list, also written onto
      the Day page's Personal tile via generatedFor().
      ============================================================ */
@@ -16269,6 +16521,7 @@
     document.getElementById("usPage").hidden = state.view !== "us";
     document.getElementById("foodPage").hidden = state.view !== "food";
     document.getElementById("nutritionPage").hidden = state.view !== "nutrition";
+    document.getElementById("growthPage").hidden = state.view !== "growth";
     document.getElementById("healthPage").hidden = state.view !== "health";
     document.getElementById("cyclePage").hidden = state.view !== "cycle";
     document.getElementById("habitsPage").hidden = state.view !== "habits";
@@ -16298,6 +16551,7 @@
     else if (state.view === "family") renderFamilyPage();
     else if (state.view === "food") renderFood();
     else if (state.view === "nutrition") renderNutrition();
+    else if (state.view === "growth") renderGrowth();
     else if (state.view === "health") renderHealth();
     else if (state.view === "cycle") renderCycle();
     else if (state.view === "supplements") renderSupplements();
@@ -19149,7 +19403,14 @@
   // phrasing), or a standalone line that ends in a recognisable business-type word
   // (email signatures often sit on their own line).
   function qaExtractApptBusiness(text) {
-    const NAME = "[A-Z][\\w&'’.]*(?:\\s+(?:of|the|and|&|[A-Z][\\w&'’.]*)){0,4}";
+    // 2026-08-06: NO period in the word char-class -- a business name at the end of a
+    // sentence ("...from Lotus Healing Acupuncture. Your appointment...") must stop at
+    // the full stop, not treat the following capitalised word as another name token.
+    // Confirmed live: with "." included this swallowed straight through into the next
+    // sentence ("Lotus Healing Acupuncture. Your"); dropping it, the \s+ this repetition
+    // needs before its next word simply can't match right after a bare period, so the
+    // name correctly stops there instead.
+    const NAME = "[A-Z][\\w&']*(?:\\s+(?:of|the|and|&|[A-Z][\\w&']*)){0,4}";
     let m = text.match(new RegExp(`\\bfrom\\s+(${NAME})`));
     if (m) return qaCleanName(m[1]);
     m = text.match(new RegExp(`\\bat\\s+(${NAME})`));
@@ -19168,9 +19429,14 @@
     return m[1].trim();
   }
   function qaExtractApptLocation(text) {
-    let m = text.match(/\b(?:location|address|where)\s*[:]\s*([^\n]+)/i);
+    let m = text.match(/\b(?:location|address|where)\s*[:]\s*([^\n.]+)/i);
     if (m) return qaCleanName(m[1]);
-    m = text.match(/\b\d+[a-zA-Z]?\s+[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,3}\s+(?:St|Street|Rd|Road|Ave|Avenue|Dr|Drive|Cres|Crescent|Pl|Place|Ln|Lane|Way|Hwy|Highway|Pde|Parade)\b[^\n]*/i);
+    // 2026-08-06: a trailing [^\n]* here (to also catch a suburb after the street, "12
+    // Bondi Rd, Bondi") turned out to just grab the entire rest of the line/paragraph
+    // -- confirmed live it ran straight through "12 Bondi Rd, Bondi. See you then!" as
+    // ONE location. A single, tightly-capped comma continuation (one more capitalised
+    // word or two) gets the suburb without also grabbing whatever sentence follows it.
+    m = text.match(/\b\d+[a-zA-Z]?\s+[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,3}\s+(?:St|Street|Rd|Road|Ave|Avenue|Dr|Drive|Cres|Crescent|Pl|Place|Ln|Lane|Way|Hwy|Highway|Pde|Parade)\b(?:,\s*[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*){0,2})?/i);
     if (m) return qaCleanName(m[0]);
     return null;
   }
