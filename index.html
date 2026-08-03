@@ -4669,6 +4669,14 @@
   .num-grp-py b { color: var(--cosmic-gold); font-weight: 800; }
   .num-grp-py:empty { display: none; }
   .num-grp-sep { color: var(--ink-faint); font-size: 11px; }
+  /* 2026-08-06: CD chip, far right of the PY/UY row — margin-left:auto claims
+     the row's leftover width (see the markup comment above); bold/on-brand,
+     no box/fill, :empty hides it when there's no cycle data to show. */
+  .num-grp-cd {
+    margin-left: auto; font-family: var(--font-body); font-size: 11px; font-weight: 800;
+    color: var(--ink); letter-spacing: 0.02em; cursor: pointer; flex: none;
+  }
+  .num-grp-cd:empty { display: none; }
   .astro-motif .motif-glyph { display: block; }
   /* compact version of the mascot badge, shown in the persistent header on every page */
   .astro-motif--mini { width: 34px; height: 34px; font-size: 19px; line-height: 34px; margin: 0; }
@@ -7818,7 +7826,17 @@
              calendar instead, which IS the rightmost element in the .day-row2 grid.
              #numGrpPy/#astroMotifMini are unchanged IDs — renderDay()/applyTheme() don't
              need to change, they just fill whatever element currently holds these IDs. -->
-        <span class="num-grp-mascot mini-cal-mascot"><span id="numGrpPy" class="num-grp-py"></span><span id="astroMotifMini" class="astro-motif astro-motif--mini num-hover-trigger" tabindex="0"></span><span class="num-grp-sep">&middot;</span><span id="numGrpUy" class="num-grp-py"></span></span>
+        <!-- 2026-08-06 (Linh: "add the Cycle Day chip to the numerology bar, far
+             right of the PY/UY line"): #numGrpCd is a 5th flex child of this same
+             row with margin-left:auto -- .num-grp-mascot is already display:flex
+             (confirmed via getBoundingClientRect it spans the row's near-full
+             width once reparented into #numGroupStrip on mobile), so auto-margin
+             pushes it to the true far edge; PY/UY/the animal motif keep their own
+             gap/gap, just no longer centred as a group once this claims the
+             leftover space (her wording explicitly allowed "left/centre" for
+             them). Filled by Book33CD.label(new Date()) in renderDay() below --
+             empty when nothing's logged, :empty hides it, same as .date-pm. -->
+        <span class="num-grp-mascot mini-cal-mascot"><span id="numGrpPy" class="num-grp-py"></span><span id="astroMotifMini" class="astro-motif astro-motif--mini num-hover-trigger" tabindex="0"></span><span class="num-grp-sep">&middot;</span><span id="numGrpUy" class="num-grp-py"></span><span id="numGrpCd" class="num-grp-cd" role="button" tabindex="0" data-jump-view="cycle" title="Open Cycle"></span></span>
         <div class="mini-cal" id="miniCal">
           <div class="mini-cal-nav">
             <button type="button" class="nav-arrow" id="miniCalPrev" aria-label="Previous month">‹</button>
@@ -10697,12 +10715,10 @@
     // marker stays absent, same as the CD chip.
     const cdMin = 5 * 60;
     if (cdMin > START_MIN && cdMin < END_MIN) {
-      const cd = cycleDayFor(state.anchor);
-      if (cd) {
-        const phase = phaseOn(state.anchor, cyclePrediction());
-        const icon = phase && CYCLE_PHASE_INFO[phase] ? CYCLE_PHASE_INFO[phase].icon + " " : "";
+      const cdLabel = Book33CD.label(state.anchor);
+      if (cdLabel) {
         const top = topForMin(cdMin) - 16;
-        html += `<span class="lbl cd-mark" style="top:${top}px" role="button" tabindex="0" data-jump-view="cycle" title="Open Cycle">${icon}CD ${cd}</span>`;
+        html += `<span class="lbl cd-mark" style="top:${top}px" role="button" tabindex="0" data-jump-view="cycle" title="Open Cycle">${cdLabel}</span>`;
       }
     }
     el.innerHTML = html;
@@ -13114,6 +13130,13 @@
       uyEl.tabIndex = 0;
       uyEl.innerHTML = `${d.getFullYear()}&nbsp;UY&nbsp;<b>${esc(String(uy))}</b>${focusPopoverHtml(`Universal Year · ${d.getFullYear()}`, uy, uyFocus, "num-hover-pop--right")}`;
     }
+    // 2026-08-06 (Linh: "far right of the top line... Book33CD.label(new Date())"):
+    // deliberately real "today", not `d` (the day being VIEWED, which PY/UY above
+    // read) -- her own words specified new Date() for this one, so unlike the 5am
+    // calendar marker (which tracks state.anchor) this chip always shows today's
+    // real cycle day regardless of which day she's browsing to.
+    const cdEl = document.getElementById("numGrpCd");
+    if (cdEl) cdEl.textContent = Book33CD.label(new Date());
     // keep an already-open detail sheet (openTlDetail) in sync — renderTimeline() above
     // just rebuilt TL_ITEMS_BY_ID from scratch, so a step tick/timer/etc. anywhere else
     // that triggered this renderDay() needs to reflect inside the sheet too, not just
@@ -15901,6 +15924,21 @@
   const PHASE_COL = {
     menstrual: "var(--flow-med)", follicular: "var(--work-seed)",
     fertile: "var(--fertile)", luteal: "var(--family-seed)",
+  };
+  // 2026-08-06 (Linh: "Use Book33CD.label(new Date()) to show '[phase icon] CD n'"):
+  // a small reusable namespace so any chrome that wants the real cycle-day label
+  // (the numerology-bar chip, the 5am calendar marker, anywhere else later) reads
+  // it the same way -- real CH5 data (HEALTH.flow via cycleDayFor/derivePeriods),
+  // never a placeholder. Empty string when nothing's logged yet, same as the CD
+  // chip (#periodBadge) already does.
+  const Book33CD = {
+    label(date) {
+      const cd = cycleDayFor(date);
+      if (!cd) return "";
+      const phase = phaseOn(date, cyclePrediction());
+      const icon = phase && CYCLE_PHASE_INFO[phase] ? CYCLE_PHASE_INFO[phase].icon + " " : "";
+      return `${icon}CD ${cd}`;
+    },
   };
   // everything needed for an at-a-glance read of where a date sits in the cycle,
   // independent of whether that date happens to be a bleeding day
