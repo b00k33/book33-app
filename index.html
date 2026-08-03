@@ -1267,37 +1267,41 @@
      z-index (and coming later in the DOM) puts it on top instead, and the wider, fully
      opaque border + stronger tint make it read as a deliberate marker, not a smudge. */
   .power-layer { position: absolute; top: 0; left: 0; width: var(--gutter); bottom: 0; z-index: 3; pointer-events: none; }
-  .power-block {
-    position: absolute; left: 0; right: 0; border-left: 7px solid transparent;
+  /* 2026-08-06 (Linh: "change each power-hour marker from a single dot into a subtle
+     dot-line-dot: a small dot at START, a thin line spanning the period, a small dot at
+     FINISH"): .power-marker is the hover/tap trigger AND the positioning box -- top and
+     height come straight from topForMin(start)/topForMin(end), the same per-minute math
+     the old single dot already used, so the two dots land exactly on the power hour's
+     real start/end regardless of any expanded hour block above them. The dots stay a
+     touch bolder (opacity 0.7) than the connecting line (0.4) so the shape reads as
+     "two small marks joined by a thin thread", not one uniform bar -- (removed the old,
+     already-fully-transparent-and-never-rendered .power-block rule that used to sit here
+     from an earlier "line on the right edge" design; renderPowerHours() never emitted
+     one, confirmed via grep, so nothing depended on it). */
+  .power-marker {
+    position: absolute; left: calc(var(--gutter) - 4px); width: 7px; pointer-events: auto;
   }
-  /* 2026-07-26 (Linh): first "change the block into a solid line", then "move the block to
-     the right" — so the LEFT gutter shows nothing now (fill dropped, border transparent);
-     the power hour is marked only by the solid 7px colour line + pill on the calendar's
-     RIGHT edge (.power-label-row border-right below). */
-  .power-block[data-k="good"]  { background: transparent; border-left-color: transparent; box-shadow: none; }
-  .power-block[data-k="bad"]   { background: transparent; border-left-color: transparent; box-shadow: none; }
-  /* 2026-07-26 (Linh): "move the green to the right" — Money's green marker lives only on the
-     RIGHT edge now (line + pill via .power-label-row); the left gutter stays clean. */
-  .power-block[data-k="money"] { background: transparent; border-left-color: transparent; box-shadow: none; }
-  /* 2026-08-02 (book44, "numerology hovers for the times... very subtle icon"): a small
-     dot at the gutter edge, same visual language as .now-line::before's gold dot — quiet
-     until hovered, no pill/chrome added back to the calendar itself. */
   .power-dot {
-    position: absolute; left: calc(var(--gutter) - 4px); width: 7px; height: 7px; margin-top: -3.5px;
-    border-radius: 50%; pointer-events: auto; opacity: 0.65;
+    position: absolute; left: 0; width: 7px; height: 7px;
+    border-radius: 50%; opacity: 0.7;
   }
-  .power-dot[data-k="good"] { background: var(--pb-good-text); }
-  .power-dot[data-k="bad"] { background: var(--pb-bad-text); }
-  .power-dot[data-k="money"] { background: var(--cosmic-gold); }
-  .power-dot:hover, .power-dot:focus-visible { opacity: 1; }
+  .power-dot--start { top: -3.5px; }
+  .power-dot--end { top: calc(100% - 3.5px); }
+  .power-line { position: absolute; left: 3px; top: 0; bottom: 0; width: 1px; opacity: 0.4; }
+  .power-marker[data-k="good"]  .power-dot, .power-marker[data-k="good"]  .power-line { background: var(--pwr-good-mark); }
+  .power-marker[data-k="bad"]   .power-dot, .power-marker[data-k="bad"]   .power-line { background: var(--pwr-bad-mark); }
+  .power-marker[data-k="money"] .power-dot, .power-marker[data-k="money"] .power-line { background: var(--pwr-money-mark); }
+  .power-marker:hover .power-dot, .power-marker:focus-visible .power-dot,
+  .power-marker:hover .power-line, .power-marker:focus-visible .power-line { opacity: 1; }
   /* the Best/Worst time-range labels read on the opposite (right) side of the
      timeline from the zodiac hour markers, above the event cards */
   /* 2026-08-01 ("these events look ugly"): z 4 → 1 so Best/Worst/Money pills sit UNDER the
      event blocks — they printed on top of her actual plans. Visible in free hours only. */
   .power-label-layer { position: absolute; top: 0; left: var(--gutter); right: 0; bottom: 0; z-index: 1; pointer-events: none; }
-  /* the row carries a colour bar on the calendar's RIGHT edge (border-right), mirroring
-     the left-gutter power-block bar so each power hour is bracketed on both sides. The
-     pill is right-aligned with enough padding to clear that bar. */
+  /* the row carries a colour bar on the calendar's RIGHT edge (border-right) -- from an
+     earlier design where a matching bar sat in the left gutter too, bracketing each
+     power hour on both sides (that left-gutter bar is long gone, see .power-marker
+     above). The pill is right-aligned with enough padding to clear the right bar. */
   .power-label-row {
     position: absolute; left: 0; right: 0; display: flex; align-items: flex-start;
     justify-content: flex-end; padding: 3px 14px 0 0; border-right: 7px solid transparent;
@@ -4920,6 +4924,17 @@
     --power-money: #2BE57E;
     --power-money-tint: rgba(150,255,196,0.12);
     --pb-money-bg: color-mix(in oklab, #2BE57E 55%, black 45%);     --pb-money-text: #EAFFF2;
+    /* 2026-08-06 (Linh: dot-line-dot power-hour markers, "RED=bad, GOLD=money,
+       GREEN=good"): dedicated colours for the marker only -- redefining --power-good/
+       --power-bad above directly would also ripple into --pb-good/bad-text (feeding
+       the old, now-dead .pb-lbl pills) and, for --power-bad specifically, an unrelated
+       delete-button hover elsewhere (.rtn-sub-del/.rtn-date-chip). Money reuses
+       --cosmic-gold-soft -- already a deliberately duller gold than --cosmic-gold,
+       which the now-line uses -- so the two golds read as related but never identical,
+       exactly her "distinct... so the two aren't confused" ask. */
+    --pwr-good-mark: #3EAD73;
+    --pwr-bad-mark: var(--power-bad);
+    --pwr-money-mark: var(--cosmic-gold-soft);
     color: var(--ink);   /* body's inherited colour was computed OUTSIDE this scope */
   }
   /* buttons don't inherit color — any button without its own colour rule was falling
@@ -10530,12 +10545,25 @@
   // just the Sleep marker from the retired preset template layer below — SLEEP_END_MIN
   // is declared further down the file, but that's fine: this function only reads it when
   // called (during renderDay()), by which point the whole script has already run once.
+  // 2026-08-06 (Linh: "add a sleep message at 10pm... the evening bookend: the 10pm
+  // marker is where sleep begins, the 6am one is where it ends"): a second .lbl for
+  // SLEEP_START_MIN, same markup/classes/position-above-the-line convention as the
+  // existing end marker, just the other direction ("Sleep from" instead of "Sleep →")
+  // -- both are independent, absolutely-positioned children of the same #sleepBand, so
+  // adding one is just a second string in the same innerHTML rather than a new element.
   function renderSleepBand() {
     const el = document.getElementById("sleepBand");
     if (!el) return;
-    if (SLEEP_END_MIN <= START_MIN || SLEEP_END_MIN >= END_MIN) { el.innerHTML = ""; return; }
-    const top = topForMin(SLEEP_END_MIN) - 16;
-    el.innerHTML = `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
+    let html = "";
+    if (SLEEP_START_MIN > START_MIN && SLEEP_START_MIN < END_MIN) {
+      const top = topForMin(SLEEP_START_MIN) - 16;
+      html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep from ${esc(fmtTime(minToTime(SLEEP_START_MIN)))}</span>`;
+    }
+    if (SLEEP_END_MIN > START_MIN && SLEEP_END_MIN < END_MIN) {
+      const top = topForMin(SLEEP_END_MIN) - 16;
+      html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
+    }
+    el.innerHTML = html;
   }
 
   /* --- preset day template: sleep / commitments / home backdrop, real events render on top ---
@@ -10761,7 +10789,18 @@
       // 2026-08-02 (book44, "very subtle icon" — SUPERSEDES the old wide invisible bar):
       // topForMin(mins) is the exact-minute position (same trick the now-line dot uses),
       // so the dot sits right at 3:22/12:22/etc, not just somewhere in that hour's row.
-      blockHtml += `<div class="power-dot num-hover-trigger" data-k="${p.k}" style="top:${top}px" tabindex="0">${powerHourPopoverHtml(p, rangeLabel)}</div>`;
+      // 2026-08-06 (Linh: "dot at START, thin line spanning the period, dot at FINISH"):
+      // .power-marker now spans the full hour (top/height, reusing rowH which used to
+      // feed only the dead label row below) with a dot at each end and a line joining
+      // them; the hover/tap popover lives inside the START dot specifically (a small,
+      // zero-height box) rather than the tall marker itself, so it still opens right
+      // where the old single dot's popover did instead of wherever the marker's now-
+      // taller box happens to end.
+      blockHtml += `<div class="power-marker num-hover-trigger" data-k="${p.k}" style="top:${top}px;height:${rowH}px" tabindex="0">
+        <span class="power-dot power-dot--start">${powerHourPopoverHtml(p, rangeLabel)}</span>
+        <span class="power-line"></span>
+        <span class="power-dot power-dot--end"></span>
+      </div>`;
       labelHtml += `<div class="power-label-row" data-k="${p.k}" style="top:${top}px;height:${rowH}px">
         <span class="pb-lbl">${esc(p.label)} · ${rangeLabel}</span>
       </div>`;
