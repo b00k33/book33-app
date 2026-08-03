@@ -1193,6 +1193,15 @@
     position: absolute; left: 8px; font-family: var(--font-body); font-size: 11px;
     font-style: italic; color: var(--ink-faint);
   }
+  /* 2026-08-06 (Linh: "bold, not an event... tapping it opens CH5"): the CD marker
+     is a sibling .lbl inside the same pointer-events:none #sleepBand layer, so it
+     needs its own pointer-events:auto poke-through (same pattern .animal-band
+     .em.num-hover-trigger already uses) plus bold/non-italic to read as distinct
+     from the quiet Sleep marker beside it, while still carrying no box/fill. */
+  .sleep-band .lbl.cd-mark {
+    font-style: normal; font-weight: 700; color: var(--ink-soft);
+    pointer-events: auto; cursor: pointer;
+  }
   .template-band .template-label {
     font-size: 9.5px; letter-spacing: 0.03em; color: var(--ink-faint);
     background: var(--paper); padding: 1px 7px; border-radius: 999px;
@@ -5279,10 +5288,13 @@
        art already used for the PWA/home-screen icon, see manifest.json). The mark
        already carries its own ring, so the button drops its own border/background/
        text styling entirely rather than doubling up two circles. */
+    /* 2026-08-06 (Linh: "top left corner needs to be larger"): 30px -> 44px, which
+       also happens to bring it up to CLAUDE.md's own 44px minimum tap target (was
+       under it before). */
     .nav-drawer-btn {
       display: flex; align-items: center; justify-content: center; flex: none;
       position: static; z-index: 1;
-      width: 30px; height: 30px; padding: 0; border-radius: 50%;
+      width: 44px; height: 44px; padding: 0; border-radius: 50%;
       border: none; background: none; cursor: pointer;
     }
     .nav-drawer-logo { width: 100%; height: 100%; border-radius: 50%; display: block; }
@@ -10683,18 +10695,30 @@
     if (SLEEP_END_MIN > START_MIN && SLEEP_END_MIN < END_MIN) {
       const top = topForMin(SLEEP_END_MIN) - 16;
       html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
-      // 2026-08-06 (Linh: "also show the CD in the calendar at 6am every day... same
-      // phase icon as the numerology chip... update to whichever day I'm viewing"):
-      // a second quiet italic .lbl line, same #sleepBand/.lbl treatment as Sleep ->
-      // 6am right above it (no event block, not tappable) -- state.anchor (not
-      // "today") so it's always the viewed day's cycle day, same cycleDayFor()/
-      // phaseOn()/CYCLE_PHASE_INFO the CD chip (#periodBadge) and Week/Month cycle
-      // chips already use, so the icon always matches hers exactly.
+    }
+    // 2026-08-06 (Linh: "the marker must show the REAL cycle day number, calculated
+    // from the cycle/period data I record in CH5 ... show it at 5am each day --
+    // bold, not an event. Tapping it opens CH5"): SUPERSEDES the earlier 6am/quiet-
+    // italic/non-tappable version (which was already reading real data -- same
+    // cycleDayFor()/phaseOn()/CYCLE_PHASE_INFO the CD chip #periodBadge and Week/
+    // Month cycle chips use -- but sat right on top of the Sleep->6am line and
+    // wasn't tappable). Own 5am slot, own .cd-mark styling (bold, not italic;
+    // pointer-events re-enabled against #sleepBand's own pointer-events:none, same
+    // "poke a hole" pattern .animal-band .em.num-hover-trigger already uses),
+    // data-jump-view="cycle" reuses the app's existing global click delegate
+    // (index.html ~9520: `state.view = jump.dataset.jumpView; render();`) --
+    // CH5's Cycle page (view id "cycle") is the real cycle/period recording UI
+    // (HEALTH.flow, read via cycleDayFor -> derivePeriods()). No fallback number
+    // is shown when nothing's logged yet -- cycleDayFor() returns null and the
+    // marker stays absent, same as the CD chip.
+    const cdMin = 5 * 60;
+    if (cdMin > START_MIN && cdMin < END_MIN) {
       const cd = cycleDayFor(state.anchor);
       if (cd) {
         const phase = phaseOn(state.anchor, cyclePrediction());
         const icon = phase && CYCLE_PHASE_INFO[phase] ? CYCLE_PHASE_INFO[phase].icon + " " : "";
-        html += `<span class="lbl" style="top:${top + 14}px">${icon}CD ${cd}</span>`;
+        const top = topForMin(cdMin) - 16;
+        html += `<span class="lbl cd-mark" style="top:${top}px" role="button" tabindex="0" data-jump-view="cycle" title="Open Cycle">${icon}CD ${cd}</span>`;
       }
     }
     el.innerHTML = html;
