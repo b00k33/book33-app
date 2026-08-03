@@ -3258,6 +3258,38 @@
   .track-opt[data-track="marriage"] { color: var(--marriage-ink); }
   .track-opt[data-track="personal"] { color: var(--ink); }
   .track-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px currentColor; font-weight: 600; }
+  /* 2026-08-06 (Linh: "redesign my routine form... remove the heavy outlines on every
+     field; separate with spacing and subtle tone... compact colour chips... no big
+     outlined pills; selected clearly highlighted"): CLAUDE.md's own "flat: colour and
+     space, NOT boxes/borders" language, matching #addForm's already-decluttered look
+     (.field-hint short hints, no boxed container). Scoped to #rtnAddForm specifically —
+     .add-form/.field input/.track-picker/.track-opt are shared base classes used by a
+     dozen OTHER forms across the app (Goals, People, Family, Work Manual, the main
+     event form itself, etc.) — restyling those globally would ripple far past "my
+     routine form". */
+  #rtnAddForm { border: none; box-shadow: none; }
+  #rtnAddForm .field input[type="text"], #rtnAddForm .field input[type="time"],
+  #rtnAddForm .field input[type="number"], #rtnAddForm .field input[type="date"],
+  #rtnAddForm .field select {
+    border: none; background: var(--field-bg);
+  }
+  /* compact colour chips: natural width instead of flex:1 stretching to fill the row,
+     wrapping into tidy rows; a filled, high-contrast "selected" state (gold fill, dark
+     text) replaces the thin inset ring so it's unmistakable at a glance, not just
+     "clearly highlighted" on close inspection. */
+  #rtnAddForm .track-picker { flex-wrap: wrap; gap: 6px; }
+  #rtnAddForm .track-opt {
+    flex: 0 0 auto; border: 1px solid var(--note-line); background: none;
+    border-radius: 999px; padding: 4px 12px; font-size: 12px;
+  }
+  #rtnAddForm .track-opt[aria-pressed="true"] {
+    background: var(--margin-rule); border-color: var(--margin-rule); color: #17130A; box-shadow: none;
+  }
+  /* Repeats/Days-of-week chips have no per-item colour of their own (unlike Part of
+     life's work/family/marriage/personal ink) -- the dot next to their label was
+     inheriting a default ink colour with no real meaning, just visual noise. Days of
+     week already carries its own planet-icon identity per button. */
+  #rtnFreqPicker .track-opt::before, #rtnWeekdayPicker .track-opt::before { display: none; }
   /* 2026-08-02 (Linh screenshot, Routines edit form): the 7-day pickers (Supplements/
      Family/Routines) use .track-opt{flex:1} inside a wrapping row -- on a phone only 6
      pills fit per line, so Sunday wraps alone onto its own line and flex:1 stretches it
@@ -3267,14 +3299,13 @@
     #suppWeekdayPicker, #famWeekdayPicker, #rtnWeekdayPicker {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     }
-    /* #rtnFreqPicker (Daily/Weekly/.../Custom interval/As needed) never had a wrap rule
-       at all -- flex:1 with flex-shrink can't shrink text-bearing buttons below their
-       label's min-content width, so it ran off the right edge instead of wrapping.
-       Longer labels than the weekday pills, so 3 columns instead of 4. */
-    #rtnFreqPicker {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-    }
   }
+  /* 2026-08-06: #rtnFreqPicker's old mobile grid override (3 equal-width columns,
+     stretching "Daily" to match "Custom interval") is gone -- SUPERSEDED by the
+     #rtnAddForm .track-opt redesign above (flex:0 0 auto + flex-wrap on the picker),
+     which was built to solve the exact problem the grid existed for (long labels
+     running off the edge instead of wrapping) without stretching every chip to a fixed
+     column width first -- the opposite of "compact". */
   /* Type picker — the dot's shape mirrors the calendar: round = task, square = event */
   .kind-opt { color: var(--margin-rule); }
   .kind-opt[data-kind="event"]::before { border-radius: 2px; }
@@ -7334,16 +7365,27 @@
         </div>
       </div>
       <div class="field full">
-        <label for="rtnCategory">Sub-category <span style="text-transform:none;letter-spacing:0">(optional — e.g. Household, Beauty, Admin)</span></label>
+        <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
         <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
         <datalist id="rtnCatList"></datalist>
       </div>
       <div class="field full">
-        <label for="rtnStart">Start time <span style="text-transform:none;letter-spacing:0">(optional — lays the sub-tasks onto the Day calendar from here)</span></label>
+        <label for="rtnStart">Start time <span class="field-hint">optional — sets when it lands on the calendar</span></label>
         <input type="time" id="rtnStart" style="max-width:150px">
       </div>
+      <!-- 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
+           WITHOUT adding a sub-task... if I add none, I just set a start time + a
+           Duration (min) field"): mirrors #addForm's own Start/Duration pattern (fDur ->
+           syncs an end time) -- rtnDuration only matters when there are no sub-tasks
+           (toggled by updateRtnSubTotal(), which already re-runs on every add/remove/
+           edit of a sub-task row); when subs.length > 0 their own minutes decide the
+           block length instead, same back-to-back behaviour as before, untouched. -->
+      <div class="field full" id="rtnDurationField">
+        <label for="rtnDuration">Duration (min) <span class="field-hint">optional — sets the block length</span></label>
+        <input type="number" id="rtnDuration" min="5" step="5" placeholder="e.g. 30" style="max-width:150px">
+      </div>
       <div class="field full">
-        <label>Sub-tasks <span style="text-transform:none;letter-spacing:0">(each with its minutes — they fall back-to-back on the calendar so the task takes its real time)</span></label>
+        <label>Sub-tasks <span class="field-hint">optional — each with its minutes, back-to-back on the calendar</span></label>
         <div id="rtnSubHead" class="rtn-sub-head" hidden><span class="rsh-step">Step</span><span class="rsh-min">Minutes</span></div>
         <div id="rtnSubList" class="rtn-sub-list"></div>
         <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
@@ -7358,21 +7400,20 @@
           <button type="button" class="track-opt" data-freq="yearly" aria-pressed="false">Yearly</button>
           <button type="button" class="track-opt" data-freq="interval" aria-pressed="false">Custom interval</button>
           <button type="button" class="track-opt" data-freq="once" aria-pressed="false">One-off</button>
-          <button type="button" class="track-opt" data-freq="asNeeded" aria-pressed="false">As needed</button>
         </div>
       </div>
       <div class="field full note-inline" id="rtnHairNote" hidden>
         This wash type's day is decided by the every-2-days rotation, not a repeat pattern here — use the calendar switch on its row to show or hide it, or the date list below for an extra one-off wash.
       </div>
       <div class="field full" id="rtnIntervalField" hidden>
-        <label for="rtnIntervalDays">Repeat every <span style="text-transform:none;letter-spacing:0">— for unusual patterns a fixed weekday/date can't express (e.g. "every 2 days")</span></label>
+        <label for="rtnIntervalDays">Repeat every <span class="field-hint">e.g. "every 2 days"</span></label>
         <div style="display:flex;align-items:center;gap:8px">
           <input type="number" id="rtnIntervalDays" min="1" value="2" style="width:70px">
           <span style="font-size:12px;color:var(--ink-soft)">days</span>
         </div>
       </div>
       <div class="field full" id="rtnAnchorField" hidden>
-        <label for="rtnAnchorDate">Anchor date <span style="text-transform:none;letter-spacing:0">(the interval counts from here)</span></label>
+        <label for="rtnAnchorDate">Anchor date <span class="field-hint">the interval counts from here</span></label>
         <input type="date" id="rtnAnchorDate">
       </div>
       <div class="field full" id="rtnOnceField" hidden>
@@ -7388,11 +7429,11 @@
         <input type="number" id="rtnMonthlyDay" min="1" max="31" placeholder="1–31">
       </div>
       <div class="field full" id="rtnWeeklyField">
-        <label>Days of week <span style="text-transform:none;letter-spacing:0">(tap one or more)</span></label>
+        <label>Days of week <span class="field-hint">tap one or more</span></label>
         <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
       </div>
       <div class="field full">
-        <label>Also runs on <span style="text-transform:none;letter-spacing:0">(extra one-off dates, on top of the pattern above — edits to this task keep applying to them)</span></label>
+        <label>Also runs on <span class="field-hint">extra one-off dates on top of the pattern</span></label>
         <div id="rtnExtraList" class="rtn-date-list"></div>
         <div style="display:flex;align-items:center;gap:8px">
           <input type="date" id="rtnExtraDate" style="max-width:170px">
@@ -7400,13 +7441,13 @@
         </div>
       </div>
       <div class="field full">
-        <label for="rtnFitLink">Fitness tracker link <span style="text-transform:none;letter-spacing:0">(optional — ticking this routine done also logs a session there)</span></label>
+        <label for="rtnFitLink">Fitness tracker link <span class="field-hint">optional — logs a session when ticked done</span></label>
         <select id="rtnFitLink">
           <option value="">None</option>
         </select>
       </div>
       <div class="field full">
-        <label for="rtnNote">Note <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <label for="rtnNote">Note <span class="field-hint">optional</span></label>
         <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
       </div>
       <div class="form-actions">
@@ -10771,6 +10812,22 @@
     { k: "bad",   label: "2nd Worst",  time: "18:22" },
     { k: "money", label: "💰 28 Money", time: "20:22" },   // her nightly 28 personal hour — bills, payments, purchases
   ];
+  // 2026-08-06 (Linh: "preset the power hour blocks larger and sleep blocks smallest"):
+  // state.expandedBlocks already lets any hour opt into extra height by dragging (see
+  // its own comment near topForMin) -- this just seeds it with sensible defaults
+  // instead of leaving every hour at the plain baseline until she manually drags one.
+  // Power hours start already-larger; sleep hours get no entry at all, so they stay at
+  // the plain baseline -- the smallest a row can be, since the drag handler clamps to
+  // Math.max(0, ...) and only ever grows a row, never shrinks it below that (confirmed
+  // in the resize-handle code below). A later manual drag on any of these hours just
+  // overwrites its map entry like any other hour -- nothing here is special-cased past
+  // the initial value.
+  POWER_HOURS.forEach(p => {
+    const h = Math.floor(toMin(p.time) / 60);
+    if (h >= START_HOUR && h < END_HOUR && !state.expandedBlocks.has(h)) {
+      state.expandedBlocks.set(h, Math.round(HOUR_H() * 0.4));
+    }
+  });
   // 2026-08-02 (book44, "numerology hovers for best/worst/money hour... very subtle
   // icon"): only Money has a real number behind it — her own "28 personal hour" note
   // above — so only Money gets the full focusFor() digit-meaning treatment (28 reduces
@@ -16695,7 +16752,14 @@
       return rowFor(`rt:${t.id}`, {
         dotColor: TRACK_INK[t.track], title: esc(t.title), metaTop: freqLabel, metaBottom, steps: subs,
         calToggle: `<button type="button" class="rtn-cal-toggle" data-rtn-cal="${t.id}" aria-pressed="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button>`,
-        actions: `<button class="del" data-rtn-edit="${t.id}" aria-label="Edit ${esc(t.title)}">✎</button>
+        // 2026-08-06 (Linh: "a simple, obvious way to drop a routine onto the calendar
+        // as a ONE-OFF... without going through the whole routine editor"): rtnAddOnce()
+        // builds a quick-add draft straight from this row's own data (title/track/
+        // category/start) and opens the SAME preview the quick-add bar itself uses --
+        // day/time chips already built, title already editable -- so this is a "pick a
+        // day, tap Add" action, never the full routine form.
+        actions: `<button class="del" data-rtn-once="${t.id}" aria-label="Add ${esc(t.title)} to calendar once" title="Add once to calendar">📅</button>
+          <button class="del" data-rtn-edit="${t.id}" aria-label="Edit ${esc(t.title)}">✎</button>
           <button class="del" data-rtn-del="${t.id}" aria-label="Delete ${esc(t.title)}">×</button>`,
       });
     };
@@ -18324,7 +18388,15 @@
   }
   function updateRtnSubTotal() {
     const head = document.getElementById("rtnSubHead");
-    if (head) head.hidden = !rtnSubList.querySelector(".rtn-sub-row");
+    const hasSubs = !!rtnSubList.querySelector(".rtn-sub-row");
+    if (head) head.hidden = !hasSubs;
+    // 2026-08-06 (Linh: "make sub-tasks fully optional... if I do add sub-tasks, keep
+    // the current back-to-back behaviour"): Duration only makes sense when there's no
+    // sub-task list deciding the length instead -- hidden the moment a sub-task exists,
+    // shown again the moment the list empties back out. Runs on every add/remove/edit
+    // of a sub-task row (same call sites this function already had).
+    const durField = document.getElementById("rtnDurationField");
+    if (durField) durField.hidden = hasSubs;
     const tot = readRtnSubs().reduce((a, s) => a + s.min, 0);
     const el = document.getElementById("rtnSubTotal");
     if (!tot) { el.hidden = true; el.textContent = ""; return; }
@@ -18393,6 +18465,10 @@
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
       document.getElementById("rtnStart").value = task.start || "";
+      // 2026-08-06: only meaningful without sub-tasks (see updateRtnSubTotal, called at
+      // the end of this function, which hides the field again if subtasks got added below)
+      document.getElementById("rtnDuration").value =
+        task.start && task.end && toMin(task.end) > toMin(task.start) ? String(toMin(task.end) - toMin(task.start)) : "";
       (task.subtasks || []).forEach(s => addRtnSubRow(s.text, s.min));
       rtnTrack = task.track; syncRtnTrackButtons();
       rtnFreq = task.freq;
@@ -18421,6 +18497,29 @@
     renderRtnExtraDates();
     renderRtnCatList(); updateRtnSubTotal();
     document.getElementById("rtnTitle").focus();
+  }
+  // 2026-08-06 (Linh: "a simple, obvious way to drop a routine onto the calendar as a
+  // ONE-OFF single event on a day I choose — WITHOUT going through the whole routine
+  // editor... leaving the recurring routine untouched"): builds a qaDraft straight from
+  // the routine's own title/track/category/start and opens the SAME preview the
+  // quick-add bar itself shows (day/time chips, editable title — see qaRenderPreview) —
+  // "pick a day, tap Add it", never the routine form, and never touches ROUTINE_TASKS or
+  // its extraDates (that's the OTHER "attach an existing routine" path, #addForm's own
+  // Type:Routine option, which deliberately keeps recurring in sync — this one is a
+  // genuinely separate, one-off EVENTS[] entry, exactly as asked). qaDraft/qaRenderPreview
+  // are declared further down the file, but that's fine: this function only reads them
+  // when actually called (a click, after the whole script has run once), same reasoning
+  // already used for SLEEP_END_MIN etc. above.
+  function rtnAddOnce(task) {
+    const p = {
+      title: task.title, track: task.track, locPath: [], date: new Date(state.anchor),
+      start: task.start || "",
+      end: task.start ? (task.end || minToTime(Math.min(toMin(task.start) + 60, 1439))) : "",
+    };
+    qaDraft = { raw: "", p, rec: null, spendAmount: null, kind: "event", bareHour: null, estMin: null, who: "me", open: "date" };
+    state.view = "day"; render();
+    qaRenderPreview();
+    document.getElementById("qaPreview")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   document.getElementById("rtnAddBtn").addEventListener("click", () => openRtnForm(null));
   document.getElementById("rtnCancelBtn").addEventListener("click", closeRtnForm);
@@ -18452,6 +18551,16 @@
     if (fitLink) task.fitLink = fitLink;
     if (start) task.start = start;
     if (subtasks.length) task.subtasks = subtasks;
+    // 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
+    // WITHOUT adding a sub-task"): only applies with no sub-tasks -- their own minutes
+    // already decide the block length (generatedFor() sums them), same as before.
+    // Stored as a plain end time, same field generatedFor()'s no-subtask branch already
+    // reads (`end: (tOvr ? tOvr.end : t.end) || ""`) -- no changes needed on the
+    // calendar-rendering side, this was already wired, just never had a way to set it.
+    if (!subtasks.length && start) {
+      const dur = parseInt(document.getElementById("rtnDuration").value, 10);
+      if (dur > 0) task.end = minToTime(Math.min(toMin(start) + dur, 1439));
+    }
     if (rtnExtraDates.length) task.extraDates = rtnExtraDates.slice();
 
     if (rtnFreq === "once") {
@@ -19285,6 +19394,12 @@
       FAMILY_TASKS = FAMILY_TASKS.filter(t => t.id !== famDel.dataset.famDel);
       if (famEditId === famDel.dataset.famDel) closeFamForm();
       saveFamilyTasks(); renderFamilyPage();
+      return;
+    }
+    const rtnOnce = e.target.closest("[data-rtn-once]");
+    if (rtnOnce) {
+      const task = ROUTINE_TASKS.find(t => t.id === rtnOnce.dataset.rtnOnce);
+      if (task) rtnAddOnce(task);
       return;
     }
     const rtnEdit = e.target.closest("[data-rtn-edit]");
