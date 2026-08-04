@@ -7142,6 +7142,47 @@
     .rail-pat-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--fast); flex: none; margin-left: auto; }
     .rail-pat-empty { font-size: 12px; color: var(--ink-faint); padding: 6px 0; border-top: 1px solid var(--desk-hair); }
   }
+
+  /* ============================================================
+     ROUTINE OCCURRENCE OVERRIDES — 2026-08-04 ("edit this day vs the routine").
+     Scope toggle + notes in the detail sheet's edit panel; ghost blocks and the
+     edited-day dot on the Day grid. All colours from central tokens.
+     ============================================================ */
+  .ovr-scope { display: flex; gap: 8px; margin: 0 0 8px; }
+  .ovr-scope-opt {
+    flex: 1; min-height: 44px; padding: 8px 12px; text-align: left; cursor: pointer;
+    border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg);
+    font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--ink);
+  }
+  .ovr-scope-opt .sub { display: block; font-size: 10.5px; font-weight: 400; color: var(--ink-faint); margin-top: 2px; }
+  .ovr-scope-opt[aria-pressed="true"] {
+    border-color: var(--cosmic-gold); color: var(--cosmic-gold);
+    box-shadow: inset 0 0 0 1px var(--cosmic-gold);
+  }
+  .ovr-scope-opt[data-ovr-scope="routine"][aria-pressed="true"] {
+    border-color: var(--power-bad); color: var(--power-bad);
+    box-shadow: inset 0 0 0 1px var(--power-bad);
+  }
+  .ovr-note { font-size: 11.5px; line-height: 1.5; border-radius: var(--radius-sm); padding: 8px 12px; margin: 0 0 8px; }
+  .ovr-note-day { color: var(--cosmic-gold); background: color-mix(in oklab, var(--cosmic-gold) 10%, transparent); }
+  .ovr-note-rtn { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 10%, transparent); }
+  .ovr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+  .ovr-revert { margin-left: auto; }
+  /* skipped occurrence's ghost — faint dashed shell holding its slot, one-tap Restore */
+  .tl-item.tl-ghost {
+    opacity: 0.45; background: none; border: 1px dashed var(--note-line);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    pointer-events: auto; cursor: default;
+  }
+  .tl-item.tl-ghost .tl-title { text-decoration: line-through; color: var(--ink-faint); }
+  .tl-ghost-restore {
+    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink);
+    border-radius: 999px; padding: 4px 12px; min-height: 28px; cursor: pointer;
+    font-family: var(--font-body); font-size: 11px; font-weight: 600; flex: none;
+  }
+  .tl-ghost-restore:hover { border-color: var(--cosmic-gold); color: var(--cosmic-gold); }
+  /* edited-day marker: a small gold dot beside the title */
+  .tl-ovr-dot { color: var(--cosmic-gold); font-size: 14px; line-height: 1; margin-right: 2px; flex: none; }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -9898,6 +9939,95 @@
   function saveRtnSkips() { try { localStorage.setItem(RTN_SKIP_KEY, JSON.stringify(ROUTINE_SKIPS)); } catch (e) {} }
   let ROUTINE_SKIPS = loadRtnSkips();
 
+  /* ============================================================
+     ROUTINE OCCURRENCE OVERRIDES — 2026-08-04 (Linh, "edit this day vs the routine"):
+     the CANONICAL per-day override store. A routine in daybook-routines is a TEMPLATE;
+     each calendar appearance is a generated OCCURRENCE. Editing an occurrence defaults
+     to changing ONLY that day — recorded here, never on the template's own fields.
+
+     Shape, on each routine object itself (so it saves/syncs with daybook-routines):
+       t.overrides = { "2026-08-04": { start, dur, end, title, note,
+                                       skipped:true, movedTo:"YYYY-MM-DD" } }
+     Keyed by the occurrence's PATTERN date (where the recurrence would place it).
+     Missing fields fall back to the template. skipped hides the day (ghost on the
+     grid, restorable). movedTo renders it on the target date instead — the original
+     day is implicitly skipped-by-move, so it never shows twice. Merging happens per
+     render in generatedFor(); merged occurrences are never saved anywhere.
+
+     This SUPERSEDES the three older per-occId stores (ROUTINE_SKIPS /
+     ROUTINE_TIME_OVR / ROUTINE_NOTES for day-notes) — migrated below one time, then
+     those stay only for ::step:: sub-task notes, which aren't per-day overrides. --- */
+  function parseOccId(occId) {
+    // "rt-<taskId>-<YYYY-MM-DD>" — taskId may itself contain dashes, the date can't
+    if (!occId || occId.indexOf("rt-") !== 0) return null;
+    const date = occId.slice(-10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || occId.charAt(occId.length - 11) !== "-") return null;
+    return { taskId: occId.slice(3, -11), date };
+  }
+  function rtnOvr(t, dateKey) { return (t && t.overrides && t.overrides[dateKey]) || null; }
+  // merge patch into overrides[dateKey]; undefined/null/"" values DELETE that field,
+  // an emptied override is removed entirely (that's what "Revert to the routine" is)
+  function setRtnOvr(taskId, dateKey, patch) {
+    const t = ROUTINE_TASKS.find(x => x.id === taskId);
+    if (!t || !dateKey) return;
+    t.overrides = t.overrides || {};
+    const cur = t.overrides[dateKey] || {};
+    Object.keys(patch).forEach(k => {
+      if (patch[k] === undefined || patch[k] === null || patch[k] === "") delete cur[k];
+      else cur[k] = patch[k];
+    });
+    if (Object.keys(cur).length) t.overrides[dateKey] = cur; else delete t.overrides[dateKey];
+    if (t.overrides && !Object.keys(t.overrides).length) delete t.overrides;
+    saveRoutines();
+  }
+  function clearRtnOvr(taskId, dateKey) {
+    const t = ROUTINE_TASKS.find(x => x.id === taskId);
+    if (!t || !t.overrides) return;
+    delete t.overrides[dateKey];
+    if (!Object.keys(t.overrides).length) delete t.overrides;
+    saveRoutines();
+  }
+  // one-time fold of the legacy stores into t.overrides (idempotent: migrated entries
+  // are removed from the legacy stores, so a second boot finds nothing to move)
+  (function migrateRtnOverrides() {
+    let movedAny = false;
+    Object.keys(ROUTINE_TIME_OVR).forEach(occId => {
+      const p = parseOccId(occId), o = ROUTINE_TIME_OVR[occId];
+      if (!p || !o) return;
+      const t = ROUTINE_TASKS.find(x => x.id === p.taskId);
+      if (!t) return;
+      t.overrides = t.overrides || {};
+      const cur = t.overrides[p.date] || {};
+      if (o.start) cur.start = o.start;
+      if (o.end) cur.end = o.end;
+      if (o.date && o.date !== p.date) cur.movedTo = o.date;
+      t.overrides[p.date] = cur;
+      delete ROUTINE_TIME_OVR[occId];
+      movedAny = true;
+    });
+    Object.keys(ROUTINE_SKIPS).forEach(occId => {
+      const p = parseOccId(occId);
+      if (!p) return;
+      const t = ROUTINE_TASKS.find(x => x.id === p.taskId);
+      if (!t) return;
+      t.overrides = t.overrides || {};
+      (t.overrides[p.date] = t.overrides[p.date] || {}).skipped = true;
+      delete ROUTINE_SKIPS[occId];
+      movedAny = true;
+    });
+    Object.keys(ROUTINE_NOTES).forEach(occId => {
+      const p = parseOccId(occId);           // ::step:: keys fail the date check — stay put
+      if (!p || !ROUTINE_NOTES[occId]) return;
+      const t = ROUTINE_TASKS.find(x => x.id === p.taskId);
+      if (!t) return;
+      t.overrides = t.overrides || {};
+      (t.overrides[p.date] = t.overrides[p.date] || {}).note = ROUTINE_NOTES[occId];
+      delete ROUTINE_NOTES[occId];
+      movedAny = true;
+    });
+    if (movedAny) { saveRoutines(); saveRtnTimeOvr(); saveRtnSkips(); saveRtnNotes(); }
+  })();
+
   /* --- Fitness auto-link: which FIT_LOG session (if any) a tick on this id created,
      so un-ticking removes exactly that session and nothing she logged by hand
      (Linh 2026-08-02: "register events like pilates linked to the fitness tracking
@@ -10284,36 +10414,47 @@
           startMin = Math.max(0, timeToMin(anchor.start) - total);
         }
       }
-      // per-day note override (ROUTINE_NOTES) never touches the template's own t.note —
-      // falls back to it when she hasn't written anything for this specific occurrence
+      // per-day overrides (t.overrides, 2026-08-04) — the occurrence is the TEMPLATE
+      // merged with overrides[date]; override fields win, missing ones fall back.
+      // skipped -> a faint restorable ghost instead of the block; movedTo (another
+      // date) -> nothing here, the injected pass after this forEach renders it there.
       const occId = `rt-${t.id}-${keyOf(date)}`;
-      if (ROUTINE_SKIPS[occId]) return;   // this ONE occurrence was deleted — template untouched
-      const occNote = ROUTINE_NOTES[occId];
-      // 2026-08-05 (Part D): a per-occurrence time/date override — see ROUTINE_TIME_OVR's
-      // own comment above. Moved to a DIFFERENT date -> this occurrence has relocated
-      // away from today's normal pattern slot, skip it here entirely; the injected pass
-      // right after this forEach renders it on its new date instead. Present with the
-      // SAME date (a same-day drag) -> substitute its start/end below, template
-      // untouched, every OTHER day this routine still follows its normal schedule.
-      const tOvr = ROUTINE_TIME_OVR[occId];
-      if (tOvr && tOvr.date && tOvr.date !== keyOf(date)) return;
+      const ovr = rtnOvr(t, keyOf(date));
+      const effTitle = ovr && ovr.title ? ovr.title : t.title;
+      if (ovr && ovr.movedTo && ovr.movedTo !== keyOf(date)) return;
+      if (ovr && ovr.skipped) {
+        const gs = ovr.start || (startMin != null ? minToTime(startMin) : effStart || "");
+        if (gs) out.push({
+          id: occId, generated: true, date: keyOf(date), ghostSkip: true,
+          track: t.track, category: t.category || "Routine", title: effTitle,
+          kind: "routine", allDay: false, fromRoutine: true, rtTaskId: t.id,
+          start: gs, end: minToTime(Math.min(timeToMin(gs) + 30, 1439)),
+        });
+        return;
+      }
+      const hasOvr = !!ovr;
+      const occNote = ovr && ovr.note != null ? ovr.note : null;
       if (startMin != null && subs.length) {
         // the routine is ONE block spanning its real length, with its sub-tasks carried
         // inside as tickable steps (Linh 2026-07-26) — no longer exploded into mini-blocks;
         // that "real length" always rounds up to the nearest 5 (Linh 2026-07-30)
-        const total = roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+        const total = ovr && ovr.dur ? ovr.dur : roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+        const sMin = ovr && ovr.start ? timeToMin(ovr.start) : startMin;
         out.push({
-          id: occId, generated: true, date: keyOf(date),
-          track: t.track, category: t.category || "Routine", title: t.title,
+          id: occId, generated: true, date: keyOf(date), hasOvr,
+          track: t.track, category: t.category || "Routine", title: effTitle,
           note: occNote != null ? occNote : t.note, freq: t.freq, kind: "routine", allDay: false, fromRoutine: true,
-          start: tOvr ? tOvr.start : minToTime(startMin), end: tOvr ? tOvr.end : minToTime(startMin + total),
+          start: minToTime(sMin),
+          end: ovr && ovr.end && !ovr.dur ? ovr.end : minToTime(Math.min(sMin + total, 1439)),
           steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null,
         });
       } else {
-        const start = tOvr ? tOvr.start : (effStart || "");
+        const start = ovr && ovr.start ? ovr.start : (effStart || "");
+        const ovrEnd = ovr && start
+          ? (ovr.dur ? minToTime(Math.min(timeToMin(start) + ovr.dur, 1439)) : ovr.end || null) : null;
         out.push({
-          id: occId, generated: true, date: keyOf(date),
-          track: t.track, category: t.category || "Routine", title: t.title,
+          id: occId, generated: true, date: keyOf(date), hasOvr,
+          track: t.track, category: t.category || "Routine", title: effTitle,
           note: occNote != null ? occNote : t.note, freq: t.freq, fromRoutine: true,
           // 2026-08-03 (Linh: "when I open Pilates, I can't reschedule, delete, or book
           // another like it"): this branch (a routine with NO subtasks, e.g. a simple
@@ -10325,7 +10466,7 @@
           rtTaskId: t.id,
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
-          allDay: !start, start, end: (tOvr ? tOvr.end : effEnd) || "", fitLink: t.fitLink || null,
+          allDay: !start, start, end: (ovrEnd || effEnd) || "", fitLink: t.fitLink || null,
         });
       }
     });
@@ -10336,21 +10477,25 @@
     // stays the ORIGINAL occurrence id (not rebuilt from the new date) so its done-state/
     // notes/timer history, all keyed by that occId, keep following it to the new day,
     // same as a real calendar item keeps its identity across a reschedule.
-    Object.keys(ROUTINE_TIME_OVR).forEach(occId => {
-      const ovr = ROUTINE_TIME_OVR[occId];
-      if (!ovr || !ovr.date || ovr.date !== k || ovr.fromDate === k) return;
-      if (ROUTINE_SKIPS[occId]) return;   // moved, then deleted — don't resurrect it on the new date
-      const t = ROUTINE_TASKS.find(rt => occId === `rt-${rt.id}-${ovr.fromDate}`);
-      if (!t || t.calOn === false) return;
-      const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
-      const occNote = ROUTINE_NOTES[occId];
-      out.push({
-        id: occId, generated: true, date: k,
-        track: t.track, category: t.category || "Routine", title: t.title,
-        note: occNote != null ? occNote : t.note, freq: t.freq, fromRoutine: true,
-        kind: subs.length ? "routine" : undefined, allDay: !ovr.start,
-        start: ovr.start || "", end: ovr.end || "",
-        steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null,
+    ROUTINE_TASKS.forEach(t => {
+      if (!t.overrides || t.calOn === false) return;
+      Object.keys(t.overrides).forEach(fromDate => {
+        const ovr = t.overrides[fromDate];
+        if (!ovr || ovr.movedTo !== k || fromDate === k) return;
+        if (ovr.skipped) return;   // moved, then deleted — don't resurrect it on the new date
+        const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
+        // `.id` keeps the ORIGINAL pattern date so done-state/notes/timer history,
+        // all keyed by that occId, keep following the occurrence to its new day
+        const start = ovr.start || "";
+        const end = start && ovr.dur ? minToTime(Math.min(timeToMin(start) + ovr.dur, 1439)) : ovr.end || "";
+        out.push({
+          id: `rt-${t.id}-${fromDate}`, generated: true, date: k, hasOvr: true,
+          track: t.track, category: t.category || "Routine", title: ovr.title || t.title,
+          note: ovr.note != null ? ovr.note : t.note, freq: t.freq, fromRoutine: true,
+          kind: subs.length ? "routine" : undefined, allDay: !start,
+          start, end,
+          steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null,
+        });
       });
     });
     // recurring EVENTS — same synthesize-per-day mechanism as routines above, but
@@ -12020,16 +12165,17 @@
       if (!moveFitLogSession(e.id.slice(7), e.date, dateKey, timeStr, dur)) return;
     } else if (e.fromRoutine && e.rtTaskId) {
       // e.id never changes across repeated moves (see generatedFor()'s injected pass —
-      // it's what lets done-state/notes keep following the occurrence), but e.date DOES
-      // — it's wherever the occurrence is CURRENTLY rendering. So on a second move,
-      // e.date is already the target of the FIRST move, not the routine's true pattern
-      // date — reuse the existing override's fromDate (the one thing that's still
-      // correct) rather than re-deriving it from e.date, or a re-drag would silently
-      // detach the occurrence from its real origin and it'd stop rendering anywhere.
-      const prev = ROUTINE_TIME_OVR[e.id];
-      const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
-      ROUTINE_TIME_OVR[e.id] = { fromDate, date: dateKey, start: timeStr, end };
-      saveRtnTimeOvr();
+      // it's what lets done-state/notes keep following the occurrence) and it CARRIES
+      // the true pattern date, so parseOccId(e.id).date is always the right override
+      // key even on a second move (e.date, by contrast, is wherever it currently
+      // renders). movedTo clears itself on a drag back home (setRtnOvr deletes
+      // undefined fields), so the override shrinks back to a plain time nudge.
+      const p = parseOccId(e.id);
+      if (!p) return;
+      setRtnOvr(e.rtTaskId, p.date, {
+        start: timeStr, end, dur: undefined,
+        movedTo: dateKey !== p.date ? dateKey : undefined,
+      });
       // already-ticked-done routine occurrence carries a linked FIT_LOG session (see
       // applyFitLink) — move it along too, or her fitness history would silently stay
       // pinned to the day she moved the occurrence AWAY from.
@@ -12098,10 +12244,11 @@
     if (e.id.indexOf("fitcal-") === 0) {
       if (!moveFitLogSession(e.id.slice(7), e.date, e.date, startStr, dur)) return;
     } else if (e.fromRoutine && e.rtTaskId) {
-      const prev = ROUTINE_TIME_OVR[e.id];
-      const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
-      ROUTINE_TIME_OVR[e.id] = { fromDate, date: e.date, start: startStr, end: endStr };
-      saveRtnTimeOvr();
+      // same-day resize — start+end land in the occurrence's override, keeping any
+      // movedTo already there (a moved occurrence can be resized on its new day)
+      const p = parseOccId(e.id);
+      if (!p) return;
+      setRtnOvr(e.rtTaskId, p.date, { start: startStr, end: endStr, dur: undefined });
       if (LINKED_FIT[e.id]) moveFitLogSession(LINKED_FIT[e.id], e.date, e.date, startStr, dur);
     } else if (!e.generated) {
       const ev = EVENTS.find(x => x.id === e.id);
@@ -12262,8 +12409,20 @@
       // events code further down) reads data-tl-detail directly, same id every block
       // already carries — no draggable attribute needed for it to work. data-move-id
       // stays: right-click-to-edit (the contextmenu listener below) still keys off it.
+      // 2026-08-04 ("edit this day vs the routine", Stage 2): a skipped occurrence
+      // leaves a faint restorable ghost in its slot instead of vanishing — one tap on
+      // Restore deletes just the skip flag. No data-tl-detail: a ghost isn't openable.
+      if (e.ghostSkip) {
+        return `<div class="tl-item tl-block tl-ghost" data-track="${e.track}" style="${style}">
+          <span class="tl-title">${esc(e.title)}</span>
+          <button type="button" class="tl-ghost-restore" data-rt-restore="${e.id}">Restore</button>
+        </div>`;
+      }
+      // Stage 2 marker: an occurrence with a per-day override wears a small gold dot
+      // so an edited day reads differently from a clean one at a glance
+      const ovrDot = e.hasOvr ? `<span class="tl-ovr-dot" title="Edited for this day only" aria-label="Edited for this day only">•</span>` : "";
       return `<div class="tl-item ${cls}${done ? " done" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
-        <span class="tl-title">${tick}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}</span>
+        <span class="tl-title">${tick}${ovrDot}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}</span>
         <span class="tl-meta">${meta}</span>
         ${rateHtml}${resizeHandles}
       </div>`;
@@ -12338,6 +12497,11 @@
   // without snapping shut mid-interaction; openTlDetail() resets it for a freshly-opened
   // item so the sheet always STARTS flat/collapsed per her "less busy by default" ask.
   let tlDetailPanel = null;
+  // 2026-08-04 ("edit this day vs the routine"): which scope the edit panel writes to —
+  // "day" (the DEFAULT: overrides[date] only) or "routine" (the template). Module-level
+  // for the same survive-refresh reason as tlDetailPanel above; openTlDetail() resets
+  // it to "day" so every freshly-opened occurrence starts on the safe scope.
+  let tlOvrScope = "day";
   function renderTlDetailBody(e) {
     const kind = eventKind(e);
     const done = isDone(e.id);
@@ -12375,14 +12539,53 @@
     // star rating stays OUT of this panel, in the default view, per her explicit
     // "keep the star rating" -- only the text-entry fields move.
     const hasEditFields = hasRtnExtras || !!fitResolved;
-    const editFieldsHtml = hasEditFields ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields"${tlDetailPanel === "edit" ? "" : " hidden"}>
-        ${hasRtnExtras ? `<textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>` : ""}
-        ${hasRtnExtras && !fitResolved && e.start ? `<div class="fit-session-fields">
+    // 2026-08-04 ("edit this day vs the routine", Stage 1): a routine occurrence's edit
+    // panel leads with a SCOPE toggle — "This day only" (default) writes t.overrides
+    // [patternDate] via the Save button; "The routine" edits the template itself after
+    // a red warning. Field values re-fill per scope on toggle (refreshOpenTlDetail).
+    const isRtnOcc = !!(e.fromRoutine && e.rtTaskId);
+    const rtnT = isRtnOcc ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
+    const occDate = isRtnOcc ? (parseOccId(e.id) || {}).date : null;
+    const occOvr = rtnT && occDate ? rtnOvr(rtnT, occDate) : null;
+    const occDateD = occDate ? parseKey(occDate) : null;
+    const occDateLbl = occDateD ? `${WD_FULL[dowIndex(occDateD)]} ${occDateD.getDate()} ${MON_SHORT[occDateD.getMonth()]}` : "";
+    const schedLbl = rtnT ? (ROUTINE_FREQ_LABEL[rtnT.freq] || "Its usual schedule") : "";
+    const dayScope = tlOvrScope !== "routine";
+    // field values follow the selected scope: day = the merged occurrence, routine = template
+    const fldTitle = dayScope ? e.title : (rtnT ? rtnT.title : e.title);
+    const fldStart = dayScope ? (e.start || "") : (rtnT ? rtnT.start || "" : "");
+    const rtnTplDur = rtnT ? (rtnT.durationMin || (rtnT.start && rtnT.end ? Math.max(5, timeToMin(rtnT.end) - timeToMin(rtnT.start)) : "")) : "";
+    const fldDur = dayScope ? itemDurationMin(e) : rtnTplDur;
+    const scopeHtml = isRtnOcc && rtnT ? `
+        <div class="ovr-scope" role="group" aria-label="What should this edit change?">
+          <button type="button" class="ovr-scope-opt" data-ovr-scope="day" aria-pressed="${dayScope}">This day only<span class="sub">${esc(occDateLbl)}</span></button>
+          <button type="button" class="ovr-scope-opt" data-ovr-scope="routine" aria-pressed="${!dayScope}">The routine<span class="sub">${esc(schedLbl)}</span></button>
+        </div>
+        ${dayScope
+          ? `<div class="ovr-note ovr-note-day">Changes here only affect ${esc(occDateLbl)}. Your routine keeps running as normal on its other days.</div>`
+          : `<div class="ovr-note ovr-note-rtn">This changes every occurrence — past single-day overrides stay put.</div>`}
+        <div class="fit-session-fields">
+          <label class="fit-field" style="flex:1 1 100%">
+            <span class="fit-field-lbl">Title</span>
+            <input type="text" id="ovrTitle" value="${esc(fldTitle)}" autocomplete="off">
+          </label>
+          <label class="fit-field">
+            <span class="fit-field-lbl">Start time</span>
+            <input type="time" id="ovrStart" value="${esc(fldStart)}">
+          </label>
           <label class="fit-field">
             <span class="fit-field-lbl">Duration (min)</span>
-            <input type="number" min="5" step="5" placeholder="mins" data-tl-rtn-duration="${e.id}" value="${itemDurationMin(e)}">
+            <input type="number" min="5" step="5" id="ovrDur" value="${fldDur || ""}">
           </label>
-        </div>` : ""}
+        </div>
+        <div class="ovr-actions">
+          <button type="button" class="btn-save" data-ovr-save>${dayScope ? "Save this day" : "Save the routine"}</button>
+          ${dayScope ? `<button type="button" class="tl-move-btn" data-ovr-skip>Skip this day</button>` : ""}
+          ${occOvr ? `<button type="button" class="tab-link ovr-revert" data-ovr-revert>Revert to the routine</button>` : ""}
+        </div>` : "";
+    const editFieldsHtml = hasEditFields ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields"${tlDetailPanel === "edit" ? "" : " hidden"}>
+        ${scopeHtml}
+        ${hasRtnExtras ? `<textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>` : ""}
         ${fitResolved ? `<div class="fit-session-fields">
           <label class="fit-field${fs.time ? "" : " fit-field-missing"}">
             <span class="fit-field-lbl">Time</span>
@@ -12517,6 +12720,7 @@
     const e = TL_ITEMS_BY_ID[id];
     if (!e) return;
     tlDetailPanel = null;
+    tlOvrScope = "day";
     document.getElementById("tlDetailOverlay").hidden = false;
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
     renderTlDetailHeadActions(e);
@@ -12559,6 +12763,67 @@
       const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
       const resolved = item && resolveFitSessionFor(item);
       if (resolved) { setSessionRating(resolved.date, sid, +n); renderDay(); }
+      return;
+    }
+    // 2026-08-04 ("edit this day vs the routine", Stage 1): scope toggle + save/skip/
+    // revert. Same stopPropagation-before-rerender discipline as the star handler above.
+    const scopeBtn = e.target.closest("[data-ovr-scope]");
+    if (scopeBtn) {
+      e.stopPropagation();
+      tlOvrScope = scopeBtn.dataset.ovrScope === "routine" ? "routine" : "day";
+      refreshOpenTlDetail();
+      return;
+    }
+    const ovrItem = () => TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
+    if (e.target.closest("[data-ovr-save]")) {
+      e.stopPropagation();
+      const item = ovrItem();
+      const p = item && parseOccId(item.id);
+      const t = item && ROUTINE_TASKS.find(x => x.id === item.rtTaskId);
+      if (!item || !p || !t) return;
+      const title = (document.getElementById("ovrTitle")?.value || "").trim();
+      const start = document.getElementById("ovrStart")?.value || "";
+      const dur = Math.max(5, parseInt(document.getElementById("ovrDur")?.value, 10) || 0) || null;
+      if (tlOvrScope === "routine") {
+        // template edit — every occurrence changes; existing per-day overrides stay put
+        if (title) t.title = title;
+        t.start = start || t.start;
+        const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
+        if (!subs.length && dur) {
+          t.durationMin = dur;
+          if (t.end && t.start) t.end = minToTime(Math.min(timeToMin(t.start) + dur, 1439));
+        }
+        saveRoutines();
+      } else {
+        // this day only — writes overrides[patternDate]; title override only when it
+        // actually differs from the template (same value would be pure noise)
+        setRtnOvr(t.id, p.date, {
+          start: start || undefined,
+          dur: dur || undefined,
+          end: undefined,
+          title: title && title !== t.title ? title : undefined,
+        });
+      }
+      tlDetailPanel = null;
+      renderDay();
+      return;
+    }
+    if (e.target.closest("[data-ovr-skip]")) {
+      e.stopPropagation();
+      const item = ovrItem();
+      const p = item && parseOccId(item.id);
+      if (item && p && item.rtTaskId) setRtnOvr(item.rtTaskId, p.date, { skipped: true });
+      closeTlDetail();
+      renderDay();
+      return;
+    }
+    if (e.target.closest("[data-ovr-revert]")) {
+      e.stopPropagation();
+      const item = ovrItem();
+      const p = item && parseOccId(item.id);
+      if (item && p && item.rtTaskId) clearRtnOvr(item.rtTaskId, p.date);
+      tlDetailPanel = null;
+      renderDay();
       return;
     }
     // 2026-08-04 (Linh, popup declutter): the flat "Edit" action reveals the collapsed
@@ -12669,9 +12934,9 @@
     if (rtOccDel) {
       const occId = rtOccDel.dataset.rtOccDel;
       const item = TL_ITEMS_BY_ID[occId];
-      if (!confirm(`Delete this occurrence of ${item ? item.title : "this routine"}? The rest of the routine keeps repeating as usual.`)) return;
-      ROUTINE_SKIPS[occId] = true;
-      saveRtnSkips();
+      if (!confirm(`Skip this occurrence of ${item ? item.title : "this routine"}? The rest of the routine keeps repeating as usual — a faint ghost stays on the day so you can restore it.`)) return;
+      const p = parseOccId(occId);
+      if (p && item && item.rtTaskId) setRtnOvr(item.rtTaskId, p.date, { skipped: true });
       closeTlDetail();
       renderDay();
       return;
@@ -18889,6 +19154,10 @@
     const rtnNoteField = e.target.closest("[data-rtn-note]");
     if (rtnNoteField) {
       const occId = rtnNoteField.dataset.rtnNote, val = rtnNoteField.value.trim();
+      // day-notes live in the occurrence's override now (2026-08-04); only ::step::
+      // sub-task keys (which fail parseOccId's date check) stay in ROUTINE_NOTES
+      const p = parseOccId(occId), item = TL_ITEMS_BY_ID[occId];
+      if (p && item && item.rtTaskId) { setRtnOvr(item.rtTaskId, p.date, { note: val || undefined }); return; }
       if (val) ROUTINE_NOTES[occId] = val; else delete ROUTINE_NOTES[occId];
       saveRtnNotes(); return;
     }
@@ -21087,6 +21356,18 @@
     // when the tap lands on the tick button (2026-08-02, GCal reference: "use this when
     // i select event"; 2026-08-06: .tl-edit/.tl-del dropped from this guard along with
     // the per-card icons themselves -- see renderTimeline's own removal note)
+    // one-tap Restore on a skipped occurrence's ghost (2026-08-04, "edit this day vs
+    // the routine" Stage 2) — deletes just the skip flag; any other per-day override
+    // fields (a moved time, a note) stay put. Lives in THIS document-level delegate
+    // because the ghost sits on the Day grid, not inside the detail sheet.
+    const rtRestore = e.target.closest("[data-rt-restore]");
+    if (rtRestore) {
+      const p = parseOccId(rtRestore.dataset.rtRestore);
+      const rItem = TL_ITEMS_BY_ID[rtRestore.dataset.rtRestore];
+      if (p && rItem && rItem.rtTaskId) setRtnOvr(rItem.rtTaskId, p.date, { skipped: undefined });
+      renderDay();
+      return;
+    }
     const tlDetail = e.target.closest("[data-tl-detail]");
     if (tlDetail && !e.target.closest(".tl-tick")) {
       // 2026-08-04 (desktop styling spec, point 3): the tapped block rides along so the
