@@ -1040,11 +1040,15 @@
 
   .date-block { text-align: center; min-width: 0; }
   .date-block .weekday {
-    /* 2026-08-06 (Linh, "still not even" after size+weight already matched): tracking
-       (letter-spacing) was the last remaining difference -- this was 0.24em vs
-       .date-mon's 0.14em vs .ud-badge's 0.08em, a 3x spread that reads as size even
-       when the glyphs themselves are identical. All three now share 0.1em. */
-    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dl-day);
+    /* 2026-08-06 (Linh, "still not even" after size+weight+tracking already matched):
+       pixel-measured her screenshot -- WED genuinely renders taller than AUG/UD even
+       with byte-identical CSS, because W/E/D are blocky straight-edged letters that
+       fill their box while A/U/G's curves+point anti-alias to a softer edge. Her call
+       ("change the design so it can't read as uneven"): dropped the bright/bold pop
+       that was drawing the eye to compare them -- same muted colour as .date-mon/
+       .ud-badge now, so nothing here is trying to look bigger than anything else. The
+       two gold NUMBERS remain the only accent in this line. */
+    font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dl-small);
     font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 7px;
   }
   .date-block .weekday .ruler {
@@ -6189,6 +6193,15 @@
     .day-row2 .page-head { display: contents; }
     .day-row2 #tilesDate .tile-grp { display: none; }
     .day-row2 .mini-cal-wrap { display: contents; }
+    /* 2026-08-06 (Linh: "when i select today it disrupts the ui"): SUPERSEDES the
+       contents-collapse above once .mini-cal-wrap has been reparented into the date
+       dropdown (placeDateLine()) — it's still a .day-row2 descendant there (the whole
+       #dayRow2 subtree moved together, .date-drop-pop included), so the rule above
+       still matched and made the wrapper an inert non-box, silently defeating its own
+       width/alignment rule further down (a display:contents element has no box of its
+       own to size). Restored to a normal box specifically inside the dropdown, later in
+       source so it wins the specificity tie against the rule above. */
+    .date-drop-pop .mini-cal-wrap { display: flex; }
     /* 2026-08-04 (Linh, cosmic panels "far less vertical space"): 9px wasn't on the
        4/8/12/16/24/32 scale anyway -- fixed to 8px, matching num-group-strip above. */
     .mini-cal-mascot { padding: 4px 8px; }
@@ -12961,11 +12974,27 @@
         ${deskDelAttr ? `<button type="button" class="tl-desk-btn tl-desk-del" ${deskDelAttr}>🗑 Delete</button>` : ""}
         <button type="button" class="tl-desk-btn tl-desk-done" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>✓ ${done ? "Done" : "Mark done"}</button>
       </div>`;
+    // 2026-08-05 ("B33 Notification" Step 4): per-event Reminder override — only for
+    // items that map to a stored object (a handwritten/imported event, or a recurring
+    // event's template) and only while Settings → Notifications allows overrides.
+    // undefined = category default, -1 = off, N = custom minutes-before; the pills
+    // write straight onto the stored event, and the wrapped saver re-arms the engine.
+    const remT = tlRemindTargetOf(e);
+    const remV = remT ? remT.obj.remind : undefined;
+    const remMode = remV == null ? "default" : remV === -1 ? "off" : "custom";
+    const remHtml = remT ? `<div class="tl-remind">
+        <span class="tl-detail-em">🔔</span>
+        <button type="button" class="nt-chip" data-tl-remind="default" aria-pressed="${remMode === "default"}">Default</button>
+        <button type="button" class="nt-chip" data-tl-remind="custom" aria-pressed="${remMode === "custom"}">Custom</button>
+        <button type="button" class="nt-chip" data-tl-remind="off" aria-pressed="${remMode === "off"}">Off</button>
+        ${remMode === "custom" ? `<span class="tl-remind-min"><input type="number" id="tlRemindMin" min="0" step="5" value="${remV}" aria-label="Minutes before"> min before</span>` : ""}
+      </div>` : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
       <div class="tl-detail-row"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      ${remHtml}
       ${starsHtml}
       <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
         <span>${done ? "✓" : ""}</span>${done ? "Done" : "Mark done"}
@@ -13108,6 +13137,22 @@
       renderDay();
       return;
     }
+    // 2026-08-05 ("B33 Notification" Step 4): the Reminder pills — Default clears the
+    // stored override, Off stores -1, Custom seeds 30 (editable in the input that
+    // appears). Saving goes through the wrapped saver, which re-arms the engine.
+    const remBtn = e.target.closest("[data-tl-remind]");
+    if (remBtn) {
+      e.stopPropagation();
+      const t = tlRemindTargetOf(ovrItem());
+      if (!t) return;
+      const mode = remBtn.dataset.tlRemind;
+      if (mode === "default") delete t.obj.remind;
+      else if (mode === "off") t.obj.remind = -1;
+      else if (t.obj.remind == null || t.obj.remind === -1) t.obj.remind = 30;
+      t.save();
+      refreshOpenTlDetail();
+      return;
+    }
     // 2026-08-04 (Linh, popup declutter): the flat "Edit" action reveals the collapsed
     // fields panel in place — see renderTlDetailBody's editFieldsHtml/tlDetailPanel.
     // both toggles below hit the exact same detach bug the star fix above documents —
@@ -13159,6 +13204,12 @@
   // page editor used, just a new home for the inputs.
   document.getElementById("tlDetailBody").addEventListener("change", e => {
     const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
+    // 2026-08-05 ("B33 Notification" Step 4): custom minutes-before for this event
+    if (e.target.id === "tlRemindMin") {
+      const t = tlRemindTargetOf(item);
+      if (t) { t.obj.remind = Math.max(0, parseInt(e.target.value, 10) || 0); t.save(); }
+      return;
+    }
     // 2026-08-06 (drag-and-drop, mobile-resize-via-popup gap): a plain routine
     // occurrence with no linked fitness session has no fitResolved to key off — this
     // field sets the item's real end time straight through resizeItem instead of
@@ -19880,6 +19931,19 @@
     const rail = document.querySelector("#dayPage .day-side");
     const row2 = document.getElementById("dayRow2");
     if (!wrap || !home || !rail || !row2) return;
+    // 2026-08-06 (Linh: "when i select today it disrupts the ui"): on true mobile
+    // widths (≤640px) the date dropdown owns .mini-cal-wrap now — placeDateLine()
+    // reparents it INTO .date-drop-pop, opened by tapping the date (see that function,
+    // in the separate sync-module closure further down — its own isMobile()/MOBILE_MQ
+    // aren't reachable from here, hence the inline matchMedia at the SAME 640px cutoff
+    // rather than a cross-closure call). This function's own "wide" branch below only
+    // ever MOVES the calendar at ≥901px, but it ran on every renderDay() regardless,
+    // and its "return home" branch kept yanking the calendar straight back out of the
+    // open dropdown into its old grid slot on every single render — the two placement
+    // functions fighting continuously, which is exactly the flicker/misplacement she
+    // saw. Deferring entirely below 641px leaves the dropdown as sole owner there; the
+    // 641–900px band (no dropdown involved) is unaffected.
+    if (window.matchMedia("(max-width: 640px)").matches) return;
     const wide = miniCalDeskMq.matches;
     if (wide && wrap.parentElement !== rail) rail.insertBefore(wrap, rail.firstElementChild);
     if (!wide && home.parentElement && wrap.previousElementSibling !== home)
