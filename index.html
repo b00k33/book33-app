@@ -4895,6 +4895,17 @@
   .cyc-detail-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); }
   .cyc-detail-label b { font-size: 13px; color: var(--ink); text-transform: none; letter-spacing: normal; }
   .cyc-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* 2026-08-05 (Linh: "Group symptoms together e.g. Menstrual |PMS|Other"): the 19
+     symptom chips were one flat wall — she was hand-writing "Fatigue" into Notes
+     rather than finding its chip. Three labelled clusters now; label style mirrors
+     the notify page's hairline group label so the app keeps one grouping language. */
+  .cyc-sym-groups { display: flex; flex-direction: column; gap: 8px; }
+  .cyc-sym-group { display: flex; flex-direction: column; gap: 4px; }
+  .cyc-sym-group-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-faint);
+  }
+  .cyc-sym-group-label::after { content: ""; flex: 1; height: 1px; background: var(--note-line); }
   .cyc-chip {
     border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft);
     border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-body);
@@ -13690,9 +13701,7 @@
           </div>
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Symptoms</span>
-            <div class="cyc-chip-row">
-              ${SYMPTOM_LIST.map(s => `<button type="button" class="cyc-chip" data-symptom="${s}" aria-pressed="${(log.symptomTags || []).includes(s)}">${SYMPTOM_LABEL[s]}</button>`).join("")}
-            </div>
+            ${symptomChipsHtml(log)}
           </div>
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Pain <b>${log.pain ?? 0}</b>/10</span>
@@ -17950,14 +17959,32 @@
   const MUCUS_TYPES = ["dry", "sticky", "creamy", "watery", "eggWhite", "unusual"];
   const MUCUS_LABEL = { dry: "Dry", sticky: "Sticky", creamy: "Creamy", watery: "Watery", eggWhite: "Egg-white", unusual: "Unusual" };
   const MUCUS_RANK = { dry: 0, sticky: 1, creamy: 2, watery: 3, eggWhite: 4 };   // higher = more fertile-signalling; "unusual" excluded
-  const SYMPTOM_LIST = ["cramps", "bloating", "digestion", "breastTenderness", "headache", "fatigue",
-    "moodChanges", "irritability", "anxiety", "lowMood", "backPain", "nausea",
-    "gas", "diarrhoea", "constipation", "thirst", "feelingHot", "feelingCold", "drySkin"];
+  // 2026-08-05 (Linh: "Group symptoms together e.g. Menstrual |PMS|Other"): purely a
+  // display grouping — storage stays the same flat symptomTags keys, so nothing
+  // already logged moves or changes meaning. SYMPTOM_LIST derives from the groups
+  // (not the other way round) so a key can never be listed yet missing from every
+  // group — that mistake used to silently drop the chip from both panels.
+  const SYMPTOM_GROUPS = [
+    { label: "Menstrual", keys: ["cramps", "backPain", "headache", "nausea", "diarrhoea", "fatigue"] },
+    { label: "PMS", keys: ["bloating", "breastTenderness", "moodChanges", "irritability", "anxiety", "lowMood", "constipation"] },
+    { label: "Other", keys: ["digestion", "gas", "thirst", "feelingHot", "feelingCold", "drySkin"] },
+  ];
+  const SYMPTOM_LIST = SYMPTOM_GROUPS.flatMap(g => g.keys);
   const SYMPTOM_LABEL = { cramps: "Cramps", bloating: "Bloating", digestion: "Digestion", breastTenderness: "Breast tenderness",
     headache: "Headache", fatigue: "Fatigue", moodChanges: "Mood changes", irritability: "Irritability",
     anxiety: "Anxiety", lowMood: "Low mood", backPain: "Back pain", nausea: "Nausea",
     gas: "Gas", diarrhoea: "Diarrhoea", constipation: "Constipation", thirst: "Thirst",
     feelingHot: "Feeling hot", feelingCold: "Feeling cold", drySkin: "Dry skin" };
+  // one renderer for both hosts (Cycle page selected-day panel + the Day page's
+  // CD-badge popover) so the grouping can never drift between them — the groups
+  // themselves are SYMPTOM_GROUPS, defined with SYMPTOM_LIST above
+  function symptomChipsHtml(log) {
+    return `<div class="cyc-sym-groups">${SYMPTOM_GROUPS.map(g =>
+      `<div class="cyc-sym-group">
+        <span class="cyc-sym-group-label">${g.label}</span>
+        <div class="cyc-chip-row">${g.keys.map(s => `<button type="button" class="cyc-chip" data-symptom="${s}" aria-pressed="${(log.symptomTags || []).includes(s)}">${SYMPTOM_LABEL[s]}</button>`).join("")}</div>
+      </div>`).join("")}</div>`;
+  }
 
   // quick-glance phase framing for the Day page — most of the cycle isn't bleeding,
   // so "where am I / what should I focus on" matters more than a flow prompt (see Life Map)
@@ -18325,9 +18352,7 @@
 
         <div class="cyc-detail-row">
           <span class="cyc-detail-label">Symptoms</span>
-          <div class="cyc-chip-row">
-            ${SYMPTOM_LIST.map(s => `<button type="button" class="cyc-chip" data-symptom="${s}" aria-pressed="${(log.symptomTags || []).includes(s)}">${SYMPTOM_LABEL[s]}</button>`).join("")}
-          </div>
+          ${symptomChipsHtml(log)}
         </div>
 
         <div class="cyc-detail-row full">
