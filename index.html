@@ -580,13 +580,16 @@
   .day-row2 { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; margin: 4px 0 12px; }
   @media (max-width: 900px) { .day-row2 { grid-template-columns: 1fr; } }
   .day-row2 #tilesDate { margin: 0; }
-  .day-row2 .mini-cal-wrap {
+  /* 2026-08-05 (desktop declutter): .day-side joined these selectors — placeMiniCalDesk()
+     reparents the mini calendar into the rail on wide screens, and it must keep the same
+     full width + cosmic token re-scope in either home. */
+  .day-row2 .mini-cal-wrap, .day-side .mini-cal-wrap {
     width: 100%;
     --ink: #F2EDDF; --ink-soft: #D8CDB6; --ink-faint: #A99C82; --margin-rule: var(--cosmic-gold);
     --paper: #0E0B05; --note-bg: rgba(233,200,119,0.06);
     --note-line: rgba(233,200,119,0.18); --field-bg: rgba(233,200,119,0.08);
   }
-  .day-row2 .mini-cal { width: 100%; }
+  .day-row2 .mini-cal, .day-side .mini-cal { width: 100%; }
   /* 2026-08-02 ("move PY11 horse logo to the right hand side" → "no, to the left of the
      mini calendar"): sits beside the calendar now, not stacked above it — row instead of
      column, mascot first in DOM so it lands on the calendar's left. justify-content:
@@ -7293,6 +7296,33 @@
   .tl-ghost-restore:hover { border-color: var(--cosmic-gold); color: var(--cosmic-gold); }
   /* edited-day marker: a small gold dot beside the title */
   .tl-ovr-dot { color: var(--cosmic-gold); font-size: 14px; line-height: 1; margin-right: 2px; flex: none; }
+
+  /* ============================================================
+     DESKTOP DECLUTTER — 2026-08-05 (Linh: "improve desktop design... I noticed zero
+     difference" + code44 answers). The 2026-08-04 pass ADDED the header row but left
+     the old date block underneath — date shown twice, plus a dead void where the left
+     column stretched to match the mini calendar. Fix per her answers: the duplicate
+     big date + UD/weekday line GO (the header row owns the date now), the PM/sign/
+     animal/birthday numerology strip STAYS as a slim line, the mini calendar keeps its
+     top-right position but joins the rail (placeMiniCalDesk) so the void collapses.
+     Desktop-only — mobile reads none of these rules and keeps its own header line.
+     ============================================================ */
+  @media (min-width: 641px) {
+    /* duplicate date display: the big "5 AUG" + its dropdown trigger, and the
+       "UD 5 WEDNESDAY" line — all of it already lives in #deskHead */
+    #dayPage .date-row { display: none; }
+    #dayPage .weekday-moon-row .ud-badge,
+    #dayPage .weekday-moon-row .weekday { display: none; }
+    /* the surviving numerology strip reads as one slim line under the header */
+    #dayPage .weekday-moon-row { margin: 0; }
+    .day-row2 { margin: 0 0 8px; }
+    #deskHead { margin: 0 0 12px; }
+  }
+  /* placeMiniCalDesk() moves the mini calendar into the rail on wide screens and
+     stamps this class in the SAME breath — CSS and DOM can never disagree about
+     whether the 300px column is occupied. Single-column only while the calendar is
+     actually gone; the class comes off when it returns home. */
+  .day-row2.mini-out { grid-template-columns: 1fr; }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -8451,7 +8481,11 @@
           </div>
         </div>
       </div>
-      <div class="mini-cal-wrap">
+      <!-- 2026-08-05 (Linh, desktop declutter): anchor marker so placeMiniCalDesk() can
+           return the mini calendar here when the viewport shrinks back under 901px —
+           same marker trick #dayRow2Home uses for the mobile date line. -->
+      <div id="miniCalHome" hidden></div>
+      <div class="mini-cal-wrap" id="miniCalWrap">
         <!-- 2026-08-02 ("move PY11 horse logo to the right hand side"): SUPERSEDES the
              weekday-moon-row placement — that row's far right was still only the left
              column's edge, not the page's actual right side. This sits above the mini
@@ -14705,6 +14739,7 @@
     // after renderTimeline so the patients card reads the freshly-filled TL_ITEMS_BY_ID
     renderDeskHead();
     renderDeskRail();
+    placeMiniCalDesk();
   }
 
   // quick-jump mini month calendar, toggled from the month pill in the Day page header
@@ -19772,6 +19807,31 @@
      desktop-only nodes, so mobile behaviour is untouched. Rendered fresh from
      renderDay() (renderDeskHead/renderDeskRail calls at its tail).
      ============================================================ */
+  // 2026-08-05 (Linh, desktop declutter: "improve desktop design... zero difference"):
+  // on wide screens the mini calendar joins the TOP of the right rail (.day-side) —
+  // same screen position as before (top-right), but the left column stops stretching
+  // to match its height, so the dead void beside it disappears and the timeline pulls
+  // up under the header. Returns home (#miniCalHome in .day-row2) under 901px, where
+  // .day-row2 is single-column and the old flow is correct. Same reparent-with-anchor
+  // pattern placeDateLine()/placeCosmicMascot() already use.
+  const miniCalDeskMq = window.matchMedia("(min-width: 901px)");
+  function placeMiniCalDesk() {
+    const wrap = document.getElementById("miniCalWrap");
+    const home = document.getElementById("miniCalHome");
+    const rail = document.querySelector("#dayPage .day-side");
+    const row2 = document.getElementById("dayRow2");
+    if (!wrap || !home || !rail || !row2) return;
+    const wide = miniCalDeskMq.matches;
+    if (wide && wrap.parentElement !== rail) rail.insertBefore(wrap, rail.firstElementChild);
+    if (!wide && home.parentElement && wrap.previousElementSibling !== home)
+      home.parentElement.insertBefore(wrap, home.nextSibling);
+    // the .mini-out class and the reparent always move together — see its CSS comment
+    row2.classList.toggle("mini-out", wide);
+  }
+  window.addEventListener("resize", placeMiniCalDesk);
+  // matchMedia change fires even when the harness resizes the viewport without a
+  // classic resize event (and self-corrects a mismatched boot-time width)
+  if (miniCalDeskMq.addEventListener) miniCalDeskMq.addEventListener("change", placeMiniCalDesk);
   function renderDeskHead() {
     const el = document.getElementById("deskDateBlock");
     if (!el) return;
