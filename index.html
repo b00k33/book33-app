@@ -1680,7 +1680,11 @@
     width: 100%; resize: vertical; min-height: 44px; font: inherit; font-size: 13px; padding: 8px 10px;
     border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
   }
-  .tl-detail-fitlink { font-size: 12.5px; color: var(--ink-faint); }
+  /* 2026-08-04 (Linh: "make the fit-link line small and subtle, not a big note"): no
+     .tl-detail-extra wrapper any more (that box's own border-top/padding was what read
+     as "big" even though the text itself was already small) -- just a bare quiet line
+     in the default view now, same font-size/colour as before. */
+  .tl-detail-fitlink { font-size: 12.5px; color: var(--ink-faint); padding: 2px 0; }
   /* 2026-08-05 (Part D, Reschedule/Duplicate): reuses .tl-detail-extra's own
      border-top/gap/padding rhythm (rule above) — same field look as .tl-rtn-note, same
      bordered/gold-text button language as .tl-detail-done-btn, just flex:1 pairs
@@ -11488,28 +11492,33 @@
       actions.push(`<button type="button" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>`);
       actions.push(`<button type="button" data-del="${e.id}" aria-label="Delete ${esc(e.title)}">🗑</button>`);
     } else if (e.rtTaskId) {
-      // 2026-08-03 (Linh: "when I open Pilates, I can't reschedule, delete, or book
-      // another like it"): "Edit routine" only ever edited the recurring TEMPLATE (every
-      // occurrence, forever) — there was no way to cancel just today's. data-rt-occ-del
-      // writes a ROUTINE_SKIPS entry for this occId alone (see its own comment near
-      // ROUTINE_TIME_OVR) rather than touching ROUTINE_TASKS, so every other occurrence
-      // keeps following the pattern untouched.
-      actions.push(`<button type="button" data-rt-open="${e.rtTaskId}" aria-label="Edit routine ${esc(e.title)}" title="Edit this routine">✎</button>`);
+      // 2026-08-04 (Linh, popup declutter mockup: pencil stays in the header): this
+      // pencil used to jump straight to the routine TEMPLATE editor -- SUPERSEDED, it
+      // now toggles the SAME in-sheet fields panel the body's Edit reveals (data-tl-
+      // toggle-edit, handled in both the head-actions AND body click listeners), so
+      // tapping it reveals note-for-today/session fields in place instead of leaving
+      // the sheet. Deep template editing (recurrence, steps) is still reachable via a
+      // secondary link INSIDE that revealed panel (see renderTlDetailBody). data-rt-
+      // occ-del is unchanged: writes a ROUTINE_SKIPS entry for this occId alone (see
+      // its own comment near ROUTINE_TIME_OVR), every other occurrence keeps repeating.
+      actions.push(`<button type="button" data-tl-toggle-edit aria-label="Edit ${esc(e.title)}">✎</button>`);
       actions.push(`<button type="button" data-rt-occ-del="${e.id}" aria-label="Delete this occurrence of ${esc(e.title)}" title="Delete just this occurrence">🗑</button>`);
     } else if (e.id.indexOf("fitcal-") === 0) {
-      // 2026-08-04 (Step 7, Linh: "no way to edit or delete it" -- Pilates fitness-log
-      // entry): fitcal- items are a DISPLAY-ONLY projection of a FIT_LOG session onto the
-      // Day timeline (see fitCalendarEventsFor) -- generated:true with no rtTaskId, so
-      // they fell through both branches above and got zero action buttons. Edit reopens
-      // the SAME inline field-editing row the Fitness widget already has (FIT_EDIT_OPEN),
-      // same reuse-not-reinvent pattern as the routine branch above, rather than building
-      // a second edit form; Delete calls the existing removeFitSession().
+      // 2026-08-04: same toggle as the routine branch above -- reveals the inline
+      // Time/Duration/Location/Notes fields (fitSessionHtml) in place instead of
+      // navigating to the Habits page's fitness editor for the exact same fields.
       const sessId = e.id.slice(7);
-      actions.push(`<button type="button" data-fitcal-edit="${sessId}" aria-label="Edit ${esc(e.title)} session">✎</button>`);
+      actions.push(`<button type="button" data-tl-toggle-edit aria-label="Edit ${esc(e.title)} session">✎</button>`);
       actions.push(`<button type="button" data-fitcal-del="${sessId}" aria-label="Delete ${esc(e.title)} session">🗑</button>`);
     }
     document.getElementById("tlDetailHeadActions").innerHTML = actions.join("");
   }
+  // 2026-08-04 (Linh, popup declutter: "split VIEW from EDIT"): which collapsible panel
+  // (if any) is currently open in the sheet -- null | "edit" | "move". Module-level so it
+  // survives a refreshOpenTlDetail() re-render (e.g. after the star handler's renderDay())
+  // without snapping shut mid-interaction; openTlDetail() resets it for a freshly-opened
+  // item so the sheet always STARTS flat/collapsed per her "less busy by default" ask.
+  let tlDetailPanel = null;
   function renderTlDetailBody(e) {
     const kind = eventKind(e);
     const done = isDone(e.id);
@@ -11530,48 +11539,26 @@
         <span class="tl-step-t">${esc(stepLabel(s))}</span><span class="tl-step-m">${stepMinOf(s)}m</span>
       </label>`;
     }).join("")}</div>` : "";
-    const extraHtml = hasRtnExtras ? `<div class="tl-detail-extra">
-        <textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>
-        ${e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : ""}
-      </div>` : (e.note ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "");
-    // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
-    // day/time, and duplicate it to another day/time"): only for items rescheduleItem/
-    // duplicateItem actually know how to move — a handwritten event, a routine
-    // occurrence, or a fitcal- fitness-log entry (2026-08-03: added — see those
-    // functions' own comment for why the other generated types, hair/birthdays/
-    // supplements, still don't get this). One date+time pair feeds both actions — pick
-    // a target, then choose Reschedule (move) or Duplicate (copy).
-    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0;
-    const moveHtml = canMove ? `<div class="tl-detail-extra tl-detail-move">
-        <div class="tl-detail-move-row">
-          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
-          <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
-        </div>
-        <div class="tl-detail-move-actions">
-          <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
-          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
-        </div>
-      </div>` : "";
-    // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log" +
-    // "let me navigate quickly to the habits tracking page"): only renders once a real
-    // FIT_LOG session exists for this item (resolveFitSessionFor) — same .fit-stars
-    // markup/data-fit-star convention as the Habits page's own rating control, wired to
-    // the SAME setSessionRating(), so a rating set from either place stays in sync.
+    // 2026-08-04 (Linh: "'ticking this off also logs a session' should be a small,
+    // subtle line, not a big note"): bare .tl-detail-fitlink line, always visible in the
+    // flat default view -- no .tl-detail-extra box around it any more (see that class's
+    // CSS comment). A plain read-only note (non-routine e.note) is DISPLAY, not an
+    // editable field, so it stays visible too, same as location/category above it.
+    const fitLinkHtml = e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : "";
+    const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "";
     const fitResolved = resolveFitSessionFor(e);
-    // 2026-08-06: time/duration/location/notes fields moved in here from the old
-    // Habits page's fitSelectedDetail editor (removed along with that page) --
-    // this was the only other place they were ever editable, so the fields (not
-    // just the star rating) needed a real home rather than just disappearing.
-    // Same data-fit-field/data-fit-notes/data-fit-notes-confirm convention, same
-    // setSessionField()/setSessionNotes() writers -- see the tlDetailBody change/
-    // click handlers below.
     const fs = fitResolved && fitResolved.sess;
-    const fitSessionHtml = fitResolved ? `<div class="tl-detail-extra tl-detail-fitrate">
-        <div class="fit-stars" role="group" aria-label="Rate this ${esc(fs.type)} session">
-          ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fit-star" data-tl-fit-star="${fs.id}:${n}"
-              aria-pressed="${(fs.rating || 0) >= n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}
-        </div>
-        <div class="fit-session-fields">
+    // 2026-08-04 (Linh: "move ALL the editable fields -- Time, Duration, Location,
+    // Notes, note for today -- BEHIND the Edit pencil, hidden until I tap Edit"):
+    // consolidates what used to be two always-visible blocks (extraHtml's note
+    // textarea, fitSessionHtml's field/notes rows) into ONE collapsed panel, toggled
+    // by the single "Edit" action in the flat row below (data-tl-toggle-edit). The
+    // star rating stays OUT of this panel, in the default view, per her explicit
+    // "keep the star rating" -- only the text-entry fields move.
+    const hasEditFields = hasRtnExtras || !!fitResolved;
+    const editFieldsHtml = hasEditFields ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields"${tlDetailPanel === "edit" ? "" : " hidden"}>
+        ${hasRtnExtras ? `<textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>` : ""}
+        ${fitResolved ? `<div class="fit-session-fields">
           <label class="fit-field${fs.time ? "" : " fit-field-missing"}">
             <span class="fit-field-lbl">Time</span>
             <input type="time" data-tl-fit-field="${fs.id}:time" value="${fs.time || ""}">
@@ -11588,23 +11575,72 @@
         <div class="fit-notes-row">
           <textarea class="fit-notes" data-tl-fit-notes="${fs.id}" placeholder="Notes on the session — how it felt, what you did…" rows="2">${esc(fs.notes || "")}</textarea>
           <button type="button" class="dh-confirm" data-tl-fit-notes-confirm="${fs.id}" aria-label="Save notes">✓</button>
+        </div>` : ""}
+        ${hasRtnExtras && e.rtTaskId ? `<button type="button" class="tab-link" data-rt-open="${e.rtTaskId}" style="margin-left:0">Edit routine settings (time, repeat, steps) →</button>` : ""}
+      </div>` : "";
+    // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
+    // day/time, and duplicate it to another day/time"): only for items rescheduleItem/
+    // duplicateItem actually know how to move — a handwritten event, a routine
+    // occurrence, or a fitcal- fitness-log entry. One date+time pair feeds both
+    // actions — pick a target, then choose Reschedule (move) or Duplicate (copy).
+    // 2026-08-04: now collapsed behind the flat "Reschedule"/"Book another" actions
+    // (data-tl-toggle-move) instead of always shown -- fixes the "Reschedule does
+    // nothing" report, which was really "the fields were already pre-filled with the
+    // CURRENT date/time and always visible, so tapping the button with nothing changed
+    // silently re-saved the same slot." Now the panel only appears once you've tapped
+    // an action, so there's a visible open-then-fill-then-confirm sequence instead of
+    // a button that can look like a no-op.
+    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0;
+    const moveHtml = canMove ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove"${tlDetailPanel === "move" ? "" : " hidden"}>
+        <div class="tl-detail-move-row">
+          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
+          <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
         </div>
+        <div class="tl-detail-move-actions">
+          <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
+          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
+        </div>
+      </div>` : "";
+    // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
+    // only renders once a real FIT_LOG session exists for this item (resolveFitSessionFor)
+    // — same .fit-stars markup/data-fit-star convention as the Habits page's own rating
+    // control, wired to the SAME setSessionRating(), so a rating set from either place
+    // stays in sync. Stays in the flat default view (not the edit panel) per her ask.
+    const starsHtml = fitResolved ? `<div class="fit-stars" role="group" aria-label="Rate this ${esc(fs.type)} session">
+        ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fit-star" data-tl-fit-star="${fs.id}:${n}"
+            aria-pressed="${(fs.rating || 0) >= n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}
+      </div>` : "";
+    // 2026-08-04 (Linh: "the actions -- Edit, Reschedule, Book another, Delete", per
+    // her own mockup): Edit/Delete are the header's own icon pair for every item type
+    // (see renderTlDetailHeadActions -- routine/fitcal's pencil now toggles the same
+    // panel this Reschedule/Book-another pair does, just reached from the header
+    // instead of here). Reschedule/Book-another render as the same bordered pill
+    // buttons as the reveal panel's own confirm buttons below (.tl-move-btn) —
+    // matches her mockup exactly, always visible when the item is movable, toggling
+    // the collapsed date/time panel open on tap.
+    const actionsHtml = canMove ? `<div class="tl-detail-move-actions tl-detail-move-toggle">
+        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="${tlDetailPanel === "move"}">Reschedule</button>
+        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="${tlDetailPanel === "move"}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
       </div>` : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
       <div class="tl-detail-row"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      ${starsHtml}
       <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
         <span>${done ? "✓" : ""}</span>${done ? "Done" : "Mark done"}
       </button>
-      ${fitSessionHtml}
-      ${stepsHtml}${extraHtml}${moveHtml}
+      ${fitLinkHtml}${plainNoteHtml}
+      ${stepsHtml}
+      ${actionsHtml}
+      ${editFieldsHtml}${moveHtml}
     `;
   }
   function openTlDetail(id) {
     const e = TL_ITEMS_BY_ID[id];
     if (!e) return;
+    tlDetailPanel = null;
     document.getElementById("tlDetailOverlay").hidden = false;
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
     renderTlDetailHeadActions(e);
@@ -11614,6 +11650,7 @@
     const ov = document.getElementById("tlDetailOverlay");
     ov.hidden = true;
     delete ov.dataset.itemId;
+    tlDetailPanel = null;
   }
   function refreshOpenTlDetail() {
     const ov = document.getElementById("tlDetailOverlay");
@@ -11628,18 +11665,43 @@
   // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
   // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
   document.getElementById("tlDetailBody").addEventListener("click", e => {
-    // 2026-08-03 ("let me RATE Pilates out of 5"): reads/writes the SAME FIT_LOG
-    // session + setSessionRating() the Habits page's own stars use, so a rating set
-    // from either place stays in sync — renderDay() below re-runs refreshOpenTlDetail()
-    // (and the Wellness widget) so both pick up the change immediately.
+    // 2026-08-04 (Linh: "tapping a star closes the popup — fix it so it only sets the
+    // rating"): root cause was never the click TARGET, it was renderDay() below calling
+    // refreshOpenTlDetail() -> renderTlDetailBody() SYNCHRONOUSLY, mid-click, which
+    // replaces #tlDetailBody's innerHTML and detaches the very <button> that's still
+    // bubbling this event. By the time it reaches #tlDetailOverlay's own "click outside
+    // .tl-detail-sheet closes it" listener further down, e.target is an orphaned node
+    // with no parent, so .closest(".tl-detail-sheet") fails and it reads as an outside
+    // click. stopPropagation() here means that outer listener never runs for this click
+    // at all, regardless of what the re-render does to the DOM.
     const starBtn = e.target.closest("[data-tl-fit-star]");
     if (starBtn) {
+      e.stopPropagation();
       const [sid, n] = starBtn.dataset.tlFitStar.split(":");
       const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
       const resolved = item && resolveFitSessionFor(item);
       if (resolved) { setSessionRating(resolved.date, sid, +n); renderDay(); }
       return;
     }
+    // 2026-08-04 (Linh, popup declutter): the flat "Edit" action reveals the collapsed
+    // fields panel in place — see renderTlDetailBody's editFieldsHtml/tlDetailPanel.
+    // both toggles below hit the exact same detach bug the star fix above documents —
+    // refreshOpenTlDetail() replaces #tlDetailBody's innerHTML synchronously, mid-click,
+    // orphaning the clicked button before the event finishes bubbling to the overlay's
+    // outside-click listener. Same stopPropagation() fix.
+    const editToggle = e.target.closest("[data-tl-toggle-edit]");
+    if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
+    // "Reschedule" and "Book another like it" are two entry points into the SAME
+    // collapsed date/time panel (they already share one date+time pair, see moveHtml) —
+    // fixes "Reschedule does nothing": tapping it now visibly opens a panel to fill in
+    // rather than silently re-saving whatever the pre-filled current date/time already was.
+    const moveToggle = e.target.closest("[data-tl-toggle-move]");
+    if (moveToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "move" ? null : "move"; refreshOpenTlDetail(); return; }
+    // the routine-template deep-edit link inside the edit panel (see editFieldsHtml) —
+    // same "close this sheet first" courtesy the header's old data-rt-open case used,
+    // the global document click delegate (near ROUTINE_TASKS.find) does the actual
+    // navigate-to-Routines-page-and-open-the-form work once this bubbles up to it.
+    if (e.target.closest("[data-rt-open]")) { closeTlDetail(); return; }
     // 2026-08-06: time/duration/location fields + notes now render inline right
     // here (see renderTlDetailBody's fitSessionHtml) instead of linking out to the
     // old Habits page editor, so there's no more "Open in Habits" jump to handle.
@@ -11688,26 +11750,15 @@
   // needs no equivalent here: it stays on the Day page, and refreshOpenTlDetail() (run
   // at the end of every renderDay()) already auto-closes once the item is gone.
   document.getElementById("tlDetailHeadActions").addEventListener("click", e => {
-    if (e.target.closest("[data-edit], [data-rt-open]")) closeTlDetail();
-    // 2026-08-04 (Step 7): fitness-log items' Edit/Delete -- see renderTlDetailHeadActions.
-    // Edit navigates to the Habits page's fitness section (#fitSelectedDetail) -- same
-    // "Open Fitness tab" state.fitYear/fitSelectedDate pattern already used by
-    // #fitOpenTab below -- because that's the ONLY still-live place these fields are
-    // editable. There used to be a second, inline copy of this editor directly on the
-    // Day page (#fitLinkTile / FIT_EDIT_OPEN toggle) but it was removed in an earlier
-    // "simplified Wellness glance" pass and its host no longer exists -- confirmed via
-    // getElementById returning null -- so reopening it here would silently do nothing.
-    const fcEdit = e.target.closest("[data-fitcal-edit]");
-    if (fcEdit) {
-      state.fitYear = state.anchor.getFullYear();
-      state.fitSelectedDate = keyOf(state.anchor);
-      state.view = "habits";
-      closeTlDetail();
-      render();
-      const detail = document.getElementById("fitSelectedDetail");
-      if (detail) detail.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
+    // 2026-08-04 (Linh, popup mockup: pencil stays in the header for every item type):
+    // routine/fitcal items' pencil now toggles the same in-sheet fields panel the body's
+    // click listener does (see renderTlDetailBody/editFieldsHtml) -- same detach-on-
+    // rerender bug the star fix documents, same stopPropagation() fix, since this
+    // listener's target can get orphaned by refreshOpenTlDetail() mid-click same as
+    // any button inside #tlDetailBody would.
+    const editToggle = e.target.closest("[data-tl-toggle-edit]");
+    if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
+    if (e.target.closest("[data-edit]")) closeTlDetail();
     const fcDel = e.target.closest("[data-fitcal-del]");
     if (fcDel) {
       const sessId = fcDel.dataset.fitcalDel;
