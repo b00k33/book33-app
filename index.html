@@ -1676,6 +1676,11 @@
      border-top/gap/padding rhythm (rule above) — same field look as .tl-rtn-note, same
      bordered/gold-text button language as .tl-detail-done-btn, just flex:1 pairs
      instead of one full-width row/button. */
+  /* 2026-08-06 (Linh: popup "too busy" -- the toggle pills and the panel's own confirm
+     pills were both visible at once with identical labels, reading as 4 duplicate
+     buttons): small label + .tab-link Cancel so the panel is self-contained once open. */
+  .tl-detail-move-head { display: flex; align-items: center; gap: 10px; }
+  .tl-detail-move-head span { font-size: 11px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
   .tl-detail-move-row { display: flex; gap: 8px; }
   .tl-detail-move-row input {
     flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 8px 10px;
@@ -11569,8 +11574,18 @@
     // silently re-saved the same slot." Now the panel only appears once you've tapped
     // an action, so there's a visible open-then-fill-then-confirm sequence instead of
     // a button that can look like a no-op.
+    // 2026-08-06 (Linh, "too busy"): moveOpen makes this panel and the toggle pills
+    // below (actionsHtml) mutually exclusive -- previously both rendered at once once
+    // open, showing two rows of identically-labelled "Reschedule"/"Book another" pills.
+    // Cancel here (data-tl-toggle-move, same handler as the toggle pills) collapses
+    // back to actionsHtml without confirming.
     const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0;
-    const moveHtml = canMove ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove"${tlDetailPanel === "move" ? "" : " hidden"}>
+    const moveOpen = tlDetailPanel === "move";
+    const moveHtml = canMove && moveOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
+        <div class="tl-detail-move-head">
+          <span>New date &amp; time</span>
+          <button type="button" class="tab-link" data-tl-toggle-move>Cancel</button>
+        </div>
         <div class="tl-detail-move-row">
           <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
           <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
@@ -11595,11 +11610,12 @@
     // panel this Reschedule/Book-another pair does, just reached from the header
     // instead of here). Reschedule/Book-another render as the same bordered pill
     // buttons as the reveal panel's own confirm buttons below (.tl-move-btn) —
-    // matches her mockup exactly, always visible when the item is movable, toggling
-    // the collapsed date/time panel open on tap.
-    const actionsHtml = canMove ? `<div class="tl-detail-move-actions tl-detail-move-toggle">
-        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="${tlDetailPanel === "move"}">Reschedule</button>
-        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="${tlDetailPanel === "move"}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
+    // matches her mockup exactly, toggling the collapsed date/time panel open on tap.
+    // 2026-08-06: hidden while moveOpen (see moveHtml above) so only one row of these
+    // pills is ever on screen at a time.
+    const actionsHtml = canMove && !moveOpen ? `<div class="tl-detail-move-actions tl-detail-move-toggle">
+        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">Reschedule</button>
+        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
       </div>` : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
