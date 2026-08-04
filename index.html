@@ -1136,28 +1136,15 @@
     font-size: 11px; color: var(--margin-rule); opacity: 0.45; pointer-events: none;
   }
   .hours.expand-armed .hour-row[data-block-h]:hover::after { opacity: 1; }
-  /* 2026-08-02 (Linh: "a better expanding function where i can drag"): a thin strip
-     sitting right at the boundary between every 2-hour block and the next — nearly
-     invisible at rest (just a hairline), brightens and shows a resize cursor on hover
-     so it reads as grabbable without adding visible chrome to a row that isn't being
-     touched. Lives in #resizeHandleLayer, a dedicated top-level layer positioned by JS
-     (renderResizeHandles) using the same topForMin() math as everything else — NOT
-     inside .hour-row any more: #eventsLayer sits above #hours (z-index 2 vs 1) and
-     would have silently swallowed drags across most of a handle's width if it had
-     stayed a child of #hours (only the narrow gutter sliver would've been outside
-     #eventsLayer's reach). This layer sits above #eventsLayer instead. */
-  .resize-handle-layer { position: absolute; inset: 0; z-index: 7; pointer-events: none; }
-  .block-resize-handle {
-    position: absolute; left: 0; right: 0; height: 9px; margin-top: -4px;
-    cursor: ns-resize; touch-action: none; pointer-events: auto;
-  }
-  .block-resize-handle::after {
-    content: ""; position: absolute; left: calc(var(--gutter) + 8px); right: 8px; top: 4px; height: 1px;
-    background: var(--margin-rule); opacity: 0; transition: opacity .15s ease;
-  }
-  .block-resize-handle[data-expanded="true"]::after { opacity: 0.35; }
-  .block-resize-handle:hover::after { opacity: 0.8; }
-  body.resizing-block, body.resizing-block * { cursor: ns-resize !important; user-select: none !important; }
+  /* 2026-08-04 (Linh: "remove the manual hour-expand feature completely -- no tap,
+     double-tap, arrow, or any expand gesture"): the drag-to-resize handle system that
+     used to live here (.resize-handle-layer/.block-resize-handle, #resizeHandleLayer,
+     the pointerdown/move/up IIFE near topForMin's other consumers) is deleted outright
+     rather than left disabled -- unlike other retired features in this file, this one
+     was self-contained (own layer, own CSS, own JS closure, nothing else read its
+     state), so full removal carries none of the "might be entangled with shared code"
+     risk that usually argues for a reversible disable instead. Hours now size to their
+     own content automatically -- see computeCompactHours()/buildHours() near HOUR_H(). */
   /* 2026-08-05 (Part D, press-and-hold drag-to-reschedule): a lifted look for the block
      actively being dragged — same "cursor + no text-select" pattern as resizing-block
      above, plus a soft shadow so it visually separates from the timeline underneath it
@@ -8113,14 +8100,6 @@
           <div class="elapsed-layer" id="elapsedLayer" hidden></div>
           <div class="now-line" id="nowLine" hidden><span class="now-time"></span></div>
           <div class="hover-add-line" id="hoverAddLine" hidden><span class="hv-lbl"></span></div>
-          <!-- 2026-08-02 (Linh: "a better expanding function where i can drag"): resize
-               handles live in their OWN top-level layer, not inside #hours (z-index 1) —
-               #eventsLayer (z-index 2) sits on top of #hours and would silently eat every
-               drag attempt across most of the row's width (a real bug caught before it
-               shipped: only the narrow gutter/label sliver would have been grabbable).
-               This layer sits above everything (z-index 7); pointer-events:none on the
-               layer itself so it doesn't block clicks elsewhere, auto only on each handle. -->
-          <div class="resize-handle-layer" id="resizeHandleLayer"></div>
         </div>
         </div>
         <!-- 2026-08-06 (Linh: "the fire icon, move that to below the calendar in the
@@ -8520,44 +8499,61 @@
     } catch (e) {}
   })();
 
-  // 2026-08-02 (code44, "expand the calendar hour block length... per-block... pushes
-  // later blocks down"): every position on the timeline used to be a flat
-  // (minutes-START_MIN)/60*H. Expanded blocks break that — everything AFTER an expanded
-  // block sits one extra EXPAND_BONUS lower. These two functions are the single source of
-  // truth for that math; every renderer (hours, zodiac bands, events, power hours, sky,
-  // sleep band, now-line) and the hover/drag Y<->minutes mapping all go through them
-  // instead of computing pixels by hand, so an expand can never desync one layer from
-  // another.
-  // 2026-08-02 update ("a better expanding function where i can drag"): EXPAND_BONUS is
-  // now just the DEFAULT/cap reference (one row's height) — the real per-block amount
-  // lives in state.expandedBlocks (a Map<hour,bonusPx>), since dragging makes it a
-  // continuous value instead of one fixed step.
-  const EXPAND_BONUS = () => HOUR_H();
-  const EXPAND_BONUS_MAX = () => HOUR_H() * 2.5;
+  // 2026-08-04 (Linh: "remove the manual hour-expand feature completely... hours size
+  // to their content automatically instead: empty hours stay compact, hours WITH events
+  // grow to fit them"): SUPERSEDES the drag-to-resize system this block used to carry
+  // (state.expandedBlocks, a user-controlled Map<hour,bonusPx>). Every position on the
+  // timeline is still (minutes-START_MIN)/60*H plus whatever's been "banked" by earlier
+  // hours running short — that part of the math is unchanged, and every renderer (hours,
+  // zodiac bands, events, power hours, sky, sleep band, now-line) still goes through
+  // topForMin/bonusBeforeHour instead of computing pixels by hand, same as before. The
+  // ONLY thing that changed is WHERE the per-hour adjustment comes from: instead of a
+  // user-dragged bonus that grows a row, it's now a computed SHRINK (state.compactHours,
+  // a Set<hour>, populated by computeCompactHours() near buildHours()) for hours with no
+  // events at all. compactH() is deliberately independent of HOUR_H() at the top of its
+  // range (min(22, HOUR_H())) so pinch-zooming the whole timeline can't push a compact
+  // row taller than a busy one.
+  const compactH = () => Math.min(22, HOUR_H());
   const isBlockStartHour = h => (h - ANIMAL_BAND_START) % 2 === 0;
-  // pixel bonus already "banked" strictly BEFORE this hour (i.e. from hours that have
-  // fully finished by the time this hour begins) — an hour being expanded doesn't affect
-  // its own internal layout, only what comes after it.
-  // 2026-08-02 (Linh: "allow for all hour blocks to be expandable"): SUPERSEDES the
-  // 2-hour-block granularity above — every single hour can now carry its own bonus, not
-  // just the zodiac-band start hours (isBlockStartHour is unrelated now: it still marks
-  // where an animal icon/boundary sits, but no longer gates what's resizable). +1 instead
-  // of +2 below, since a "block" is one hour wide now.
+  // pixel adjustment already "banked" strictly BEFORE this hour (i.e. from hours that
+  // have fully finished by the time this hour begins) — a compact hour doesn't affect
+  // its own internal layout, only what comes after it. Every hour is independently
+  // eligible (not just zodiac-band starts; isBlockStartHour is unrelated, it only marks
+  // where an animal icon/boundary sits).
   function bonusBeforeHour(hour) {
     let sum = 0;
-    state.expandedBlocks.forEach((bonus, bh) => { if (bh + 1 <= hour) sum += bonus; });
+    for (let h = START_HOUR; h + 1 <= hour && h < END_HOUR; h++) {
+      if (state.compactHours.has(h)) sum += compactH() - HOUR_H();
+    }
     return sum;
   }
-  function topForMin(mins) {
-    return (mins - START_MIN) / 60 * HOUR_H() + bonusBeforeHour(mins / 60);
+  // 2026-08-04 (found while verifying auto-fit click-to-add accuracy): #hours is
+  // position:relative (real flow child, pushed down by .timeline-wrap's own
+  // padding-top), while #eventsLayer/#sleepBand/#powerLayer/etc are all position:
+  // absolute;top:0 siblings of it -- CSS defines an absolutely-positioned box's
+  // containing block as the nearest positioned ancestor's PADDING edge, so top:0
+  // lands them at the padding box's outer edge, ignoring that same padding-top
+  // entirely. Result: #hours' rendered rows sit padding-top px lower than every
+  // topForMin()-driven layer, a pre-existing gap (the base rule has always set
+  // padding-top on .timeline-wrap) that a 48px hour made too small a fraction of a
+  // row to ever tip a click into the wrong 15-minute bucket -- a 22px compact row
+  // makes that same absolute gap ~3x more of the row, and it does. Reading the real
+  // computed padding-top here (rather than hardcoding today's 4px) keeps this correct
+  // automatically if that value ever changes again for unrelated reasons.
+  function layerTopOffset() {
+    const w = document.querySelector(".timeline-wrap");
+    return w ? parseFloat(getComputedStyle(w).paddingTop) || 0 : 0;
   }
-  // inverse of topForMin — walks the same block boundaries so a click/drag at pixel `y`
-  // maps back to the right minute even inside/after an expanded block
+  function topForMin(mins) {
+    return layerTopOffset() + (mins - START_MIN) / 60 * HOUR_H() + bonusBeforeHour(mins / 60);
+  }
+  // inverse of topForMin — walks the same row boundaries so a click/drag at pixel `y`
+  // maps back to the right minute even inside/after a compact hour
   function minForTop(y) {
-    const H = HOUR_H();
-    let mins = START_MIN, pxSoFar = 0;
+    const H = HOUR_H(), C = compactH();
+    let mins = START_MIN, pxSoFar = layerTopOffset();
     for (let h = START_HOUR; h < END_HOUR; h++) {
-      const rowH = state.expandedBlocks.has(h) ? H + state.expandedBlocks.get(h) : H;
+      const rowH = state.compactHours.has(h) ? C : H;
       if (y < pxSoFar + rowH || h === END_HOUR - 1) {
         return mins + (y - pxSoFar) / rowH * 60;
       }
@@ -10681,13 +10677,11 @@
                   miniCalAnchor: new Date(TODAY), spendAnchor: new Date(TODAY),
                   // 2026-08-06: Habits page (real routines + weight, Week/Month/Manage)
                   hbMode: "week", hbAnchor: new Date(TODAY),
-                  // 2026-08-02 (code44, "expand the calendar hour block length"): per-block
-                  // opt-in extra height, keyed by each block's start hour.
-                  // 2026-08-02 update (Linh: "a better expanding function where i can drag"):
-                  // SUPERSEDES the tap-arm-then-tap-a-block toggle (expandMode is gone) — a
-                  // block's bonus height is now a continuous value she drags to, not a fixed
-                  // on/off. Map<hour, bonusPx>, not a Set — 0/absent means normal height.
-                  expandedBlocks: new Map() };
+                  // 2026-08-04 (Linh: "remove manual hour-expand, hours auto-fit their
+                  // content"): SUPERSEDES the drag-to-resize Map this used to be — which
+                  // hours currently have no events, recomputed every renderDay() by
+                  // computeCompactHours() from the day's real item data, not user input.
+                  compactHours: new Set() };
 
   /* ============================================================
      DAY VIEW
@@ -11071,22 +11065,11 @@
     { k: "bad",   label: "2nd Worst",  time: "18:22" },
     { k: "money", label: "💰 28 Money", time: "20:22" },   // her nightly 28 personal hour — bills, payments, purchases
   ];
-  // 2026-08-06 (Linh: "preset the power hour blocks larger and sleep blocks smallest"):
-  // state.expandedBlocks already lets any hour opt into extra height by dragging (see
-  // its own comment near topForMin) -- this just seeds it with sensible defaults
-  // instead of leaving every hour at the plain baseline until she manually drags one.
-  // Power hours start already-larger; sleep hours get no entry at all, so they stay at
-  // the plain baseline -- the smallest a row can be, since the drag handler clamps to
-  // Math.max(0, ...) and only ever grows a row, never shrinks it below that (confirmed
-  // in the resize-handle code below). A later manual drag on any of these hours just
-  // overwrites its map entry like any other hour -- nothing here is special-cased past
-  // the initial value.
-  POWER_HOURS.forEach(p => {
-    const h = Math.floor(toMin(p.time) / 60);
-    if (h >= START_HOUR && h < END_HOUR && !state.expandedBlocks.has(h)) {
-      state.expandedBlocks.set(h, Math.round(HOUR_H() * 0.4));
-    }
-  });
+  // 2026-08-04: the "preset power hours larger" seeding that used to live here relied
+  // entirely on state.expandedBlocks, which no longer exists now hours size to their
+  // own event content instead of a manually-seeded/dragged bonus (see computeCompactHours
+  // near buildHours) -- a power hour with no real event in it now renders at the same
+  // compact height as any other quiet hour, same as Sleep/CD markers already do.
   // 2026-08-02 (book44, "numerology hovers for best/worst/money hour... very subtle
   // icon"): only Money has a real number behind it — her own "28 personal hour" note
   // above — so only Money gets the full focusFor() digit-meaning treatment (28 reduces
@@ -11152,53 +11135,49 @@
       : "";
   }
 
+  // 2026-08-04 (Linh: "hours size to their content automatically -- empty hours stay
+  // compact, hours WITH events grow to fit them" + her own "a row gets class 'has' if
+  // it holds events, else 'empty'" reference): decides which hours are compact, from
+  // the day's REAL item start/end times, not from anything pixel-based -- an hour is
+  // "empty"/compact only when nothing placed on the timeline overlaps it at all;
+  // anything that does (even a single 15-min task) keeps every hour it spans at the
+  // normal full HOUR_H(), which is already generously sized for one item's card. Must
+  // run before buildHours() and before every other topForMin() consumer for the day
+  // (sleep band, power hours, animal bands, sky, now-line) -- renderDay() computes
+  // `timed` and calls this first, THEN buildHours(), so nothing downstream ever reads
+  // a stale state.compactHours. Mirrors itemEndMin's own clamping so a genuinely
+  // multi-hour block (e.g. a 7:30-8:15 routine) keeps every hour it touches full-size,
+  // not just the one its start-time falls in.
+  function computeCompactHours(items) {
+    const busy = new Set();
+    items.forEach(e => {
+      const s = toMin(e.start);
+      if (s === null) return;
+      const eEnd = itemEndMin(e);
+      if (eEnd === null || eEnd <= START_MIN || s >= END_MIN) return;
+      const cs = Math.max(s, START_MIN), ce = Math.max(Math.min(eEnd, END_MIN), cs + 1);
+      for (let h = Math.floor(cs / 60); h <= Math.floor((ce - 1) / 60); h++) busy.add(h);
+    });
+    const compact = new Set();
+    for (let h = START_HOUR; h < END_HOUR; h++) if (!busy.has(h)) compact.add(h);
+    state.compactHours = compact;
+  }
   function buildHours() {
     let html = "";
     for (let h = START_HOUR; h < END_HOUR; h++) {
       // a true zodiac block boundary — where one animal's 2hr span ends and the next
-      // begins — vs. a mid-block hour, where the animal's own icon sits (see CSS .hour-row::after)
-      // — still used for the icon/hairline, NOT for gating what's resizable any more (see
-      // the "allow all hour blocks" note on bonus below).
+      // begins — vs. a mid-block hour, where the animal's own icon sits (see CSS
+      // .hour-row::after) — unrelated to compacting, purely the icon/hairline.
       const zb = isBlockStartHour(h);
-      // 2026-08-02 (code44, "expand the hour block length... per-block"): an expanded
-      // block's FIRST hour carries the extra height; topForMin()/minForTop() (declared
-      // near HOUR_H) keep every other layer in sync with this.
-      // 2026-08-02 update ("a better expanding function where i can drag"): bonus is now
-      // whatever she dragged it to (state.expandedBlocks is a Map<hour,bonusPx>), not a
-      // fixed on/off. The resize handle itself is NOT rendered here any more — see
-      // renderResizeHandles() below; it lives in its own top-level layer, not inside
-      // #hours, because #eventsLayer sits above #hours (z-index 2 vs 1) and would have
-      // silently swallowed drags across most of a handle's width if it stayed here.
-      // 2026-08-02 update (Linh: "allow for all hour blocks to be expandable"):
-      // SUPERSEDES the `zb ? ... : 0` gate — every hour can carry its own bonus now, not
-      // just the zodiac-band start hours. data-hour is the new resize-target lookup (used
-      // by the drag handler below); data-zb/data-block-h stay as they were, still tied to
-      // the zodiac icon/boundary, unrelated to resizing now.
-      const bonus = state.expandedBlocks.get(h) || 0;
-      const expanded = bonus > 0;
-      const style = expanded ? ` style="height:${(HOUR_H() + bonus).toFixed(0)}px"` : "";
-      html += `<div class="hour-row" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${expanded ? ' data-expanded="true"' : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
+      // 2026-08-04: replaces the old manual-drag bonus entirely — compact/full is a
+      // plain lookup against the Set computeCompactHours() just built, no dragging,
+      // no per-hour user state at all. "has"/"empty" per her own reference wording.
+      const compact = state.compactHours.has(h);
+      const style = compact ? ` style="height:${compactH().toFixed(0)}px"` : "";
+      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
     }
     html += `<div class="hour-row" style="height:0"><span class="hour-label">${hourLabel(END_HOUR)}</span></div>`;
-    const hours = document.getElementById("hours");
-    hours.innerHTML = html;
-    renderResizeHandles();
-  }
-  // one handle per HOUR, positioned at the hour's bottom edge via the same topForMin()
-  // math every other layer uses — lives in #resizeHandleLayer, a dedicated top-level
-  // layer above #eventsLayer (see the HTML comment by that div for why).
-  // 2026-08-02 (Linh: "allow for all hour blocks to be expandable"): SUPERSEDES the
-  // every-OTHER-hour (2-hour zodiac block) loop below — steps by 1 now, and the boundary
-  // moves from (h+2) to (h+1) throughout, everywhere this same math is duplicated (the
-  // live-drag reposition loop in the pointermove handler further down).
-  function renderResizeHandles() {
-    let html = "";
-    for (let h = START_HOUR; h < END_HOUR; h++) {
-      const y = topForMin((h + 1) * 60);
-      const expanded = (state.expandedBlocks.get(h) || 0) > 0;
-      html += `<div class="block-resize-handle" data-resize-h="${h}"${expanded ? ' data-expanded="true"' : ""} style="top:${y.toFixed(0)}px" title="Drag to resize this hour"></div>`;
-    }
-    document.getElementById("resizeHandleLayer").innerHTML = html;
+    document.getElementById("hours").innerHTML = html;
   }
 
   // 2026-08-04 (Linh: "Pilates shows as a thin sliver instead of a 7:30-8:15
@@ -13151,11 +13130,35 @@
   let tlScrollInit = false;
   function renderDay() {
     const d = state.anchor, k = keyOf(d);
+    // 2026-08-04: moved up from further below (where `timed` used to live right before
+    // renderTimeline(timed) consumed it) — computeCompactHours() needs the day's real
+    // item list BEFORE buildHours() runs, since buildHours() is what actually reads
+    // state.compactHours to size each row. Every other layer between here and
+    // renderTimeline() (sleep band, power hours, animal bands, sky) also depends on
+    // topForMin(), so compact hours have to be settled before ANY of them render, not
+    // just before the timeline items themselves.
+    const dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
+    // all-day PERSONAL/FAMILY items surface in "Also today" too — their old sidebar
+    // boxes are gone, and a written-in task must never be invisible on its day.
+    // Generated daily routines stay with their own pages so the box doesn't flood —
+    // EXCEPT routines from the Routines page (fromRoutine), which now have their own
+    // calendar on/off switch there (Linh 2026-07-27): if she's left it on, she wants
+    // to see it, timed or not — that's what "on the calendar" means to her, and hiding
+    // it silently here is exactly what made an added routine look like it "did not add".
+    const allDay = dayEvents.filter(e =>
+      (e.allDay || !e.start) &&
+      (e.track === "personal" || e.track === "family" ? (!e.generated || e.fromRoutine) : true));
+    // anything with a real time goes on the calendar, whatever its life-area —
+    // personal/family timed items also stay in their sidebar lists for ticking off
+    const timed = dayEvents.filter(e => !e.allDay && e.start);
+    // 2026-08-04 (Linh: "hours size to their content automatically"): see this
+    // function's own comment near buildHours() for exactly what "compact" means here.
+    computeCompactHours(timed);
     // 2026-08-02 (code44 per-block expand): buildHours() used to be a one-time boot call
-    // (the hour ruler never changed shape before). Now that a block's own height can
-    // change, it has to rebuild every renderDay() too, or the row backdrop stays stuck at
-    // its old heights while events/bands/etc (which already read state.expandedBlocks
-    // directly) render in their new, correct positions.
+    // (the hour ruler never changed shape before). Now that a row's own height depends
+    // on content, it has to rebuild every renderDay() too, or the row backdrop stays
+    // stuck at its old heights while events/bands/etc (which already read
+    // state.compactHours directly) render in their new, correct positions.
     buildHours();
     // 2026-08-02: scroll the timeline to 6am once, the first time the Day page renders —
     // not on every renderDay() call (adding an event, ticking a task, etc. all call this
@@ -13232,20 +13235,8 @@
     // -- removed along with it. CD now shows via the numerology-bar chip and the 5am
     // marker only (see numGrpCd below, and renderSleepBand's cd-pill).
 
-    const dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
-    // all-day PERSONAL/FAMILY items surface in "Also today" too — their old sidebar
-    // boxes are gone, and a written-in task must never be invisible on its day.
-    // Generated daily routines stay with their own pages so the box doesn't flood —
-    // EXCEPT routines from the Routines page (fromRoutine), which now have their own
-    // calendar on/off switch there (Linh 2026-07-27): if she's left it on, she wants
-    // to see it, timed or not — that's what "on the calendar" means to her, and hiding
-    // it silently here is exactly what made an added routine look like it "did not add".
-    const allDay = dayEvents.filter(e =>
-      (e.allDay || !e.start) &&
-      (e.track === "personal" || e.track === "family" ? (!e.generated || e.fromRoutine) : true));
-    // anything with a real time goes on the calendar, whatever its life-area —
-    // personal/family timed items also stay in their sidebar lists for ticking off
-    const timed = dayEvents.filter(e => !e.allDay && e.start);
+    // dayEvents/allDay/timed now computed at the TOP of renderDay(), before buildHours()
+    // — see the comment there for why (computeCompactHours() needs `timed` first).
 
     document.getElementById("alsoToday").innerHTML = allDay.length
       ? `<div class="also-today"><div class="note-title">To-Do's</div>${allDay.map(e => {
@@ -21165,115 +21156,38 @@
     e.stopPropagation();
     document.getElementById("patientsNudge").classList.toggle("open");
   });
-  // 2026-08-02 (Linh: "a better expanding function where i can drag" + a real bug she
-  // found: tapping a block to expand it ALSO opened the add-event form). SUPERSEDES the
-  // arm-button/tap-toggle pair above — every 2-hour block gets a resize handle on the
-  // boundary below it (rendered by renderResizeHandles into #resizeHandleLayer, a
-  // top-level layer — NOT inside #hours, see that div's HTML comment for why) that she
-  // drags to grow/shrink the block's height, a continuous value in state.expandedBlocks
-  // (Map<hour,bonusPx>), not a fixed on/off.
-  //
-  // The bug's root cause: BOTH #hours (~line 17190 below) and #eventsLayer (~line 17235)
-  // carry their own unconditional click listener that opens the add-event form at
-  // whatever time was clicked (#hours covers the label gutter #eventsLayer doesn't reach;
-  // #eventsLayer covers the rest). With the old tap-toggle, tapping a block to expand it
-  // was ALSO a click landing on one of those, so both fired off the same gesture. Fix has
-  // two parts: (1) the handle lives in its own layer now, so a plain click on it never
-  // reaches either of those listeners via bubbling — they're not ancestors of it; (2) for
-  // the split-second AFTER a real drag ends, the pointer can land back over #hours or
-  // #eventsLayer, so a capture-phase guard on their shared ancestor (.timeline-wrap)
-  // swallows that one trailing click via a `justResized` flag, cleared on the next tick.
-  (function () {
-    const handleLayer = document.getElementById("resizeHandleLayer");
-    const wrap = document.querySelector(".timeline-wrap");
-    let dragH = null, dragHandle = null, dragStartY = 0, dragStartTop = 0, dragStartBonus = 0, dragMoved = false, justResized = false;
-    handleLayer.addEventListener("pointerdown", e => {
-      const handle = e.target.closest(".block-resize-handle");
-      if (!handle) return;
-      e.preventDefault();
-      dragH = parseInt(handle.dataset.resizeH, 10);
-      dragHandle = handle;
-      dragStartY = e.clientY;
-      dragStartTop = parseFloat(handle.style.top) || 0;
-      dragStartBonus = state.expandedBlocks.get(dragH) || 0;
-      dragMoved = false;
-      handle.setPointerCapture(e.pointerId);
-      document.body.classList.add("resizing-block");
-    });
-    handleLayer.addEventListener("pointermove", e => {
-      if (dragH == null) return;
-      const dy = e.clientY - dragStartY;
-      if (Math.abs(dy) > 2) dragMoved = true;
-      const bonus = Math.max(0, Math.min(EXPAND_BONUS_MAX(), dragStartBonus + dy));
-      // live preview: resize the row now; #hours reflows natively so every hour-row/label
-      // AFTER it shifts down for free. The full renderDay() (events, animal bands, sky,
-      // power hours) still waits for release, so a drag stays smooth.
-      // 2026-08-02 (Linh: "allow for all hour blocks to be expandable"): data-hour, not
-      // data-block-h — every row can be the drag target now, not just zodiac-band starts.
-      const row = document.querySelector(`#hours .hour-row[data-hour="${dragH}"]`);
-      if (row) row.style.height = `${HOUR_H() + bonus}px`;
-      // 2026-08-02 (Linh: "the line calibration is not good" / "why does expanding ...
-      // hover here? its too low"): #resizeHandleLayer's handles are absolutely positioned
-      // from a one-time render, so they DON'T get the free reflow #hours gets — every
-      // handle after the one being dragged used to stay frozen at its pre-drag position
-      // for the whole drag, visibly detached from the row/label it's supposed to mark.
-      // Fix: commit the live bonus so topForMin/bonusBeforeHour see the true in-progress
-      // value, then reposition every handle (including this one, replacing the old
-      // dragStartTop-relative math) from that. style.top only, never innerHTML here —
-      // that would destroy this exact handle element and release its pointer capture,
-      // breaking the drag mid-gesture.
-      state.expandedBlocks.set(dragH, bonus);
-      document.querySelectorAll(".block-resize-handle").forEach(h => {
-        const hh = parseInt(h.dataset.resizeH, 10);
-        // +1, not +2: every hour is its own block now (allow for all hour blocks to be
-        // expandable) — matches renderResizeHandles()'s own math above.
-        h.style.top = `${topForMin((hh + 1) * 60).toFixed(0)}px`;
-      });
-    });
-    function endDrag(e) {
-      if (dragH == null) return;
-      const dy = e.clientY - dragStartY;
-      const bonus = Math.round(Math.max(0, Math.min(EXPAND_BONUS_MAX(), dragStartBonus + dy)));
-      if (bonus > 0) state.expandedBlocks.set(dragH, bonus); else state.expandedBlocks.delete(dragH);
-      dragH = null; dragHandle = null;
-      document.body.classList.remove("resizing-block");
-      if (dragMoved) {
-        justResized = true;
-        renderDay();
-        setTimeout(() => { justResized = false; }, 0);
-      }
-      dragMoved = false;
-    }
-    handleLayer.addEventListener("pointerup", endDrag);
-    handleLayer.addEventListener("pointercancel", endDrag);
-    // capture phase on the shared ancestor of #hours and #eventsLayer, runs before either
-    // of their click-to-add-event listeners — swallows the one trailing click a real drag
-    // leaves behind on release, wherever it happens to land.
-    wrap.addEventListener("click", e => { if (justResized) e.stopPropagation(); }, true);
-  })();
+  // 2026-08-04 (Linh: "remove the manual hour-expand feature completely -- no tap,
+  // double-tap, arrow, or any expand gesture... swiping/scrolling the calendar must
+  // NEVER expand an hour"): the entire drag-to-resize handler that used to live here
+  // (pointerdown/move/up on #resizeHandleLayer, state.expandedBlocks, the justResized
+  // click-swallow guard) is deleted outright. Hours now size themselves automatically
+  // from real event content (computeCompactHours(), called from renderDay() before
+  // buildHours()) — there is no more per-hour drag state for a swipe to accidentally
+  // trigger, which was the root of the "accidental expand on swipe" bug she also
+  // flagged: #resizeHandleLayer no longer exists, so a scroll/swipe gesture has
+  // nothing resize-shaped left to land on.
   /* 2026-08-02 (Linh: "allow for pinching screen to expand hour blocks both mobile and
      desktop, i have a touch screen"): two-finger pinch over the timeline scales
      --hour-h, the single var almost the whole timeline is already wired through (see
      HOUR_H() above). Same trade-off as the drag-resize handler right above: during the
      live gesture only cheap style tweaks happen (row heights via the CSS var — free;
-     resize-handle tops; scrollTop, to keep the pinched time under her fingers instead of
-     the view drifting) — event/sky/power-hour blocks stay visually frozen mid-gesture
-     and only snap to their correct new positions via the real renderDay() on release,
-     exactly like a drag-resize does. */
+     scrollTop, to keep the pinched time under her fingers instead of the view
+     drifting) — event/sky/power-hour blocks stay visually frozen mid-gesture and only
+     snap to their correct new positions via the real renderDay() on release. */
   (function () {
     const HOUR_H_KEY = "daybook-hour-h", MIN_H = 24, MAX_H = 160;
     const scroller = document.getElementById("timelineScroll");
     let startDist = 0, startH = 0, anchorMin = 0, pinching = false;
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-    const repositionHandles = () => {
-      document.querySelectorAll(".block-resize-handle").forEach(h => {
-        const hh = parseInt(h.dataset.resizeH, 10);
-        h.style.top = `${topForMin((hh + 1) * 60).toFixed(0)}px`;
-      });
+    // 2026-08-04: compactH() is deliberately NOT proportional to HOUR_H() (see its own
+    // comment near topForMin) -- a compact row's live height during the gesture has to
+    // be recomputed from the CURRENT HOUR_H() every frame, same as the real one
+    // buildHours() would produce, or empty hours would drift out of sync with busy ones
+    // mid-pinch instead of just snapping to the right size on release.
+    const repositionRows = () => {
       document.querySelectorAll("#hours .hour-row[data-hour]").forEach(row => {
         const hh = parseInt(row.dataset.hour, 10);
-        const bonus = state.expandedBlocks.get(hh) || 0;
-        if (bonus > 0) row.style.height = `${HOUR_H() + bonus}px`;
+        row.style.height = state.compactHours.has(hh) ? `${compactH().toFixed(0)}px` : "";
       });
     };
     scroller.addEventListener("touchstart", e => {
@@ -21291,7 +21205,7 @@
       const scale = dist(e.touches[0], e.touches[1]) / startDist;
       const newH = Math.max(MIN_H, Math.min(MAX_H, startH * scale));
       document.documentElement.style.setProperty("--hour-h", `${newH.toFixed(1)}px`);
-      repositionHandles();
+      repositionRows();
       const rect = scroller.getBoundingClientRect();
       const midYViewport = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
       scroller.scrollTop = topForMin(anchorMin) - midYViewport;
@@ -21500,7 +21414,7 @@
       el.addEventListener("pointerdown", e => {
         lastPointerType = e.pointerType;
         if (e.pointerType === "mouse") return;
-        if (e.target.closest(".tl-item, .block-resize-handle")) { down = null; return; }
+        if (e.target.closest(".tl-item")) { down = null; return; }
         down = { x: e.clientX, y: e.clientY, t: Date.now(), scrollTop: scrollerEl ? scrollerEl.scrollTop : 0 };
       });
       el.addEventListener("pointerup", e => {
