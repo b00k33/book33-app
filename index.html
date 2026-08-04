@@ -72,6 +72,8 @@
     --track-text: #ffffff;
     --cat-personal-fitness: #3DDC84;   /* Fitness subcategory — bright green, distinct from Work's dark green */
     --cat-personal-beauty: #DB4B4B;    /* Beauty subcategory — red */
+    --fast: var(--cat-personal-fitness);   /* 2026-08-06 (Linh: "fasting always tracks fitness"):
+      points at the Fitness token rather than its own hex, so the two can never drift apart. */
     /* 2026-07-31 ("i like the mockup, replace what i have with that design"): the Day
        page's cosmic/numerology gold had drifted to its own ad hoc hex (chosen only for
        AA contrast on a gold ground) that never actually matched the mockup's own brass
@@ -1323,6 +1325,18 @@
     width: 7px; height: 7px; border-radius: 50%; background: var(--cosmic-gold, #D9A93F);
   }
   .now-line .now-time { display: none; }
+
+  /* 2026-08-06 (Linh, fasting indicator 2a): slim line down the RIGHT edge of the
+     day column, top/height set per-render from topForMin() (renderFastLine()) --
+     covers the fast's [start, goalEnd] span clamped to the visible day/grid, same
+     positioning approach as .now-line above just vertical instead of horizontal.
+     Colour is --fast (points at the Fitness token, never its own hex -- see :root). */
+  .fast-line { position: absolute; right: 0; width: 3px; border-radius: 2px; z-index: 5; pointer-events: none;
+    background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent); }
+  .fast-line::after {
+    content: "FASTING"; position: absolute; right: 6px; top: 6px; writing-mode: vertical-rl;
+    font-size: 9px; font-weight: 600; letter-spacing: 0.08em; color: var(--fast); opacity: 0.5;
+  }
 
   /* --- Daily Focus (GG33 numerology day-energy) --- */
   /* Daily Focus — under the date, beside the mini-calendar. Year/month THEME lines
@@ -4341,6 +4355,16 @@
   .sb-fill { height: 100%; border-radius: 999px; background: var(--margin-rule); box-shadow: 0 0 6px color-mix(in oklab, var(--margin-rule) 60%, transparent); }
   .sb-amt { flex: none; width: 84px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
   #spendList .wrp-del { margin-left: 8px; }
+
+  /* 2026-08-06 (Linh, fasting indicator 2b): reuses .spend-bar-row/.sb-label/.sb-track/
+     .sb-fill/.sb-amt as-is (the app's one label-bar-value component) for the Day page's
+     Fasting status row, just overriding the fill colour to --fast. */
+  .fast-status { display: flex; flex-direction: column; gap: 4px; margin: 0 0 16px; }
+  .fast-bar-row .sb-fill { background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent); }
+  .fast-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--fast);
+    margin-right: 6px; vertical-align: middle; box-shadow: 0 0 4px color-mix(in oklab, var(--fast) 70%, transparent); }
+  .fast-bar-sub { font-size: 11.5px; color: var(--ink-faint); }
+  .fast-bar-row.goal-met .sb-amt { color: var(--fast); }
 
   /* ============ BEAUTY pages ============ */
   /* Fasting/Weight/Cycle are each a compact, narrow-by-design widget (borrowed from
@@ -7584,6 +7608,17 @@
         <label>Days of week <span class="field-hint">tap one or more</span></label>
         <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
       </div>
+      <div class="field full" id="rtnWeekIntervalField">
+        <label for="rtnWeekInterval">Repeat every <span class="field-hint">1 = every week</span></label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:70px">
+          <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+        </div>
+      </div>
+      <div class="field full" id="rtnWeekAnchorField" hidden>
+        <label for="rtnWeekAnchorDate">Starting the week of <span class="field-hint">this week counts as week 1 of the cycle</span></label>
+        <input type="date" id="rtnWeekAnchorDate">
+      </div>
       <div class="field full">
         <label>Also runs on <span class="field-hint">extra one-off dates on top of the pattern</span></label>
         <div id="rtnExtraList" class="rtn-date-list"></div>
@@ -8052,6 +8087,17 @@
                (h2/rule already hidden there too), so it collapses outright (CSS,
                .day-main > .section-head { display:none }). -->
         </div>
+        <!-- 2026-08-06 (Linh, fasting indicator 2b): "above the grid" -- directly above
+             .timeline-scroll. renderFastBar() shows/hides + fills this; only rendered
+             while HEALTH.activeFast is truthy. -->
+        <div class="fast-status" id="fastStatus" hidden>
+          <div class="spend-bar-row fast-bar-row" id="fastBarRow">
+            <span class="sb-label"><span class="fast-dot"></span>Fasting</span>
+            <div class="sb-track"><div class="sb-fill" id="fastBarFill"></div></div>
+            <span class="sb-amt" id="fastBarAmt"></span>
+          </div>
+          <div class="fast-bar-sub" id="fastBarSub"></div>
+        </div>
         <div class="timeline-scroll" id="timelineScroll">
         <div class="timeline-wrap">
           <div class="sky-layer" id="skyLayer"></div>
@@ -8064,6 +8110,9 @@
           <div class="power-label-layer" id="powerLabelLayer"></div>
           <div class="elapsed-layer" id="elapsedLayer" hidden></div>
           <div class="now-line" id="nowLine" hidden><span class="now-time"></span></div>
+          <!-- 2026-08-06 (Linh, fasting indicator 2a): renderFastLine() positions top/height
+               via topForMin(), same approach as .now-line just vertical -- see CSS .fast-line. -->
+          <div class="fast-line" id="fastLine" hidden></div>
           <div class="hover-add-line" id="hoverAddLine" hidden><span class="hv-lbl"></span></div>
         </div>
         </div>
@@ -9119,7 +9168,17 @@
     if (t.freq === "daily") return true;
     if (t.freq === "yearly") return t.month === date.getMonth() + 1 && t.day === date.getDate();
     if (t.freq === "monthly") return t.day === date.getDate();
-    if (t.freq === "weekly") return Array.isArray(t.weekdays) ? t.weekdays.includes(dowIndex(date)) : dowIndex(date) === t.weekday;
+    if (t.freq === "weekly") {
+      const onDay = Array.isArray(t.weekdays) ? t.weekdays.includes(dowIndex(date)) : dowIndex(date) === t.weekday;
+      if (!onDay) return false;
+      // "every N weeks" cycle (Linh: "every 4th week I do 4 days of pilates") — the
+      // weekAnchor's own week counts as week 1, so weeksSince 0, N, 2N... are "on".
+      if (t.weekInterval > 1 && t.weekAnchor) {
+        const weeksSince = Math.round(dayDiff(startOfWeek(date), startOfWeek(parseKey(t.weekAnchor))) / 7);
+        return weeksSince >= 0 && weeksSince % t.weekInterval === 0;
+      }
+      return true;
+    }
     if (t.freq === "once") return t.date === keyOf(date);
     if (t.freq === "interval") {
       if (!t.anchor || !t.intervalDays) return false;
@@ -9143,7 +9202,9 @@
     if (t.freq === "count") return `${t.weeklyTarget || 5}×/week`;
     if (t.freq === "weekly" && Array.isArray(t.weekdays)) {
       if (!t.weekdays.length) return "Weekly · no days set";
-      return "Weekly · " + t.weekdays.slice().sort((a, b) => a - b).map(i => WD_FULL[i].slice(0, 3)).join(", ");
+      const dayList = t.weekdays.slice().sort((a, b) => a - b).map(i => WD_FULL[i].slice(0, 3)).join(", ");
+      const prefix = t.weekInterval > 1 ? `Every ${t.weekInterval} weeks · ` : "Weekly · ";
+      return prefix + dayList;
     }
     return ROUTINE_FREQ_LABEL[t.freq] || t.freq;
   }
@@ -9164,9 +9225,11 @@
     if (t.freq === "weekly") {
       const days = Array.isArray(t.weekdays) ? t.weekdays : (t.weekday != null ? [t.weekday] : []);
       if (!days.length) return null;
-      let best = null;
-      days.forEach(wd => { const d = addDays(from, (wd - dowIndex(from) + 7) % 7); if (!best || d < best) best = d; });
-      return best;
+      // scan forward through the full cycle length so an "every N weeks" pattern's
+      // off-weeks are correctly skipped, not just the nearest matching weekday
+      const horizon = Math.max(7, (t.weekInterval || 1) * 7);
+      for (let i = 0; i < horizon; i++) { const d = addDays(from, i); if (routineOccursOn(t, d)) return d; }
+      return null;
     }
     if (t.freq === "numMoney") { for (let i = 0; i < 400; i++) { const d = addDays(from, i); if (isMoneyDay(d)) return d; } return null; }
     if (t.freq === "interval") {
@@ -10963,6 +11026,32 @@
     nowLine.hidden = false;
     nowLine.style.top = `${y}px`;
     nowLine.querySelector(".now-time").textContent = fmtTime(`${pad(now.getHours())}:${pad(now.getMinutes())}`);
+  }
+
+  // 2026-08-06 (Linh, fasting indicator 2a): slim vertical line on the day column's right
+  // edge, spanning [fast start, start+goalHours] clamped to this day's own midnight-to-
+  // midnight bounds AND the visible grid's START_MIN/END_MIN -- same topForMin() the
+  // now-line above uses, just for a vertical span instead of one horizontal position.
+  // Unlike renderElapsedFade this is a fixed span that never depends on "now", so it only
+  // needs to run per-render (renderDay()/renderFastEverywhere()), no ticking.
+  function renderFastLine() {
+    const el = document.getElementById("fastLine");
+    if (!HEALTH.activeFast) { el.hidden = true; return; }
+    const goalH = HEALTH.fastGoalHours || 16;
+    const start = new Date(HEALTH.activeFast);
+    const goalEnd = new Date(start.getTime() + goalH * 3600000);
+    const dayStart = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), state.anchor.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const rangeStart = start < dayStart ? dayStart : start;
+    const rangeEnd = goalEnd > dayEnd ? dayEnd : goalEnd;
+    if (rangeEnd <= dayStart || rangeStart >= dayEnd || rangeStart >= rangeEnd) { el.hidden = true; return; }
+    const startMin = Math.max(START_MIN, Math.min(END_MIN, (rangeStart - dayStart) / 60000));
+    const endMin = Math.max(START_MIN, Math.min(END_MIN, (rangeEnd - dayStart) / 60000));
+    if (endMin <= startMin) { el.hidden = true; return; }
+    const top = topForMin(startMin), bottom = topForMin(endMin);
+    el.hidden = false;
+    el.style.top = `${top.toFixed(1)}px`;
+    el.style.height = `${(bottom - top).toFixed(1)}px`;
   }
 
   /* the right-hand rail follows the time of day — attention cards and the task
@@ -13267,6 +13356,8 @@
     renderBirthdayWidget();
     renderPowerHours();
     renderElapsedFade();
+    renderFastLine();
+    renderFastBar();
     orderDayRail();
     renderTimeline(timed);
     renderFastEverywhere();
@@ -15127,6 +15218,35 @@
     const today = document.getElementById("todayFastCard");
     if (today) today.innerHTML = fastCardHTML({ showGoalInput: false, showUdNote: false });
     renderDayNotes();
+    // 2026-08-06 (fasting indicator 2a/2b): both are safe to call from any page -- #fastLine/
+    // #fastStatus are static markup, and topForMin() only reads state/constants + a
+    // computed-style lookup that works even while the Day page isn't the visible one.
+    renderFastLine();
+    renderFastBar();
+  }
+  // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
+  // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
+  // app's one label-bar-value component, see #fastStatus) rather than a new class.
+  // Refreshed on every fasting-state change via renderFastEverywhere() above and ticks
+  // live via tickFastDisplays()'s existing 1s timer below, same as every other fasting
+  // display in the app -- no separate timer.
+  function renderFastBar() {
+    const box = document.getElementById("fastStatus");
+    if (!box) return;
+    if (!HEALTH.activeFast) { box.hidden = true; return; }
+    box.hidden = false;
+    const goalH = HEALTH.fastGoalHours || 16;
+    const goalMs = goalH * 3600000;
+    const start = new Date(HEALTH.activeFast);
+    const goalEnd = new Date(start.getTime() + goalMs);
+    const elapsedMs = Math.max(0, Date.now() - start.getTime());
+    const over = elapsedMs >= goalMs;
+    document.getElementById("fastBarFill").style.width = `${(Math.min(elapsedMs / goalMs, 1) * 100).toFixed(1)}%`;
+    document.getElementById("fastBarAmt").textContent = `${fmtHrs(elapsedMs)} / ${goalH}h${over ? " ✓" : ""}`;
+    document.getElementById("fastBarRow").classList.toggle("goal-met", over);
+    document.getElementById("fastBarSub").textContent = over
+      ? `goal reached · ${fmtHrs(elapsedMs - goalMs)} over`
+      : `on track · breaks in ${fmtHrs(goalMs - elapsedMs)} at ${fmtTime(`${goalEnd.getHours()}:${goalEnd.getMinutes()}`)}`;
   }
   function tickFastDisplays() {
     if (!HEALTH.activeFast) return;
@@ -15144,6 +15264,7 @@
       el.dataset.passed = pct >= parseFloat(el.dataset.fastTick);
     });
     document.querySelectorAll("[data-fast-encourage]").forEach(el => el.textContent = fastEncouragement(pct, over));
+    renderFastBar();
   }
 
   /* ---- fasting summary graph: hours fasted per day, past week or month.
@@ -17077,7 +17198,7 @@
           const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
           const durMin = subs.length ? roundUp5(subs.reduce((a, s) => a + (s.min || 0), 0))
             : (t.start && t.end && toMin(t.end) > toMin(t.start) ? toMin(t.end) - toMin(t.start) : 0);
-          metaHtml = `${dotsHtml}${timePart ? `<span class="rtn-meta-time">${esc(timePart)}</span>` : ""}${durMin ? `<span class="rtn-dur-pill">${durMin}m</span>` : ""}`;
+          metaHtml = `${dotsHtml}${timePart ? `<span class="rtn-meta-time">${esc(timePart)}</span>` : ""}${t.weekInterval > 1 ? `<span class="rtn-dur-pill">/${t.weekInterval}wk</span>` : ""}${durMin ? `<span class="rtn-dur-pill">${durMin}m</span>` : ""}`;
         }
       } else {
         const freqDetail = t.freq === "yearly" ? ` (${MON_SHORT[t.month - 1]} ${t.day})`
@@ -17641,7 +17762,11 @@
 
   document.getElementById("prevDay").addEventListener("click", () => { state.anchor = addDays(state.anchor, -1); render(); });
   document.getElementById("nextDay").addEventListener("click", () => { state.anchor = addDays(state.anchor, 1); render(); });
-  document.getElementById("todayPill").addEventListener("click", () => { state.anchor = new Date(TODAY); render(); });
+  // 2026-08-06 (Linh: "Today should jump to the Day page from any tab"): same
+  // state.anchor + state.view = "day" + render() triple every "open a single day"
+  // call site already uses (month/week grid taps, quick-add go-to-day chips, etc.) --
+  // no-op if already on Day, since state.view is already "day" there.
+  document.getElementById("todayPill").addEventListener("click", () => { state.anchor = new Date(TODAY); state.view = "day"; render(); });
 
   document.getElementById("prevMonth").addEventListener("click", () => {
     state.monthAnchor = new Date(state.monthAnchor.getFullYear(), state.monthAnchor.getMonth() - 1, 1); render();
@@ -18815,10 +18940,18 @@
     document.getElementById("rtnYearlyField").hidden = rtnFreq !== "yearly";
     document.getElementById("rtnMonthlyField").hidden = rtnFreq !== "monthly";
     document.getElementById("rtnWeeklyField").hidden = rtnFreq !== "weekly";
+    document.getElementById("rtnWeekIntervalField").hidden = rtnFreq !== "weekly";
     document.getElementById("rtnIntervalField").hidden = rtnFreq !== "interval";
     document.getElementById("rtnAnchorField").hidden = rtnFreq !== "interval";
     document.querySelectorAll("#rtnFreqPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.freq === rtnFreq)));
+    syncRtnWeekAnchorVisibility();
+  }
+  // the "starting the week of" anchor only matters (and only shows) once she's actually
+  // repeating less than every week — 1 week is the common case and needs no anchor at all
+  function syncRtnWeekAnchorVisibility() {
+    const n = parseInt(document.getElementById("rtnWeekInterval").value, 10) || 1;
+    document.getElementById("rtnWeekAnchorField").hidden = !(rtnFreq === "weekly" && n > 1);
   }
   function syncRtnTrackButtons() {
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
@@ -18865,6 +18998,8 @@
       else if (task.freq === "weekly") {
         rtnWeekdays = Array.isArray(task.weekdays) ? task.weekdays.slice() : (task.weekday != null ? [task.weekday] : []);
         syncRtnWeekdayButtons();
+        document.getElementById("rtnWeekInterval").value = task.weekInterval || 1;
+        document.getElementById("rtnWeekAnchorDate").value = task.weekAnchor || keyOf(startOfWeek(TODAY));
       } else if (task.freq === "interval") {
         document.getElementById("rtnIntervalDays").value = task.intervalDays || 2;
         document.getElementById("rtnAnchorDate").value = task.anchor || "";
@@ -18923,6 +19058,12 @@
     else rtnWeekdays = [...rtnWeekdays, wd];
     syncRtnWeekdayButtons();
   });
+  document.getElementById("rtnWeekInterval").addEventListener("input", () => {
+    syncRtnWeekAnchorVisibility();
+    const anchorField = document.getElementById("rtnWeekAnchorField");
+    const anchorInput = document.getElementById("rtnWeekAnchorDate");
+    if (!anchorField.hidden && !anchorInput.value) anchorInput.value = keyOf(startOfWeek(TODAY));
+  });
   rtnForm.addEventListener("submit", e => {
     e.preventDefault();
     const title = document.getElementById("rtnTitle").value.trim();
@@ -18963,6 +19104,12 @@
       task.day = dv;
     } else if (rtnFreq === "weekly") {
       task.weekdays = rtnWeekdays.slice().sort((a, b) => a - b);
+      const wi = parseInt(document.getElementById("rtnWeekInterval").value, 10) || 1;
+      if (wi > 1) {
+        const wa = document.getElementById("rtnWeekAnchorDate").value;
+        if (!wa) { document.getElementById("rtnWeekAnchorDate").focus(); return; }
+        task.weekInterval = wi; task.weekAnchor = wa;
+      }
     } else if (rtnFreq === "interval") {
       const n = parseInt(document.getElementById("rtnIntervalDays").value, 10);
       if (!n || n < 1) { document.getElementById("rtnIntervalDays").focus(); return; }
