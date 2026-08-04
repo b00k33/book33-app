@@ -1093,7 +1093,19 @@
     padding: 13px 17px; margin: 0 auto 26px; max-width: 470px;
   }
   .note-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); margin-bottom: 7px; }
-  .note-item { padding: 4px 0; font-family: var(--font-body); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  /* 2026-08-06 (phone to-do drag): selection/callout killed for the same reason as
+     .tl-item — a long-press must stay a long-press, not start iOS text selection. */
+  .note-item { padding: 4px 0; font-family: var(--font-body); font-size: 14px; display: flex; align-items: center; gap: 8px;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  /* the floating pill that follows the finger while a to-do is being carried to the
+     timeline — same flat card language as the blocks it lands between */
+  .todo-drag-ghost {
+    position: fixed; z-index: 400; transform: translate(-50%, -130%); pointer-events: none;
+    background: var(--paper); color: var(--ink); border: 1px solid var(--margin-rule);
+    border-radius: 10px; padding: 6px 12px; font-family: var(--font-body); font-size: 13px; font-weight: 600;
+    box-shadow: 0 10px 28px -6px rgba(0,0,0,0.5); max-width: 70vw; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
   .note-item .loc { font-size: 11.5px; font-style: italic; color: var(--ink-soft); margin-left: 5px; }
   .note-item.done .note-text { opacity: 0.5; text-decoration: line-through; }
   .recur { font-size: 10px; color: var(--ink-faint); margin-left: 4px; }
@@ -23321,6 +23333,70 @@
     e.dataTransfer.setData("application/x-daybook-track", chip.dataset.dragTrack || "personal");
     e.dataTransfer.effectAllowed = "copy";
   });
+  // 2026-08-06 (Linh, on her phone: "it works for events but for regular wash - hair it
+  // doesnt"): the hair wash (and every other all-day to-do) lives in the "Also today"
+  // list, not on the timeline — and the list's schedule-by-drag above is NATIVE HTML5
+  // drag, which touch browsers simply never start. Touch equivalent: press-and-hold a
+  // to-do row (same 450ms/12px arm gate as block-dragging, so scrolling the list never
+  // triggers it), a floating ghost pill follows the finger, and dropping it on the
+  // timeline creates the same 30-min event at the drop slot the mouse path's drop
+  // handler creates. Mouse keeps the native-drag path above untouched.
+  (function () {
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 12;
+    const dayPage = document.getElementById("dayPage");
+    let timer = null, pressX = 0, pressY = 0, tdrag = null, ghost = null;
+    function cancelPress() { clearTimeout(timer); timer = null; }
+    function placeGhost(x, y) { if (ghost) { ghost.style.left = `${x}px`; ghost.style.top = `${y}px`; } }
+    dayPage.addEventListener("pointerdown", e => {
+      if (e.pointerType === "mouse") return;
+      const chip = e.target.closest("[data-drag-title]");
+      if (!chip || e.target.closest(".tick") || e.target.closest(".tl-edit") || e.target.closest(".tl-del")) return;
+      pressX = e.clientX; pressY = e.clientY;
+      const pid = e.pointerId;
+      timer = setTimeout(() => {
+        timer = null;
+        tdrag = { title: chip.dataset.dragTitle, track: chip.dataset.dragTrack || "personal" };
+        try { chip.setPointerCapture(pid); } catch (err) {}
+        ghost = document.createElement("div");
+        ghost.className = "todo-drag-ghost";
+        ghost.textContent = tdrag.title;
+        document.body.appendChild(ghost);
+        placeGhost(pressX, pressY);
+        document.body.classList.add("dragging-block");
+        if (navigator.vibrate) navigator.vibrate(10);
+      }, LONG_PRESS_MS);
+    });
+    // same scroll-steal guard as the block-drag fix: once armed, the browser must not
+    // claim the finger for native pan (touch-action is only read at gesture start)
+    dayPage.addEventListener("touchmove", e => { if (tdrag) e.preventDefault(); }, { passive: false });
+    dayPage.addEventListener("pointermove", e => {
+      if (timer && (Math.abs(e.clientX - pressX) > MOVE_CANCEL_PX || Math.abs(e.clientY - pressY) > MOVE_CANCEL_PX)) cancelPress();
+      if (!tdrag) return;
+      e.preventDefault();
+      placeGhost(e.clientX, e.clientY);
+      const r = eventsLayerEl.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (inside) eventsLayerEl.dataset.dragOver = "true"; else delete eventsLayerEl.dataset.dragOver;
+    }, { passive: false });
+    function endTodoDrag(e, commit) {
+      cancelPress();
+      if (!tdrag) return;
+      const d = tdrag; tdrag = null;
+      if (ghost) { ghost.remove(); ghost = null; }
+      delete eventsLayerEl.dataset.dragOver;
+      document.body.classList.remove("dragging-block");
+      suppressNextItemClick = true;
+      if (!commit) return;
+      const r = eventsLayerEl.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      let minutes = Math.round(minForTop(e.clientY - r.top) / 15) * 15;
+      minutes = Math.max(START_MIN, Math.min(END_MIN - 30, minutes));
+      EVENTS.push({ id: uid(), date: keyOf(state.anchor), track: d.track, title: d.title, category: "", locPath: locForMinute(minutes), allDay: false, start: minToTime(minutes), end: minToTime(minutes + 30) });
+      saveEvents(EVENTS); renderDay();
+    }
+    dayPage.addEventListener("pointerup", e => endTodoDrag(e, true));
+    dayPage.addEventListener("pointercancel", e => endTodoDrag(e, false));
+  })();
   // 2026-08-01 ("I don't want that anymore"): auto-guessing a location (Home/Clinic/class)
   // from the day-template schedule was showing up uninvited in the hover-add tooltip and
   // getting stamped onto new/dragged events. Removed — always returns no location now.
