@@ -2562,6 +2562,11 @@
        depth-language the mockup doesn't use — solid flat fill, no shadow, matching every
        other event/task pill fixed this session. */
     box-shadow: none;
+    /* 2026-08-06 (phone drag fix): iOS long-press starts text selection / the copy
+       callout on the block's title DURING the 450ms hold, before body.dragging-block's
+       own user-select:none exists — kill both on the block itself so the hold stays a
+       hold. Block text was never selectable-by-design anyway (tap = open detail). */
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   }
   /* 2026-08-01 ("the font looks ugly, and the color contrast is terrible"): SUPERSEDES
      the serif title — the mockup's .tl-event/.tl-task text is always --sans (Inter), never
@@ -3134,11 +3139,17 @@
   .rtn-sched-extra-row { border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .rtn-sched-extra-row .track-picker { flex-wrap: wrap; }
   .rtn-sched-extra-row2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .rtn-sched-extra-row2 input[type=time], .rtn-sched-extra-row2 input[type=number], .rtn-sched-extra-row2 input[type=date] {
+  /* .field prefix is load-bearing: the generic `.field input[type=…] { width:100% }`
+     rule ties on specificity with a bare .rtn-sched-extra-row2 selector and wins on
+     source order, stretching these compact inline inputs to full rows (found on the
+     first working screenshot of the events form — same silent bug in the routines
+     form, since both wrap this repeater in a .field). */
+  .field .rtn-sched-extra-row2 input[type=time], .field .rtn-sched-extra-row2 input[type=number],
+  .field .rtn-sched-extra-row2 input[type=date], .field .rtn-sched-extra-row .rtn-sched-extra-anchor {
     font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--note-line);
-    border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
+    border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); width: auto;
   }
-  .rtn-sched-extra-row2 input[type=number] { width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
+  .field .rtn-sched-extra-row2 input[type=number] { width: 55px; text-align: right; font-variant-numeric: tabular-nums; }
   .rtn-sched-extra-label { font-size: 11px; color: var(--ink-soft); }
   .rtn-sched-extra-del { margin-left: auto; flex: none; border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 3px 6px; border-radius: 6px; transition: color .12s, background .12s; }
   .rtn-sched-extra-del:hover { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 12%, transparent); }
@@ -3437,12 +3448,15 @@
   /* Part of life + Whose job: compact colour chips, natural width instead of flex:1
      stretching to fill the row, wrapping into tidy rows; a filled high-contrast
      "selected" state (gold fill, dark text) replaces the thin inset ring. */
-  #addForm #trackPicker.track-picker, #addForm #whoPicker.track-picker { flex-wrap: wrap; gap: 6px; }
-  #addForm #trackPicker .track-opt, #addForm #whoPicker .track-opt {
+  #addForm #trackPicker.track-picker, #addForm #whoPicker.track-picker,
+  #addForm #fWeekdayPicker.track-picker, #addForm .rtn-sched-extra-days.track-picker { flex-wrap: wrap; gap: 6px; }
+  #addForm #trackPicker .track-opt, #addForm #whoPicker .track-opt,
+  #addForm #fWeekdayPicker .track-opt, #addForm .rtn-sched-extra-days .track-opt {
     flex: 0 0 auto; border: 1px solid var(--note-line); background: none;
     border-radius: 999px; padding: 4px 12px; font-size: 12px;
   }
-  #addForm #trackPicker .track-opt[aria-pressed="true"], #addForm #whoPicker .track-opt[aria-pressed="true"] {
+  #addForm #trackPicker .track-opt[aria-pressed="true"], #addForm #whoPicker .track-opt[aria-pressed="true"],
+  #addForm #fWeekdayPicker .track-opt[aria-pressed="true"], #addForm .rtn-sched-extra-days .track-opt[aria-pressed="true"] {
     background: var(--margin-rule); border-color: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
   }
   /* Type: a true joined segmented control (Task / Event / Routine), one-line labels
@@ -8374,11 +8388,22 @@
                layers exactly like the Routines form's. Only offered on kind=event, and
                never while editing an existing one-off (no conversion in v1). -->
           <div class="allday-row full" id="fRepeatField" hidden>
-            <input type="checkbox" id="fRepeat"><label for="fRepeat">Repeats weekly</label>
+            <input type="checkbox" id="fRepeat"><label for="fRepeat">Repeats</label>
           </div>
           <div class="field full" id="fWeekdayField" hidden>
             <label>Days of week <span class="field-hint">tap one or more — uses the Starts time above</span></label>
             <div class="track-picker" id="fWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
+          </div>
+          <div class="field full" id="fWeekIntervalField" hidden>
+            <label for="fWeekInterval">Repeat every <span class="field-hint">1 = every week</span></label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="fWeekInterval" min="1" value="1" style="width:70px">
+              <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+            </div>
+          </div>
+          <div class="field full" id="fWeekAnchorField" hidden>
+            <label for="fWeekAnchorDate">Starting the week of <span class="field-hint">this week counts as week 1 of the cycle</span></label>
+            <input type="date" id="fWeekAnchorDate">
           </div>
           <div class="field full" id="fSchedExtraField" hidden>
             <label>Additional schedule <span class="field-hint">optional — a second (or third) day/time pattern on this same event</span></label>
@@ -20916,6 +20941,11 @@
     const on = formKind === "event" && !document.getElementById("fRepeatField").hidden
       && document.getElementById("fRepeat").checked;
     document.getElementById("fWeekdayField").hidden = !on;
+    document.getElementById("fWeekIntervalField").hidden = !on;
+    // the "starting the week of" anchor only matters (and only shows) once the
+    // cadence is genuinely every-N-weeks — same rule as the Routines form
+    const wi = parseInt(document.getElementById("fWeekInterval").value, 10) || 1;
+    document.getElementById("fWeekAnchorField").hidden = !(on && wi > 1);
     document.getElementById("fSchedExtraField").hidden = !on;
     if (formKind !== "routine") {
       // a repeating series has no single Day; its end comes from Duration, and
@@ -20929,6 +20959,12 @@
     document.getElementById("fRepeat").disabled = !!editingRecurTemplateId;
   }
   document.getElementById("fRepeat").addEventListener("change", syncRepeatFields);
+  document.getElementById("fWeekInterval").addEventListener("input", () => {
+    syncRepeatFields();
+    const anchorField = document.getElementById("fWeekAnchorField");
+    const anchorInput = document.getElementById("fWeekAnchorDate");
+    if (!anchorField.hidden && !anchorInput.value) anchorInput.value = keyOf(startOfWeek(TODAY));
+  });
   // whose job is it — Mine / his / Both (two-person system)
   let formWho = "me";
   // 2026-08-02 (code44): picking always re-collapses back to the summary line —
@@ -21055,6 +21091,8 @@
     fEnd.value = "";
     fDur.value = t.durationMin ? String(t.durationMin) : "";
     document.getElementById("fRepeat").checked = true;
+    document.getElementById("fWeekInterval").value = String(layers[0] && layers[0].weekInterval || 1);
+    document.getElementById("fWeekAnchorDate").value = layers[0] && layers[0].weekAnchor || "";
     fRepeatWeekdays = (layers[0] && layers[0].weekdays || []).slice();
     fExtraSchedules = layers.slice(1).map(l => ({
       weekdays: (l.weekdays || []).slice(), start: l.start || "",
@@ -22467,8 +22505,21 @@
   // touch/pen keep the original long-press gate untouched. Mouse also gets a live
   // start–end readout (reusing hoverLine, the same element the "hover to add" ghost
   // uses — see its own guard above) and snaps to 5 min instead of touch's 15.
+  // 2026-08-06 (Linh, on her phone: "its not working. it just brings up the event") —
+  // three real-hardware bugs the synthetic tests couldn't see:
+  // (1) #timelineScroll's touch-action:pan-y let the BROWSER claim the finger for
+  //     native scroll the moment it moved, firing pointercancel and killing the armed
+  //     drag — preventDefault() in a POINTER event can't stop that, only a non-passive
+  //     touchmove listener can (same technique the pinch-zoom block below already uses).
+  // (2) a long-press-then-release within the browser's ~10px tap slop still fires a
+  //     native click afterwards → openTlDetail popped the event open right after the
+  //     drop. suppressNextItemClick now covers EVERY completed drag, not just mouse.
+  // (3) 8px of finger jitter during the 450ms hold cancelled arming entirely (then the
+  //     release read as a tap → popup). 12px tolerates a pressing finger; a real scroll
+  //     flick clears that in the first frames regardless.
+  // Plus a tiny vibration on arm (Android; iOS ignores) so pickup is feelable.
   (function () {
-    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 8, MOUSE_DRAG_PX = 4;
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 12, MOUSE_DRAG_PX = 4;
     const layer = document.getElementById("eventsLayer");
     let timer = null, pressX = 0, pressY = 0, drag = null, candidate = null;
     function cancelPress() { clearTimeout(timer); timer = null; candidate = null; }
@@ -22481,7 +22532,12 @@
       try { item.setPointerCapture(pointerId); } catch (err) {}
       item.classList.add("tl-dragging");
       document.body.classList.add("dragging-block");
+      if (!mouse && navigator.vibrate) navigator.vibrate(10);
     }
+    // the fix for (1): while a drag is armed, stop the browser from ever starting its
+    // native pan — touch-action is only consulted at gesture start, so this must be a
+    // live non-passive listener, not CSS
+    layer.addEventListener("touchmove", e => { if (drag) e.preventDefault(); }, { passive: false });
     layer.addEventListener("pointerdown", e => {
       const item = e.target.closest(".tl-item");
       if (!item || e.target.closest(".tl-tick") || e.target.closest(".tl-resize-handle")) return;
@@ -22518,7 +22574,9 @@
       d.el.classList.remove("tl-dragging");
       document.body.classList.remove("dragging-block");
       hoverLine.hidden = true;
-      if (d.mouse) suppressNextItemClick = true;
+      // every completed drag suppresses the trailing native click — touch fires one
+      // too when the finger stayed inside the browser's tap slop (bug 2 above)
+      suppressNextItemClick = true;
       const step = d.mouse ? 5 : 15;
       let minutes = Math.round(minForTop(d.origTop + (e.clientY - pressY)) / step) * step;
       minutes = Math.max(START_MIN, Math.min(END_MIN - step, minutes));
@@ -22732,6 +22790,12 @@
       if (!fStart.value) { fStart.focus(); return; }   // v1 series are always timed
       const days = fRepeatWeekdays.slice().sort((a, b) => a - b);
       if (!days.length) { alert("Pick at least one day of the week for this event."); return; }
+      const wi = parseInt(document.getElementById("fWeekInterval").value, 10) || 1;
+      let wa = "";
+      if (wi > 1) {
+        wa = document.getElementById("fWeekAnchorDate").value;
+        if (!wa) { document.getElementById("fWeekAnchorDate").focus(); return; }
+      }
       const extra = fExtraSchedules.filter(l => l.weekdays.length);
       for (const l of extra) {
         if ((l.weekInterval || 1) > 1 && !l.weekAnchor) {
@@ -22740,7 +22804,7 @@
         }
       }
       const schedules = [
-        { weekdays: days, start: fStart.value },
+        { weekdays: days, start: fStart.value, ...(wi > 1 ? { weekInterval: wi, weekAnchor: wa } : {}) },
         ...extra.map(l => ({
           // an extra layer with no time of its own inherits the main Starts time
           weekdays: l.weekdays.slice().sort((a, b) => a - b), start: l.start || fStart.value,
