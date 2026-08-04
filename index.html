@@ -19948,8 +19948,10 @@
     if (wide && wrap.parentElement !== rail) rail.insertBefore(wrap, rail.firstElementChild);
     if (!wide && home.parentElement && wrap.previousElementSibling !== home)
       home.parentElement.insertBefore(wrap, home.nextSibling);
-    // the .mini-out class and the reparent always move together — see its CSS comment
-    row2.classList.toggle("mini-out", wide);
+    // 2026-08-05: .mini-out derives from where the calendar ACTUALLY is, not from
+    // where this function just tried to put it — placeDateLine() also moves the
+    // wrap, and a stale class here is what stretched the calendar full-width.
+    row2.classList.toggle("mini-out", wrap.parentElement !== row2);
   }
   window.addEventListener("resize", placeMiniCalDesk);
   // matchMedia change fires even when the harness resizes the viewport without a
@@ -24396,7 +24398,12 @@
       if (row.parentElement !== slot) slot.appendChild(row);
     } else {
       if (row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
-      if (calWrap.parentElement !== row) row.appendChild(calWrap);
+      // 2026-08-05 (Linh's giant-calendar screenshot): return the calendar to its
+      // row2 home ONLY below 901px. Above that, placeMiniCalDesk()/placeDeskGrid()
+      // own the calendar (rail / right column) — grabbing it back here raced those
+      // functions, and the loser left .mini-out's single-column grid holding a
+      // full-width month grid with ~280px day cells.
+      if (!miniCalDeskMq.matches && calWrap.parentElement !== row) row.appendChild(calWrap);
     }
   }
   // 2026-08-06 (Linh: "move the online button to bottom right of mobile screen page"):
