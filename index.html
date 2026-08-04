@@ -928,6 +928,13 @@
     align-items: stretch; gap: 8px; text-align: left; cursor: default;
   }
   .date-drop-pop .patients-nudge { width: 100%; justify-content: center; }
+  /* 2026-08-06 (Linh: "put a mini calendar under today above patients"): the pop
+     widens only while it actually hosts the reparented mini calendar (mobile — see
+     placeDateLine()), so the plain desktop menu keeps its compact 200px. The grid
+     stretches to the pop's inner width; the wrap's own gap/centering carry over. */
+  .date-drop-pop:has(.mini-cal-wrap) { width: 280px; }
+  .date-drop-pop .mini-cal-wrap { width: 100%; align-items: stretch; }
+  .date-drop-pop .mini-cal { width: 100%; }
   /* 2026-08-06 (Linh: "move the arrows to Today when opened from tapping day date"):
      #prevDay/#nextDay flank #todayPill in their own row, above Today's Patients --
      today-pill fills the remaining space between the two fixed-size nav-arrow circles
@@ -8055,6 +8062,13 @@
       <button type="button" class="del rtn-del-full" id="rtnDeleteBtn" hidden>Delete routine</button>
     </form>
 
+    <!-- ⛓ Chains (2026-08-05, Linh: "make a chain page with routines? it needs to
+         exist somewhere"): the one home for time-linked routines — every chain listed
+         visually, plus the builder that creates/edits them. Rendered by renderChains(). -->
+    <div class="section-head" style="margin-top:20px"><h2>Chains</h2><span class="rule"></span></div>
+    <div class="rtn-chains-sub">Tie one routine's time to another — it moves when the other moves.</div>
+    <div id="rtnChains"></div>
+
     <div class="section-head" style="margin-top:20px"><h2>All routines</h2><span class="rule"></span></div>
     <div id="rtnDeleteNote" class="note-inline" hidden></div>
     <div id="rtnManage"></div>
@@ -9724,6 +9738,61 @@
   }
   function recurringEventsOn(date) { return RECURRING_EVENTS.filter(t => recurringEventOccursOn(t, date)); }
 
+  /* ---- routine chains (2026-08-05, Linh: "make a chain page with routines? it needs
+     to exist somewhere"): t.anchorTo names another routine by id (legacy: by role —
+     the built-in date-night pair predates ids here), t.anchorMode is "before" (this
+     routine's steps END exactly as the anchor starts — the original date-night
+     behavior, and the default when anchorMode is missing) or "after" (this routine
+     STARTS the moment the anchor ends). Managed on the Routines page's Chains card. */
+  function chainAnchorOf(t) {
+    if (!t || !t.anchorTo) return null;
+    return ROUTINE_TASKS.find(a => a.id !== t.id && (a.id === t.anchorTo || a.role === t.anchorTo)) || null;
+  }
+  // a routine's own un-chained start on a date — layer-aware for multi-schedule weeklies
+  function rawRoutineStartMin(t, date) {
+    let s = t.start;
+    if (t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length) {
+      const layer = t.schedules.find(l => layerOccursOn(l, date)) || t.schedules[0];
+      s = layer.start || "";
+    }
+    return s ? timeToMin(s) : null;
+  }
+  function routineDurMin(t) {
+    const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
+    if (subs.length) return roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+    if (t.durationMin) return t.durationMin;
+    if (t.start && t.end && toMin(t.end) > toMin(t.start)) return toMin(t.end) - toMin(t.start);
+    return 30;
+  }
+  // where the chain puts t on this date, or null when the chain isn't live that day
+  // (not chained, anchor doesn't occur, or anchor skipped/moved to another date — each
+  // link then falls back to its own saved time). Follows a chained anchor's own chain
+  // (A→B→C), with a seen-set so an accidental loop resolves to raw times instead of
+  // hanging. A same-day drag on the anchor (overrides[date].start) moves the whole
+  // chain with it.
+  function chainedStartMinOn(t, date, seen) {
+    if (!t.anchorTo) return null;
+    seen = seen || new Set([t.id]);
+    const anchor = chainAnchorOf(t);
+    if (!anchor || seen.has(anchor.id)) return null;
+    seen.add(anchor.id);
+    if (anchor.calOn === false || !routineOccursOn(anchor, date)) return null;
+    const k = keyOf(date);
+    const aOvr = rtnOvr(anchor, k);
+    if (aOvr && (aOvr.skipped || (aOvr.movedTo && aOvr.movedTo !== k))) return null;
+    let aStart = aOvr && aOvr.start ? timeToMin(aOvr.start) : null;
+    if (aStart == null) aStart = chainedStartMinOn(anchor, date, seen);
+    if (aStart == null) aStart = rawRoutineStartMin(anchor, date);
+    if (aStart == null) return null;
+    if (t.anchorMode === "after") {
+      const aDur = aOvr && aOvr.dur ? aOvr.dur
+        : aOvr && aOvr.end ? Math.max(0, toMin(aOvr.end) - aStart)
+        : routineDurMin(anchor);
+      return Math.min(aStart + aDur, 1439);
+    }
+    return Math.max(0, aStart - routineDurMin(t));
+  }
+
   // display label for a task's recurrence — the only freq whose label needs the task's own
   // data (the interval length), since "every N days" isn't a fixed vocabulary word like the rest
   function routineFreqLabel(t) {
@@ -10457,16 +10526,17 @@
         effEnd = (!subs.length && effStart && t.durationMin)
           ? minToTime(Math.min(timeToMin(effStart) + t.durationMin, 1439)) : "";
       }
-      // a routine can anchor its END to another routine's start — e.g. "get ready
-      // for date night" finishes exactly as date night begins. Resolved dynamically
-      // so it still lines up if that routine's time moves.
+      // chained routine ("Chain to", Chains card on the Routines page) — its time on
+      // this date comes from the anchor routine (ends as the anchor starts, or starts
+      // as it ends; see chainedStartMinOn), recomputed live so the whole chain slides
+      // when the anchor moves. Falls back to the routine's own saved time whenever
+      // the chain isn't live that day.
       let startMin = effStart ? timeToMin(effStart) : null;
-      if (t.anchorTo && subs.length) {
-        const anchor = routinesOn(date).find(a => a.role === t.anchorTo && a.start);
-        if (anchor) {
-          const total = roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
-          startMin = Math.max(0, timeToMin(anchor.start) - total);
-        }
+      const chainMin = chainedStartMinOn(t, date);
+      if (chainMin != null) {
+        startMin = chainMin;
+        effStart = minToTime(chainMin);
+        if (!subs.length) effEnd = minToTime(Math.min(chainMin + routineDurMin(t), 1439));
       }
       // per-day overrides (t.overrides, 2026-08-04) — the occurrence is the TEMPLATE
       // merged with overrides[date]; override fields win, missing ones fall back.
@@ -23893,7 +23963,15 @@
     var calWrap = document.querySelector(".mini-cal-wrap");
     if (!slot || !row || !home || !calWrap) return;
     if (isMobile()) {
-      if (calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
+      // 2026-08-06 (Linh, dropdown screenshot: "put a mini calendar under today above
+      // patients"): SUPERSEDES parking calWrap at #dayRow2Home — on mobile the mini
+      // calendar now lives INSIDE the date dropdown, between the ‹ Today › row and the
+      // Today's-Patients button. Same reparent-don't-rebuild rule as everything else
+      // here: ids/delegated listeners (miniCalGrid taps, prev/next month) ride along.
+      var pop = document.querySelector(".date-drop-pop");
+      var nudge = document.getElementById("patientsNudge");
+      if (pop && nudge && calWrap.parentElement !== pop) pop.insertBefore(calWrap, nudge);
+      else if (!pop && calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
       if (row.parentElement !== slot) slot.appendChild(row);
     } else {
       if (row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
