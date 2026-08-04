@@ -24589,7 +24589,8 @@
           if (NOTIF.commute.on) {
             const title = String(e.title || "").toLowerCase();
             const isCommute = kws.some(kw => title.includes(kw))
-              || extras.includes(e.id) || (e.recurId && extras.includes(e.recurId));
+              || extras.includes(e.id) || (e.recurId && extras.includes(e.recurId))
+              || (e.rtTaskId && extras.includes(e.rtTaskId));   // routine picked in the panel — matches every occurrence
             if (isCommute) {
               const when = startMs + (NOTIF.commute.fireDelayMin || 0) * 60000;
               if (when > now) {
@@ -24802,7 +24803,10 @@
     for (let i = 0; i < 7; i++) {
       const d = addDays(new Date(), i);
       Book33Notify.timedItemsForDate(d).forEach(e => {
-        const key = e.recurId || e.id;
+        // template id for anything recurring — a daily routine ("Pack for work")
+        // must appear ONCE in the picker, not once per day; the engine matches
+        // rtTaskId/recurId back to every occurrence
+        const key = e.recurId || e.rtTaskId || e.id;
         if (seen.has(key)) return;
         seen.add(key);
         pool.push({ key, title: e.title || "(untitled)", when: `${parseKey(e.date || keyOf(d)).getDate()} ${MON_SHORT[parseKey(e.date || keyOf(d)).getMonth()]} ${fmtTime(e.start)}`, recur: !!e.recurId });
@@ -24841,7 +24845,7 @@
     const matched = pool.filter(p => kws.some(kw => p.title.toLowerCase().includes(kw)));
     const extraChips = (NOTIF.commute.extraEventIds || []).map((id, i) => {
       const p = pool.find(x => x.key === id);
-      const t = p ? p.title : (RECURRING_EVENTS.find(x => x.id === id) || EVENTS.find(x => x.id === id) || {}).title;
+      const t = p ? p.title : (RECURRING_EVENTS.find(x => x.id === id) || ROUTINE_TASKS.find(x => x.id === id) || EVENTS.find(x => x.id === id) || {}).title;
       return `<button type="button" class="nt-chip" aria-pressed="true" data-nt-exdel="${i}" title="Remove">${esc(t || "(past event)")}<span class="x">×</span></button>`;
     }).join("");
     const addable = pool.filter(p => !kws.some(kw => p.title.toLowerCase().includes(kw)) && !(NOTIF.commute.extraEventIds || []).includes(p.key));
