@@ -1,7 +1,7 @@
 // Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260805a";
+var CACHE_VERSION = "b33-20260805b";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -23,6 +23,25 @@ self.addEventListener("activate", function (e) {
     caches.keys().then(function (keys) {
       return Promise.all(keys.filter(function (k) { return k !== CACHE_VERSION; }).map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
+  );
+});
+
+// Notification taps (Book33Notify, 2026-08-05): focus the app if a window is already
+// open — telling it which day the notification was about so it can jump there — or
+// cold-open it with ?nday=<date>, which the app's boot consumes (consumeOpenParam()).
+self.addEventListener("notificationclick", function (e) {
+  e.notification.close();
+  var data = e.notification.data || {};
+  var day = typeof data.date === "string" ? data.date : "";
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+      var c = list && list.length ? list[0] : null;
+      if (c) {
+        if (day) { try { c.postMessage({ type: "b33-open-day", date: day, eventId: data.eventId || null }); } catch (err) {} }
+        return c.focus ? c.focus() : undefined;
+      }
+      return self.clients.openWindow(day ? "./?nday=" + encodeURIComponent(day) : "./");
+    }).catch(function () {})
   );
 });
 
