@@ -3547,6 +3547,7 @@
     font-family: var(--font-emoji); font-size: 12px; line-height: 1;
     background: var(--field-bg); border-radius: 50%; padding: 2px; box-shadow: 0 0 0 1px var(--note-line);
   }
+  .mo-top .mo-fast-mini { width: 14px; height: 14px; flex: none; }
   .mo-period {
     position: absolute; top: 6px; right: 7px; width: 7px; height: 7px; border-radius: 50%;
     background: var(--flow-med); z-index: 2;
@@ -3646,6 +3647,7 @@
   .week-col:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
   .week-col[data-today="true"] { border-color: var(--margin-rule); border-width: 1.5px; }
   .wk-head { text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--note-line); }
+  .wk-head .wk-fast-mini { width: 16px; height: 16px; flex: none; margin: 3px auto 0; }
   .wk-head .wk-dow { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); }
   /* 2026-08-01: same digit-legibility fix as Day/Month — bare "1"s misread as a capital
      I in Cormorant Garamond at this size. */
@@ -13836,6 +13838,7 @@
           <span class="wk-ud" data-master="${wkUd.master}" title="Universal Day">UD ${wkUd.value}</span>
           <div class="wk-sign num-hover-trigger" tabindex="0"><span class="gl">${sign.gl}</span> ${sign.name}${sunSignPopoverHtml(sign)}</div>
           ${wkBdays.length ? `<div class="wk-bday" title="${esc(wkBdays.map(b => b.title).join(" · "))}">🎂 ${wkBdays.length === 1 ? esc(bdName(wkBdays[0].title)) : "×" + wkBdays.length}</div>` : ""}
+          ${k === keyOf(TODAY) ? miniFastRing("wk-fast-mini") : ""}
           ${ps || cd || isOvu || isFertile ? `<div class="wk-cyc">
             ${ps ? `<span class="wk-period" data-predicted="${!!ps.predicted}" style="${ps.logged ? `background:var(${FLOW_VAR[ps.flow]});border-color:var(${FLOW_VAR[ps.flow]})` : ""}">🩸${ps.logged ? "" : " exp."}</span>` : ""}
             ${cd ? `<span class="wk-cd" title="${wkPhaseInfo ? wkPhaseInfo.label : ""}">CD${cd}${wkPhaseInfo ? " " + wkPhaseInfo.icon : ""}</span>` : ""}
@@ -14343,6 +14346,7 @@
             <span class="mo-ud" data-master="${ud.master}">${ud.value}</span>
           </span>
           ${moon ? `<span class="mo-moon">${moon.em}</span>` : ""}
+          ${keyOf(d) === keyOf(TODAY) ? miniFastRing("mo-fast-mini") : ""}
         </div>
         ${cd ? `<span class="mo-cd" title="${moPhaseInfo ? moPhaseInfo.label : ""}">CD${cd}${moPhaseInfo ? " " + moPhaseInfo.icon : ""}</span>` : ""}
         ${lny ? `<span class="mo-lny"><span class="sg">${ANIMAL_INFO[incoming.animal].em}</span>Lunar New Year</span>` : ""}
@@ -14852,7 +14856,10 @@
     if (h >= 100) return `${h}:${String(m).padStart(2,"0")}`;
     return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
   };
-  const fmtHrs = ms => `${Math.floor(ms / 3600000)}h ${Math.round(ms % 3600000 / 60000)}m`;
+  // 2026-08-06: round the TOTAL minutes first, then split -- rounding h/m separately let
+  // a remainder like 59.6min round up to "60m" instead of carrying to the next hour
+  // (e.g. "15h 60m" instead of "16h 0m"), caught while building the fasting bar (2b).
+  const fmtHrs = ms => { const t = Math.round(ms / 60000); return `${Math.floor(t / 60)}h ${t % 60}m`; };
   const shortDate = iso => {
     const d = new Date(iso);
     return `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -14867,6 +14874,24 @@
   function fastTickXY(f) {
     const theta = (-90 + f * 360) * Math.PI / 180;
     return { x: (60 + FAST_R * Math.cos(theta)).toFixed(1), y: (60 + FAST_R * Math.sin(theta)).toFixed(1) };
+  }
+  // 2026-08-06 ("include fasting progress/ring in calendar, like CD"): same tiny-ring
+  // trick as .wg-mini-ring-wrap, reused on today's cell in Week/Month — only shown while
+  // a fast is actually live, and picked up for free by tickFastDisplays() via [data-fast-ring].
+  function miniFastRing(cls) {
+    if (!HEALTH.activeFast) return "";
+    const elapsedMs = Date.now() - new Date(HEALTH.activeFast).getTime();
+    const goalH = HEALTH.fastGoalHours || 16;
+    const pct = Math.min(elapsedMs / 3600000 / goalH, 1);
+    const over = elapsedMs / 3600000 > goalH;
+    return `<span class="fast-ring-wrap ${cls}" title="🔥 ${Math.round(pct * 100)}% fasted">
+      <svg viewBox="0 0 120 120" class="fast-ring-svg">
+        <circle cx="60" cy="60" r="${FAST_R}" class="fast-ring-track"/>
+        <circle cx="60" cy="60" r="${FAST_R}" class="fast-ring-prog" data-fast-ring
+          data-over="${over}" transform="rotate(-90 60 60)"
+          style="stroke-dasharray:${FAST_C.toFixed(1)};stroke-dashoffset:${(FAST_C * (1 - pct)).toFixed(1)}"/>
+      </svg>
+    </span>`;
   }
   // encouraging milestone copy so the fast reads as a small climb with landmarks,
   // not just a number to sit and watch — see Life Map: structure should motivate, not just track
