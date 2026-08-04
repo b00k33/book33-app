@@ -74,6 +74,12 @@
     --cat-personal-beauty: #DB4B4B;    /* Beauty subcategory — red */
     --fast: var(--cat-personal-fitness);   /* 2026-08-06 (Linh: "fasting always tracks fitness"):
       points at the Fitness token rather than its own hex, so the two can never drift apart. */
+    /* 2026-08-06 (chains feature): every chain colour derives from an existing central
+       token, never its own hex — same single-source rule as --fast above. */
+    --chain-spine: var(--accent-seed);          /* the gold spine + nodes down chained blocks */
+    --chain-ok: var(--cat-personal-fitness);    /* feasible ✓ in the chain summary chip */
+    --chain-bad: var(--warn);                   /* infeasible ✕ in the chain summary chip */
+    --chain-deadline: var(--track-work);        /* the dashed "be at work" line (work indigo) */
     /* 2026-07-31 ("i like the mockup, replace what i have with that design"): the Day
        page's cosmic/numerology gold had drifted to its own ad hoc hex (chosen only for
        AA contrast on a gold ground) that never actually matched the mockup's own brass
@@ -1377,6 +1383,53 @@
     font-size: 9px; font-weight: 600; letter-spacing: 0.08em; color: var(--fast); opacity: 0.5;
   }
 
+  /* --- chains (linked routines) — Stage 2 visuals --- */
+  /* Overlay layer for the spine/nodes/deadline line, same coordinate space as
+     .events-layer (left gutter offset, absolute inside .timeline-wrap). z-index 3:
+     above the event blocks' own layer (2) so nodes read on top of the gutter, still
+     under the fast line (5) and now line (6). pointer-events:none throughout — all
+     interaction stays on the blocks and the summary chip. */
+  .chain-layer { position: absolute; top: 0; left: var(--gutter); right: 0; bottom: 0; z-index: 3; pointer-events: none; }
+  /* thin gold spine down the LEFT of the chained run; chained blocks shift right
+     (.tl-chained below) to open the gutter it lives in */
+  .chain-spine { position: absolute; left: 7px; width: 2px; border-radius: 2px; background: var(--chain-spine); opacity: 0.75; }
+  /* one hollow node per chained block, centred on the block's vertical middle */
+  .chain-node {
+    position: absolute; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--paper); box-shadow: inset 0 0 0 2px var(--chain-spine);
+    font-size: 8px; line-height: 12px; text-align: center;
+  }
+  /* the anchor (pinned step): filled gold, soft glow, ⚓ marker — the fixed point
+     the rest of the chain is computed from */
+  .chain-node-pin {
+    background: var(--chain-spine); color: var(--accent-on);
+    box-shadow: 0 0 8px color-mix(in oklab, var(--chain-spine) 65%, transparent);
+  }
+  /* dashed deadline line across the grid; stops 10px short of the right edge so it
+     never touches the fasting line (right:0, 3px wide) */
+  .chain-deadline { position: absolute; left: 0; right: 10px; border-top: 1px dashed var(--chain-deadline); }
+  .chain-deadline-lbl {
+    position: absolute; right: 0; top: -14px; font-size: 9.5px; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--chain-deadline);
+  }
+  /* chained blocks shift right to open the spine gutter (lane-packed blocks keep
+     their inline left/width — chain steps are back-to-back by construction, so they
+     don't lane-pack against each other) */
+  .tl-item.tl-chained { left: 20px; }
+  /* the chain summary chips above the grid — flat text rows, no box, same rhythm as
+     .fast-bar-sub directly above them */
+  .chain-chips { display: flex; flex-direction: column; gap: 4px; margin: 0 0 16px; }
+  .chain-chips:empty { display: none; margin: 0; }
+  .chain-chip { display: flex; align-items: baseline; gap: 8px; font-size: 12px; flex-wrap: wrap; }
+  .chain-chip-name { font-weight: 700; color: var(--ink-soft); }
+  .chain-chip-run { color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .chain-chip-ok { color: var(--chain-ok); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chain-chip-bad { color: var(--chain-bad); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chain-chip-try {
+    border: none; background: none; padding: 12px 4px; margin: -12px 0; cursor: pointer;
+    font-size: 12px; font-weight: 700; color: var(--chain-spine); text-decoration: underline;
+  }
+
   /* --- Daily Focus (GG33 numerology day-energy) --- */
   /* Daily Focus — under the date, beside the mini-calendar. Year/month THEME lines
      first (ambient, serif), then two content-sized day tiles. */
@@ -1644,6 +1697,19 @@
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
     .tl-detail-sheet { border-radius: 16px; max-height: 74vh; }
   }
+  /* recurring-event delete scope chooser — same overlay/sheet chrome as the detail
+     sheet it opens from, sitting one layer above it */
+  .ev-scope-overlay { z-index: 320; }
+  .ev-scope-sheet { padding: 16px; gap: 8px; width: min(360px, 100vw); }
+  .ev-scope-title { font-size: 13.5px; font-weight: 600; color: var(--ink); padding-bottom: 4px; }
+  .ev-scope-btn {
+    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink);
+    border-radius: var(--radius-sm); padding: 12px; min-height: 44px; font-size: 13.5px;
+    font-family: var(--font-body); text-align: left; cursor: pointer;
+  }
+  .ev-scope-btn:hover { border-color: var(--margin-rule); }
+  .ev-scope-all { color: var(--power-bad); }
+  .ev-scope-cancel { background: none; border-color: transparent; color: var(--ink-soft); text-align: center; }
   .tl-detail-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 0; flex: none; }
   .tl-detail-close {
     width: 34px; height: 34px; min-width: 34px; min-height: 34px; border-radius: 50%; border: none;
@@ -3322,14 +3388,15 @@
      life's work/family/marriage/personal ink) -- the dot next to their label was
      inheriting a default ink colour with no real meaning, just visual noise. Days of
      week already carries its own planet-icon identity per button. */
-  #rtnFreqPicker .track-opt::before, #rtnWeekdayPicker .track-opt::before { display: none; }
+  #rtnFreqPicker .track-opt::before, #rtnWeekdayPicker .track-opt::before,
+  #fWeekdayPicker .track-opt::before, .rtn-sched-extra-days .track-opt::before { display: none; }
   /* 2026-08-02 (Linh screenshot, Routines edit form): the 7-day pickers (Supplements/
      Family/Routines) use .track-opt{flex:1} inside a wrapping row -- on a phone only 6
      pills fit per line, so Sunday wraps alone onto its own line and flex:1 stretches it
      to the full row width by itself. Same bug on all three since they share this markup.
      A 4-col grid on mobile keeps every pill the same size across both rows instead. */
   @media (max-width: 640px) {
-    #suppWeekdayPicker, #famWeekdayPicker, #rtnWeekdayPicker {
+    #suppWeekdayPicker, #famWeekdayPicker, #rtnWeekdayPicker, #fWeekdayPicker {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     }
   }
@@ -4407,6 +4474,14 @@
     margin-right: 6px; vertical-align: middle; box-shadow: 0 0 4px color-mix(in oklab, var(--fast) 70%, transparent); }
   .fast-bar-sub { font-size: 11.5px; color: var(--ink-faint); }
   .fast-bar-row.goal-met .sb-amt { color: var(--fast); }
+  /* 2026-08-06 (Linh: "allow it to show even when fast is not active and allow to
+     click to start or stop fast"): the row is a tap target now (same data-fast-toggle
+     delegate as the Health page's own button). Padding+negative margin extends the
+     hit area to ~44px without changing the visual rhythm; idle state dims the dot to
+     an outline so green still unambiguously means "actively fasting". */
+  .fast-bar-row[data-fast-toggle] { cursor: pointer; padding: 12px 0; margin: -12px 0; }
+  .fast-bar-row.fast-idle .fast-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fast) 55%, transparent); }
+  .fast-bar-row.fast-idle .sb-amt { color: var(--ink-faint); font-weight: 600; }
 
   /* ============ BEAUTY pages ============ */
   /* Fasting/Weight/Cycle are each a compact, narrow-by-design widget (borrowed from
@@ -6991,6 +7066,17 @@
     </div>
   </div>
 
+  <!-- recurring-event delete: the GCal-style scope chooser (this / following / all) -->
+  <div class="tl-detail-overlay ev-scope-overlay" id="evScopeOverlay" hidden>
+    <div class="tl-detail-sheet ev-scope-sheet" role="dialog" aria-label="Delete recurring event">
+      <div class="ev-scope-title" id="evScopeTitle">Delete recurring event</div>
+      <button type="button" class="ev-scope-btn" id="evScopeThis">Delete this event</button>
+      <button type="button" class="ev-scope-btn" id="evScopeFollowing">Delete this and following</button>
+      <button type="button" class="ev-scope-btn ev-scope-all" id="evScopeAll">Delete all events</button>
+      <button type="button" class="ev-scope-btn ev-scope-cancel" id="evScopeCancel">Cancel</button>
+    </div>
+  </div>
+
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
     <div class="bd-head">
@@ -8158,16 +8244,24 @@
                .day-main > .section-head { display:none }). -->
         </div>
         <!-- 2026-08-06 (Linh, fasting indicator 2b): "above the grid" -- directly above
-             .timeline-scroll. renderFastBar() shows/hides + fills this; only rendered
-             while HEALTH.activeFast is truthy. -->
-        <div class="fast-status" id="fastStatus" hidden>
-          <div class="spend-bar-row fast-bar-row" id="fastBarRow">
+             .timeline-scroll. renderFastBar() fills this.
+             2026-08-06 later (Linh: "allow it to show even when fast is not active and
+             allow to click to start or stop fast"): always visible now -- an idle "tap
+             to start" state replaces the old hide-when-not-fasting; the row carries
+             data-fast-toggle so the SAME app-wide delegate the Health page's own
+             start/end button uses handles the tap (one interaction language, no new
+             handler). -->
+        <div class="fast-status" id="fastStatus">
+          <div class="spend-bar-row fast-bar-row" id="fastBarRow" data-fast-toggle role="button" tabindex="0" aria-label="Start fasting">
             <span class="sb-label"><span class="fast-dot"></span>Fasting</span>
             <div class="sb-track"><div class="sb-fill" id="fastBarFill"></div></div>
             <span class="sb-amt" id="fastBarAmt"></span>
           </div>
           <div class="fast-bar-sub" id="fastBarSub"></div>
         </div>
+        <!-- 2026-08-06 (chains Stage 1): one summary chip per chain rendering today --
+             name + feasible/late status vs its deadline. Filled by renderChainChips(). -->
+        <div class="chain-chips" id="chainChips"></div>
         <div class="timeline-scroll" id="timelineScroll">
         <div class="timeline-wrap">
           <div class="sky-layer" id="skyLayer"></div>
@@ -8183,6 +8277,9 @@
           <!-- 2026-08-06 (Linh, fasting indicator 2a): renderFastLine() positions top/height
                via topForMin(), same approach as .now-line just vertical -- see CSS .fast-line. -->
           <div class="fast-line" id="fastLine" hidden></div>
+          <!-- 2026-08-06 (chains Stage 2): spine + nodes + dashed deadline line,
+               positioned per-render by renderChainLayer() via topForMin(). -->
+          <div class="chain-layer" id="chainLayer"></div>
           <div class="hover-add-line" id="hoverAddLine" hidden><span class="hv-lbl"></span></div>
         </div>
         </div>
@@ -8267,6 +8364,21 @@
           </div>
           <div class="field" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" class="field-bare"></div>
           <div class="field" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart" class="field-bare"></div>
+          <!-- recurring events (2026-08-04, "add that to routines and events"): weekly
+               layers exactly like the Routines form's. Only offered on kind=event, and
+               never while editing an existing one-off (no conversion in v1). -->
+          <div class="allday-row full" id="fRepeatField" hidden>
+            <input type="checkbox" id="fRepeat"><label for="fRepeat">Repeats weekly</label>
+          </div>
+          <div class="field full" id="fWeekdayField" hidden>
+            <label>Days of week <span class="field-hint">tap one or more — uses the Starts time above</span></label>
+            <div class="track-picker" id="fWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
+          </div>
+          <div class="field full" id="fSchedExtraField" hidden>
+            <label>Additional schedule <span class="field-hint">optional — a second (or third) day/time pattern on this same event</span></label>
+            <div id="fSchedExtraList" class="rtn-sched-extra-list"></div>
+            <button type="button" class="add-btn" id="fSchedAddBtn">+ Add another schedule</button>
+          </div>
           <!-- 2026-08-06 (Linh: "too boxy and too long... tuck OPTIONAL fields behind a
                small 'More options' toggle so the form is short by default"): everything
                below is real, unchanged functionality -- just collapsed out of the way
@@ -9274,6 +9386,40 @@
     return false;
   }
   function routinesOn(date) { return ROUTINE_TASKS.filter(t => routineOccursOn(t, date)); }
+
+  /* --- Recurring EVENTS (Linh 2026-08-04, "add that [layered schedules] to routines and
+     events", full-GCal scope chosen): weekly-layer templates living OUTSIDE the flat
+     EVENTS array, occurrences synthesized per-day by generatedFor() exactly like
+     routines. Reuses schedulesOf()/layerOccursOn() unchanged (templates carry
+     freq:"weekly"). recurUntil (template-level, inclusive) is the "delete this and
+     following" boundary — it stops every layer at once, matching Google Calendar. */
+  const RECUR_EV_KEY = "daybook-recurring-events";
+  function loadRecurringEvents() {
+    try { const v = JSON.parse(localStorage.getItem(RECUR_EV_KEY)); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function saveRecurringEvents() { try { localStorage.setItem(RECUR_EV_KEY, JSON.stringify(RECURRING_EVENTS)); } catch (e) {} }
+  let RECURRING_EVENTS = loadRecurringEvents();
+  const EV_TIME_OVR_KEY = "daybook-event-time-overrides";
+  function loadEvTimeOvr() {
+    try { const v = JSON.parse(localStorage.getItem(EV_TIME_OVR_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveEvTimeOvr() { try { localStorage.setItem(EV_TIME_OVR_KEY, JSON.stringify(EVENT_TIME_OVR)); } catch (e) {} }
+  let EVENT_TIME_OVR = loadEvTimeOvr();
+  const EV_SKIP_KEY = "daybook-event-skips";
+  function loadEvSkips() {
+    try { const v = JSON.parse(localStorage.getItem(EV_SKIP_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveEvSkips() { try { localStorage.setItem(EV_SKIP_KEY, JSON.stringify(EVENT_SKIPS)); } catch (e) {} }
+  let EVENT_SKIPS = loadEvSkips();
+  function recurringEventOccursOn(t, date) {
+    if (t.recurUntil && keyOf(date) > t.recurUntil) return false;
+    return schedulesOf(t).some(l => layerOccursOn(l, date));
+  }
+  function recurringEventsOn(date) { return RECURRING_EVENTS.filter(t => recurringEventOccursOn(t, date)); }
+
   // display label for a task's recurrence — the only freq whose label needs the task's own
   // data (the interval length), since "every N days" isn't a fixed vocabulary word like the rest
   function routineFreqLabel(t) {
@@ -9998,6 +10144,46 @@
         steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null,
       });
     });
+    // recurring EVENTS — same synthesize-per-day mechanism as routines above, but
+    // simpler: no subtasks/anchorTo, always timed (v1 requires a start time). The
+    // active layer for THIS date supplies the start; durationMin (shared across
+    // layers) supplies the end.
+    recurringEventsOn(date).forEach(t => {
+      const occId = `ev-${t.id}-${k}`;
+      if (EVENT_SKIPS[occId]) return;   // this ONE occurrence was deleted — template untouched
+      const ovr = EVENT_TIME_OVR[occId];
+      if (ovr && ovr.date && ovr.date !== k) return;   // relocated — injected pass below renders it there
+      const layers = schedulesOf(t);
+      const layer = layers.find(l => layerOccursOn(l, date)) || layers[0];
+      const effStart = layer.start || "";
+      const effEnd = (effStart && t.durationMin)
+        ? minToTime(Math.min(timeToMin(effStart) + t.durationMin, 1439)) : "";
+      const start = ovr ? ovr.start : effStart;
+      out.push({
+        id: occId, generated: true, date: k, track: t.track, category: t.category || "",
+        title: t.title, kind: "event", locPath: Array.isArray(t.locPath) ? t.locPath : [],
+        ...(t.who && t.who !== "me" ? { who: t.who } : {}),
+        allDay: !start, start, end: (ovr ? ovr.end : effEnd) || "",
+        fromRecurringEvent: true, recurId: t.id,
+      });
+    });
+    // cross-day pass for recurring events, mirroring the routine one above: an
+    // occurrence dragged onto a day its pattern wouldn't place it must still render
+    // on its NEW date, keeping its ORIGINAL occId so done-state follows the move.
+    Object.keys(EVENT_TIME_OVR).forEach(occId => {
+      const ovr = EVENT_TIME_OVR[occId];
+      if (!ovr || !ovr.date || ovr.date !== k || ovr.fromDate === k) return;
+      if (EVENT_SKIPS[occId]) return;   // moved, then deleted — don't resurrect it
+      const t = RECURRING_EVENTS.find(rt => occId === `ev-${rt.id}-${ovr.fromDate}`);
+      if (!t) return;
+      out.push({
+        id: occId, generated: true, date: k, track: t.track, category: t.category || "",
+        title: t.title, kind: "event", locPath: Array.isArray(t.locPath) ? t.locPath : [],
+        ...(t.who && t.who !== "me" ? { who: t.who } : {}),
+        allDay: !ovr.start, start: ovr.start || "", end: ovr.end || "",
+        fromRecurringEvent: true, recurId: t.id,
+      });
+    });
     SUPPLEMENTS.filter(s => supplementOccursOn(s, date)).forEach(s => {
       out.push({
         id: `supp-${s.id}-${keyOf(date)}`, generated: true, date: keyOf(date),
@@ -10054,6 +10240,214 @@
     if (!SHOP.some(s => s.name === nm)) { SHOP.push({ id: uid(), name: nm, size: "102mL", step: "Root treatment", bought: false }); saveShop(SHOP); }
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
   })();
+
+  /* ---- chains (linked routines) — Stage 1: data + scheduler ----
+     2026-08-06 (Linh, full spec): a chain is a run of blocks back-to-back. ONE step is
+     pinned to a real time (the anchor); every other step's time is computed by counting
+     outward from the pin, or backward from the chain's deadline when nothing is pinned.
+     Computed blocks are NEVER saved as events — times are recomputed live each render,
+     so there is nothing to drift or duplicate. Steps reference existing routines/events
+     by id (their duration comes from the referenced item) or define an inline step with
+     its own dur. daybook-chains has no builder UI yet — data-level for now. */
+  const CHAINS_KEY = "daybook-chains";
+  function loadChains() {
+    try { const v = JSON.parse(localStorage.getItem(CHAINS_KEY) || "[]"); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function saveChains() { try { localStorage.setItem(CHAINS_KEY, JSON.stringify(CHAINS)); } catch (e) {} }
+  let CHAINS = loadChains();
+  // duration precedence per spec — event: end−start (else dur); routine: sum of subtask
+  // minutes rounded up to 5 like the calendar block itself renders (else durationMin,
+  // else dur); inline step: dur. 30/15 fallbacks stop a half-defined step from
+  // collapsing the whole chain's math to zero-length.
+  function chainStepDur(s) {
+    if (s.kind === "event") {
+      const ev = EVENTS.find(x => x.id === s.ref);
+      if (ev && ev.start && ev.end) return Math.max(5, timeToMin(ev.end) - timeToMin(ev.start));
+      return s.dur || 30;
+    }
+    if (s.kind === "routine") {
+      const t = ROUTINE_TASKS.find(x => x.id === s.ref);
+      const subs = t && Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
+      if (subs.length) return roundUp5(subs.reduce((a, x) => a + Math.max(1, x.min || 0), 0));
+      return (t && t.durationMin) || s.dur || 30;
+    }
+    return s.dur || 15;
+  }
+  // the scheduler. Returns null when the chain has nothing to anchor on (no pin AND no
+  // deadline). times[] is {start,end} in minutes-from-midnight per step, same order as
+  // chain.steps. `date` is unused by the maths today (a chain's times don't depend on
+  // the date) but stays in the signature per the spec for when they might.
+  function computeChain(chain, date) {
+    const steps = chain.steps || [];
+    if (!steps.length) return null;
+    const durs = steps.map(chainStepDur);
+    const bufs = steps.map(s => s.bufferBefore || 0);
+    const pinIdx = steps.findIndex(s => s.pin && (s.pin.pick || (s.pin.options && s.pin.options.length)));
+    const deadlineMin = chain.deadline && chain.deadline.at ? timeToMin(chain.deadline.at) : null;
+    // one pass of the walk for a given anchor position — reused by the suggestion
+    // search below so "would the 6:30 class work?" runs the exact same maths
+    function walk(anchorIdx, anchorStart) {
+      const times = new Array(steps.length);
+      times[anchorIdx] = { start: anchorStart, end: anchorStart + durs[anchorIdx] };
+      for (let i = anchorIdx - 1; i >= 0; i--) {
+        const end = times[i + 1].start - bufs[i + 1];
+        times[i] = { start: end - durs[i], end };
+      }
+      for (let i = anchorIdx + 1; i < steps.length; i++) {
+        const start = times[i - 1].end + bufs[i];
+        times[i] = { start, end: start + durs[i] };
+      }
+      return times;
+    }
+    let pick = null, times;
+    if (pinIdx !== -1) {
+      const pin = steps[pinIdx].pin;
+      pick = pin.pick || pin.options[0];
+      times = walk(pinIdx, timeToMin(pick));
+    } else if (deadlineMin != null) {
+      // no pin — the whole chain schedules backward so it ENDS at the deadline
+      times = walk(steps.length - 1, deadlineMin - durs[steps.length - 1]);
+    } else {
+      return null;
+    }
+    const arrival = times[times.length - 1].end;
+    let feasible = null, slack = null, suggestion = null;
+    if (deadlineMin != null && pinIdx !== -1) {
+      feasible = arrival <= deadlineMin;
+      slack = deadlineMin - arrival;
+      // late, and the pinned step has other class options: surface the first one that
+      // WOULD arrive in time as a suggestion — never auto-switch (her pick stands
+      // until she taps the suggestion in the chip)
+      if (!feasible && steps[pinIdx].pin.options) {
+        for (const opt of steps[pinIdx].pin.options) {
+          if (opt === pick) continue;
+          const alt = walk(pinIdx, timeToMin(opt));
+          if (alt[alt.length - 1].end <= deadlineMin) { suggestion = opt; break; }
+        }
+      }
+    } else if (deadlineMin != null) {
+      feasible = true; slack = 0;   // backward-from-deadline lands exactly on it by construction
+    }
+    return { times, arrival, feasible, slack, deadlineMin, pinIdx, pick, suggestion };
+  }
+  // days uses JS getDay() numbering (0=Sun..6=Sat), same convention as routine
+  // weekday/famWeekday everywhere else in this file
+  function chainsOn(date) {
+    return CHAINS.filter(c => Array.isArray(c.days) && c.days.includes(date.getDay()) && c.steps && c.steps.length);
+  }
+  // builds the day's chain-computed timeline items + which normally-rendered items they
+  // REPLACE. A referenced routine/event keeps its own id on the chain block, so
+  // done-state, steps, ratings and the detail sheet all keep working — but the ORIGINAL
+  // occurrence is suppressed from the day (same id twice = the duplicate the spec
+  // forbids). Chain items are generated-without-rtTaskId on purpose: canMove/resize
+  // gates read that as immovable, which is right — their times are computed, and a
+  // hand-drag would just be overwritten next render.
+  function chainBlocksFor(date) {
+    const k = keyOf(date);
+    const out = { items: [], suppress: new Set(), chips: [] };
+    chainsOn(date).forEach(chain => {
+      const sched = computeChain(chain, date);
+      if (!sched) return;
+      chain.steps.forEach((s, i) => {
+        const t = sched.times[i];
+        const startMin = Math.max(0, Math.min(1439, t.start));
+        const endMin = Math.max(0, Math.min(1439, t.end));
+        const base = {
+          generated: true, fromChain: chain.id, chainPin: i === sched.pinIdx, date: k,
+          allDay: false, start: minToTime(startMin), end: minToTime(endMin),
+        };
+        if (s.kind === "routine") {
+          const rt = ROUTINE_TASKS.find(r => r.id === s.ref);
+          if (!rt) return;
+          const occId = `rt-${rt.id}-${k}`;
+          out.suppress.add(occId);
+          const subs = Array.isArray(rt.subtasks) ? rt.subtasks.filter(x => x && x.text) : [];
+          out.items.push({ ...base, id: occId, title: rt.title, track: rt.track, category: rt.category || "Routine",
+            kind: subs.length ? "routine" : undefined, steps: subs.length ? subs : undefined, fitLink: rt.fitLink || null });
+        } else if (s.kind === "event") {
+          const ev = EVENTS.find(x => x.id === s.ref);
+          if (!ev) return;
+          out.suppress.add(ev.id);
+          out.items.push({ ...base, id: ev.id, title: ev.title, track: ev.track, category: ev.category || "",
+            locPath: Array.isArray(ev.locPath) ? ev.locPath : [] });
+        } else {
+          out.items.push({ ...base, id: `chain-${chain.id}-${i}-${k}`, title: s.title || "Step",
+            track: s.track || "personal", category: "" });
+        }
+      });
+      out.chips.push({ chain, sched });
+    });
+    return out;
+  }
+  // Stage 1's summary chip row above the grid — green when the chain lands before its
+  // deadline, red + a tappable working alternative when it doesn't
+  function renderChainChips(chainData) {
+    const box = document.getElementById("chainChips");
+    if (!box) return;
+    if (!chainData || !chainData.chips.length) { box.innerHTML = ""; return; }
+    box.innerHTML = chainData.chips.map(ci => {
+      const s = ci.sched;
+      const name = esc(ci.chain.name || ci.chain.id);
+      const first = Math.max(0, s.times[0].start);
+      if (s.deadlineMin == null) {
+        return `<div class="chain-chip"><span class="chain-chip-name">${name}</span><span class="chain-chip-run">${fmtTime(minToTime(first))} – ${fmtTime(minToTime(Math.min(1439, s.arrival)))}</span></div>`;
+      }
+      const lbl = ci.chain.deadline.label ? esc(ci.chain.deadline.label.toLowerCase()) : "done";
+      if (s.feasible) {
+        return `<div class="chain-chip"><span class="chain-chip-name">${name}</span><span class="chain-chip-ok">✓ ${lbl} ${fmtTime(minToTime(Math.min(1439, s.arrival)))}${s.slack > 0 ? ` · ${s.slack}m early` : ""}</span></div>`;
+      }
+      const sug = s.suggestion
+        ? ` <button type="button" class="chain-chip-try" data-chain-pick="${esc(ci.chain.id)}:${esc(s.suggestion)}">try ${fmtTime(s.suggestion)}</button>` : "";
+      return `<div class="chain-chip"><span class="chain-chip-name">${name}</span><span class="chain-chip-bad">✕ ${-s.slack}m late</span>${sug}</div>`;
+    }).join("");
+  }
+  // Stage 2's overlay: gold spine + a node per chained block (anchor filled, ⚓),
+  // dashed deadline line with its right-aligned label. Spine/node geometry reads the
+  // chain's RENDERED blocks (data-chain, set by renderTimeline) rather than re-running
+  // the time maths: short blocks paint taller than their true minutes (the timeline's
+  // legibility min-height), so time-derived positions would stop the spine above the
+  // last block's visual bottom and drift nodes off-centre. The deadline line stays on
+  // topForMin() — it marks a TIME, not a block. Must run after renderTimeline().
+  function renderChainLayer(chainData) {
+    const layer = document.getElementById("chainLayer");
+    if (!layer) return;
+    if (!chainData || !chainData.chips.length) { layer.innerHTML = ""; return; }
+    let html = "";
+    chainData.chips.forEach(ci => {
+      const blocks = Array.from(document.querySelectorAll(`#eventsLayer .tl-chained[data-chain="${CSS.escape(ci.chain.id)}"]`));
+      if (blocks.length) {
+        const tops = blocks.map(b => parseFloat(b.style.top) || 0);
+        const bottoms = blocks.map(b => (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0));
+        const top = Math.min(...tops), bottom = Math.max(...bottoms);
+        html += `<div class="chain-spine" style="top:${top.toFixed(1)}px;height:${(bottom - top).toFixed(1)}px"></div>`;
+        blocks.forEach(b => {
+          const mid = (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0) / 2;
+          const pin = b.classList.contains("tl-chain-pin");
+          html += `<div class="chain-node${pin ? " chain-node-pin" : ""}" style="top:${(mid - 6).toFixed(1)}px">${pin ? "⚓" : ""}</div>`;
+        });
+      }
+      if (ci.sched.deadlineMin != null) {
+        const dTop = topForMin(ci.sched.deadlineMin);
+        const lbl = ci.chain.deadline.label ? `${esc(ci.chain.deadline.label.toLowerCase())} · ` : "";
+        html += `<div class="chain-deadline" style="top:${dTop.toFixed(1)}px"><span class="chain-deadline-lbl">${lbl}${fmtTime(minToTime(ci.sched.deadlineMin))}</span></div>`;
+      }
+    });
+    layer.innerHTML = html;
+  }
+  // tapping the red chip's "try 6:30" switches the pinned step's pick to that option
+  // and recomputes — the one deliberate write this feature does
+  document.getElementById("chainChips").addEventListener("click", e => {
+    const btn = e.target.closest("[data-chain-pick]");
+    if (!btn) return;
+    const v = btn.dataset.chainPick, cut = v.indexOf(":");
+    const chain = CHAINS.find(c => c.id === v.slice(0, cut));
+    const pinStep = chain && (chain.steps || []).find(s => s.pin);
+    if (!pinStep) return;
+    pinStep.pin.pick = v.slice(cut + 1);
+    saveChains();
+    renderDay();
+  });
 
   /* seed function stripped from the public sync build */
 
@@ -11431,6 +11825,13 @@
       // applyFitLink) — move it along too, or her fitness history would silently stay
       // pinned to the day she moved the occurrence AWAY from.
       if (LINKED_FIT[e.id]) moveFitLogSession(LINKED_FIT[e.id], e.date, dateKey, timeStr, dur);
+    } else if (e.fromRecurringEvent && e.recurId) {
+      // same one-occurrence-only override contract as the routine branch above,
+      // including the reuse-prev-fromDate rule for repeated moves
+      const prev = EVENT_TIME_OVR[e.id];
+      const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
+      EVENT_TIME_OVR[e.id] = { fromDate, date: dateKey, start: timeStr, end };
+      saveEvTimeOvr();
     } else if (!e.generated) {
       const ev = EVENTS.find(x => x.id === e.id);
       if (!ev) return;
@@ -11592,7 +11993,14 @@
       // they're faint and cluttered"): the per-card .tl-edit/.tl-del pencil/× are gone --
       // tapping the block opens the detail popup, whose own header pencil/trash already
       // do the same edit/delete/edit-routine jobs these did (see renderTlDetailHeadActions).
-      const cls = isBlock ? "tl-block" : "tl-point";
+      // 2026-08-06 (chains Stage 2): chained blocks shift right (.tl-chained CSS) to
+      // open the spine gutter; the pin flag rides along for anything styling the anchor.
+      // data-chain lets renderChainLayer() find this chain's rendered blocks and hang
+      // the spine/nodes off their REAL painted geometry (min-height-inflated and
+      // clamped), not the raw time maths — see its comment.
+      const cls = (isBlock ? "tl-block" : "tl-point")
+        + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
+      const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
       const colStyle = p.cols > 1
         ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 3px);width:calc(${(100 / p.cols).toFixed(2)}% - 8px);right:auto;`
         : "";
@@ -11638,7 +12046,7 @@
       // events code further down) reads data-tl-detail directly, same id every block
       // already carries — no draggable attribute needed for it to work. data-move-id
       // stays: right-click-to-edit (the contextmenu listener below) still keys off it.
-      return `<div class="tl-item ${cls}${done ? " done" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
+      return `<div class="tl-item ${cls}${done ? " done" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
         <span class="tl-title">${tick}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}</span>
         <span class="tl-meta">${meta}</span>
         ${resizeHandles}
@@ -11680,6 +12088,12 @@
     if (!e.generated) {
       actions.push(`<button type="button" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>`);
       actions.push(`<button type="button" data-del="${e.id}" aria-label="Delete ${esc(e.title)}">🗑</button>`);
+    } else if (e.fromRecurringEvent && e.recurId) {
+      // recurring event occurrence: ✎ edits the whole series (the template — same
+      // all-occurrences semantics as editing a routine), 🗑 opens the 3-way scope
+      // chooser (this event / this and following / all events) instead of confirm().
+      actions.push(`<button type="button" data-edit="${e.recurId}" aria-label="Edit series ${esc(e.title)}">✎</button>`);
+      actions.push(`<button type="button" data-ev-occ-del="${e.id}" aria-label="Delete ${esc(e.title)}" title="Delete — choose how much of the series">🗑</button>`);
     } else if (e.rtTaskId) {
       // 2026-08-04 (Linh, popup declutter mockup: pencil stays in the header): this
       // pencil used to jump straight to the routine TEMPLATE editor -- SUPERSEDED, it
@@ -11790,7 +12204,7 @@
     // open, showing two rows of identically-labelled "Reschedule"/"Book another" pills.
     // Cancel here (data-tl-toggle-move, same handler as the toggle pills) collapses
     // back to actionsHtml without confirming.
-    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0;
+    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || (e.fromRecurringEvent && !!e.recurId) || e.id.indexOf("fitcal-") === 0;
     const moveOpen = tlDetailPanel === "move";
     const moveHtml = canMove && moveOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
         <div class="tl-detail-move-head">
@@ -12004,6 +12418,60 @@
       renderDay();
       return;
     }
+    // recurring EVENT delete — GCal-style scope chooser instead of a flat confirm()
+    const evOccDel = e.target.closest("[data-ev-occ-del]");
+    if (evOccDel) {
+      const occId = evOccDel.dataset.evOccDel;
+      const item = TL_ITEMS_BY_ID[occId];
+      openEvScopeChooser(occId, item);
+      return;
+    }
+  });
+  /* --- recurring-event delete scope chooser (this / following / all) --- */
+  let evScopeTarget = null;   // { occId, recurId, occDate, title }
+  function openEvScopeChooser(occId, item) {
+    if (!item || !item.recurId) return;
+    evScopeTarget = { occId, recurId: item.recurId, occDate: item.date, title: item.title };
+    document.getElementById("evScopeTitle").textContent = `Delete “${item.title}”`;
+    document.getElementById("evScopeOverlay").hidden = false;
+  }
+  function closeEvScopeChooser() {
+    document.getElementById("evScopeOverlay").hidden = true;
+    evScopeTarget = null;
+  }
+  function evScopeDone() {
+    closeEvScopeChooser();
+    closeTlDetail();
+    render();
+  }
+  document.getElementById("evScopeThis").addEventListener("click", () => {
+    if (!evScopeTarget) return;
+    EVENT_SKIPS[evScopeTarget.occId] = true;
+    saveEvSkips();
+    evScopeDone();
+  });
+  document.getElementById("evScopeFollowing").addEventListener("click", () => {
+    if (!evScopeTarget) return;
+    const t = RECURRING_EVENTS.find(x => x.id === evScopeTarget.recurId);
+    if (t) {
+      // occDate is where the occurrence currently RENDERS; the pattern boundary must
+      // come from its true pattern date, so a moved occurrence still cuts correctly
+      const ovr = EVENT_TIME_OVR[evScopeTarget.occId];
+      const patternDate = ovr && ovr.fromDate ? ovr.fromDate : evScopeTarget.occDate;
+      t.recurUntil = keyOf(addDays(parseKey(patternDate), -1));
+      saveRecurringEvents();
+    }
+    evScopeDone();
+  });
+  document.getElementById("evScopeAll").addEventListener("click", () => {
+    if (!evScopeTarget) return;
+    RECURRING_EVENTS = RECURRING_EVENTS.filter(t => t.id !== evScopeTarget.recurId);
+    saveRecurringEvents();
+    evScopeDone();
+  });
+  document.getElementById("evScopeCancel").addEventListener("click", closeEvScopeChooser);
+  document.getElementById("evScopeOverlay").addEventListener("click", e => {
+    if (!e.target.closest(".ev-scope-sheet")) closeEvScopeChooser();
   });
   document.getElementById("tlDetailOverlay").addEventListener("click", e => {
     if (!e.target.closest(".tl-detail-sheet")) closeTlDetail();
@@ -13299,7 +13767,14 @@
     // renderTimeline() (sleep band, power hours, animal bands, sky) also depends on
     // topForMin(), so compact hours have to be settled before ANY of them render, not
     // just before the timeline items themselves.
-    const dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
+    // 2026-08-06 (chains): computed BEFORE the merge below because chain steps that
+    // reference a routine/event REPLACE that item's normal rendering for the day
+    // (same id, chain-computed time) — the suppress set is what stops the original
+    // and the chain copy both rendering, which is the duplication the spec forbids.
+    const chainData = chainBlocksFor(d);
+    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
+    if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
+    dayEvents = dayEvents.concat(chainData.items);
     // all-day PERSONAL/FAMILY items surface in "Also today" too — their old sidebar
     // boxes are gone, and a written-in task must never be invisible on its day.
     // Generated daily routines stay with their own pages so the box doesn't flood —
@@ -13440,6 +13915,10 @@
     renderFastBar();
     orderDayRail();
     renderTimeline(timed);
+    // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
+    // renderTimeline so compact-hour heights are settled and topForMin() is final
+    renderChainChips(chainData);
+    renderChainLayer(chainData);
     renderFastEverywhere();
     renderBodyWidget();
     renderDayHealth();
@@ -13927,7 +14406,7 @@
           ${(() => {
             // fold the day's generated routines (supplements, washes, admin…) into one
             // quiet chip so real plans stay readable; birthdays always stay full size
-            const isRoutine = e => e.generated && e.allDay && e.category !== "Birthdays";
+            const isRoutine = e => e.generated && e.allDay && e.category !== "Birthdays" && !e.fromRecurringEvent;
             const routines = evs.filter(isRoutine);
             const shown = evs.filter(e => !isRoutine(e));
             // 2026-08-06 (Linh: "give ALL events a tick-off control, not just routines
@@ -14386,9 +14865,11 @@
       const shop = !!shoppingDayReason(d);
       const evs = [...generatedFor(d).filter(e => !e.preview), ...EVENTS.filter(e => e.date === keyOf(d))];
       const bdays = evs.filter(e => e.category === "Birthdays");
-      const chips = evs.filter(e => !e.generated)
+      // recurring-event occurrences are generated:true (they're synthesized, not EVENTS
+      // rows) but must read as real titled events here, not anonymous routine dots
+      const chips = evs.filter(e => !e.generated || e.fromRecurringEvent)
         .sort((a, z) => (a.allDay ? "0" : "1" + (a.start || "")).localeCompare(z.allDay ? "0" : "1" + (z.start || "")));
-      const dots = evs.filter(e => e.generated && e.category !== "Birthdays");
+      const dots = evs.filter(e => e.generated && !e.fromRecurringEvent && e.category !== "Birthdays");
       const ps = periodStatusFor(d, moPred);
       const cd = cycleDayFor(d);
       const moPhase = cd ? phaseOn(d, moPred) : null;
@@ -15343,8 +15824,23 @@
   function renderFastBar() {
     const box = document.getElementById("fastStatus");
     if (!box) return;
-    if (!HEALTH.activeFast) { box.hidden = true; return; }
+    const row = document.getElementById("fastBarRow");
+    // 2026-08-06 (Linh: "allow it to show even when fast is not active and allow to
+    // click to start or stop fast"): idle state instead of hiding -- empty track,
+    // "tap to start" where the countdown normally reads, dimmed dot via .fast-idle.
+    if (!HEALTH.activeFast) {
+      box.hidden = false;
+      row.classList.add("fast-idle");
+      row.classList.remove("goal-met");
+      row.setAttribute("aria-label", "Start fasting");
+      document.getElementById("fastBarFill").style.width = "0%";
+      document.getElementById("fastBarAmt").textContent = "tap to start";
+      document.getElementById("fastBarSub").textContent = "";
+      return;
+    }
     box.hidden = false;
+    row.classList.remove("fast-idle");
+    row.setAttribute("aria-label", "End fast");
     const goalH = HEALTH.fastGoalHours || 16;
     const goalMs = goalH * 3600000;
     const start = new Date(HEALTH.activeFast);
@@ -20220,11 +20716,14 @@
       renderDay();
       return;
     }
-    // edit a hand-written event
+    // edit a hand-written event — or, when the id matches a recurring-event
+    // template instead (the ✎ on a recurring occurrence carries recurId), the series
     const edit = e.target.closest("[data-edit]");
     if (edit) {
       const ev = EVENTS.find(x => x.id === edit.dataset.edit);
-      if (ev) openFormForEdit(ev);
+      if (ev) { openFormForEdit(ev); return; }
+      const rt = RECURRING_EVENTS.find(x => x.id === edit.dataset.edit);
+      if (rt) openFormForRecurEdit(rt);
       return;
     }
     // delete a hand-written event
@@ -20336,11 +20835,94 @@
       .forEach(id => { const el = document.getElementById(id); if (el) el.hidden = isRoutine; });
     fTitle.required = !isRoutine;
     if (isRoutine) populateFRoutine();
+    // recurring events: Repeats is only offered on kind=event, and never while
+    // editing an existing one-off (converting one-off ↔ series isn't supported)
+    document.getElementById("fRepeatField").hidden = formKind !== "event" || eventEditId != null;
+    syncRepeatFields();
   }
   document.getElementById("kindPicker").addEventListener("click", e => {
     const b = e.target.closest(".kind-opt");
-    if (b) { formKind = b.dataset.kind; syncKind(); }
+    if (!b) return;
+    if (editingRecurTemplateId) return;   // a recurring series is always an event
+    formKind = b.dataset.kind; syncKind();
   });
+
+  /* ---- recurring-event form state (weekly layers, mirrors the Routines form) ---- */
+  let editingRecurTemplateId = null;
+  let fRepeatWeekdays = [];
+  let fExtraSchedules = [];
+  document.getElementById("fWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">
+      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+  const syncFWeekdayButtons = () => document.querySelectorAll("#fWeekdayPicker .track-opt")
+    .forEach(b => b.setAttribute("aria-pressed", String(fRepeatWeekdays.includes(+b.dataset.weekday))));
+  document.getElementById("fWeekdayPicker").addEventListener("click", e => {
+    const b = e.target.closest("[data-weekday]"); if (!b) return;
+    const d = +b.dataset.weekday;
+    fRepeatWeekdays = fRepeatWeekdays.includes(d) ? fRepeatWeekdays.filter(x => x !== d) : [...fRepeatWeekdays, d];
+    syncFWeekdayButtons();
+  });
+  function renderFSchedExtra() {
+    const box = document.getElementById("fSchedExtraList");
+    box.innerHTML = fExtraSchedules.map((l, i) => `
+      <div class="rtn-sched-extra-row" data-idx="${i}">
+        <div class="track-picker rtn-sched-extra-days" role="group" aria-label="Days of week for this schedule">
+          ${WD_FULL.map((wd, d) => `<button type="button" class="track-opt" data-weekday="${d}" aria-pressed="${l.weekdays.includes(d)}">${wd.slice(0, 3)}</button>`).join("")}
+        </div>
+        <div class="rtn-sched-extra-row2">
+          <input type="time" class="rtn-sched-extra-start" value="${esc(l.start || "")}" aria-label="Start time">
+          <span class="rtn-sched-extra-label">every</span>
+          <input type="number" class="rtn-sched-extra-interval" min="1" value="${l.weekInterval || 1}" aria-label="Repeat every N weeks">
+          <span class="rtn-sched-extra-label">week(s)</span>
+          <button type="button" class="rtn-sched-extra-del" aria-label="Remove this schedule">×</button>
+        </div>
+        <input type="date" class="rtn-sched-extra-anchor" ${(l.weekInterval || 1) > 1 ? "" : "hidden"} value="${esc(l.weekAnchor || "")}" aria-label="Starting the week of">
+      </div>`).join("");
+  }
+  document.getElementById("fSchedAddBtn").addEventListener("click", () => {
+    fExtraSchedules.push({ weekdays: [], start: "", weekInterval: 1, weekAnchor: "" });
+    renderFSchedExtra();
+  });
+  document.getElementById("fSchedExtraList").addEventListener("click", e => {
+    const wd = e.target.closest("[data-weekday]");
+    if (wd) {
+      const row = wd.closest(".rtn-sched-extra-row"), d = +wd.dataset.weekday;
+      const l = fExtraSchedules[+row.dataset.idx];
+      l.weekdays = l.weekdays.includes(d) ? l.weekdays.filter(x => x !== d) : [...l.weekdays, d];
+      wd.setAttribute("aria-pressed", String(l.weekdays.includes(d)));
+      return;
+    }
+    const del = e.target.closest(".rtn-sched-extra-del");
+    if (del) { fExtraSchedules.splice(+del.closest(".rtn-sched-extra-row").dataset.idx, 1); renderFSchedExtra(); }
+  });
+  document.getElementById("fSchedExtraList").addEventListener("input", e => {
+    const row = e.target.closest(".rtn-sched-extra-row"); if (!row) return;
+    const l = fExtraSchedules[+row.dataset.idx];
+    if (e.target.classList.contains("rtn-sched-extra-start")) l.start = e.target.value;
+    else if (e.target.classList.contains("rtn-sched-extra-interval")) {
+      l.weekInterval = parseInt(e.target.value, 10) || 1;
+      const anchorInput = row.querySelector(".rtn-sched-extra-anchor");
+      anchorInput.hidden = l.weekInterval <= 1;
+      if (l.weekInterval > 1 && !anchorInput.value) { anchorInput.value = keyOf(startOfWeek(TODAY)); l.weekAnchor = anchorInput.value; }
+    } else if (e.target.classList.contains("rtn-sched-extra-anchor")) l.weekAnchor = e.target.value;
+  });
+  function syncRepeatFields() {
+    const on = formKind === "event" && !document.getElementById("fRepeatField").hidden
+      && document.getElementById("fRepeat").checked;
+    document.getElementById("fWeekdayField").hidden = !on;
+    document.getElementById("fSchedExtraField").hidden = !on;
+    if (formKind !== "routine") {
+      // a repeating series has no single Day; its end comes from Duration, and
+      // v1 series are always timed — End/All-day don't apply while it's on
+      document.getElementById("fDateField").hidden = on;
+      document.getElementById("fEndField").hidden = on;
+      document.getElementById("fAllDayRow").hidden = on;
+    }
+    if (on) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; }
+    // an existing series stays a series — deleting it is the 🗑's job, not an unticked box
+    document.getElementById("fRepeat").disabled = !!editingRecurTemplateId;
+  }
+  document.getElementById("fRepeat").addEventListener("change", syncRepeatFields);
   // whose job is it — Mine / his / Both (two-person system)
   let formWho = "me";
   // 2026-08-02 (code44): picking always re-collapses back to the summary line —
@@ -20386,10 +20968,13 @@
     document.getElementById("addFormBackdrop").hidden = true;
     document.getElementById("addFormConfirm").hidden = true;
     form.reset(); state.track = "work"; syncTrack();
+    eventEditId = null;
+    editingRecurTemplateId = null;
+    fRepeatWeekdays = []; fExtraSchedules = [];
+    renderFSchedExtra(); syncFWeekdayButtons();
     formKind = "task"; syncKind();
     formWho = "me"; syncWho();
     fStart.disabled = false; fEnd.disabled = false; fDur.disabled = false;
-    eventEditId = null;
     formDirty = false;
     setMoreOptionsOpen(false);
     document.getElementById("eventSubmitBtn").textContent = "Write it in";
@@ -20438,6 +21023,40 @@
     // there — editing should never hide something she'd already filled in.
     const hasExtra = whoOf(ev) !== "me" || (ev.stages && ev.stages.length) || ev.estMin
       || (!ev.allDay && ev.end) || ev.allDay || ev.category || (ev.locPath && ev.locPath.length);
+    setMoreOptionsOpen(!!hasExtra);
+    fTitle.focus();
+  }
+  // editing a recurring-event TEMPLATE (the ✎ on any of its occurrences) — always
+  // the whole series, same all-occurrences semantics as editing a routine
+  function openFormForRecurEdit(t) {
+    addRow.hidden = true; form.hidden = false;
+    document.getElementById("addFormBackdrop").hidden = false;
+    formDirty = false;
+    document.getElementById("kindRoutineBtn").hidden = true;
+    eventEditId = null;
+    editingRecurTemplateId = t.id;
+    document.getElementById("eventSubmitBtn").textContent = "Save changes";
+    fTitle.value = t.title;
+    state.track = t.track; syncTrack();
+    formWho = t.who || "me"; syncWho();
+    fCat.value = t.category || "";
+    fLoc.value = (t.locPath || []).join(" > ");
+    document.getElementById("fStages").value = "";
+    fAllDay.checked = false;
+    fStart.disabled = fEnd.disabled = fDur.disabled = false;
+    const layers = schedulesOf(t);
+    fStart.value = layers[0] && layers[0].start || "";
+    fEnd.value = "";
+    fDur.value = t.durationMin ? String(t.durationMin) : "";
+    document.getElementById("fRepeat").checked = true;
+    fRepeatWeekdays = (layers[0] && layers[0].weekdays || []).slice();
+    fExtraSchedules = layers.slice(1).map(l => ({
+      weekdays: (l.weekdays || []).slice(), start: l.start || "",
+      weekInterval: l.weekInterval || 1, weekAnchor: l.weekAnchor || "",
+    }));
+    renderFSchedExtra(); syncFWeekdayButtons();
+    formKind = "event"; syncKind();
+    const hasExtra = (t.who && t.who !== "me") || t.durationMin || t.category || (t.locPath && t.locPath.length);
     setMoreOptionsOpen(!!hasExtra);
     fTitle.focus();
   }
@@ -21849,9 +22468,9 @@
     function cancelPress() { clearTimeout(timer); timer = null; candidate = null; }
     function arm(id, item, pointerId, mouse) {
       const ev = TL_ITEMS_BY_ID[id];
-      // only real events + routine occurrences can move — other generated items
-      // (hair, birthdays, supplements…) have no stored home to move them into
-      if (!ev || (ev.generated && !(ev.fromRoutine && ev.rtTaskId))) return;
+      // only real events + routine/recurring-event occurrences can move — other
+      // generated items (hair, birthdays, supplements…) have no stored home to move into
+      if (!ev || (ev.generated && !(ev.fromRoutine && ev.rtTaskId) && !(ev.fromRecurringEvent && ev.recurId))) return;
       drag = { id, el: item, origTop: parseFloat(item.style.top) || 0, mouse };
       try { item.setPointerCapture(pointerId); } catch (err) {}
       item.classList.add("tl-dragging");
@@ -22100,6 +22719,51 @@
       ? document.getElementById("fStages").value.split("\n").map(s => s.trim()).filter(Boolean)
       : [];
     const estVal = formKind === "task" ? parseInt(document.getElementById("fEst").value, 10) : NaN;
+    // recurring event (weekly layers) — its OWN save path, never also an EVENTS row
+    const repeats = formKind === "event" && !document.getElementById("fRepeatField").hidden
+      && document.getElementById("fRepeat").checked;
+    if (repeats || editingRecurTemplateId) {
+      if (!fStart.value) { fStart.focus(); return; }   // v1 series are always timed
+      const days = fRepeatWeekdays.slice().sort((a, b) => a - b);
+      if (!days.length) { alert("Pick at least one day of the week for this event."); return; }
+      const extra = fExtraSchedules.filter(l => l.weekdays.length);
+      for (const l of extra) {
+        if ((l.weekInterval || 1) > 1 && !l.weekAnchor) {
+          alert(`Set a "starting the week of" date for the extra schedule on ${l.weekdays.length} day(s).`);
+          return;
+        }
+      }
+      const schedules = [
+        { weekdays: days, start: fStart.value },
+        ...extra.map(l => ({
+          // an extra layer with no time of its own inherits the main Starts time
+          weekdays: l.weekdays.slice().sort((a, b) => a - b), start: l.start || fStart.value,
+          ...((l.weekInterval || 1) > 1 ? { weekInterval: l.weekInterval, weekAnchor: l.weekAnchor } : {}),
+        })),
+      ];
+      const durationMin = parseInt(fDur.value, 10) || 0;
+      const fields = {
+        title, track: state.track, freq: "weekly", category: fCat.value.trim(),
+        locPath: parseLocPath(fLoc.value), schedules,
+      };
+      if (editingRecurTemplateId) {
+        const t = RECURRING_EVENTS.find(x => x.id === editingRecurTemplateId);
+        if (t) {
+          Object.assign(t, fields);
+          if (formWho === "me") delete t.who; else t.who = formWho;
+          if (durationMin > 0) t.durationMin = durationMin; else delete t.durationMin;
+        }
+      } else {
+        RECURRING_EVENTS.push({
+          id: uid(), ...fields,
+          ...(formWho !== "me" ? { who: formWho } : {}),
+          ...(durationMin > 0 ? { durationMin } : {}),
+        });
+      }
+      saveRecurringEvents(); closeForm();
+      render();   // a series touches many days — refresh every view, not just today
+      return;
+    }
     if (eventEditId) {
       const ev = EVENTS.find(x => x.id === eventEditId);
       if (ev) {
