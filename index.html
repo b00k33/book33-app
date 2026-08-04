@@ -2787,6 +2787,28 @@
   .dp-recap-row { font-size: 12.5px; color: var(--ink-soft); padding: 3px 0; }
   .dp-recap-left { font-size: 12px; color: var(--ink-soft); font-style: italic; margin-top: 6px; }
   .dp-recap-left.dp-recap-clear { color: var(--fit-workout); font-style: normal; font-weight: 700; }
+  /* 2026-08-06 (Linh: "make it expandable so I can see and tick them"): the whole
+     header is the toggle now — cursor + chevron say so; the bell keeps its own tap. */
+  .dp-card { cursor: pointer; }
+  .dp-chevron { flex: none; font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
+  /* recap task rows — same ●/○ language as the habit tracker: green filled dot
+     (fitness token) + soft strike when done, faint hollow ring when still to do.
+     Every row is a real button toggling through the app-wide data-tick-ev delegate;
+     44px min height keeps them honest tap targets. */
+  .dp-t-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
+    padding: 4px 2px; border: none; background: none; cursor: pointer; text-align: left;
+    font-family: var(--font-body); font-size: 13.5px; color: var(--ink);
+  }
+  .dp-dot {
+    flex: none; width: 11px; height: 11px; border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--ink-faint) 60%, transparent);
+  }
+  .dp-dot-done {
+    background: var(--fast); box-shadow: 0 0 5px color-mix(in oklab, var(--fast) 50%, transparent);
+  }
+  .dp-t-row.done .dp-t-label { text-decoration: line-through; opacity: 0.55; }
+  .dp-t-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* TASKS keep soft rounded mochi corners + a round gold tick;
      ROUTINES are tasks on a schedule — rounded, tickable, gold ↻, steps + minutes in the meta;
      EVENTS (appointments/occasions) are rounded pills too (2026-08-01: SUPERSEDED the
@@ -11335,18 +11357,29 @@
     playRewardSound(scale);
     rewardToast(milestoneMsg || pickRewardMsg(scale === "milestone" ? "day" : scale), scale);
   }
-  // small, satisfying, closure-not-guilt (her ask): what's done reads as a plain
-  // checked list; what's left is one soft line, never itemised — a nudge-free
-  // "no rush" beats a list of everything still outstanding.
+  // 2026-08-06 (Linh: "the card shows a ring but not which tasks — make it expandable
+  // so I can see and tick them"): SUPERSEDES the never-itemise-the-outstanding recap.
+  // Two groups, same visual language as the habit tracker — done rows get a green ●
+  // (fitness token) + soft strike, still-to-do rows a faint ○ and are tappable.
+  // Rows carry data-tick-ev, so the app-wide tick delegate handles the toggle through
+  // the ONE existing completion mechanism (daybook-done via tickTask/toggleDone —
+  // rewards, fit-links and renderDay's live ring/count refresh all come for free,
+  // and nothing new is ever created). What counts = dayTickables(), the single
+  // easy-to-change source (its filter is the ONLY place to narrow later).
   function dayRecapHTML(items) {
     if (!items.length) return `<div class="dp-recap-left">Nothing tickable on today's page yet.</div>`;
+    const row = (e, done) => `<button type="button" class="dp-t-row${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}
+        aria-label="${done ? "Un-tick" : "Mark done"}: ${esc(e.title)}">
+        <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>
+      </button>`;
     const doneItems = items.filter(e => isDone(e.id));
-    const left = items.length - doneItems.length;
+    const todoItems = items.filter(e => !isDone(e.id));
+    const left = todoItems.length;
     return `
-      ${doneItems.length ? doneItems.map(e => `<div class="dp-recap-row">✓ ${esc(e.title)}</div>`).join("")
-        : `<div class="dp-recap-left">Nothing ticked off yet today — whenever you're ready.</div>`}
+      ${doneItems.map(e => row(e, true)).join("")}
+      ${todoItems.map(e => row(e, false)).join("")}
       ${left > 0 ? `<div class="dp-recap-left">${left} left for today — no rush.</div>`
-        : `<div class="dp-recap-left dp-recap-clear">Everything's done. Nicely closed out.</div>`}
+        : `<div class="dp-recap-left dp-recap-clear">✓ All done today.</div>`}
     `;
   }
   // goal-gradient ring (her ask: "seeing it near full pulls me to finish") — tap
@@ -11365,15 +11398,16 @@
     if (fitWeeks >= 2) streakBits.push(`🔥 ${fitWeeks}-week fitness streak`);
     const bestRtn = bestRoutineStreak();
     if (bestRtn) streakBits.push(`🔥 ${bestRtn.streak}-day ${esc(bestRtn.title)}`);
-    host.innerHTML = `<div class="dp-card">
-      <button type="button" class="dp-ring-btn" id="dpToggle" aria-expanded="${dpRecapOpen}" aria-label="Today's progress — tap for a recap">
+    host.innerHTML = `<div class="dp-card" id="dpHeader" role="button" tabindex="0" aria-expanded="${dpRecapOpen}"
+      aria-label="Today's progress — tap to ${dpRecapOpen ? "hide" : "show"} today's tasks">
+      <span class="dp-ring-btn">
         <svg viewBox="0 0 ${size} ${size}" class="dp-ring-svg">
           <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="dp-ring-track"/>
           <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="dp-ring-prog" data-complete="${complete}"
             transform="rotate(-90 ${size / 2} ${size / 2})" style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off}"/>
         </svg>
         <span class="dp-ring-center">${total ? `${done}/${total}` : "—"}</span>
-      </button>
+      </span>
       <div class="dp-info">
         <div class="dp-label">${complete ? "Today — all done" : total ? "Today's progress" : "Nothing tickable today"}</div>
         ${streakBits.length ? `<div class="dp-streaks">${streakBits.join(" · ")}</div>` : ""}
@@ -11381,12 +11415,18 @@
       <button type="button" class="dp-sound-toggle" id="dpSoundToggle" aria-pressed="${rewardSoundOn}"
         aria-label="${rewardSoundOn ? "Turn off completion sound" : "Turn on completion sound"}"
         title="${rewardSoundOn ? "Sound on completion — on" : "Sound on completion — off"}">${rewardSoundOn ? "🔔" : "🔕"}</button>
+      <span class="dp-chevron" aria-hidden="true">${dpRecapOpen ? "▴" : "▾"}</span>
     </div>
     <div class="dp-recap"${dpRecapOpen ? "" : " hidden"}>${dayRecapHTML(items)}</div>`;
   }
   document.getElementById("dayProgress").addEventListener("click", e => {
-    if (e.target.closest("#dpToggle")) { dpRecapOpen = !dpRecapOpen; renderDayProgress(); return; }
+    // recap rows carry data-tick-ev — the app-wide tick delegate (on #wrap) handles
+    // those, so they must fall through here untouched
+    if (e.target.closest("[data-tick-ev]")) return;
     if (e.target.closest("#dpSoundToggle")) { setRewardSound(!rewardSoundOn); renderDayProgress(); return; }
+    // 2026-08-06 (Linh: "expand on tap of the card header"): the WHOLE header row
+    // toggles now, not just the ring — chevron is the affordance
+    if (e.target.closest("#dpHeader")) { dpRecapOpen = !dpRecapOpen; renderDayProgress(); return; }
   });
 
   // staged tasks — for the ones she finishes in pieces: the task carries follow-up
