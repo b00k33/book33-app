@@ -5107,6 +5107,10 @@
   }
 
   .footnote { font-size: 11.5px; color: var(--ink-faint); text-align: center; max-width: 520px; line-height: 1.6; }
+  /* offline-copy status line under the footnote — same quiet voice, the ✓ carries
+     the same "done/healthy" green the CPD target-met stat uses */
+  .offline-ready { font-size: 11px; color: var(--ink-faint); text-align: center; margin: 4px 0 16px; }
+  .offline-ready .ok { color: var(--fit-workout); font-weight: 600; }
 
   @media (max-width: 520px) {
     :root { --gutter: 60px; --hour-h: 48px; }
@@ -6118,8 +6122,16 @@
       position: static;
     }
     #navDateSlot .weekday-moon-row, #navDateSlot .date-row { font-size: 11px; }
+    /* 2026-08-05 (Linh, "its not the colour its the uneven size"): the earlier
+       make-them-the-same pass unified the BASE rules (12px tier) but this nav-slot
+       band still carried its own mix -- AUG 9px vs WED 12px vs UD 11px, and the two
+       gold numbers 13px vs 22px. Inside the slot everything now sits on exactly two
+       tiers: 11px for all three small words, 13px for both gold numbers. */
     #navDateSlot .date-big .date-num { font-size: 13px; }
-    #navDateSlot .date-big .date-mon { font-size: 9px; }
+    #navDateSlot .date-big .date-mon { font-size: 11px; }
+    #navDateSlot .ud-badge .n { font-size: 13px; }
+    #navDateSlot .ud-badge { font-size: 11px; }
+    #navDateSlot .weekday { font-size: 11px; }
   }
   /* 2026-08-02 (Linh, three rounds in, still "ugly": "why are you ignoring my request
      to use google cal ui design for calendar vs everything else" -- the last three
@@ -9130,6 +9142,10 @@
   </div>
 
   <p class="footnote">Entries marked ↻ repeat automatically from your Life Map. Ticks and hand-written entries are saved in this browser.</p>
+  <!-- offline-copy status (Linh 2026-08-05, "offline ready symbol can be at the bottom"):
+       filled in by the service-worker registration script at the end of the file;
+       stays hidden on file:// copies where a SW can't register at all. -->
+  <div class="offline-ready" id="offlineReady" hidden></div>
 </div>
 
 <script>
@@ -10884,6 +10900,15 @@
       // the chain isn't live that day.
       let startMin = effStart ? timeToMin(effStart) : null;
       const chainMin = chainedStartMinOn(t, date);
+      // 2026-08-06 (Linh: "i dont like that i cant see the chain"): the chain places
+      // this block at the right time (above) but nothing marked it as chained, so the
+      // Day view drew it as a plain block — same gap on the anchor's own occurrence.
+      // chainAnchorOccId lets the post-pass below (see renderDay()) find that anchor
+      // occurrence and tag both ends with the same fromChain id, which the timeline
+      // block template already knows how to draw (tl-chained/tl-chain-pin/data-chain
+      // — built for the old Stage 2 spine, reused here for the live anchorTo model).
+      const chainAnchor = chainMin != null ? chainAnchorOf(t) : null;
+      const chainAnchorOccId = chainAnchor ? (isRecurEvent(chainAnchor) ? `ev-${chainAnchor.id}-${k}` : `rt-${chainAnchor.id}-${k}`) : null;
       if (chainMin != null) {
         startMin = chainMin;
         effStart = minToTime(chainMin);
@@ -10927,6 +10952,7 @@
           start: minToTime(sMin),
           end: ovr && ovr.end && !ovr.dur ? ovr.end : minToTime(Math.min(sMin + total, 1439)),
           steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null,
+          fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
         });
       } else {
         const start = ovr && ovr.start ? ovr.start : (effStart || "");
@@ -10947,6 +10973,7 @@
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
           allDay: !start, start, end: (ovrEnd || effEnd) || "", fitLink: t.fitLink || null,
+          fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
         });
       }
     });
@@ -10996,6 +11023,10 @@
       // its time here, sliding with the anchor; a chain-granted day the chain can't
       // resolve drops the occurrence rather than rendering at a stale pattern time
       const chainMin = chainedStartMinOn(t, date);
+      // see the matching comment on the routine push above — chainAnchorOccId lets
+      // renderDay()'s post-pass tag the anchor's own occurrence to match this one
+      const chainAnchor = chainMin != null ? chainAnchorOf(t) : null;
+      const chainAnchorOccId = chainAnchor ? (isRecurEvent(chainAnchor) ? `ev-${chainAnchor.id}-${k}` : `rt-${chainAnchor.id}-${k}`) : null;
       if (chainMin != null) {
         effStart = minToTime(chainMin);
         effEnd = minToTime(Math.min(chainMin + routineDurMin(t), 1439));
@@ -11009,6 +11040,7 @@
         ...(t.who && t.who !== "me" ? { who: t.who } : {}),
         allDay: !start, start, end: (ovr ? ovr.end : effEnd) || "",
         fromRecurringEvent: true, recurId: t.id,
+        fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
       });
     });
     // cross-day pass for recurring events, mirroring the routine one above: an
@@ -11246,36 +11278,31 @@
       return `<div class="chain-chip"><span class="chain-chip-name">${name}</span><span class="chain-chip-bad">✕ ${-s.slack}m late</span>${sug}</div>`;
     }).join("");
   }
-  // Stage 2's overlay: gold spine + a node per chained block (anchor filled, ⚓),
-  // dashed deadline line with its right-aligned label. Spine/node geometry reads the
-  // chain's RENDERED blocks (data-chain, set by renderTimeline) rather than re-running
-  // the time maths: short blocks paint taller than their true minutes (the timeline's
-  // legibility min-height), so time-derived positions would stop the spine above the
-  // last block's visual bottom and drift nodes off-centre. The deadline line stays on
-  // topForMin() — it marks a TIME, not a block. Must run after renderTimeline().
-  function renderChainLayer(chainData) {
+  // Gold spine + a node per chained block (anchor filled, ⚓). Spine/node geometry
+  // reads the chain's RENDERED blocks (data-chain, set by renderTimeline) rather than
+  // re-running the time maths: short blocks paint taller than their true minutes (the
+  // timeline's legibility min-height), so time-derived positions would stop the spine
+  // above the last block's visual bottom and drift nodes off-centre. Must run after
+  // renderTimeline(). 2026-08-06: chainIds is a flat array of fromChain ids (one per
+  // live anchorTo pair, see renderDay()'s liveChainIds) — no deadline concept in this
+  // model (that was Stage 2's daybook-chains-only feature; dropped along with it).
+  function renderChainLayer(chainIds) {
     const layer = document.getElementById("chainLayer");
     if (!layer) return;
-    if (!chainData || !chainData.chips.length) { layer.innerHTML = ""; return; }
+    if (!chainIds || !chainIds.length) { layer.innerHTML = ""; return; }
     let html = "";
-    chainData.chips.forEach(ci => {
-      const blocks = Array.from(document.querySelectorAll(`#eventsLayer .tl-chained[data-chain="${CSS.escape(ci.chain.id)}"]`));
-      if (blocks.length) {
-        const tops = blocks.map(b => parseFloat(b.style.top) || 0);
-        const bottoms = blocks.map(b => (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0));
-        const top = Math.min(...tops), bottom = Math.max(...bottoms);
-        html += `<div class="chain-spine" style="top:${top.toFixed(1)}px;height:${(bottom - top).toFixed(1)}px"></div>`;
-        blocks.forEach(b => {
-          const mid = (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0) / 2;
-          const pin = b.classList.contains("tl-chain-pin");
-          html += `<div class="chain-node${pin ? " chain-node-pin" : ""}" style="top:${(mid - 6).toFixed(1)}px">${pin ? "⚓" : ""}</div>`;
-        });
-      }
-      if (ci.sched.deadlineMin != null) {
-        const dTop = topForMin(ci.sched.deadlineMin);
-        const lbl = ci.chain.deadline.label ? `${esc(ci.chain.deadline.label.toLowerCase())} · ` : "";
-        html += `<div class="chain-deadline" style="top:${dTop.toFixed(1)}px"><span class="chain-deadline-lbl">${lbl}${fmtTime(minToTime(ci.sched.deadlineMin))}</span></div>`;
-      }
+    [...new Set(chainIds)].forEach(id => {
+      const blocks = Array.from(document.querySelectorAll(`#eventsLayer .tl-chained[data-chain="${CSS.escape(id)}"]`));
+      if (!blocks.length) return;
+      const tops = blocks.map(b => parseFloat(b.style.top) || 0);
+      const bottoms = blocks.map(b => (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0));
+      const top = Math.min(...tops), bottom = Math.max(...bottoms);
+      html += `<div class="chain-spine" style="top:${top.toFixed(1)}px;height:${(bottom - top).toFixed(1)}px"></div>`;
+      blocks.forEach(b => {
+        const mid = (parseFloat(b.style.top) || 0) + (b.offsetHeight || 0) / 2;
+        const pin = b.classList.contains("tl-chain-pin");
+        html += `<div class="chain-node${pin ? " chain-node-pin" : ""}" style="top:${(mid - 6).toFixed(1)}px">${pin ? "⚓" : ""}</div>`;
+      });
     });
     layer.innerHTML = html;
   }
@@ -14847,6 +14874,20 @@
     let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
     if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
     dayEvents = dayEvents.concat(chainData.items);
+    // 2026-08-06 (Linh: "i dont like that i cant see the chain"): live anchorTo chains
+    // (the Routines-page "Chains" card, see chainedStartMinOn) mark their moving end
+    // with fromChain/chainAnchorOccId in generatedFor() — this finds the anchor's own
+    // occurrence in TODAY's list and tags it the same way, so both blocks share one
+    // data-chain id and the spine/node overlay below draws a line between them.
+    const liveChainIds = [];
+    dayEvents.forEach(e => {
+      if (!e.fromChain || !e.chainAnchorOccId) return;
+      const anchorItem = dayEvents.find(x => x.id === e.chainAnchorOccId);
+      if (!anchorItem) return;
+      anchorItem.fromChain = e.fromChain;
+      anchorItem.chainPin = true;
+      liveChainIds.push(e.fromChain);
+    });
     // all-day PERSONAL/FAMILY items surface in "Also today" too — their old sidebar
     // boxes are gone, and a written-in task must never be invisible on its day.
     // Generated daily routines stay with their own pages so the box doesn't flood —
@@ -14994,9 +15035,13 @@
     orderDayRail();
     renderTimeline(timed);
     // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
-    // renderTimeline so compact-hour heights are settled and topForMin() is final
+    // renderTimeline so compact-hour heights are settled and topForMin() is final.
+    // renderChainChips still reads the (now always-empty) daybook-chains chip data —
+    // left as a harmless no-op rather than deleted. renderChainLayer switched to
+    // liveChainIds (2026-08-06, see above) since real chains now live as anchorTo
+    // pairs, not daybook-chains steps.
     renderChainChips(chainData);
-    renderChainLayer(chainData);
+    renderChainLayer(liveChainIds);
     renderFastEverywhere();
     renderBodyWidget();
     renderDayHealth();
@@ -25516,4 +25561,35 @@
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () { navigator.serviceWorker.register("./sw.js").catch(function () {}); });
 }
+// "✓ Works offline" line at the page bottom (Linh 2026-08-05): true only when a
+// service worker controls this page AND the app shell is really in the cache — the
+// same two things the offline path needs. Hidden entirely where a SW can't exist
+// (file:// copies), re-checked whenever a new SW takes over after an update.
+(function () {
+  var el = document.getElementById("offlineReady");
+  if (!el || location.protocol === "file:" || !("serviceWorker" in navigator) || !("caches" in window)) return;
+  function refresh() {
+    if (!navigator.serviceWorker.controller) {
+      el.hidden = false;
+      el.textContent = "Getting the offline copy ready — keep the app open a moment…";
+      return;
+    }
+    caches.keys().then(function (keys) {
+      var b33 = keys.filter(function (k) { return k.indexOf("b33-") === 0; });
+      if (!b33.length) { el.hidden = true; return Promise.resolve(false); }
+      return Promise.all(b33.map(function (k) {
+        return caches.open(k).then(function (c) {
+          return c.match("./").then(function (hit) { return hit || c.match("./index.html"); });
+        });
+      })).then(function (hits) { return hits.some(Boolean); });
+    }).then(function (ready) {
+      el.hidden = false;
+      el.innerHTML = ready
+        ? '<span class="ok">✓</span> Works offline — app and your data are saved on this device'
+        : "Getting the offline copy ready — open once with internet";
+    }).catch(function () { el.hidden = true; });
+  }
+  window.addEventListener("load", function () { setTimeout(refresh, 1500); });
+  navigator.serviceWorker.addEventListener("controllerchange", function () { setTimeout(refresh, 500); });
+})();
 </script>
