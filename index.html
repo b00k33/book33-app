@@ -7323,6 +7323,42 @@
      whether the 300px column is occupied. Single-column only while the calendar is
      actually gone; the class comes off when it returns home. */
   .day-row2.mini-out { grid-template-columns: 1fr; }
+
+  /* ============================================================
+     DESKTOP 3-COLUMN WORKSPACE — 2026-08-05 (Linh's re-layout spec). ≥1024px only;
+     placeDeskGrid() has moved the widgets into #deskGrid by the time these rules
+     matter, and CSS + DOM share the same 1024px matchMedia signal. Flat: columns
+     group by tone and spacing, not nested boxes. Below 1024px #deskGrid stays
+     hidden and none of this applies — the phone layout is untouched.
+     ============================================================ */
+  #deskGrid[hidden] { display: none; }
+  @media (min-width: 1024px) {
+    /* top bar: logo + chapter tabs + spacer + icon circles, one row */
+    #deskHead { display: none; }
+    .nav-tiers { display: flex; align-items: center; gap: 16px; }
+    .nav-tiers .desk-logo { width: 34px; height: 34px; flex: none; }
+    .nav-tiers .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .nav-tiers .desk-tools { margin-left: 0; }
+    .nav-tiers .desk-tool { width: 36px; height: 36px; font-size: 15px; }
+    /* the workspace */
+    #deskGrid { display: grid; grid-template-columns: 290px minmax(0, 1fr) 300px; gap: 16px; align-items: start; margin-top: 8px; }
+    #deskColLeft, #deskColMain, #deskColRight { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    /* left rail: the date, stated once */
+    .ddc-num { font-size: 44px; font-weight: 800; color: var(--gold-bright); line-height: 1; font-variant-numeric: tabular-nums; }
+    .ddc-wd { font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 4px; }
+    .ddc-sub { font-size: 11.5px; color: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+    #deskDateCard .date-drop-nav { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    #deskDateCard .today-pill { flex: none; }
+    /* left rail cards inherit their existing looks; kill leftover chrome spacing */
+    #deskColLeft #tilesDate { margin: 0; }
+    #deskColLeft .page-head { margin: 0; }
+    /* the emptied old containers take no space */
+    .day-row2 { display: none; }
+    .day-layout { display: block; margin: 0; }
+    /* centre: the day is the hero — its pieces stack tight under the command bar */
+    #deskColMain .day-main { display: flex; flex-direction: column; }
+    #deskColMain #dayProgress { margin: 0; }
+  }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -8398,6 +8434,22 @@
         <button type="button" class="desk-tool" id="deskToolBday" title="Birthdays" aria-label="Birthday details" aria-pressed="false">🎖</button>
       </div>
     </div>
+    <!-- 2026-08-05 (Linh, desktop re-layout spec): the ≥1024px three-column workspace.
+         EMPTY scaffold — placeDeskGrid() moves the EXISTING widgets in (and back out
+         below the breakpoint), so there is exactly one copy of every component and
+         zero duplicated logic. Left: today-context glance (date once, numerology
+         strip, Numerology/Cycle cards). Centre: the day as hero (command bar,
+         progress, fasting + timeline). Right: month calendar + patients + the rest
+         of the rail. Hidden below 1024px, where the phone layout applies untouched. -->
+    <div id="deskGrid" hidden>
+      <div id="deskColLeft">
+        <div id="deskDateCard">
+          <div id="ddcDate"></div>
+        </div>
+      </div>
+      <div id="deskColMain"></div>
+      <div id="deskColRight"></div>
+    </div>
     <div class="day-row2" id="dayRow2">
       <div id="tilesDate" class="tile-shelf">
         <div class="page-head">
@@ -8682,6 +8734,10 @@
         <!-- 2026-08-04 (Linh, desktop styling spec, point 5): desktop-only right-rail
              cards, display:none under 641px so phones keep their existing layout.
              Re-rendered by renderDeskRail() on every renderDay(). -->
+        <!-- 2026-08-05: anchor markers so placeDeskGrid() can return the Numerology/
+             Cycle cards (→ left column) and the progress card (→ centre column) to
+             their rail homes below the 1024px breakpoint -->
+        <div id="railHome" hidden></div>
         <div class="rail-card" id="railNum">
           <h4>Numerology <button type="button" class="rail-info" id="railNumInfo" title="Universal, Personal and Month numbers — the full reading lives in the Numerology &amp; Astrology card">ⓘ</button></h4>
           <div class="rail-chips" id="railNumChips"></div>
@@ -8706,6 +8762,7 @@
           <div class="pileup-sub">Slipped past their day — do it, move it, or let it go.</div>
           <div id="pileupList"></div>
         </div>
+        <div id="dayProgressHome" hidden></div>
         <div id="dayProgress"></div>
         <div id="alsoToday"></div>
 
@@ -14740,6 +14797,8 @@
     renderDeskHead();
     renderDeskRail();
     placeMiniCalDesk();
+    // after placeMiniCalDesk so the right column already has the calendar at its top
+    placeDeskGrid();
   }
 
   // quick-jump mini month calendar, toggled from the month pill in the Day page header
@@ -19832,6 +19891,81 @@
   // matchMedia change fires even when the harness resizes the viewport without a
   // classic resize event (and self-corrects a mismatched boot-time width)
   if (miniCalDeskMq.addEventListener) miniCalDeskMq.addEventListener("change", placeMiniCalDesk);
+
+  /* ============================================================
+     DESKTOP 3-COLUMN WORKSPACE — 2026-08-05 (Linh's re-layout spec: "a proper
+     desktop layout — date stated ONCE, three aligned columns, the day timeline as
+     the hero"). ≥1024px, placeDeskGrid() moves the EXISTING widgets into the
+     #deskGrid scaffold; below it every element returns to its phone-layout home
+     via the anchor markers, so mobile is byte-identical. This is a re-layout of
+     the same components — no logic is duplicated anywhere.
+       left  ← #tilesDate (numerology strip) + #railNum + #railCycle, under the
+               once-only date card (#deskDateCard, filled by renderDeskHead) with
+               the existing ‹ Today › .date-drop-nav moved in under it
+       centre← .day-main (command bar, fasting, timeline) with #dayProgress
+               slotted in after the command bar
+       right ← .day-side (mini calendar first, patients right after, then the
+               rest of the rail: herb alerts, also-today, shopping…)
+       top   ← the B33 logo + icon toolbar join .nav-tiers; #deskHead hides
+     ============================================================ */
+  const deskGridMq = window.matchMedia("(min-width: 1024px)");
+  function placeDeskGrid() {
+    const grid = document.getElementById("deskGrid");
+    const dayLayout = document.querySelector("#dayPage .day-layout");
+    if (!grid || !dayLayout) return;
+    const on = deskGridMq.matches;
+    const colL = document.getElementById("deskColLeft");
+    const colM = document.getElementById("deskColMain");
+    const colR = document.getElementById("deskColRight");
+    const dateCard = document.getElementById("deskDateCard");
+    const dropNav = document.querySelector("#dayPage .date-drop-nav");
+    const dropPop = document.querySelector("#dayPage .date-drop-pop");
+    const tiles = document.getElementById("tilesDate");
+    const row2 = document.getElementById("dayRow2");
+    const calHome = document.getElementById("miniCalHome");
+    const dayMain = document.querySelector("#dayPage .day-main");
+    const daySide = document.querySelector("#dayPage .day-side");
+    const rNum = document.getElementById("railNum");
+    const rCyc = document.getElementById("railCycle");
+    const rPat = document.getElementById("railPatients");
+    const prog = document.getElementById("dayProgress");
+    const progHome = document.getElementById("dayProgressHome");
+    const railHome = document.getElementById("railHome");
+    const qa = document.getElementById("qaSlotDay");
+    const logo = document.querySelector(".desk-logo");
+    const tools = document.querySelector(".desk-tools");
+    const navTiers = document.querySelector(".nav-tiers");
+    const topRight = document.querySelector(".nav-tiers .topbar-right");
+    const deskHead = document.getElementById("deskHead");
+    grid.hidden = !on;
+    if (on) {
+      if (logo && navTiers && logo.parentElement !== navTiers) navTiers.insertBefore(logo, navTiers.firstElementChild);
+      if (tools && topRight && tools.parentElement !== topRight) topRight.insertBefore(tools, topRight.firstChild);
+      if (dropNav && dateCard && dropNav.parentElement !== dateCard) dateCard.appendChild(dropNav);
+      if (tiles && tiles.parentElement !== colL) colL.appendChild(tiles);
+      if (rNum && rNum.parentElement !== colL) colL.appendChild(rNum);
+      if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
+      if (dayMain && dayMain.parentElement !== colM) colM.appendChild(dayMain);
+      if (prog && qa && prog.previousElementSibling !== qa) qa.insertAdjacentElement("afterend", prog);
+      if (daySide && daySide.parentElement !== colR) colR.appendChild(daySide);
+      const wrap = document.getElementById("miniCalWrap");
+      if (wrap && rPat && wrap.parentElement === daySide && rPat.previousElementSibling !== wrap)
+        daySide.insertBefore(rPat, wrap.nextSibling);
+    } else {
+      if (deskHead) {
+        if (logo && logo.parentElement !== deskHead) deskHead.insertBefore(logo, deskHead.firstElementChild);
+        if (tools && tools.parentElement !== deskHead) deskHead.appendChild(tools);
+      }
+      if (dropNav && dropPop && dropNav.parentElement !== dropPop) dropPop.insertBefore(dropNav, dropPop.firstChild);
+      if (tiles && row2 && tiles.parentElement !== row2) row2.insertBefore(tiles, calHome);
+      if (railHome && rNum && rCyc && rPat && railHome.nextElementSibling !== rNum) railHome.after(rNum, rCyc, rPat);
+      if (progHome && prog && progHome.nextElementSibling !== prog) progHome.after(prog);
+      if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
+      if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
+    }
+  }
+  window.addEventListener("resize", placeDeskGrid);
+  if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDeskGrid);
   function renderDeskHead() {
     const el = document.getElementById("deskDateBlock");
     if (!el) return;
@@ -19842,6 +19976,12 @@
       `<span class="dd-ud">UD <b>${universalDay(d).value}</b></span>`;
     const cur = document.querySelector('#deskTodayMenu [data-dnav="today"]');
     if (cur) cur.dataset.cur = String(keyOf(d) === keyOf(TODAY));
+    // ≥1024px 3-column workspace: the left rail's once-only date card — big day
+    // number, weekday, "August 2026 · UD n" (same data, different home)
+    const ddc = document.getElementById("ddcDate");
+    if (ddc) ddc.innerHTML = `<div class="ddc-num">${d.getDate()}</div>` +
+      `<div class="ddc-wd">${WD_FULL[dowIndex(d)]}</div>` +
+      `<div class="ddc-sub">${MONTHS[d.getMonth()]} ${d.getFullYear()} · UD ${universalDay(d).value}</div>`;
   }
   let deskPatOpen = false;
   function renderDeskRail() {
