@@ -3717,9 +3717,6 @@
   /* a column flashes gold while a dragged routine hovers over it (mouse drag between
      columns rewrites the chain — see the #rtnTable pointer controller) */
   .rtb-cell.rtb-drop-over { background: color-mix(in oklab, var(--accent-seed) 8%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent-seed); border-radius: var(--radius-sm); }
-  /* the "glue it to which one?" strip a >1-candidate drop opens under its band */
-  .rtb-pickrow { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px 12px; font-size: 12px; color: var(--ink-soft); }
-  .rtb-pickrow .add-btn { padding: 4px 12px; font-size: 12px; }
   /* chain members shown inside the horizontal chains table (Routines page) */
   .chain-h-item { position: relative; padding-right: 40px; min-height: 44px; align-items: center; }
   .chain-h-time { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -3952,6 +3949,15 @@
      event form itself, etc.) — restyling those globally would ripple far past "my
      routine form". */
   #rtnAddForm { border: none; box-shadow: none; }
+  /* 2026-08-05 (Linh, routine form screenshot: "make this more compact"): same
+     tightening #addForm already got ("too busy, make it more compact") — smaller
+     label/hint type, tighter field and row gaps, less card padding. Tap targets
+     stay ≥44px (the mobile .track-opt min-height rule is untouched) — only the
+     empty air between fields shrinks. */
+  #rtnAddForm { margin-top: 14px; padding: 14px 16px; gap: 10px 14px; }
+  #rtnAddForm .field { gap: 3px; }
+  #rtnAddForm .field label { font-size: 9.5px; }
+  #rtnAddForm .field-hint { font-size: 9px; margin-top: 1px; }
   #rtnAddForm .field input[type="text"], #rtnAddForm .field input[type="time"],
   #rtnAddForm .field input[type="number"], #rtnAddForm .field input[type="date"],
   #rtnAddForm .field select {
@@ -20153,7 +20159,6 @@
   }
 
   let rtnListMode = "list";
-  let rtbPick = null;   // pending "glue it to which one?" from a multi-candidate column drop
   function renderRoutines() {
     renderChains();
     document.getElementById("rtnManage").hidden = rtnListMode !== "list";
@@ -20277,8 +20282,8 @@
     // 2026-08-05 (Linh: "i dont understand the category of morning work, work etc.
     // remove these categories and just group everything together for now"): the
     // (track, category) banding is GONE — one Before / Event / After spread holds
-    // every routine at once. All cells share band key "all" so the drag/drop,
-    // pick-strip and add plumbing work unchanged.
+    // every routine at once. All cells share band key "all" so the drag/drop and
+    // add plumbing work unchanged.
     const pill = t => {
       const occId = chainOccIdFor(t, tKey);
       const done = isDone(occId);
@@ -20293,35 +20298,22 @@
         ${list.length ? list.map(pill).join("") : ""}
         <button type="button" class="rtb-add" data-rtb-add-track="personal" data-rtb-add-cat="">+ add</button>
       </div>`;
+    // 2026-08-06 (Linh: "i want to be able to put routines in different categories
+    // without gluing it to another one. I do that when I want to make a chain of
+    // glued routines together"): column position is now TWO independent things —
+    // an actual glued chain (anchorTo/anchorMode, computed relative time, built
+    // only via the ⛓ Chains builder) wins when present; otherwise the plain
+    // t.phase label (set by dragging here) places it with no gluing at all.
     const before = [], evt = [], after = [];
-    ROUTINE_TASKS.forEach(t => (t.anchorTo && chainAnchorOf(t) ? (t.anchorMode === "before" ? before : after) : evt).push(t));
+    ROUTINE_TASKS.forEach(t => {
+      const mode = (t.anchorTo && chainAnchorOf(t)) ? t.anchorMode : t.phase;
+      (mode === "before" ? before : mode === "after" ? after : evt).push(t);
+    });
     let html = `<div class="rtb-tbl"><div class="rtb-grid">`;
     html += cell(before, "Before", "before", true) + cell(evt, "Event", "during", false) + cell(after, "After", "after", false);
-    // a Before/After drop with several possible anchors parks here until she picks
-    if (rtbPick) {
-      const pt = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
-      const cands = ROUTINE_TASKS.filter(x => x.id !== rtbPick.id && !(x.anchorTo && chainAnchorOf(x)));
-      html += `<div class="rtb-pickrow">${rtbPick.none
-        ? `Nothing in the Event column to glue <b>${esc(pt ? pt.title : "")}</b> to — chain it from the ⛓ builder instead, or drop something into Event first.`
-        : `⛓ Glue <b>${esc(pt ? pt.title : "")}</b> ${rtbPick.mode === "before" ? "just before" : "right after"} which one?
-           ${cands.map(c => `<button type="button" class="add-btn" data-rtb-pick-anchor="${esc(c.id)}">${esc(c.title)}</button>`).join("")}`}
-        <button type="button" class="add-btn" data-rtb-pick-cancel>Cancel</button></div>`;
-    }
     host.innerHTML = html + `</div></div>`;
   }
   document.getElementById("rtnTable").addEventListener("click", e => {
-    // the "glue it to which one?" strip a multi-candidate column drop leaves open
-    const pickA = e.target.closest("[data-rtb-pick-anchor]");
-    if (pickA && rtbPick) {
-      const t = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
-      if (t) {
-        t.anchorTo = pickA.dataset.rtbPickAnchor; t.anchorMode = rtbPick.mode;
-        delete t.deadline; delete t.deadlineLabel;
-        saveChainNode(t);
-      }
-      rtbPick = null; renderRoutines(); renderDay(); return;
-    }
-    if (e.target.closest("[data-rtb-pick-cancel]")) { rtbPick = null; renderRtnTable(); return; }
     // own attribute, not the app-wide [data-tick-ev] delegate — that one always
     // calls renderDay() afterward, never renderRtnTable(), and both delegates would
     // otherwise fire on the same click (bubbling) and double-toggle it back off
@@ -20351,15 +20343,17 @@
     }
   });
   /* 2026-08-06 (Linh: "how to move train to work to Before") + 2026-08-05 (Linh:
-     "i need to be able to drag to different columns" — the mouse-only version
-     below never reached her on a touchscreen): drag a routine between its band's
-     columns to rewrite its chain in place, from a dedicated ⋮⋮ handle so it works
-     for touch too, same handle-drag pattern as the Chains page's row reorder
-     (grabbing the bare row on a touchscreen would otherwise steal vertical scroll
-     from the column). Drop into Before/After glues it to the band's Event item —
-     auto when there's exactly one, the pick-strip asks when there are several;
-     drop back into Event unchains it. Same-band only: dropping into another
-     band's cell is a cancel, not a silent re-categorise. */
+     "i need to be able to drag to different columns") + 2026-08-06 (Linh: "i want
+     to be able to put routines in different categories without gluing it to
+     another one. I do that when I want to make a chain of glued routines
+     together"): drag a routine between columns from a dedicated ⋮⋮ handle (touch
+     + mouse both, same pattern as the Chains page's row reorder — grabbing the
+     bare row on a touchscreen would otherwise steal vertical scroll from the
+     column). This ONLY ever sets/clears the plain t.phase label — no gluing, no
+     picker. Any existing chain link is severed on drop so the drag always has a
+     visible effect (a live chain's anchorMode would otherwise keep outranking
+     phase in renderRtnTable's column pick); deliberate re-gluing stays the
+     Chains builder's job. */
   let rtbDrag = null;
   document.getElementById("rtnTable").addEventListener("pointerdown", e => {
     const handle = e.target.closest(".rtb-handle");
@@ -20399,24 +20393,10 @@
     if (!commit || !d.over) return;
     const t = ROUTINE_TASKS.find(x => x.id === d.id);
     if (!t) return;
-    if (d.over === "during") {
-      if (t.anchorTo || t.deadline) {
-        delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel;
-        saveChainNode(t); renderRoutines(); renderDay();
-      }
-      return;
-    }
-    const mode = d.over === "before" ? "before" : "after";
-    // single flattened band (bandKey "all") — every unchained routine is a candidate
-    const cands = ROUTINE_TASKS.filter(x => x.id !== t.id && !(x.anchorTo && chainAnchorOf(x)));
-    if (cands.length === 1) {
-      t.anchorTo = cands[0].id; t.anchorMode = mode;
-      delete t.deadline; delete t.deadlineLabel;
-      saveChainNode(t); renderRoutines(); renderDay();
-      return;
-    }
-    rtbPick = { id: t.id, mode, bandKey: d.bandKey, none: !cands.length };
-    renderRtnTable();
+    const hadAny = t.anchorTo || t.deadline || t.phase;
+    delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel;
+    if (d.over === "during") delete t.phase; else t.phase = d.over;
+    if (hadAny || t.phase) { saveChainNode(t); renderRoutines(); renderDay(); }
   }
   document.addEventListener("pointerup", () => rtbEndDrag(true));
   document.addEventListener("pointercancel", () => rtbEndDrag(false));
@@ -27594,12 +27574,12 @@
     // editing; the pending reload lands after she saves/cancels (release below).
     if (document.querySelector(".cb-build")) return true;
     // 2026-08-06 ("when i drag items across, the page glitches and takes me to list
-    // page"): the Routines Table's column drag (rtbDrag) and its "glue it to which
-    // one?" pick-strip (rtbPick) are module vars in the OTHER script's closure —
-    // unreachable from here (same cross-closure trap as placeDateLine/miniCalDeskMq,
-    // see project_book33_app_push_checklist memory) — so read the DOM markers they
-    // already set instead of the vars themselves, same trick as .cb-build above.
-    return !!document.querySelector("#rtnTable .rtb-dragging, .rtb-pickrow");
+    // page"): the Routines Table's column drag (rtbDrag) is a module var in the
+    // OTHER script's closure — unreachable from here (same cross-closure trap as
+    // placeDateLine/miniCalDeskMq, see project_book33_app_push_checklist memory) —
+    // so read the DOM marker it already sets instead of the var itself, same trick
+    // as .cb-build above.
+    return !!document.querySelector("#rtnTable .rtb-dragging");
   }
   function reloadWhenIdle() {
     if (!isEditing()) { location.reload(); return; }
