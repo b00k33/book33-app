@@ -1,7 +1,7 @@
 // Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260805t";
+var CACHE_VERSION = "b33-20260805u";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -18,10 +18,31 @@ self.addEventListener("install", function (e) {
   );
 });
 
+// 2026-08-05 (Linh: "offline design is off"): deleting the old cache wholesale on every
+// CACHE_VERSION bump also threw away the opportunistically-cached Google Fonts css/woff2
+// (and the Supabase CDN script) — so an offline launch right after an update rendered in
+// fallback system type until the next ONLINE visit re-fetched them. Cross-origin assets
+// never change per app version, so migrate them into the fresh cache before the old one
+// is deleted; the app shell itself still refreshes per version exactly as before.
+var KEEP_XORIGIN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.jsdelivr\.net)\//;
 self.addEventListener("activate", function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k !== CACHE_VERSION; }).map(function (k) { return caches.delete(k); }));
+      var olds = keys.filter(function (k) { return k !== CACHE_VERSION; });
+      return caches.open(CACHE_VERSION).then(function (fresh) {
+        return Promise.all(olds.map(function (name) {
+          return caches.open(name).then(function (old) {
+            return old.keys().then(function (reqs) {
+              return Promise.all(reqs.filter(function (r) { return KEEP_XORIGIN.test(r.url); }).map(function (r) {
+                return fresh.match(r).then(function (hit) {
+                  if (hit) return null;
+                  return old.match(r).then(function (res) { return res ? fresh.put(r, res) : null; });
+                });
+              }));
+            });
+          }).catch(function () {}).then(function () { return caches.delete(name); });
+        }));
+      });
     }).then(function () { return self.clients.claim(); })
   );
 });
@@ -96,7 +117,11 @@ self.addEventListener("fetch", function (e) {
           caches.open(CACHE_VERSION).then(function (c) { c.put(req, res.clone()); });
         }
         return res;
-      }).catch(function () { return cached; });
+      }).catch(function () {
+        // offline and no exact hit: accept a query-string-variant match (Google Fonts
+        // css2 URLs can differ by subset params) — a near-match beats fallback type
+        return cached || caches.match(req, { ignoreSearch: true });
+      });
     })
   );
 });

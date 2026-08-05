@@ -13770,7 +13770,16 @@
     if (!healthBody) return;
     healthBody.innerHTML = `
       ${(() => {
-        const log = cycleLogFor(k);
+        if (!state.cyclePopoverOpen) return "";
+        // 2026-08-05 (Linh: "include this dropdown in the cd in the calendar too"):
+        // the popover logs the day it was OPENED for — state.cyclePopoverDate (a
+        // calendar CD can be any day of its month), falling back to the Day anchor.
+        const popK = state.cyclePopoverDate || k;
+        const popDate = parseKey(popK);
+        const log = cycleLogFor(popK);
+        const popFlow = HEALTH.flow[popK] || "";
+        const popPhase = phaseOn(popDate, cyclePrediction());
+        const popCd = cycleDayFor(popDate);
         const rows = `
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Cervical mucus</span>
@@ -13780,7 +13789,7 @@
           </div>
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Symptoms</span>
-            ${symptomChipsHtml(log)}
+            ${symptomChipsHtml(log, popPhase, cdSymShowAll)}
           </div>
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Pain <b>${log.pain ?? 0}</b>/10</span>
@@ -13789,26 +13798,24 @@
           <div class="cyc-detail-row">
             <span class="cyc-detail-label">Bleeding <span class="cyc-detail-optional">(only if you're on your period)</span></span>
             <div class="cyc-chip-row">
-              <button type="button" class="cyc-chip" data-flowset="" aria-pressed="${!flow}">None</button>
-              ${FLOWS.map(f => `<button type="button" class="cyc-chip" data-flowset="${f}" aria-pressed="${flow === f}" style="${flow === f ? `background:var(${FLOW_VAR[f]});border-color:var(${FLOW_VAR[f]})` : ""}">${FLOW_LABEL[f]}</button>`).join("")}
+              <button type="button" class="cyc-chip" data-flowset="" aria-pressed="${!popFlow}">None</button>
+              ${FLOWS.map(f => `<button type="button" class="cyc-chip" data-flowset="${f}" aria-pressed="${popFlow === f}" style="${popFlow === f ? `background:var(${FLOW_VAR[f]});border-color:var(${FLOW_VAR[f]})` : ""}">${FLOW_LABEL[f]}</button>`).join("")}
             </div>
           </div>
           <div class="cyc-detail-row full">
             <span class="cyc-detail-label">Notes</span>
             <textarea id="dhNotesInput" placeholder="Anything worth remembering about this day" autocomplete="off">${esc(log.notes || "")}</textarea>
           </div>`;
-        // the CD badge opens the same log as a floating panel pinned near the badge —
+        // the CD pill opens the log as a floating panel pinned near the pill —
         // it stays a child of #dayHealthBody so every delegated handler keeps working
-        if (state.cyclePopoverOpen) {
-          const p = state.cyclePopoverPos || { x: 80, y: 130 };
-          return `<div class="cyc-popover" style="left:${p.x}px;top:${p.y}px">
-            <div class="cyc-pop-head"><b>CD${cycleDay ?? "—"}${phase ? " · " + esc(phase) : ""} — log this day</b>
+        const p = state.cyclePopoverPos || { x: 80, y: 130 };
+        const dayWord = popK === keyOf(new Date()) ? "log today" : `log ${popDate.getDate()} ${MON_SHORT[popDate.getMonth()]}`;
+        return `<div class="cyc-popover" style="left:${p.x}px;top:${p.y}px">
+            <div class="cyc-pop-head"><b>CD${popCd ?? "—"}${popPhase ? " · " + esc(popPhase) : ""} — ${dayWord}</b>
               <button type="button" class="cyc-pop-close" data-cyc-close aria-label="Close">×</button></div>
             ${rows}
             <div class="cyc-pop-actions"><button type="button" class="btn-save" data-cyc-log>✓ Log day</button><button type="button" class="tab-link" data-jump-view="cycle" data-cyc-close>Full Cycle page →</button></div>
           </div>`;
-        }
-        return "";
       })()}`;
   }
 
@@ -15634,7 +15641,9 @@
       // one faint meta line folds what used to be four pill rows: UD, cycle day+phase,
       // then tiny glyphs for period / ovulation / fertile / birthdays (titles carry detail)
       const metaBits = [`UD${wkUd.value}`];
-      if (cd) metaBits.push(`CD${cd}${wkPhaseInfo ? " " + wkPhaseInfo.icon : ""}`);
+      // 2026-08-05 (Linh: "include this dropdown in the cd in the calendar too"): the
+      // CD is a tap target — opens the same quick-log popover, logging THIS column's day
+      if (cd) metaBits.push(`<span class="wk-cd-tap" data-cd-log data-cd-date="${k}" role="button" tabindex="0" title="Log this day">CD${cd}${wkPhaseInfo ? " " + wkPhaseInfo.icon : ""}</span>`);
       const metaIcons =
         (ps ? `<span title="${ps.logged ? "Period logged" : "Period expected"}">🩸</span>` : "")
         + (isOvu ? `<span title="Est. ovulation">✦</span>` : isFertile ? `<span title="Fertile window">✧</span>` : "")
@@ -16098,7 +16107,7 @@
           ${moon ? `<span class="mo-moon">${moon.em}</span>` : ""}
           ${keyOf(d) === keyOf(TODAY) ? miniFastRing("mo-fast-mini") : ""}
         </div>
-        ${cd ? `<span class="mo-cd" title="${moPhaseInfo ? moPhaseInfo.label : ""}">CD${cd}${moPhaseInfo ? " " + moPhaseInfo.icon : ""}</span>` : ""}
+        ${cd ? `<span class="mo-cd" data-cd-log data-cd-date="${keyOf(d)}" title="${moPhaseInfo ? moPhaseInfo.label + " — tap to log" : "Tap to log"}">CD${cd}${moPhaseInfo ? " " + moPhaseInfo.icon : ""}</span>` : ""}
         ${lny ? `<span class="mo-lny"><span class="sg">${ANIMAL_INFO[incoming.animal].em}</span>Lunar New Year</span>` : ""}
         ${sign.name !== prevSign.name ? `<span class="mo-ingress num-hover-trigger" tabindex="0"><span class="sg">${sign.gl}</span>${sign.name}${sunSignPopoverHtml(sign)}</span>` : ""}
         ${cm.animal !== prevCm.animal ? `<span class="mo-ingress cn"><span class="sg">${CN_EMOJI[cm.animal]}</span> month</span>` : ""}
@@ -18034,26 +18043,48 @@
   // already logged moves or changes meaning. SYMPTOM_LIST derives from the groups
   // (not the other way round) so a key can never be listed yet missing from every
   // group — that mistake used to silently drop the chip from both panels.
+  // 2026-08-05 (Linh: "include headaches in the other symptoms"): headache moved
+  // Menstrual → Other.
   const SYMPTOM_GROUPS = [
-    { label: "Menstrual", keys: ["cramps", "backPain", "headache", "nausea", "diarrhoea", "fatigue"] },
+    { label: "Menstrual", keys: ["cramps", "backPain", "nausea", "diarrhoea", "fatigue"] },
     { label: "PMS", keys: ["bloating", "breastTenderness", "moodChanges", "irritability", "anxiety", "lowMood", "constipation"] },
-    { label: "Other", keys: ["digestion", "gas", "thirst", "feelingHot", "feelingCold", "drySkin"] },
+    { label: "Other", keys: ["digestion", "gas", "thirst", "feelingHot", "feelingCold", "drySkin", "headache"] },
   ];
+  // 2026-08-05 (Linh: "only show the group appropriate to the time of month e.g.
+  // menstrual time only show [menstrual] and other, same for the other phases"): the
+  // quick-log dropdown filters its symptom clusters by the day's phase. Two escape
+  // hatches so structure guides but never gates her logging: any group she's already
+  // ticked something in stays visible whatever the phase, and an "All symptoms" chip
+  // shows everything on demand.
+  const PHASE_SYMPTOM_GROUPS = {
+    menstrual: ["Menstrual", "Other"],
+    luteal: ["PMS", "Other"],
+    follicular: ["Other"],
+    fertile: ["Other"],
+  };
   const SYMPTOM_LIST = SYMPTOM_GROUPS.flatMap(g => g.keys);
   const SYMPTOM_LABEL = { cramps: "Cramps", bloating: "Bloating", digestion: "Digestion", breastTenderness: "Breast tenderness",
     headache: "Headache", fatigue: "Fatigue", moodChanges: "Mood changes", irritability: "Irritability",
     anxiety: "Anxiety", lowMood: "Low mood", backPain: "Back pain", nausea: "Nausea",
     gas: "Gas", diarrhoea: "Diarrhoea", constipation: "Constipation", thirst: "Thirst",
     feelingHot: "Feeling hot", feelingCold: "Feeling cold", drySkin: "Dry skin" };
-  // one renderer for both hosts (Cycle page selected-day panel + the Day page's
-  // CD-badge popover) so the grouping can never drift between them — the groups
-  // themselves are SYMPTOM_GROUPS, defined with SYMPTOM_LIST above
-  function symptomChipsHtml(log) {
-    return `<div class="cyc-sym-groups">${SYMPTOM_GROUPS.map(g =>
+  // one renderer for both hosts (Cycle page selected-day panel + the CD-pill quick-log
+  // popover) so the grouping can never drift between them. No `phase` (or an unknown
+  // one) = all groups, no toggle — the Cycle page's full editor stays complete.
+  function symptomChipsHtml(log, phase, showAll) {
+    const allowed = phase && PHASE_SYMPTOM_GROUPS[phase];
+    const tags = log.symptomTags || [];
+    const groups = (allowed && !showAll)
+      ? SYMPTOM_GROUPS.filter(g => allowed.includes(g.label) || g.keys.some(s => tags.includes(s)))
+      : SYMPTOM_GROUPS;
+    const toggle = allowed
+      ? `<button type="button" class="cyc-chip cyc-sym-showall" data-sym-showall aria-pressed="${!!showAll}">${showAll ? "− This phase only" : "+ All symptoms"}</button>`
+      : "";
+    return `<div class="cyc-sym-groups">${groups.map(g =>
       `<div class="cyc-sym-group">
         <span class="cyc-sym-group-label">${g.label}</span>
-        <div class="cyc-chip-row">${g.keys.map(s => `<button type="button" class="cyc-chip" data-symptom="${s}" aria-pressed="${(log.symptomTags || []).includes(s)}">${SYMPTOM_LABEL[s]}</button>`).join("")}</div>
-      </div>`).join("")}</div>`;
+        <div class="cyc-chip-row">${g.keys.map(s => `<button type="button" class="cyc-chip" data-symptom="${s}" aria-pressed="${tags.includes(s)}">${SYMPTOM_LABEL[s]}</button>`).join("")}</div>
+      </div>`).join("")}${toggle}</div>`;
   }
 
   // quick-glance phase framing for the Day page — most of the cycle isn't bleeding,
@@ -19803,6 +19834,9 @@
       renderWeek();
       return;
     }
+    // the CD tap in the header opens the quick-log popover (document-level
+    // [data-cd-log] delegate) — it must not ALSO ride the column's data-jump
+    if (e.target.closest("[data-cd-log]")) return;
     const col = e.target.closest("[data-jump]"); if (!col) return;
     state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
   });
@@ -19916,6 +19950,9 @@
       openFormWithAction(act.dataset.addAction);
       return;
     }
+    // a tap on the cell's CD chip opens the quick-log popover (document-level
+    // [data-cd-log] delegate) instead of riding the cell's own jump-to-day
+    if (e.target.closest("[data-cd-log]")) return;
     const cell = e.target.closest("[data-jump]"); if (!cell) return;
     const [yy, mm, dd] = cell.dataset.jump.split("-").map(Number);
     state.anchor = new Date(yy, mm - 1, dd);
@@ -23874,9 +23911,22 @@
   // both CD pills just navigated to CH5). Both pills (#numGrpCd in the numerology bar
   // + the 5am .cd-mark) now carry data-cd-log and anchor this panel to themselves; the
   // full Cycle page stays one tap away via the link inside the panel.
-  function openCycleLog(trigger) {
+  // transient per-open state for the popover's phase-filtered symptom groups —
+  // "+ All symptoms" flips it, every open starts back at the phase view
+  let cdSymShowAll = false;
+  function openCycleLog(trigger, dateKey) {
+    // #dayHealthBody renders nothing but this popover — hoist it to <body> once so
+    // the panel also shows when opened from the Week/Month calendars (the Day page,
+    // its old home, is hidden there and its hidden subtree would swallow the
+    // fixed-position panel). Listeners are bound to the element and ride along;
+    // orderDayRail queries within .day-side only, so it simply stops managing it.
+    const host = document.getElementById("dayHealthBody");
+    if (host && host.parentElement !== document.body) document.body.appendChild(host);
     const r = trigger.getBoundingClientRect();
     state.cyclePopoverOpen = true;
+    // a calendar CD carries its own day (data-cd-date); the Day-page pills log the anchor
+    state.cyclePopoverDate = dateKey || keyOf(state.anchor);
+    cdSymShowAll = false;
     state.cyclePopoverPos = {
       x: Math.round(Math.max(12, Math.min(r.left, window.innerWidth - 430))),
       y: Math.round(Math.min(r.bottom + 10, window.innerHeight - 320)),
@@ -23894,12 +23944,12 @@
   }
   document.addEventListener("click", e => {
     const pill = e.target.closest("[data-cd-log]");
-    if (pill) openCycleLog(pill);
+    if (pill) openCycleLog(pill, pill.dataset.cdDate);
   });
   document.addEventListener("keydown", e => {
     if (e.key !== "Enter" && e.key !== " ") return;
     const pill = e.target.closest("[data-cd-log]");
-    if (pill) { e.preventDefault(); openCycleLog(pill); }
+    if (pill) { e.preventDefault(); openCycleLog(pill, pill.dataset.cdDate); }
   });
   function closeCycleLog() {
     if (!state.cyclePopoverOpen) return;
@@ -25474,6 +25524,14 @@
   var TABLE   = "book33";
   var CFG_KEY = "book33-sync-config";                     // {url, key} fallback (unused when baked)
   var APPLIED = "book33-applied-at";                      // sessionStorage: cloud updated_at we last adopted
+  // 2026-08-05 (Linh: "mobile offline version doesn't save automatically"): edits made
+  // offline DID save locally, but the next online boot adopted the cloud copy over them
+  // — APPLIED lives in sessionStorage, so a fresh app launch could never prove the local
+  // data was newer and clobbered it. This localStorage flag survives restarts: set by
+  // the save hook on every real local edit, cleared only when a push is CONFIRMED in the
+  // cloud. While it's set, boot pushes local UP instead of pulling cloud DOWN.
+  // (deliberately "book33-" not "daybook-": gather()/the save hook skip it by prefix)
+  var DIRTY = "book33-unsynced";
   // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store
   var EXCLUDE = { "daybook-pharmacy": 1, "daybook-prescriptions": 1 };
 
@@ -25523,8 +25581,13 @@
   var _setItem = Storage.prototype.setItem;
   Storage.prototype.setItem = function (k, v) {
     _setItem.call(this, k, v);
-    if (ready && !suppress && this === window.localStorage &&
-        String(k).indexOf("daybook") === 0 && !EXCLUDE[k]) schedulePush();
+    if (!suppress && this === window.localStorage &&
+        String(k).indexOf("daybook") === 0 && !EXCLUDE[k]) {
+      // mark BEFORE the ready-gate: an edit made while offline/signed-out (sync never
+      // booted) must still survive the next online boot's pull — see DIRTY above
+      try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {}
+      if (ready) schedulePush();
+    }
   };
   function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 1400); }
   // 2026-08-02 ("make the app function offline, sync when reconnected"): SUPERSEDES
@@ -25541,6 +25604,9 @@
     if (json === lastPushed) return;                       // nothing new since last CONFIRMED push
     sb.from(TABLE).upsert({ data: snap }, { onConflict: "owner" }).select("updated_at").then(function (r) {
       lastPushed = json;                                    // only mark confirmed once it actually lands
+      // clear the unsynced flag only if nothing changed while the push was in flight —
+      // a mid-flight edit keeps its own dirty mark and re-pushes on its own timer
+      if (JSON.stringify(gather()) === json) { try { localStorage.removeItem(DIRTY); } catch (e) {} }
       if (r && r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
       setLive(true);
     }, function () { setLive(false); });                    // failed — lastPushed unchanged, stays retryable
@@ -25557,8 +25623,13 @@
     Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
     if (JSON.stringify(incoming) === JSON.stringify(gather())) {                          // no visible change
       if (row.updated_at) sessionStorage.setItem(APPLIED, row.updated_at);
+      try { localStorage.removeItem(DIRTY); } catch (e) {}                               // cloud == local, nothing unsynced
       return;
     }
+    // unpushed local edits (DIRTY) must never be silently overwritten by another
+    // device's snapshot — push ours up instead; the other device reconciles to it.
+    // Single-user, two-device reality: protecting unsent edits beats blind cloud-wins.
+    if (localStorage.getItem(DIRTY)) { pushNow(); return; }
     apply(incoming);
     lastPushed = JSON.stringify(gather());                 // adopting, don't bounce it back
     if (row.updated_at) sessionStorage.setItem(APPLIED, row.updated_at);
@@ -25831,26 +25902,46 @@
      background sync attached to an app that's already up and running. `auto` is
      true for the silent boot-time path (existing session, no UI shown yet) and
      false for an explicit sign-in tap (overlay is open, errors surface in it). */
+  // push THIS device's local data up as the cloud copy — used both when the cloud is
+  // empty (first seed) and when local carries offline edits the cloud hasn't seen
+  function seedFromLocal(auto) {
+    var json = JSON.stringify(gather());
+    sb.from(TABLE).upsert({ data: gather() }, { onConflict: "owner" }).select("updated_at").then(function (r) {
+      if (r && r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
+      lastPushed = json;
+      if (JSON.stringify(gather()) === json) { try { localStorage.removeItem(DIRTY); } catch (e) {} }
+      go();
+    }, function () {
+      setLive(false);
+      if (!auto) screenAuth("Signed in, but couldn't reach the database to sync yet — it'll keep retrying.");
+    });
+  }
   function finishAuth(auto) {
     withTimeout(fetchCloud(), 6000).then(function (row) {
       var hasCloud = row && row.data && Object.keys(row.data).some(function (k) { return k.indexOf("daybook") === 0 && !EXCLUDE[k]; });
       if (hasCloud) {
-        var localHas = Object.keys(gather()).length > 0;
-        if (localHas && sessionStorage.getItem(APPLIED) === row.updated_at) { go(); return; }
+        var localSnap = gather();
+        var localHas = Object.keys(localSnap).length > 0;
+        // offline edits waiting (DIRTY survives restarts, unlike sessionStorage's
+        // APPLIED) — LOCAL is the newer truth: push it up, never adopt the older
+        // cloud copy over it. This is the "mobile offline version doesn't save" fix.
+        if (localHas && localStorage.getItem(DIRTY)) { seedFromLocal(auto); return; }
+        var incoming = {};
+        Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
+        if (localHas && (sessionStorage.getItem(APPLIED) === row.updated_at
+            || JSON.stringify(incoming) === JSON.stringify(localSnap))) {
+          // identical data — adopt the stamp only, no rewrite and no reload (this used
+          // to apply+location.reload() on EVERY cold start, a whole extra boot for nothing)
+          sessionStorage.setItem(APPLIED, row.updated_at || "");
+          go(); return;
+        }
         apply(row.data);
         sessionStorage.setItem(APPLIED, row.updated_at || "");
         location.reload();                                  // clean boot on the adopted data
       } else {
         // nothing in the cloud yet under this login -- this device's local data (even
         // if empty) becomes the seed. No import step: local is already the source of truth.
-        sb.from(TABLE).upsert({ data: gather() }, { onConflict: "owner" }).select("updated_at").then(function (r) {
-          if (r && r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
-          lastPushed = JSON.stringify(gather());
-          go();
-        }, function () {
-          setLive(false);
-          if (!auto) screenAuth("Signed in, but couldn't reach the database to sync yet — it'll keep retrying.");
-        });
+        seedFromLocal(auto);
       }
     }, function () {
       setLive(false);
