@@ -7805,6 +7805,44 @@
   .vsw-menu button[data-cur="true"] { color: var(--gold-bright); background: var(--desk-btn-bg); font-weight: 700; }
   .vsw-menu .k { font-size: 11px; color: var(--ink-faint); font-weight: 600; }
 
+  /* ============ ROUTINES SIDE EDITOR + desktop compactness (2026-08-06, Linh:
+     "when I select a routine to edit, bring it to the side so I can edit directly
+     without changing pages or have a popup. improve the width and height compactness
+     of page to allow that") — >=1024px only; phones keep the swap-in-place form. ==== */
+  .rtn-side { display: none; }
+  @media (min-width: 1024px) {
+    .rtn-side {
+      display: flex; flex-direction: column; position: fixed; z-index: 150;
+      top: 16px; bottom: 16px; width: 400px;
+      right: max(16px, calc(50vw - 620px));   /* hugs the content column's right edge */
+      background: var(--desk-pop-bg); border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    }
+    .rtn-side[hidden] { display: none; }
+    .rtn-side-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--note-line); flex: none;
+    }
+    .rtn-side-head b { font-size: 14px; }
+    .rtn-side-head button {
+      border: none; background: none; color: var(--ink-faint); font-size: 20px; cursor: pointer;
+      min-width: 44px; min-height: 44px; border-radius: 999px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .rtn-side-head button:hover { color: var(--margin-rule); background: var(--desk-btn-bg); }
+    .rtn-side-body { overflow-y: auto; padding: 0 12px 12px; }
+    /* the form sheds its card chrome inside the rail (the rail IS the card) and
+       stacks one column at 400px */
+    .rtn-side-body .add-form { grid-template-columns: 1fr; margin-top: 8px; border: none; box-shadow: none; background: none; padding: 4px; }
+    /* content shrinks so nothing hides under the docked editor */
+    #routinesPage.rtn-editing { padding-right: 416px; }
+    /* --- compactness: the page reads like a workspace, not a poster --- */
+    #routinesPage .bd-head { margin-bottom: 8px; }
+    #routinesPage .bd-head h1 { font-size: 24px; }
+    #routinesPage .add-row { margin: 0 0 8px; }
+    #routinesPage .section-head { margin-top: 16px; }
+  }
+
   @media (min-width: 641px) {
     /* --- 1. header row: B33 logo → Today ▾ → date hierarchy → icon toolbar --- */
     #deskHead { display: flex; align-items: center; gap: 16px; margin: 0 0 16px; }
@@ -8907,6 +8945,11 @@
     <div class="add-row" id="rtnAddRow">
       <button class="add-btn" id="rtnAddBtn">✎ Add a routine</button>
     </div>
+    <!-- 2026-08-06 (Linh: "when I select a routine to edit, bring it to the side so I
+         can edit directly without changing pages or have a popup"): #rtnFormHome is the
+         form's return anchor — placeRtnForm() docks #rtnAddForm into the #rtnSide rail
+         at >=1024px and brings it back here below that (phone behaviour unchanged). -->
+    <div id="rtnFormHome" hidden></div>
     <form class="add-form" id="rtnAddForm" hidden>
       <div class="field full">
         <label for="rtnTitle">Task</label>
@@ -9052,6 +9095,12 @@
     <div id="rtnDeleteNote" class="note-inline" hidden></div>
     <div id="rtnManage"></div>
     <div id="rtnTable" hidden></div>
+    <!-- docked side editor (>=1024px): placeRtnForm() moves #rtnAddForm into the body
+         here whenever an edit/add opens on desktop — same page, no popup, no scroll-away -->
+    <aside class="rtn-side" id="rtnSide" hidden>
+      <div class="rtn-side-head"><b id="rtnSideTitle">Routine</b><button type="button" id="rtnSideClose" aria-label="Close editor">×</button></div>
+      <div class="rtn-side-body" id="rtnSideBody"></div>
+    </aside>
   </div>
 
   <!-- ================= WORK MANUAL ================= -->
@@ -20552,7 +20601,8 @@
       openRtnForm(null);
       rtnTrack = add.dataset.rtbAddTrack || "personal"; syncRtnTrackButtons();
       document.getElementById("rtnCategory").value = add.dataset.rtbAddCat || "";
-      document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" });
+      // side-rail mode keeps the list where it is — the editor is already on screen
+      if (!rtnSideMq.matches) document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const edit = e.target.closest("[data-rtb-edit]");
@@ -20560,7 +20610,7 @@
       // a column-drop's trailing click must not pop the editor open over the result
       if (Date.now() - cbDragEndAt < 500) return;
       const t = ROUTINE_TASKS.find(x => x.id === edit.dataset.rtbEdit);
-      if (t) { openRtnForm(t); document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" }); }
+      if (t) { openRtnForm(t); if (!rtnSideMq.matches) document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" }); }
     }
   });
   /* 2026-08-06 (Linh: "how to move train to work to Before") + 2026-08-05 (Linh:
@@ -23444,6 +23494,27 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  // 2026-08-06 (Linh: "bring it to the side so I can edit directly without changing
+  // pages or have a popup"): >=1024px the routine form docks into the #rtnSide rail
+  // (fixed, aligned to the content column, internally scrolling); below that it stays
+  // exactly where it always was, via the #rtnFormHome anchor — the app's standard
+  // reparent-with-anchor move, so listeners ride along and phones are untouched.
+  const rtnSideMq = window.matchMedia("(min-width: 1024px)");
+  function placeRtnForm(editing) {
+    const side = document.getElementById("rtnSide");
+    const body = document.getElementById("rtnSideBody");
+    const home = document.getElementById("rtnFormHome");
+    if (!side || !body || !home) return;
+    const wantSide = editing && rtnSideMq.matches;
+    if (wantSide && rtnForm.parentElement !== body) body.appendChild(rtnForm);
+    if (!wantSide && rtnForm.previousElementSibling !== home) home.after(rtnForm);
+    side.hidden = !wantSide;
+    document.getElementById("routinesPage").classList.toggle("rtn-editing", wantSide);
+    const t = document.getElementById("rtnSideTitle");
+    if (t) t.textContent = rtnEditId ? "Edit routine" : "New routine";
+  }
+  if (rtnSideMq.addEventListener) rtnSideMq.addEventListener("change", () => placeRtnForm(!rtnForm.hidden));
+  document.getElementById("rtnSideClose")?.addEventListener("click", () => closeRtnForm());
   function closeRtnForm() {
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
@@ -23457,6 +23528,7 @@
     document.getElementById("rtnFreqGroup").hidden = false;
     document.getElementById("rtnHairNote").hidden = true;
     document.getElementById("rtnDeleteBtn").hidden = true;
+    placeRtnForm(false);   // undock the side rail, return the form to its anchor
   }
   function openRtnForm(task) {
     rtnAddRow.hidden = true; rtnForm.hidden = false;
@@ -23518,6 +23590,7 @@
     renderRtnExtraDates();
     renderRtnSchedExtra();
     renderRtnCatList(); updateRtnSubTotal();
+    placeRtnForm(true);   // >=1024px: dock into the side rail (no scroll-away)
     document.getElementById("rtnTitle").focus();
   }
   // 2026-08-06 (Linh: "a simple, obvious way to drop a routine onto the calendar as a
@@ -24604,7 +24677,7 @@
         state.view = "routines"; render();
         openRtnForm(task);
         const form = document.getElementById("rtnAddForm");
-        if (form) form.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (form && !rtnSideMq.matches) form.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       return;
     }
