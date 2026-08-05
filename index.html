@@ -10445,19 +10445,26 @@
   function chainAnchorOf(t) {
     if (!t || !t.anchorTo) return null;
     return ROUTINE_TASKS.find(a => a.id !== t.id && (a.id === t.anchorTo || a.role === t.anchorTo))
-      || RECURRING_EVENTS.find(a => a.id !== t.id && a.id === t.anchorTo) || null;
+      || RECURRING_EVENTS.find(a => a.id !== t.id && a.id === t.anchorTo)
+      || EVENTS.find(a => a.id !== t.id && a.id === t.anchorTo) || null;
   }
-  // chains span two template collections (Linh 2026-08-05, "give option to chain
-  // events?"): routines AND repeating events can sit on either end of a chain. These
-  // two dispatchers pick the right occurs-on/override machinery per shape.
+  // chains span THREE collections now (Linh 2026-08-05 "give option to chain events?"
+  // brought in repeating events; 2026-08-06 "im struggling to connect chains of
+  // events" revealed plain one-off calendar events were still un-chainable — they're
+  // what she calls "events"). These dispatchers pick the right occurs-on/override
+  // machinery per shape; a plain event simply occurs on its own stored date.
   const isRecurEvent = x => RECURRING_EVENTS.includes(x);
+  const isPlainEvent = x => EVENTS.includes(x);
   function chainNodeOccursOn(x, date) {
+    if (isPlainEvent(x)) return x.date === keyOf(date);
     return isRecurEvent(x) ? recurringEventOccursOn(x, date) : routineOccursOn(x, date);
   }
   // one normalized {start,end,skipped,movedTo} view of a node's per-day override —
   // routines keep theirs in t.overrides[date], repeating events in the occId-keyed
-  // EVENT_SKIPS/EVENT_TIME_OVR stores
+  // EVENT_SKIPS/EVENT_TIME_OVR stores; a plain event's times are edited directly on
+  // the object itself, so it has no separate override layer at all
   function chainNodeOvr(x, k) {
+    if (isPlainEvent(x)) return null;
     if (!isRecurEvent(x)) return rtnOvr(x, k);
     const occId = `ev-${x.id}-${k}`;
     if (EVENT_SKIPS[occId]) return { skipped: true };
@@ -10468,6 +10475,7 @@
   }
   // a routine's own un-chained start on a date — layer-aware for multi-schedule weeklies
   function rawRoutineStartMin(t, date) {
+    if (isPlainEvent(t)) return t.start ? timeToMin(t.start) : null;
     let s = t.start;
     if (t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length) {
       const layer = t.schedules.find(l => layerOccursOn(l, date)) || t.schedules[0];
@@ -10489,6 +10497,28 @@
   // other, so there's no forward-chain-vs-deadline conflict to reconcile here.
   function chainDeadlineStartMin(t) {
     return t.deadline ? timeToMin(t.deadline) - routineDurMin(t) : null;
+  }
+  // 2026-08-06 (Linh: "im struggling to connect chains of events"): the render-side
+  // half of plain-event chaining. Called per stored EVENTS item in renderDay()'s
+  // assembly — a chained plain event's times recompute live from its anchor (same
+  // contract as chained routines: the stored start is the fallback when the chain
+  // can't resolve), a deadline root backs its start out of "done by". Returns the
+  // item untouched when it carries no chain, so the map is free for normal events.
+  function chainedPlainEvent(e, date) {
+    if (!e.anchorTo && !e.deadline) return e;
+    const dur = routineDurMin(e);
+    if (e.anchorTo) {
+      const cm = chainedStartMinOn(e, date);
+      if (cm == null) return e;
+      const a = chainAnchorOf(e);
+      const k = keyOf(date);
+      const aOccId = a ? (isPlainEvent(a) ? a.id : isRecurEvent(a) ? `ev-${a.id}-${k}` : `rt-${a.id}-${k}`) : null;
+      return { ...e, start: minToTime(cm), end: minToTime(Math.min(cm + dur, 1439)),
+        fromChain: e.id, chainAnchorOccId: aOccId };
+    }
+    const dsm = Math.max(0, timeToMin(e.deadline) - dur);
+    return { ...e, start: minToTime(dsm), end: minToTime(Math.min(dsm + dur, 1439)),
+      deadlineMin: timeToMin(e.deadline), deadlineLabel: e.deadlineLabel || e.title };
   }
   // where the chain puts t on this date, or null when the chain isn't live that day
   // (not chained, anchor doesn't occur, or anchor skipped/moved to another date — each
@@ -13681,7 +13711,10 @@
     // words with one-tap Change/Unchain; an unchained routine/recurring event gets a
     // quiet "Chain it →" that opens the Chains builder prefilled with this item.
     const chainT = (e.fromRoutine && e.rtTaskId) ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId)
-      : (e.fromRecurringEvent && e.recurId) ? RECURRING_EVENTS.find(t => t.id === e.recurId) : null;
+      : (e.fromRecurringEvent && e.recurId) ? RECURRING_EVENTS.find(t => t.id === e.recurId)
+      // 2026-08-06 ("im struggling to connect chains of events"): plain one-off
+      // events are chainable now too — the sheet's item IS the stored EVENTS object
+      : !e.generated ? (EVENTS.find(t => t.id === e.id) || null) : null;
     let chainRowHtml = "";
     if (chainT) {
       const chainA = chainT.anchorTo ? chainAnchorOf(chainT) : null;
@@ -15365,7 +15398,9 @@
     // (same id, chain-computed time) — the suppress set is what stops the original
     // and the chain copy both rendering, which is the duplication the spec forbids.
     const chainData = chainBlocksFor(d);
-    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)];
+    // chainedPlainEvent (2026-08-06): a chained one-off event's times recompute live
+    // from its anchor here, same as chained routines do inside generatedFor()
+    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d)];
     if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
     dayEvents = dayEvents.concat(chainData.items);
     // 2026-08-06 (Linh: "i dont like that i cant see the chain"): live anchorTo chains
@@ -19638,11 +19673,17 @@
      of exactly what will happen before saving ("make it stupid friendly"). State
      (open/prefill/mode) lives in module vars set by the host's click delegate below
      the rtn form wiring — the host node persists across re-renders, its children don't. ---- */
-  // everything chainable, both collections — routines + repeating events
-  const chainPool = () => [...ROUTINE_TASKS, ...RECURRING_EVENTS];
-  const chainNodeById = id => ROUTINE_TASKS.find(x => x.id === id) || RECURRING_EVENTS.find(x => x.id === id) || null;
+  // everything chainable — routines, repeating events, and (2026-08-06, "im
+  // struggling to connect chains of events") plain one-off calendar events too.
+  // The builder's event list keeps to today-onward TIMED events (a chain needs a
+  // time to count from; past events have nothing left to schedule), but lookups and
+  // the chained-list include every event so an old chain can still be seen/unchained.
+  const chainableEvents = () => EVENTS.filter(e => e.start && e.date && dayDiff(parseKey(e.date), TODAY) >= 0)
+    .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  const chainPool = () => [...ROUTINE_TASKS, ...RECURRING_EVENTS, ...EVENTS];
+  const chainNodeById = id => ROUTINE_TASKS.find(x => x.id === id) || RECURRING_EVENTS.find(x => x.id === id) || EVENTS.find(x => x.id === id) || null;
   // save whichever store the node lives in
-  function saveChainNode(x) { if (isRecurEvent(x)) saveRecurringEvents(); else saveRoutines(); }
+  function saveChainNode(x) { if (isPlainEvent(x)) saveEvents(EVENTS); else if (isRecurEvent(x)) saveRecurringEvents(); else saveRoutines(); }
   // next day (within a fortnight) a chain actually fires, as a short label — shared
   // by the chain rows and the builder's live preview sentence
   function nextChainTxt(t) {
@@ -19718,8 +19759,12 @@
         const nextTxt = nextChainTxt(t);
         subLine = `<span class="chain-rel">${after ? "after" : "before"}</span> ${esc(a.title)}${nextTxt ? ` · ${esc(nextTxt)}` : ""}`;
       }
+      // a plain event's chip carries its date — a one-off chain only means anything
+      // on that one day, and two same-titled events need telling apart
+      const kindChip = isRecurEvent(t) ? ` <span class="chain-kind">event</span>`
+        : isPlainEvent(t) ? ` <span class="chain-kind">${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}</span>` : "";
       return `<div class="chain-row" data-chain-edit="${t.id}" role="button" tabindex="0" aria-label="Edit chain — ${esc(t.title)}">
-        <div class="chain-title">${esc(t.title)}${isRecurEvent(t) ? ` <span class="chain-kind">event</span>` : ""}</div>
+        <div class="chain-title">${esc(t.title)}${kindChip}</div>
         <div class="chain-sub">${subLine}</div>
         <button type="button" class="chain-unlink" data-chain-unlink="${t.id}" aria-label="Unchain ${esc(t.title)}" title="Unchain — it keeps its own saved time">×</button>
       </div>`;
@@ -19728,13 +19773,28 @@
     if (rtnChainOpen) {
       const pre = rtnChainPrefill ? chainNodeById(rtnChainPrefill) : null;
       const preAnchor = pre ? chainAnchorOf(pre) : null;
-      const group = (label, list, sel, exclude) => {
-        const rows = list.filter(t => t.id !== exclude).sort((x, y) => x.title.localeCompare(y.title))
-          .map(t => `<option value="${t.id}"${sel && t.id === sel.id ? " selected" : ""}>${esc(t.title)}</option>`).join("");
+      const group = (label, list, sel, exclude, dated) => {
+        const rows = list.filter(t => t.id !== exclude)
+          .sort((x, y) => dated ? 0 : x.title.localeCompare(y.title))
+          .map(t => {
+            // one-off events keep date order and carry their day in the label — two
+            // "Dinner" entries on different days must be tellable apart
+            const dLbl = dated ? ` · ${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}` : "";
+            return `<option value="${t.id}"${sel && t.id === sel.id ? " selected" : ""}>${esc(t.title)}${dLbl}</option>`;
+          }).join("");
         return rows ? `<optgroup label="${label}">${rows}</optgroup>` : "";
       };
+      // a prefilled one-off event may be in the past (opened from an old day's popup)
+      // — splice it into the list anyway so the select can actually show it
+      const evList = (sel) => {
+        const list = chainableEvents();
+        if (sel && isPlainEvent(sel) && !list.includes(sel)) list.unshift(sel);
+        return list;
+      };
       const opts = (sel, exclude) =>
-        group("Routines", ROUTINE_TASKS, sel, exclude) + group("Repeating events", RECURRING_EVENTS, sel, exclude);
+        group("Routines", ROUTINE_TASKS, sel, exclude)
+        + group("Repeating events", RECURRING_EVENTS, sel, exclude)
+        + group("One-off events", evList(sel), sel, exclude, true);
       // 2026-08-06 (Linh: "assign anchor or deadline to" -- and "allow 3+ event
       // chaining"): a step's time comes from exactly ONE source -- another step
       // (chain to, any depth: chain C to B, then B to A, and chainedStartMinOn's own
