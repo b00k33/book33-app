@@ -24349,6 +24349,35 @@
       }
     }
   });
+  // 2026-08-05 (Linh: "the horse in the numerology panel [hover] is not working" — on
+  // her phone, while every simulated tap and the live site under test both work): her
+  // real taps on the mascot never arrive as click events, so the delegate above never
+  // runs for it. Root cause unprovable remotely (candidates: a re-render swapping the
+  // glyph node mid-gesture so Android drops the synthesized click, a stuck .pop-done,
+  // touch-to-click synthesis failing on the reparented mascot) — this fallback
+  // sidesteps all of them by acting on the RAW pointerup, which always fires. Guards:
+  // taps that moved (scrolling over it) are ignored, taps inside the open card fall
+  // through to the card's own chips, and mascotPointerAt (checked by the click
+  // delegate above) stops a tap that DOES synthesize a click from toggling twice.
+  let mascotPointerAt = 0, mascotDownXY = null;
+  document.addEventListener("pointerdown", e => {
+    const trig = e.target.closest && e.target.closest("#astroMotifMini");
+    mascotDownXY = trig && !e.target.closest(".num-hover-pop") ? [e.clientX, e.clientY] : null;
+  });
+  document.addEventListener("pointerup", e => {
+    if (!mascotDownXY) return;
+    const downXY = mascotDownXY; mascotDownXY = null;
+    const trig = e.target.closest && e.target.closest("#astroMotifMini");
+    if (!trig || e.target.closest(".num-hover-pop")) return;
+    if (Math.abs(e.clientX - downXY[0]) + Math.abs(e.clientY - downXY[1]) > 12) return;   // a scroll, not a tap
+    mascotPointerAt = Date.now();
+    document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => { if (el !== trig) el.classList.remove("pop-open"); });
+    trig.classList.remove("pop-done");
+    trig.classList.toggle("pop-open");
+    if (trig.classList.contains("pop-open")) {
+      clampPopoverToViewport(trig, trig.querySelector(".num-hover-pop, .wcard-hover-pop"));
+    }
+  });
   // pointer fully leaving a suppressed trigger re-arms it, so desktop hover-away →
   // hover-back reopens naturally (touch gets the same effect from the next tap's
   // hover shift, since mouseout fires there too)
