@@ -17349,15 +17349,17 @@
     const p = n => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   }
-  // 2026-08-05 (Linh: "allow option to resume fasting when accidentally turning it
-  // off"): the most recently ended fast, but only within a 3h window — after that a
-  // resume stops being "undo my accidental stop" and starts rewriting history. Null
-  // while a fast is running or the log is empty.
+  // 2026-08-05 (Linh: "give option to continue most recent fast"): SUPERSEDES the
+  // earlier 3h accidental-stop-only cap — that was this session's own guess at scope
+  // before she asked for the general case. No time limit now: whenever she's not
+  // fasting and a most-recently-ended fast exists, it's offered back, however long
+  // ago it ended (the "ended Xh/Xd ago" label next to the button is what lets her
+  // judge whether continuing still makes sense, not a hidden cutoff). Null only while
+  // a fast is running or the log is genuinely empty.
   function lastEndedFast() {
     if (HEALTH.activeFast || !Array.isArray(HEALTH.fasts) || !HEALTH.fasts.length) return null;
     const lf = HEALTH.fasts.reduce((a, b) => (!a || new Date(b.end || 0) > new Date(a.end || 0)) ? b : a, null);
-    if (!lf || !lf.end || !lf.start) return null;
-    return Date.now() - new Date(lf.end).getTime() <= 3 * 3600000 ? lf : null;
+    return (lf && lf.end && lf.start) ? lf : null;
   }
   function fastCardHTML(opts) {
     const showGoalInput = !!(opts && opts.showGoalInput);
@@ -17402,7 +17404,7 @@
           <span class="fast-goal-custom"><input type="number" id="fastGoalInput" min="1" max="72" value="${goalH}" aria-label="Custom fasting goal in hours"> h</span>
         </div>` : ""}
         <button class="fast-btn" data-fast-toggle data-on="${!!active}">${active ? "Stop fast" : "Start fast"}</button>
-        ${!active && lastEndedFast() ? `<button class="fast-btn fast-btn-sm" data-fast-resume title="Continues the fast that ended ${fmtHrs(Date.now() - new Date(lastEndedFast().end).getTime())} ago, keeping its original start time">Resume last fast</button>` : ""}
+        ${!active && lastEndedFast() ? `<button class="fast-btn fast-btn-sm" data-fast-resume title="Continues the fast that ended ${fmtHrs(Date.now() - new Date(lastEndedFast().end).getTime())} ago, keeping its original start time">Continue last fast</button>` : ""}
         ${showUdNote ? fastUdNoteHTML() : ""}
       </div>`;
   }
@@ -17472,12 +17474,13 @@
     if (!box) return;
     const row = document.getElementById("fastBarRow");
     // 2026-08-05 (Linh: "remove those functions, make it display only / allow option
-    // to resume fasting when accidentally turning it off"): SUPERSEDES the 2026-08-06
-    // tap-to-toggle idle state -- the row no longer starts or ends anything (accidental
-    // taps while scrolling were silently ending her fast). Idle reads "not fasting";
-    // if a fast ended within the last 3h (the accidental-stop window, see
-    // lastEndedFast), an explicit Resume chip in the sub-line restores it with its
-    // ORIGINAL start time (data-fast-resume handler).
+    // to resume fasting when accidentally turning it off"): the row no longer starts
+    // or ends anything (accidental taps while scrolling were silently ending her
+    // fast). Idle reads "not fasting"; an explicit Continue chip in the sub-line
+    // restores the most recently ended fast with its ORIGINAL start time
+    // (data-fast-resume handler) -- see lastEndedFast for the no-time-limit rule
+    // ("give option to continue most recent fast", same day, widened from an
+    // earlier 3h-only guess at scope).
     if (!HEALTH.activeFast) {
       box.hidden = false;
       row.classList.add("fast-idle");
@@ -17487,7 +17490,7 @@
       const lf = lastEndedFast();
       const agoMs = lf ? Date.now() - new Date(lf.end).getTime() : 0;
       document.getElementById("fastBarSub").innerHTML = lf
-        ? `ended ${agoMs < 60000 ? "just now" : fmtHrs(agoMs) + " ago"}<button type="button" class="fast-resume" data-fast-resume>Resume</button>`
+        ? `ended ${agoMs < 60000 ? "just now" : fmtHrs(agoMs) + " ago"}<button type="button" class="fast-resume" data-fast-resume>Continue</button>`
         : "";
       return;
     }
