@@ -7848,7 +7848,7 @@
   </div>
 
   <!-- person profile sheet (2026-08-05, Linh's Book44 mock): one person's family,
-       significant dates, life updates and notes — rendered by renderPersonProfile(),
+       significant dates, life updates and notes — rendered by ppRenderSheet(),
        opened from the People table (and from family chips inside itself: the web). -->
   <div class="pp-overlay" id="ppOverlay" hidden>
     <div class="pp-sheet" id="ppSheet" role="dialog" aria-label="Person profile"></div>
@@ -19272,8 +19272,11 @@
     general: "Hey {name}, you crossed my mind today — how are you going? Would love a catch-up soon 💛",
   };
   let ppOpenId = null;
-  function openPersonProfile(id) { ppOpenId = id; renderPersonProfile(); document.getElementById("ppOverlay").hidden = false; }
-  function closePersonProfile() { ppOpenId = null; document.getElementById("ppOverlay").hidden = true; }
+  // pp-prefixed names on purpose: a long-standing helper named openPersonProfile
+  // (upcoming-birthday rows → jump to the People page) lives later in this file, and
+  // a same-name function declaration would shadow this one — found the hard way.
+  function ppOpenSheet(id) { ppOpenId = id; ppRenderSheet(); document.getElementById("ppOverlay").hidden = false; }
+  function ppCloseSheet() { ppOpenId = null; document.getElementById("ppOverlay").hidden = true; }
   // next calendar occurrence of a month/day + whole days from today
   function ppNext(month, day) {
     if (!month || !day) return null;
@@ -19299,10 +19302,10 @@
     cands.sort((a, b) => a.days - b.days);
     return cands.length && cands[0].days <= 14 ? cands[0] : null;
   }
-  function renderPersonProfile() {
+  function ppRenderSheet() {
     const host = document.getElementById("ppSheet");
     const p = personById(ppOpenId);
-    if (!p) { closePersonProfile(); return; }
+    if (!p) { ppCloseSheet(); return; }
     const grp = TREE_GROUPS.find(g => g.id === p.group);
     const reach = ppReachOut(p);
     const inDays = n => n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`;
@@ -19383,20 +19386,20 @@
     document.getElementById("ppDraftText").focus();
   }
   document.getElementById("ppOverlay").addEventListener("click", e => {
-    if (e.target === e.currentTarget || e.target.closest("[data-pp-close]")) { closePersonProfile(); return; }
+    if (e.target === e.currentTarget || e.target.closest("[data-pp-close]")) { ppCloseSheet(); return; }
     const p = personById(ppOpenId);
     if (!p) return;
     const open = e.target.closest("[data-pp-open]");
-    if (open) { openPersonProfile(open.dataset.ppOpen); return; }
-    if (e.target.closest("[data-pp-edit]")) { closePersonProfile(); openPplForm(p); return; }
+    if (open) { ppOpenSheet(open.dataset.ppOpen); return; }
+    if (e.target.closest("[data-pp-edit]")) { ppCloseSheet(); openPplForm(p); return; }
     const bell = e.target.closest("[data-pp-bell]");
     if (bell) {
       const dt = (p.dates || []).find(x => x.id === bell.dataset.ppBell);
-      if (dt) { dt.bell = !dt.bell; savePeople(); renderPersonProfile(); renderDay(); }
+      if (dt) { dt.bell = !dt.bell; savePeople(); ppRenderSheet(); renderDay(); }
       return;
     }
     const dDel = e.target.closest("[data-pp-date-del]");
-    if (dDel) { p.dates = (p.dates || []).filter(x => x.id !== dDel.dataset.ppDateDel); savePeople(); renderPersonProfile(); renderDay(); return; }
+    if (dDel) { p.dates = (p.dates || []).filter(x => x.id !== dDel.dataset.ppDateDel); savePeople(); ppRenderSheet(); renderDay(); return; }
     if (e.target.closest("[data-pp-date-go]")) {
       const label = document.querySelector("[data-pp-newdate-label]").value.trim();
       const dv = document.querySelector("[data-pp-newdate-date]").value;
@@ -19404,21 +19407,21 @@
       const d = parseKey(dv);
       p.dates = p.dates || [];
       p.dates.push({ id: uid(), label, month: d.getMonth() + 1, day: d.getDate(), year: d.getFullYear() < TODAY.getFullYear() ? d.getFullYear() : undefined, bell: true });
-      savePeople(); renderPersonProfile(); renderDay(); return;
+      savePeople(); ppRenderSheet(); renderDay(); return;
     }
     const upDel = e.target.closest("[data-pp-up-del]");
-    if (upDel) { p.updates = (p.updates || []).filter(x => x.id !== upDel.dataset.ppUpDel); savePeople(); renderPersonProfile(); return; }
+    if (upDel) { p.updates = (p.updates || []).filter(x => x.id !== upDel.dataset.ppUpDel); savePeople(); ppRenderSheet(); return; }
     if (e.target.closest("[data-pp-up-go]")) {
       const t = document.querySelector("[data-pp-up-title]").value.trim();
       if (!t) return;
       p.updates = p.updates || [];
       p.updates.unshift({ id: uid(), title: t, sub: `${MON_SHORT[TODAY.getMonth()]} ${TODAY.getFullYear()}` });
-      savePeople(); renderPersonProfile(); return;
+      savePeople(); ppRenderSheet(); return;
     }
     const chipDel = e.target.closest("[data-pp-chip-del]");
     if (chipDel) {
       const [key, i] = chipDel.dataset.ppChipDel.split(":");
-      (p[key] || []).splice(+i, 1); savePeople(); renderPersonProfile(); return;
+      (p[key] || []).splice(+i, 1); savePeople(); ppRenderSheet(); return;
     }
     const chipGo = e.target.closest("[data-pp-chip-go]");
     if (chipGo) {
@@ -19427,7 +19430,7 @@
       const v = inp.value.trim();
       if (!v) return;
       p[key] = p[key] || []; p[key].push(v);
-      savePeople(); renderPersonProfile(); return;
+      savePeople(); ppRenderSheet(); return;
     }
     const msg = e.target.closest("[data-pp-msg]");
     if (msg) { ppShowDraft(p, msg.dataset.ppMsg); return; }
@@ -20624,10 +20627,13 @@
     state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
   });
   // upcoming-birthday row → open that person's profile on the People page
+  // 2026-08-05: now also opens the full person-profile SHEET (ppOpenSheet) on top —
+  // the row flash stays so she still sees where the person lives in the table.
   function openPersonProfile(id) {
     state.view = "people"; render();
     const row = document.getElementById("ppl-" + id);
     if (row) { row.scrollIntoView({ behavior: "smooth", block: "center" }); row.classList.add("ppl-flash"); setTimeout(() => row.classList.remove("ppl-flash"), 1800); }
+    ppOpenSheet(id);
   }
   // 2026-08-02: the upcoming-birthdays popover now lives in the date row (#birthdayHover),
   // so this delegates from #dayRow2 instead — same pattern as the [data-add-action] chips.
@@ -22583,7 +22589,7 @@
     // anywhere else on the row: open the person's profile sheet (checked AFTER the
     // buttons above, same load-bearing ordering as the routines rows' cal-toggle)
     const row = e.target.closest("[data-ppl-profile]");
-    if (row) openPersonProfile(row.dataset.pplProfile);
+    if (row) ppOpenSheet(row.dataset.pplProfile);
   });
 
   /* ---- shopping list (luxury page) ---- */
