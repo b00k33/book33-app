@@ -1713,6 +1713,9 @@
      vertical list to append a "last item" to (chapters are an always-visible pill row),
      so it just stays hidden there; "/" still opens search from anywhere on any width. */
   #navSearchBtn { display: none; }
+  /* 2026-08-06 (Linh: quick Day button in the drawer): same mobile-only treatment --
+     desktop's pill row already keeps Day one hover away inside CH22. */
+  #navDayBtn { display: none; }
   .jump-overlay {
     position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 45%, transparent);
     backdrop-filter: blur(3px); display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
@@ -5738,6 +5741,13 @@
     #navSearchBtn {
       display: flex; margin-top: 5px; padding-top: 11px;
       border-top: 1px solid var(--note-line); color: var(--ink-soft);
+    }
+    /* FIRST row in the drawer (Linh: quick Day access) -- mirror of #navSearchBtn's
+       treatment with the hairline on its other side, separating it from the chapter
+       list below rather than above. */
+    #navDayBtn {
+      display: flex; margin-bottom: 5px; padding-bottom: 11px;
+      border-bottom: 1px solid var(--note-line);
     }
     #categoryTabs .nav-cat-short { display: none; }
     #categoryTabs .nav-menu {
@@ -19579,7 +19589,18 @@
     // category with exactly one view has nothing to expand -- its pill carries
     // data-view directly and navigates on tap, same as picking a menu item, instead
     // of opening a one-item accordion.
-    document.getElementById("categoryTabs").innerHTML = CATEGORIES.map(c => {
+    // 2026-08-06 (Linh: "i need a quick day page button in the left contents toolbar
+    // to quick access day page"): first row of the drawer, above every chapter --
+    // one tap straight to the Day page without expanding CH22's submenu. Same
+    // not-a-real-category pattern as #navSearchBtn at the bottom (id-intercepted in
+    // the click delegate ahead of [data-navcat]); same mobile-only visibility, since
+    // desktop's pill row keeps Day one hover away inside CH22 already.
+    document.getElementById("categoryTabs").innerHTML =
+      `<button type="button" class="nav-cat-parent" id="navDayBtn" aria-label="Go to Day page">`
+      + `<span class="nav-cat-icon" aria-hidden="true">☀️</span>`
+      + `<span class="nav-cat-full">Day</span>`
+      + `</button>`
+      + CATEGORIES.map(c => {
       const singleView = c.views.length === 1 ? c.views[0] : null;
       const menu = singleView ? "" : c.views.map(v =>
         `${v.sep ? `<div class="nav-menu-sep" aria-hidden="true"></div>` : ""}`
@@ -19616,6 +19637,14 @@
       document.getElementById("categoryTabs").classList.remove("drawer-open");
       document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
       openJump();
+      return;
+    }
+    // same id-intercept pattern -- the drawer's quick Day row navigates directly
+    if (e.target.closest("#navDayBtn")) {
+      document.getElementById("categoryTabs").classList.remove("drawer-open");
+      document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
+      document.querySelectorAll("#categoryTabs .nav-navwrap.open").forEach(w => w.classList.remove("open"));
+      state.view = "day"; render();
       return;
     }
     // a menu pick navigates and closes; a parent click pins/toggles its menu (hover opens it too).
