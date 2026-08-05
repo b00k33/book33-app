@@ -3426,6 +3426,11 @@
     font-size: 12px; font-family: var(--font-body); cursor: pointer;
   }
   .cb-tl-edit:hover { color: var(--ink); border-color: var(--accent-seed); }
+  /* 2026-08-06 (Linh: "give an option to push chain to calendar"): inline date-picker
+     row under the chain header, same Cancel/Save row language as .chain-b-actions. */
+  .cb-push-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+  .cb-push-row input[type="date"] { flex: 1; min-width: 140px; }
+  .cb-push-row .btn-save, .cb-push-row .btn-cancel { padding: 8px 16px; font-size: 12px; }
   .cb-tl-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 2px 36px 2px 0; min-height: 40px; }
   .cb-tl-rail { flex: none; width: 14px; align-self: stretch; position: relative; }
   .cb-tl-rail::before {
@@ -11082,6 +11087,10 @@
   let EVENT_SKIPS = loadEvSkips();
   function recurringEventOccursOn(t, date) {
     if (t.recurUntil && keyOf(date) > t.recurUntil) return false;
+    // an extra one-off placement outside the weekly layers below — same field/
+    // semantics as a routine's t.extraDates (see routineOwnPatternOn); the only
+    // writer today is "push chain to calendar" on a recurring-event chain root.
+    if (Array.isArray(t.extraDates) && t.extraDates.includes(keyOf(date))) return true;
     if (schedulesOf(t).some(l => layerOccursOn(l, date))) return true;
     // chained repeating event: runs with its anchor too (same grant as routines,
     // filtered by its own picked days — see chainGrantsOn)
@@ -23324,6 +23333,12 @@
   // root id whose listing name is being inline-renamed; cbEditRoot remembers the
   // edit-loaded root so a re-anchor migrates the name to the new root on save.
   let cbName = "", cbNameEdit = null, cbEditRoot = null;
+  // "push chain to calendar" (2026-08-06, Linh: "give an option to push chain to
+  // calendar"): cbPushing is the root id whose inline date-picker is open. Placing
+  // the ROOT on a chosen date is enough — every linked before/after step already
+  // renders wherever its anchor occurs (chainGrantsOn/chainedStartMinOn, see
+  // routineOccursOn's comment on chain-granted days), so nothing else needs touching.
+  let cbPushing = null;
   // step chips — tap to add ("almost like drag and drop": add by tap, order by
   // drag) — a tap is one gesture where a cross-container drag is a phone-hostile
   // hold-and-aim, and [touch-drag-hardware-traps] says native D&D never fires on touch.
@@ -23427,12 +23442,26 @@
       const nameHtml = cbNameEdit === root.id
         ? `<input type="text" class="cb-name-input" id="cbTlNameInput" maxlength="40" value="${esc(root.chainName || "")}" placeholder="${esc(root.title)}" data-cb-name-root="${esc(root.id)}" aria-label="Chain name">`
         : `<span class="cb-tl-name">${esc(root.chainName || root.title)}</span><div class="cb-tl-day">${esc(dayLbl)}</div>`;
+      // a plain-event root already lives at one fixed date -- "push to calendar"
+      // has nothing to grant it that it doesn't already have, so the button only
+      // shows for routine/recurring-event roots (the two kinds extraDates works on).
+      const pushBtn = isPlainEvent(root) ? "" :
+        `<button type="button" class="cb-tl-edit" data-cb-push="${esc(root.id)}" title="Place this chain on a chosen day, even outside its own pattern">📅 Push</button>`;
+      const pushRow = cbPushing === root.id
+        ? `<div class="cb-push-row">
+            <input type="date" id="cbPushDateInput" value="${esc(keyOf(previewDate))}" min="${esc(keyOf(TODAY))}" aria-label="Date to push this chain to">
+            <button type="button" class="btn-save" data-cb-push-go="${esc(root.id)}">Push</button>
+            <button type="button" class="btn-cancel" data-cb-push-cancel>Cancel</button>
+          </div>`
+        : "";
       html += `<div class="cb-tl">
         <div class="cb-tl-head">
           <div class="cb-tl-titlebox">${nameHtml}</div>
           <button type="button" class="cb-tl-edit cb-tl-rename" data-cb-rename="${esc(root.id)}" aria-label="Rename chain" title="Rename this chain">✎</button>
+          ${pushBtn}
           <button type="button" class="cb-tl-edit" data-cb-edit="${esc(root.id)}">Edit</button>
         </div>
+        ${pushRow}
         <div class="cb-tl-rows">${rows}</div>
       </div>`;
     });
@@ -23593,6 +23622,36 @@
       renderChainsPage();
       const inp = document.getElementById("cbTlNameInput");
       if (inp) { inp.focus(); inp.select(); }
+      return;
+    }
+    // 📅 Push: open the inline date picker under this chain
+    const pushOpen = e.target.closest("[data-cb-push]");
+    if (pushOpen) {
+      cbPushing = pushOpen.dataset.cbPush;
+      renderChainsPage();
+      const inp = document.getElementById("cbPushDateInput");
+      if (inp) inp.focus();
+      return;
+    }
+    if (e.target.closest("[data-cb-push-cancel]")) { cbPushing = null; renderChainsPage(); return; }
+    // grants the ROOT an occurrence on the chosen date -- every linked before/after
+    // step already follows it there for free (chainGrantsOn), same reasoning as the
+    // "attach an existing routine to this day" flow on #addForm's submit handler.
+    const pushGo = e.target.closest("[data-cb-push-go]");
+    if (pushGo) {
+      const root = chainNodeById(pushGo.dataset.cbPushGo);
+      const dateVal = document.getElementById("cbPushDateInput").value;
+      if (!root || !dateVal) return;
+      if (!Array.isArray(root.extraDates)) root.extraDates = [];
+      if (!root.extraDates.includes(dateVal)) {
+        root.extraDates.push(dateVal);
+        if (isRecurEvent(root)) saveRecurringEvents(); else saveRoutines();
+      }
+      // stays on the Chains page (not jumped to Day) so pushing several chains in a
+      // row doesn't lose her place -- the card's own day line re-reads the fresh
+      // extraDate on this re-render whenever it's within the 8-day preview window.
+      cbPushing = null;
+      renderChainsPage();
       return;
     }
     if (e.target.closest("#cbSave")) {
