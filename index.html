@@ -4611,12 +4611,17 @@
     margin-right: 6px; vertical-align: middle; box-shadow: 0 0 4px color-mix(in oklab, var(--fast) 70%, transparent); }
   .fast-bar-sub { font-size: 11.5px; color: var(--ink-faint); }
   .fast-bar-row.goal-met .sb-amt { color: var(--fast); }
-  /* 2026-08-06 (Linh: "allow it to show even when fast is not active and allow to
-     click to start or stop fast"): the row is a tap target now (same data-fast-toggle
-     delegate as the Health page's own button). Padding+negative margin extends the
-     hit area to ~44px without changing the visual rhythm; idle state dims the dot to
-     an outline so green still unambiguously means "actively fasting". */
-  .fast-bar-row[data-fast-toggle] { cursor: pointer; padding: 12px 0; margin: -12px 0; }
+  /* 2026-08-05 (Linh: "tapping fasting bar... turns it off... remove those functions,
+     make it display only"): SUPERSEDES the 2026-08-06 tap-to-toggle call -- accidental
+     taps while scrolling were silently ending her fast. The row is display-only again
+     (data-fast-toggle removed from the markup); starting/stopping lives on the Fasting
+     page. Idle state still dims the dot so green unambiguously means "actively fasting". */
+  .fast-resume {
+    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft);
+    border-radius: 999px; padding: 3px 12px; font-size: 11.5px; cursor: pointer;
+    font-family: var(--font-body); margin-left: 8px;
+  }
+  .fast-resume:hover { border-color: var(--fast); color: var(--fast); }
   .fast-bar-row.fast-idle .fast-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fast) 55%, transparent); }
   .fast-bar-row.fast-idle .sb-amt { color: var(--ink-faint); font-weight: 600; }
 
@@ -8866,14 +8871,13 @@
         </div>
         <!-- 2026-08-06 (Linh, fasting indicator 2b): "above the grid" -- directly above
              .timeline-scroll. renderFastBar() fills this.
-             2026-08-06 later (Linh: "allow it to show even when fast is not active and
-             allow to click to start or stop fast"): always visible now -- an idle "tap
-             to start" state replaces the old hide-when-not-fasting; the row carries
-             data-fast-toggle so the SAME app-wide delegate the Health page's own
-             start/end button uses handles the tap (one interaction language, no new
-             handler). -->
+             2026-08-05 (Linh: "tapping fasting bar... turns it off... remove those
+             functions, make it display only"): SUPERSEDES the tap-to-toggle call that
+             briefly lived here -- accidental taps while scrolling were ending her fast.
+             Display-only now; start/stop stays on the Fasting page, and a small Resume
+             chip appears in the sub-line when a fast ended in the last few hours. -->
         <div class="fast-status" id="fastStatus">
-          <div class="spend-bar-row fast-bar-row" id="fastBarRow" data-fast-toggle role="button" tabindex="0" aria-label="Start fasting">
+          <div class="spend-bar-row fast-bar-row" id="fastBarRow">
             <span class="sb-label"><span class="fast-dot"></span>Fasting</span>
             <div class="sb-track"><div class="sb-fill" id="fastBarFill"></div></div>
             <span class="sb-amt" id="fastBarAmt"></span>
@@ -12903,26 +12907,15 @@
     });
     placed.sort((a, b) => a.top - b.top || b.h - a.h);
     let cluster = [], clusterEnd = -1;
-    // 2026-08-02 (Linh, GCal-mobile redesign, code44: "no overlapping blocks, no
-    // irregular widths"): on phone widths, overlapping items no longer split into
-    // side-by-side lane columns (colStyle below stays unused, p.cols never exceeds 1)
-    // — they stack sequentially instead, each pushed down to start right where the
-    // previous one in the cluster ends. This does mean a genuinely double-booked item
-    // no longer sits at its exact time position, the same trade-off Google Calendar's
-    // own mobile app makes for the same reason. Desktop keeps the original side-by-side
-    // lane-splitting untouched (that was itself a deliberate earlier design choice, not
-    // in scope here).
+    // 2026-08-06 (Linh, screenshot: "the overlapping events need to display overlap"):
+    // SUPERSEDES the 2026-08-02 "no overlapping blocks" mobile special-case that used
+    // to live here — genuinely double-booked items (Laundry 7-8:30pm / Chinese class
+    // 8-9pm in her screenshot) were pushed down to start after the previous block
+    // ended instead of at their real time, so "8pm-9pm" visually started around
+    // 8:20pm. Mobile now uses the same side-by-side lane-splitting desktop already
+    // had — every item sits at its true time position; a real overlap shows as
+    // narrower side-by-side columns (colStyle below) instead of a misleading shift.
     const closeCluster = () => {
-      if (window.innerWidth <= 640) {
-        let cursor = -Infinity;
-        cluster.forEach(p => {
-          if (p.top < cursor) p.top = cursor;
-          cursor = p.top + p.h + 2;
-          p.col = 0; p.cols = 1;
-        });
-        cluster = [];
-        return;
-      }
       const colEnds = [];
       cluster.forEach(p => {
         let c = 0;
@@ -16934,6 +16927,16 @@
     const p = n => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   }
+  // 2026-08-05 (Linh: "allow option to resume fasting when accidentally turning it
+  // off"): the most recently ended fast, but only within a 3h window — after that a
+  // resume stops being "undo my accidental stop" and starts rewriting history. Null
+  // while a fast is running or the log is empty.
+  function lastEndedFast() {
+    if (HEALTH.activeFast || !Array.isArray(HEALTH.fasts) || !HEALTH.fasts.length) return null;
+    const lf = HEALTH.fasts.reduce((a, b) => (!a || new Date(b.end || 0) > new Date(a.end || 0)) ? b : a, null);
+    if (!lf || !lf.end || !lf.start) return null;
+    return Date.now() - new Date(lf.end).getTime() <= 3 * 3600000 ? lf : null;
+  }
   function fastCardHTML(opts) {
     const showGoalInput = !!(opts && opts.showGoalInput);
     const showUdNote = !!(opts && opts.showUdNote);
@@ -16977,6 +16980,7 @@
           <span class="fast-goal-custom"><input type="number" id="fastGoalInput" min="1" max="72" value="${goalH}" aria-label="Custom fasting goal in hours"> h</span>
         </div>` : ""}
         <button class="fast-btn" data-fast-toggle data-on="${!!active}">${active ? "Stop fast" : "Start fast"}</button>
+        ${!active && lastEndedFast() ? `<button class="fast-btn fast-btn-sm" data-fast-resume title="Continues the fast that ended ${fmtHrs(Date.now() - new Date(lastEndedFast().end).getTime())} ago, keeping its original start time">Resume last fast</button>` : ""}
         ${showUdNote ? fastUdNoteHTML() : ""}
       </div>`;
   }
@@ -17045,22 +17049,28 @@
     const box = document.getElementById("fastStatus");
     if (!box) return;
     const row = document.getElementById("fastBarRow");
-    // 2026-08-06 (Linh: "allow it to show even when fast is not active and allow to
-    // click to start or stop fast"): idle state instead of hiding -- empty track,
-    // "tap to start" where the countdown normally reads, dimmed dot via .fast-idle.
+    // 2026-08-05 (Linh: "remove those functions, make it display only / allow option
+    // to resume fasting when accidentally turning it off"): SUPERSEDES the 2026-08-06
+    // tap-to-toggle idle state -- the row no longer starts or ends anything (accidental
+    // taps while scrolling were silently ending her fast). Idle reads "not fasting";
+    // if a fast ended within the last 3h (the accidental-stop window, see
+    // lastEndedFast), an explicit Resume chip in the sub-line restores it with its
+    // ORIGINAL start time (data-fast-resume handler).
     if (!HEALTH.activeFast) {
       box.hidden = false;
       row.classList.add("fast-idle");
       row.classList.remove("goal-met");
-      row.setAttribute("aria-label", "Start fasting");
       document.getElementById("fastBarFill").style.width = "0%";
-      document.getElementById("fastBarAmt").textContent = "tap to start";
-      document.getElementById("fastBarSub").textContent = "";
+      document.getElementById("fastBarAmt").textContent = "not fasting";
+      const lf = lastEndedFast();
+      const agoMs = lf ? Date.now() - new Date(lf.end).getTime() : 0;
+      document.getElementById("fastBarSub").innerHTML = lf
+        ? `ended ${agoMs < 60000 ? "just now" : fmtHrs(agoMs) + " ago"}<button type="button" class="fast-resume" data-fast-resume>Resume</button>`
+        : "";
       return;
     }
     box.hidden = false;
     row.classList.remove("fast-idle");
-    row.setAttribute("aria-label", "End fast");
     const goalH = HEALTH.fastGoalHours || 16;
     const goalMs = goalH * 3600000;
     const start = new Date(HEALTH.activeFast);
@@ -22292,6 +22302,20 @@
       saveHealth();
       if (state.view === "health") renderHealth(); else renderFastEverywhere();
       syncFastTimer();
+      return;
+    }
+    // 2026-08-05 (Linh: "allow option to resume fasting when accidentally turning it
+    // off"): un-does an accidental Stop — the just-ended fast comes OUT of the log
+    // and back to activeFast with its original start, so no elapsed time is lost.
+    if (e.target.closest("[data-fast-resume]")) {
+      const lf = lastEndedFast();
+      if (lf) {
+        HEALTH.fasts = HEALTH.fasts.filter(f => f.id !== lf.id);
+        HEALTH.activeFast = lf.start;
+        saveHealth();
+        if (state.view === "health") renderHealth(); else renderFastEverywhere();
+        syncFastTimer();
+      }
       return;
     }
     if (e.target.closest("[data-fast-edit-start]")) {
