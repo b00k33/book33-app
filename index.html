@@ -3338,7 +3338,11 @@
   .cb-layout { max-width: 640px; margin: 0 auto; }
   .cb-side { display: none; }
   @media (min-width: 901px) {
-    .cb-layout { max-width: 960px; display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 16px; align-items: start; }
+    /* 2026-08-05 (Linh, Chains-page screenshot: "organise steps into table format
+       of 3 columns"): Steps widened from 264px so its own Work/Marriage/Personal
+       grid (see .cb-pool below) has room to read, not just technically fit —
+       main area keeps roughly its old width (960-264 ≈ 1040-340). */
+    .cb-layout { max-width: 1040px; display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
     .cb-side { display: block; position: sticky; top: 12px; background: var(--note-bg); border-radius: var(--radius-md); padding: 16px; }
     .cb-build .cb-pool { display: none; }
   }
@@ -3356,16 +3360,23 @@
   }
   .cb-name-input:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
   .cb-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 12px; }
-  .cb-pool { display: flex; flex-wrap: wrap; gap: 8px; max-height: 168px; overflow-y: auto; padding: 2px 0; margin-top: 12px; }
-  .cb-pool .cb-pool-lab { width: 100%; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 4px 0 0; }
+  /* 2026-08-05: Steps as an actual 3-column table (Work/Marriage/Personal side by
+     side) instead of one long list with inline section headers — same table
+     language as the Before/Event/After columns next to it. Chips shrink to fit;
+     .cb-chip-tx's own ellipsis (below) keeps a long title from wrapping/breaking
+     the column. */
+  .cb-pool { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 6px; max-height: 168px; overflow-y: auto; padding: 2px 0; margin-top: 12px; }
+  .cb-pool-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .cb-pool .cb-pool-lab { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin: 4px 0 0; }
+  .cb-pool-empty { font-size: 10.5px; color: var(--ink-faint); opacity: .6; padding: 4px 0; }
   .cb-chip {
-    display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 14px;
+    display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 4px 8px;
     background: var(--field-bg); color: var(--ink); border: 1px solid var(--note-line);
-    border-radius: 999px; font-size: 12px; font-family: var(--font-body); cursor: pointer; max-width: 100%;
+    border-radius: 999px; font-size: 11px; font-family: var(--font-body); cursor: pointer; max-width: 100%;
   }
   .cb-chip:hover { border-color: var(--accent-seed); }
-  .cb-chip .cb-chip-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cb-chip .cb-chip-date { color: var(--ink-faint); font-size: 10.5px; }
+  .cb-chip .cb-chip-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .cb-chip .cb-chip-date { color: var(--ink-faint); font-size: 9.5px; flex: none; }
   /* 2026-08-06 pt.2 (Linh: "an actual 3 column table to organise the routines"):
      replaces the single .cb-track list — Before/Event/After side by side ≥901px
      (same breakpoint the Steps side panel already uses), stacked full-width sections
@@ -22592,16 +22603,26 @@
   // (Work/Marriage/Personal), routines+events+recurring events pooled together and
   // sorted alphabetically within each. A dated one-off event still shows its date
   // suffix so it reads apart from a routine at a glance.
+  // 2026-08-05 (Linh, screenshot: "organise steps into table format of 3
+  // columns"): SUPERSEDES the single stacked list above -- Work/Marriage/
+  // Personal are now three real side-by-side columns (.cb-pool-col, a CSS grid
+  // matching the Before/Event/After table's own language) instead of inline
+  // section labels in one long flex-wrap stream. Every track always renders its
+  // own column, even empty (a dash), so the 3-column shape stays fixed.
   function cbPoolHtml() {
     const used = new Set(cbItems);
     const chip = (t, dLbl) => `<button type="button" class="cb-chip" data-cb-chip="${esc(t.id)}">＋ <span class="cb-chip-tx">${esc(t.title)}</span>${dLbl ? ` <span class="cb-chip-date">${dLbl}</span>` : ""}</button>`;
-    const g = (label, chips) => chips.length ? `<div class="cb-pool-lab">${label}</div>${chips.join("")}` : "";
     const dLblOf = t => isPlainEvent(t) ? `${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}` : "";
     const all = [...ROUTINE_TASKS, ...RECURRING_EVENTS, ...chainableEvents()].filter(t => !used.has(t.id));
-    const inner = HB_TRACKS.map(tr => g(TRACK_LABEL[tr],
-      all.filter(t => t.track === tr).sort((a, b) => a.title.localeCompare(b.title)).map(t => chip(t, dLblOf(t)))
-    )).join("");
-    return inner ? `<div class="cb-pool">${inner}</div>` : "";
+    if (!all.length) return "";
+    const col = tr => {
+      const chips = all.filter(t => t.track === tr).sort((a, b) => a.title.localeCompare(b.title)).map(t => chip(t, dLblOf(t))).join("");
+      return `<div class="cb-pool-col">
+        <div class="cb-pool-lab">${esc(TRACK_LABEL[tr])}</div>
+        ${chips || `<div class="cb-pool-empty">—</div>`}
+      </div>`;
+    };
+    return `<div class="cb-pool">${HB_TRACKS.map(col).join("")}</div>`;
   }
   // the whole sequence's computed schedule, walked out from the anchor's own raw
   // time by durations — the same arithmetic the live chain does day-to-day, so what
