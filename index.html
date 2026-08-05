@@ -3560,6 +3560,13 @@
   /* one central health accent, distinct from the three life tracks; statuses reuse
      the app's own green/gold/red tokens */
   :root { --health: #5fb2bd; }
+  /* 2026-08-06 (Linh, screenshot of this page on desktop: "improve width ui"): its own
+     page got no width treatment when it moved out of the Day rail -- .h-card has no
+     max-width of its own (fine for the wider Health/fasting widgets it's shared with),
+     so a plain list of short rows stretched edge-to-edge across .wrap's full 1240px.
+     Same fix, same unguarded pattern as #notifyPage (another simple single-column
+     list page) -- .wrap's own flex centering does the rest. */
+  #medicalPage { max-width: 640px; }
   .med-need {
     display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 8px;
     border-radius: var(--radius-sm); background: color-mix(in oklab, var(--health) 10%, transparent);
@@ -3597,11 +3604,12 @@
   .med-item[data-on="true"] .ring { background: var(--health); border-color: var(--health); }
   .med-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .med-actions .add-btn { padding: 6px 14px; font-size: 12px; }
-  .med-daterow { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-  .med-daterow input[type=date] {
+  .med-daterow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .med-daterow input[type=date], .med-daterow input[type=time] {
     background: var(--field-bg); color: var(--ink); border: none; border-radius: var(--radius-sm);
     padding: 8px 10px; font-size: 13px; font-family: var(--font-body);
   }
+  .med-hint { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
   .med-form { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; }
   .med-form input, .med-form textarea {
     background: var(--field-bg); color: var(--ink); border: none; border-radius: var(--radius-sm);
@@ -12249,6 +12257,21 @@
         note: p.relation, allDay: true, start: "", end: "",
       });
     }));
+    // Medical Tracking → calendar (2026-08-06, Linh: "if i input that my dentist
+    // appointment is on x day at x time, that is automatically added to my calendar"):
+    // booking a check on the Medical Tracking page (CH22) writes nextAppt/nextApptTime
+    // straight onto the check itself — no separate calendar event to keep in sync, this
+    // just reads it back out. A date with no time still counts toward "Scheduled" on
+    // that page but stays off the timeline, same as her own words ("day AT time").
+    MEDICAL.checks.forEach(c => {
+      if (c.nextAppt !== k || !c.nextApptTime) return;
+      out.push({
+        id: `medappt-${c.id}-${k}`, generated: true, date: k,
+        track: "personal", category: "Medical", icon: c.icon,
+        title: `${c.name} appointment`, kind: "event", allDay: false,
+        start: c.nextApptTime, end: minToTime(Math.min(timeToMin(c.nextApptTime) + 60, 1439)),
+      });
+    });
     // (the nightly 28 Money Hour renders as a green power-block on the timeline
     //  — see POWER_HOURS — rather than as a generated event card)
     return out;
@@ -19295,7 +19318,7 @@
       const total = Math.max(1, dayDiff(nextDue, parseKey(c.lastDone)));
       pct = Math.max(0, Math.min(100, Math.round(dayDiff(TODAY, parseKey(c.lastDone)) / total * 100)));
     }
-    if (appt && appt >= TODAY) return { st: "scheduled", label: `Scheduled · ${appt.getDate()} ${MON_SHORT[appt.getMonth()]}`, nextDue, pct };
+    if (appt && appt >= TODAY) return { st: "scheduled", label: `Scheduled · ${appt.getDate()} ${MON_SHORT[appt.getMonth()]}${c.nextApptTime ? ` ${fmtTime(c.nextApptTime)}` : ""}`, nextDue, pct };
     if (!nextDue || TODAY > nextDue) return { st: "overdue", label: "Overdue", nextDue, pct: 100 };
     if (dayDiff(nextDue, TODAY) <= lead) return { st: "soon", label: "Due soon", nextDue, pct };
     return { st: "ok", label: "On track", nextDue, pct };
@@ -19325,9 +19348,11 @@
       const dateRow = medDateFor && medDateFor.id === c.id ? `
         <div class="med-daterow">
           <input type="date" id="medDateInput" value="${medDateFor.kind === "book" ? (c.nextAppt || "") : (c.nextAppt || keyOf(TODAY))}">
+          ${medDateFor.kind === "book" ? `<input type="time" id="medTimeInput" value="${c.nextApptTime || ""}">` : ""}
           <button type="button" class="add-btn" data-med-date-save="${c.id}">${medDateFor.kind === "book" ? "Save appointment" : "Save — done that day"}</button>
           <button type="button" class="add-btn" data-med-date-cancel>Cancel</button>
-        </div>` : "";
+        </div>
+        ${medDateFor.kind === "book" ? `<div class="med-hint">A time puts it on your calendar automatically</div>` : ""}` : "";
       return `<div class="med-card">
         <div class="med-head" data-med-open="${c.id}">
           <span class="em">${c.icon}</span>
@@ -19387,9 +19412,13 @@
       if (medDateFor && medDateFor.kind === "done") {
         // roll the cycle: the visit date becomes the new anchor; a fresh cycles key
         // means the Before/After templates come back unticked for the next round
-        c.lastDone = v; c.nextAppt = null;
+        c.lastDone = v; c.nextAppt = null; c.nextApptTime = null;
       } else {
+        // a time is what puts it on the actual calendar (generatedFor picks up
+        // nextAppt/nextApptTime directly) -- date-only still tracks toward "Scheduled"
+        // but stays off the timeline, same as it always did before this had a time.
         c.nextAppt = v;
+        c.nextApptTime = document.getElementById("medTimeInput")?.value || null;
       }
       medDateFor = null;
       saveMedical(); renderMedical(); return;
