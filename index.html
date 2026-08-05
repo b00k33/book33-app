@@ -9588,10 +9588,17 @@
      When the two methods agree, that's the day's number. When they don't,
      it's an IMPURE DAY — noted as "master/reduced", e.g. 22/4.
 
-       e.g. 20 Jul 2026 → A: 20+7+1=28→10→1   B: 2+7+1=10→1        → 1 (pure)
+       e.g. 20 Jul 2026 → A: 20+7+1=28→10→1   B: 2+7+1=10→1        → 28/1 (semi master, see SEMI_MASTERS)
        e.g. 18 Sep 2020 → A: 18+9+4=31→4      B: 9+9+4=22 (master) → 22/4 (impure)
      ------------------------------------------------------------------------ */
   const MASTERS = new Set([11, 22, 33]);
+  // 2026-08-05 (Linh: "19th August is also 28lp. There are 2 ways to calculate lp.
+  // 28 is a semi master number. Needs to be noted."): when Method A's raw total
+  // reaches 28 before reducing (e.g. 19 Aug 2026 → 19+8+1), the day reads "28/1"
+  // instead of a bare 1 — same slash notation the impure/master days already use.
+  // 28 is GG33's wealth number; isMoneyDay() below already treats these days as
+  // money days, this makes the number itself visible everywhere the UD shows.
+  const SEMI_MASTERS = new Set([28]);
   // 20 is a hidden 11 — it doesn't reduce further, and carries 11's meaning
   const HIDDEN_MASTER_OF = { 20: 11 };
   const isMasterLike = n => MASTERS.has(n) || (n in HIDDEN_MASTER_OF);
@@ -9610,8 +9617,13 @@
   }
   function universalDay(d) {
     const day = d.getDate(), mS = toSingleDigit(d.getMonth() + 1), yS = toSingleDigit(d.getFullYear());
-    const resA = reduceKeepMaster(day + mS + yS);
+    const totalA = day + mS + yS;
+    const resA = reduceKeepMaster(totalA);
     const resB = reduceKeepMaster(toSingleDigit(day) + mS + yS);
+    // semi master (28): both methods provably agree here (the two totals differ by a
+    // multiple of 9, and 28 → 1), so this never collides with the impure branch below
+    if (SEMI_MASTERS.has(totalA) && resA === resB)
+      return { value: `${totalA}/${resA}`, master: false, semi: true, pure: true };
     if (resA === resB) return { value: masterLabel(resA), master: isMasterLike(resA), pure: true };
     const aMaster = isMasterLike(resA), bMaster = isMasterLike(resB);
     const [primary, secondary] = aMaster && !bMaster ? [resA, resB] : bMaster && !aMaster ? [resB, resA] : [resA, resB];
@@ -23700,13 +23712,18 @@
     return 0;
   }
   function dpScoreDay(d, spec) {
-    const udv = parseInt(String(universalDay(d).value), 10);
+    const udRaw = String(universalDay(d).value);
+    const udv = parseInt(udRaw, 10);
+    // a "28/1" semi-master day still carries its reduced energy at full strength —
+    // it scores as the 1 it reduces to; the 28 itself stays visible in the why-line
+    const udSemi = SEMI_MASTERS.has(udv);
+    const udE = udSemi ? toSingleDigit(udv) : udv;
     const pdv = personalDay(d);
     let score = 50, why = [];
-    const su = dpEnergyScore(udv, spec, 40, 22, -35);
+    const su = dpEnergyScore(udE, spec, 40, 22, -35);
     const sp = dpEnergyScore(pdv, spec, 32, 16, -28);
     score += su + sp;
-    why.push(`<b>UD ${udv}</b> ${focusFor(udv).title}${su > 0 ? " ✓" : su < 0 ? " ✗" : ""}`);
+    why.push(`<b>UD ${udSemi ? udRaw : udv}</b> ${focusFor(udE).title}${su > 0 ? " ✓" : su < 0 ? " ✗" : ""}`);
     if (pdv != null) why.push(`<b>PD ${masterLabel(pdv)}</b> ${focusFor(masterLabel(pdv)).title}${sp > 0 ? " ✓" : sp < 0 ? " ✗" : ""}`);
     if (spec.id === "money" && [8, 17, 26, 28].includes(d.getDate())) { score += 18; why.push("<b>8-day</b> 💰"); }
     return { score: Math.max(0, Math.min(100, Math.round(score))), why: why.join(" · ") };
