@@ -1,7 +1,7 @@
 // Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260805z";
+var CACHE_VERSION = "b33-20260805z2";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -28,7 +28,9 @@ var KEEP_XORIGIN = /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.
 self.addEventListener("activate", function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
-      var olds = keys.filter(function (k) { return k !== CACHE_VERSION; });
+      // "b33-share" is the share-target's tiny hand-off stash, not an app-shell
+      // version — never sweep it (a shared .ics could be mid-flight during an update)
+      var olds = keys.filter(function (k) { return k !== CACHE_VERSION && k !== "b33-share"; });
       return caches.open(CACHE_VERSION).then(function (fresh) {
         return Promise.all(olds.map(function (name) {
           return caches.open(name).then(function (old) {
@@ -100,6 +102,25 @@ function timeoutFetch(req, ms) {
 // too (status is always 0 for those, so status===200 alone would skip them).
 self.addEventListener("fetch", function (e) {
   var req = e.request;
+  // Share target (2026-08-05, Linh: "sometimes i get ical"): Android's share sheet
+  // POSTs the shared .ics here (see manifest.json share_target). Stash the file text
+  // in its own small cache, then bounce into the app with ?shareics=1 — the calendar
+  // import module reads the stash on boot and opens its normal import preview.
+  if (req.method === "POST" && new URL(req.url).pathname.indexOf("share-ics") !== -1) {
+    e.respondWith(
+      req.formData().then(function (fd) {
+        var f = fd.get("ics");
+        return f && f.text ? f.text() : "";
+      }).then(function (text) {
+        return caches.open("b33-share").then(function (c) {
+          return c.put("./shared.ics", new Response(text || "", { headers: { "Content-Type": "text/calendar" } }));
+        });
+      }).catch(function () {}).then(function () {
+        return Response.redirect("./?shareics=1", 303);
+      })
+    );
+    return;
+  }
   if (req.method !== "GET") return;
   if (req.mode === "navigate") {
     e.respondWith(

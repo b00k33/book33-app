@@ -2674,7 +2674,11 @@
   .tl-item[data-track="personal"][data-category="Fitness"]                { --cat-c: var(--cat-personal-fitness); }
   .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] { --cat-c: var(--cat-personal-beauty); }
   .tl-block { background: var(--cat-c); background-image: none; border-left: none; }
-  .tl-block .tl-title { color: var(--cat-t); padding-right: 36px; }
+  /* 2026-08-06 (Linh, overlap fixes: "text uses nowrap/hidden/ellipsis so nothing is
+     cut off mid-word"): block titles were free to wrap and then clip mid-line against
+     the block's overflow:hidden — in a half-width overlap column that read as chopped
+     text. One line + ellipsis everywhere instead. */
+  .tl-block .tl-title { color: var(--cat-t); padding-right: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tl-block .tl-meta  { color: var(--cat-t); opacity: 0.82; }
   .tl-block .tl-meta .loc { color: var(--cat-t); opacity: 0.7; }
   /* 2026-08-01 ("change calendar to mockup calendar"): the mockup's .tl-event is a
@@ -11533,6 +11537,23 @@
     });
     saveRoutines();
     try { localStorage.setItem(FLAG, "1"); localStorage.setItem("daybook-seed-morning-routine", "1"); } catch (e) {}
+  })();
+
+  // 2026-08-06 (Linh: "an event saved at 7:30am (Pilates) renders at 8:45am, AND its
+  // time label also shows the wrong 8:45am"): the real cause was DATA, not geometry —
+  // her Pilates routine (msbtshiy6ybhf, stored start 07:30) carried
+  // anchorTo:"morn-b", anchorMode:"after", i.e. Pilates chained to start after
+  // "B · After Pilates → work" — the chain built BACKWARDS (B follows Pilates by
+  // definition, never the reverse). chainedStartMinOn() then computed morn-b's end
+  // (8:30 + 15m of steps = 8:45) and overwrote the occurrence's start before render,
+  // which feeds both the block position AND the label (the label always reads the
+  // occurrence's start field directly — it is never derived from pixel position).
+  // Self-healing strip, keyed to this exact wrong pair rather than a one-shot flag,
+  // so a stale cloud copy syncing back from another device can't resurrect it; a
+  // deliberate future re-chain of Pilates to anything OTHER than morn-b is untouched.
+  (function fixInvertedPilatesChain() {
+    const t = ROUTINE_TASKS.find(x => x.id === "msbtshiy6ybhf");
+    if (t && t.anchorTo === "morn-b") { delete t.anchorTo; delete t.anchorMode; saveRoutines(); }
   })();
 
   const isDone = id => !!DONE[id];
@@ -22308,6 +22329,32 @@
       if (e.target.id === "icsGo") commit();
       else if (e.target.id === "icsCancel") { pending = null; confirmEl.hidden = true; }
     });
+    // 2026-08-05 (Linh: "allow me to add ical to my calendar — sometimes i get ical"):
+    // arrival via Android's share sheet. The SW stashed the shared file's text in the
+    // b33-share cache and redirected to ./?shareics=1 (see manifest.json share_target
+    // + sw.js) — consume the stash, open the Events page (where this import strip and
+    // its confirm live), and run the exact same preview → Import flow as a hand-picked
+    // file. Fail-soft everywhere: no stash / no Cache API / junk text just no-ops.
+    (function consumeSharedIcs() {
+      let q;
+      try { q = new URLSearchParams(location.search); } catch (e) { return; }
+      if (!q.has("shareics")) return;
+      q.delete("shareics");
+      try { history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q.toString() : "") + location.hash); } catch (e) {}
+      if (!("caches" in window)) return;
+      caches.open("b33-share").then(c => c.match("./shared.ics").then(res => {
+        if (!res) return;
+        return res.text().then(text => {
+          c.delete("./shared.ics");
+          if (!text || !/BEGIN:(VCALENDAR|VEVENT)/i.test(text)) return;
+          // promise callbacks run after the boot render below, so render is live here
+          state.view = "events";
+          if (typeof render === "function") render();
+          preview(text);
+          try { confirmEl.scrollIntoView({ block: "center" }); } catch (e) {}
+        });
+      })).catch(() => {});
+    })();
   })();
 
   document.getElementById("wrap").addEventListener("click", e => {
