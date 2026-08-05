@@ -3292,9 +3292,30 @@
      HTML5 drag never starts on touch), tap a row to crown the 🔒 anchor. Existing
      chains render as mini gold timelines in true chain order. Reuses
      .chain-unlink / .chain-b-actions / .fam-empty from the card above. ---- */
-  .cb-wrap { max-width: 640px; margin: 0 auto; }
-  .cb-wrap .add-row { margin-top: 8px; margin-bottom: 24px; }
+  /* side-by-side ≥901px (Linh: "show routines and chains on the same page and side
+     by side" + "a box of routines on the left side for dropping and dragging"):
+     Steps palette on the left, builder + chains on the right; one column on phone,
+     where the palette lives inside the builder as before (tap-to-add) */
+  .cb-layout { max-width: 640px; margin: 0 auto; }
+  .cb-side { display: none; }
+  @media (min-width: 901px) {
+    .cb-layout { max-width: 960px; display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .cb-side { display: block; position: sticky; top: 12px; background: var(--note-bg); border-radius: var(--radius-md); padding: 16px; }
+    .cb-build .cb-pool { display: none; }
+  }
+  .cb-side-head { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .cb-side-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; }
+  .cb-side .cb-pool { max-height: 56vh; margin-top: 8px; }
+  .cb-side .cb-chip { width: 100%; justify-content: flex-start; }
+  .cb-ghost { position: fixed; z-index: 40; pointer-events: none; opacity: .92; box-shadow: 0 6px 18px rgb(0 0 0 / .35); background: var(--note-bg); }
+  .cb-main .add-row { margin-top: 8px; margin-bottom: 24px; }
   .cb-build { background: var(--note-bg); border-radius: var(--radius-md); padding: 16px; margin: 8px 0 24px; }
+  .cb-name-input {
+    width: 100%; background: var(--field-bg); color: var(--ink); border: none;
+    border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px;
+    font-family: var(--font-body); min-height: 44px; margin-bottom: 12px;
+  }
+  .cb-name-input:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
   .cb-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 12px; }
   .cb-pool { display: flex; flex-wrap: wrap; gap: 8px; max-height: 168px; overflow-y: auto; padding: 2px 0; margin-top: 12px; }
   .cb-pool .cb-pool-lab { width: 100%; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 4px 0 0; }
@@ -3331,7 +3352,11 @@
   /* existing chains: one block per chain, a mini timeline in true running order */
   .cb-tl { background: var(--note-bg); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; }
   .cb-tl-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-  .cb-tl-day { flex: 1; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .cb-tl-titlebox { flex: 1; min-width: 0; }
+  .cb-tl-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cb-tl-day { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .cb-tl-head .cb-name-input { margin-bottom: 0; min-height: 40px; }
+  .cb-tl-rename { padding: 4px 12px; }
   .cb-tl-edit {
     flex: none; min-height: 44px; padding: 4px 16px; border: 1px solid var(--note-line);
     background: transparent; color: var(--ink-soft); border-radius: 999px;
@@ -22220,6 +22245,12 @@
      "before" to the one below. Nothing new in the data model — the Day spine, the
      popups' Chain/Unchain, and the Routines-page card all keep working unchanged. */
   let cbItems = [], cbAnchorIdx = 0, cbBuilding = false, cbEditOrig = null;
+  // chain names ("allow to edit chain names"): the name lives on the chain's ROOT
+  // node (t.chainName) so it travels with the existing data + sync — no new store.
+  // cbName mirrors the builder's name field across re-renders; cbNameEdit is the
+  // root id whose listing name is being inline-renamed; cbEditRoot remembers the
+  // edit-loaded root so a re-anchor migrates the name to the new root on save.
+  let cbName = "", cbNameEdit = null, cbEditRoot = null;
   // step chips — same three groups the old select had, minus anything already in
   // the sequence. Tap to add ("almost like drag and drop": add by tap, order by
   // drag) — a tap is one gesture where a cross-container drag is a phone-hostile
@@ -22303,9 +22334,15 @@
           ${isRoot ? "" : `<button type="button" class="chain-unlink" data-cb-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
         </div>`;
       }).join("");
+      const nameHtml = cbNameEdit === root.id
+        ? `<input type="text" class="cb-name-input" id="cbTlNameInput" maxlength="40" value="${esc(root.chainName || "")}" placeholder="${esc(root.title)}" data-cb-name-root="${esc(root.id)}" aria-label="Chain name">`
+        : `<span class="cb-tl-name">${esc(root.chainName || root.title)}</span><div class="cb-tl-day">${esc(dayLbl)}</div>`;
       html += `<div class="cb-tl">
-        <div class="cb-tl-head"><span class="cb-tl-day">${esc(dayLbl)}</span>
-          <button type="button" class="cb-tl-edit" data-cb-edit="${esc(root.id)}">Edit</button></div>
+        <div class="cb-tl-head">
+          <div class="cb-tl-titlebox">${nameHtml}</div>
+          <button type="button" class="cb-tl-edit cb-tl-rename" data-cb-rename="${esc(root.id)}" aria-label="Rename chain" title="Rename this chain">✎</button>
+          <button type="button" class="cb-tl-edit" data-cb-edit="${esc(root.id)}">Edit</button>
+        </div>
         <div class="cb-tl-rows">${rows}</div>
       </div>`;
     });
@@ -22343,8 +22380,9 @@
       const dayLbl = sched && sched.previewDate ? `${WD_FULL[dowIndex(sched.previewDate)]} ${sched.previewDate.getDate()} ${MON_SHORT[sched.previewDate.getMonth()]}` : "";
       builderHtml = `<div class="cb-build">
         <div class="preg-cel-lab">Build a chain${dayLbl ? ` · ${esc(dayLbl)}` : ""}</div>
-        <div class="cb-hint">Tap a step below to add it · drag ⋮⋮ to reorder · tap a row to make it the 🔒 anchor. Every other step counts its time out from the anchor, top to bottom.</div>
-        <div class="cb-track" id="cbTrack">${rows || `<div class="fam-empty">No steps yet — tap one below to add it.</div>`}</div>
+        <input type="text" class="cb-name-input" id="cbName" maxlength="40" placeholder="Name this chain (optional)" value="${esc(cbName)}" aria-label="Chain name">
+        <div class="cb-hint">Tap a step in the Steps box to add it · drag ⋮⋮ to reorder · tap a row to make it the 🔒 anchor. Every other step counts its time out from the anchor, top to bottom.</div>
+        <div class="cb-track" id="cbTrack">${rows || `<div class="fam-empty">No steps yet — tap a step to add it.</div>`}</div>
         ${warn}
         ${cbPoolHtml()}
         <div class="chain-b-actions">
@@ -22355,15 +22393,27 @@
     } else {
       builderHtml = `<div class="add-row"><button type="button" class="add-btn" id="cbStart">⛓ Start a chain</button></div>`;
     }
-    host.innerHTML = `<div class="cb-wrap">` + builderHtml
+    host.innerHTML = `<div class="cb-layout">
+      <aside class="cb-side">
+        <div class="cb-side-head">Steps</div>
+        <div class="cb-side-hint">${cbBuilding ? "Tap a step to add it — or drag it across into your chain." : "Tap a step to start a new chain with it."}</div>
+        ${cbPoolHtml()}
+      </aside>
+      <div class="cb-main">` + builderHtml
       + `<div class="section-head" style="margin-top:22px"><h2>Your chains</h2><span class="rule"></span></div>`
-      + cbExistingHtml() + `</div>`;
+      + cbExistingHtml() + `</div></div>`;
   }
   document.getElementById("chainsPage").addEventListener("click", e => {
-    if (e.target.closest("#cbStart")) { cbBuilding = true; cbItems = []; cbAnchorIdx = 0; cbEditOrig = null; renderChainsPage(); return; }
-    if (e.target.closest("#cbCancel")) { cbBuilding = false; cbItems = []; cbEditOrig = null; renderChainsPage(); return; }
+    if (e.target.closest("#cbStart")) { cbBuilding = true; cbItems = []; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = ""; renderChainsPage(); return; }
+    if (e.target.closest("#cbCancel")) { cbBuilding = false; cbItems = []; cbEditOrig = null; cbEditRoot = null; cbName = ""; renderChainsPage(); return; }
     const chip = e.target.closest("[data-cb-chip]");
-    if (chip) { cbItems.push(chip.dataset.cbChip); renderChainsPage(); return; }
+    if (chip) {
+      // a palette-drag's trailing click must not double-add the step
+      if (Date.now() - cbDragEndAt < 500) return;
+      // tapping a step with the builder closed starts a new chain seeded with it
+      if (!cbBuilding) { cbBuilding = true; cbItems = []; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = ""; }
+      cbItems.push(chip.dataset.cbChip); renderChainsPage(); return;
+    }
     const rm = e.target.closest("[data-cb-remove]");
     if (rm) {
       e.stopPropagation();
@@ -22389,9 +22439,20 @@
         cbAnchorIdx = Math.max(0, seq.findIndex(n => n.id === root.id));
         cbBuilding = true;
         cbEditOrig = cbItems.slice();
+        cbEditRoot = root.id;
+        cbName = root.chainName || "";
         renderChainsPage();
         document.getElementById("chainsPage").scrollIntoView({ behavior: "smooth", block: "start" });
       }
+      return;
+    }
+    // ✎ on a chain block: swap its name to an inline field (Enter/blur saves, Esc cancels)
+    const rn = e.target.closest("[data-cb-rename]");
+    if (rn) {
+      cbNameEdit = rn.dataset.cbRename;
+      renderChainsPage();
+      const inp = document.getElementById("cbTlNameInput");
+      if (inp) { inp.focus(); inp.select(); }
       return;
     }
     if (e.target.closest("#cbSave")) {
@@ -22422,7 +22483,15 @@
           if (t && t.anchorTo) { delete t.anchorTo; delete t.anchorMode; saveChainNode(t); }
         }
       });
-      cbBuilding = false; cbItems = []; cbEditOrig = null;
+      // the chain's name rides on its root (= the anchor); a re-anchor migrates it
+      if (cbEditRoot && cbEditRoot !== at.id) {
+        const old = chainNodeById(cbEditRoot);
+        if (old && old.chainName) { delete old.chainName; saveChainNode(old); }
+      }
+      const nm = cbName.trim();
+      if (nm) at.chainName = nm; else delete at.chainName;
+      saveChainNode(at);
+      cbBuilding = false; cbItems = []; cbEditOrig = null; cbEditRoot = null; cbName = "";
       renderChainsPage(); return;
     }
     const slot = e.target.closest("[data-cb-set-anchor]");
@@ -22432,23 +22501,90 @@
       cbAnchorIdx = +slot.dataset.cbSetAnchor; renderChainsPage(); return;
     }
   });
-  /* drag-to-reorder (Linh: "almost like an interactive drag and drop"): pointer-based
-     on the ⋮⋮ handle only — the handle is touch-action:none so native scroll never
-     claims the gesture, while the rest of the row still scrolls the page normally.
-     No long-press arming needed: a dedicated handle can't be confused with a scroll. */
+  // the builder's name field survives every re-render via cbName; the listing's
+  // inline rename commits on Enter/blur, cancels on Esc
+  document.getElementById("chainsPage").addEventListener("input", e => {
+    if (e.target.id === "cbName") cbName = e.target.value;
+  });
+  function cbCommitTlName(cancel) {
+    const inp = document.getElementById("cbTlNameInput");
+    if (!inp || cbNameEdit == null) return;
+    if (!cancel) {
+      const t = chainNodeById(inp.dataset.cbNameRoot);
+      if (t) {
+        const v = inp.value.trim();
+        if (v) t.chainName = v; else delete t.chainName;
+        saveChainNode(t);
+      }
+    }
+    cbNameEdit = null;
+    renderChainsPage();
+  }
+  document.getElementById("chainsPage").addEventListener("keydown", e => {
+    if (e.target.id !== "cbTlNameInput") return;
+    if (e.key === "Enter") { e.preventDefault(); cbCommitTlName(false); }
+    else if (e.key === "Escape") cbCommitTlName(true);
+  });
+  document.getElementById("chainsPage").addEventListener("focusout", e => {
+    if (e.target.id === "cbTlNameInput") cbCommitTlName(false);
+  });
+  /* drag controller ("almost like an interactive drag and drop" + "a box of routines
+     on the left side for dropping and dragging"): two modes on one pointer pipeline.
+     "reorder" — the ⋮⋮ handle, touch + mouse (handle is touch-action:none so native
+     scroll never claims it). "add" — dragging a Steps-palette chip into the track,
+     MOUSE ONLY: on touch the palette must stay scrollable and tap-to-add already
+     covers it (same web-drag-is-mouse-only line the Day timeline draws). A chip
+     drag with the builder closed opens it on the spot. */
   let cbDrag = null, cbDragEndAt = 0;
   document.getElementById("chainsPage").addEventListener("pointerdown", e => {
     const h = e.target.closest(".cb-handle");
-    if (!h || !cbBuilding) return;
-    const row = h.closest(".cb-slot");
-    if (!row) return;
-    e.preventDefault();
-    cbDrag = { from: +row.dataset.cbIdx, to: +row.dataset.cbIdx, row, startY: e.clientY, moved: false };
-    try { h.setPointerCapture(e.pointerId); } catch (err) {}
-    row.classList.add("cb-dragging");
+    if (h && cbBuilding) {
+      const row = h.closest(".cb-slot");
+      if (!row) return;
+      e.preventDefault();
+      cbDrag = { mode: "reorder", from: +row.dataset.cbIdx, to: +row.dataset.cbIdx, row, startY: e.clientY, moved: false };
+      try { h.setPointerCapture(e.pointerId); } catch (err) {}
+      row.classList.add("cb-dragging");
+      return;
+    }
+    const chip = e.target.closest("[data-cb-chip]");
+    if (chip && e.pointerType === "mouse" && e.button === 0) {
+      // no preventDefault — a plain click must stay a click; the drag arms on movement
+      cbDrag = { mode: "addArm", id: chip.dataset.cbChip, label: chip.textContent.replace(/^＋\s*/, ""), startX: e.clientX, startY: e.clientY };
+    }
   });
   document.addEventListener("pointermove", e => {
     if (!cbDrag) return;
+    if (cbDrag.mode === "addArm") {
+      if (Math.hypot(e.clientX - cbDrag.startX, e.clientY - cbDrag.startY) < 6) return;
+      cbDrag.mode = "add";
+      if (!cbBuilding) {
+        cbBuilding = true; cbItems = []; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = "";
+        cbDrag.openedByDrag = true;
+        renderChainsPage();
+      }
+      const g = document.createElement("div");
+      g.className = "cb-chip cb-ghost";
+      g.textContent = cbDrag.label;
+      document.body.appendChild(g);
+      cbDrag.ghost = g;
+    }
+    if (cbDrag.mode === "add") {
+      cbDrag.ghost.style.left = (e.clientX + 12) + "px";
+      cbDrag.ghost.style.top = (e.clientY - 22) + "px";
+      const rows = [...document.querySelectorAll("#cbTrack .cb-slot")];
+      let to = 0;
+      rows.forEach(r => { const b = r.getBoundingClientRect(); if (e.clientY > b.top + b.height / 2) to++; });
+      cbDrag.to = to;
+      const build = document.querySelector(".cb-build");
+      const bb = build ? build.getBoundingClientRect() : null;
+      cbDrag.overBuild = !!bb && e.clientX >= bb.left && e.clientX <= bb.right && e.clientY >= bb.top && e.clientY <= bb.bottom;
+      rows.forEach((r, i) => {
+        r.classList.toggle("cb-drop-above", cbDrag.overBuild && i === to);
+        r.classList.toggle("cb-drop-below", cbDrag.overBuild && to === rows.length && i === rows.length - 1);
+      });
+      return;
+    }
     const dy = e.clientY - cbDrag.startY;
     if (Math.abs(dy) > 4) cbDrag.moved = true;
     cbDrag.row.style.transform = `translateY(${dy}px)`;
@@ -22463,8 +22599,25 @@
   });
   function cbEndDrag(commit) {
     if (!cbDrag) return;
-    const { from, to, row, moved } = cbDrag;
+    const d = cbDrag;
     cbDrag = null;
+    if (d.mode === "addArm") return;             // never moved — the click delegate adds it
+    if (d.mode === "add") {
+      if (d.ghost) d.ghost.remove();
+      document.querySelectorAll("#cbTrack .cb-slot").forEach(r => r.classList.remove("cb-drop-above", "cb-drop-below"));
+      cbDragEndAt = Date.now();
+      if (commit && d.overBuild) {
+        const anchorId = cbItems.length ? cbItems[Math.min(cbAnchorIdx, cbItems.length - 1)] : null;
+        cbItems.splice(d.to, 0, d.id);
+        cbAnchorIdx = anchorId ? Math.max(0, cbItems.indexOf(anchorId)) : 0;
+        renderChainsPage();
+      } else if (d.openedByDrag && !cbItems.length) {
+        cbBuilding = false;                       // dropped nowhere — put the page back
+        renderChainsPage();
+      }
+      return;
+    }
+    const { from, to, row, moved } = d;
     row.style.transform = "";
     row.classList.remove("cb-dragging");
     document.querySelectorAll("#cbTrack .cb-slot").forEach(r => r.classList.remove("cb-drop-above", "cb-drop-below"));
