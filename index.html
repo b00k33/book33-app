@@ -464,7 +464,7 @@
     /* 2026-07-26 (Linh): "put 2 tiles side by side" on mobile — the Day-page side cards go
        2-up instead of one stacked column (wide items like the shopping box span full width). */
     .day-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
-    .day-side .shop-box, .day-side .add-row, .day-side .add-form, .day-side #medSection { grid-column: 1 / -1; }
+    .day-side .shop-box, .day-side .add-row, .day-side .add-form { grid-column: 1 / -1; }
     /* 2026-08-02 (Linh, code44: "should only be visible in full desktop view... should
        not take up space in narrow view or mobile"): the date-picker grid itself goes --
        PY/UY badge (.mini-cal-mascot) stays, since that's numerology info she wants
@@ -9033,6 +9033,20 @@
     <div id="chainsPageBody"></div>
   </div>
 
+  <!-- ================= MEDICAL TRACKING ================= -->
+  <div class="page" id="medicalPage" hidden>
+    <div class="bd-head">
+      <div class="eyebrow">Floating-interval health checks</div>
+      <h1>Medical Tracking</h1>
+    </div>
+    <div class="h-card" id="medSection">
+      <div id="medNeeds"></div>
+      <div id="medCards"></div>
+      <div id="medAddForm" hidden></div>
+      <div class="add-row"><button type="button" class="add-btn" id="medAddBtn">＋ Add a health check</button></div>
+    </div>
+  </div>
+
   <!-- ================= FAMILY ================= -->
   <div class="page" id="familyPage" hidden>
     <div class="bd-head">
@@ -9882,14 +9896,6 @@
         <div id="dayProgressHome" hidden></div>
         <div id="dayProgress"></div>
         <div id="alsoToday"></div>
-
-        <div class="h-card" id="medSection">
-          <div class="section-head"><h2>Medical Tracking</h2><span class="rule"></span></div>
-          <div id="medNeeds"></div>
-          <div id="medCards"></div>
-          <div id="medAddForm" hidden></div>
-          <div class="add-row"><button type="button" class="add-btn" id="medAddBtn">＋ Add a health check</button></div>
-        </div>
 
         <!-- #addRow (the "Add to this day" trigger) moved above "The day" section-head,
              next to Today's Patients — see the comment there. This form stays here; it's
@@ -13275,6 +13281,10 @@
         // 2026-08-06 (Linh: "make me a chain building page"): whole-sequence chain
         // builder — sits by Routines since the pairwise Chains card lives there
         { id: "chains", label: "Chains" },
+        // 2026-08-06 (Linh: "medical tracking is its own page in CH22"): SUPERSEDES the
+        // same-day placement as a card inside the Day page's rail — genuinely its own
+        // page now, sitting by Chains/Routines since it's another Day-page-adjacent tool.
+        { id: "medical", label: "Medical Tracking" },
         { id: "goals", label: "Goals", sep: true },
         { id: "review", label: "Weekly Review" },
         // 2026-08-05 ("B33 Notification"): the phone-notification settings panel —
@@ -16380,7 +16390,6 @@
     renderFastEverywhere();
     renderBodyWidget();
     renderDayHealth();
-    renderMedical();
     renderDayProgress();
     renderDayFitLink();
     renderBiomechTip();
@@ -20939,20 +20948,34 @@
       </div>`;
     };
     const panelFor = list => `<div class="rtn-panel">${list.map(routineRow).join("")}</div>`;
+    // 2026-08-06 (Linh: "streamlined way for me to have categories"): SUPERSEDES the
+    // old Personal-only "lettered routines -> Morning" special case with a generic
+    // one -- any routine that already carries a t.category (the Sub-category field
+    // on its own edit form, autocompleted from RTN_SUBS but free-text) groups under
+    // that heading, in EVERY track, not just Personal. Category order follows
+    // RTN_SUBS's own suggested order first (so it reads the same as the picker),
+    // then anything custom-typed that isn't in the list, alphabetically after.
+    // Routines with no category stay flat at the top, exactly as before.
     const groupFor = (area, label, dotColor, list) => {
       if (!list.length) return "";
-      let bodyHtml;
-      if (area === "personal") {
-        // her call: only the 5 lettered morning variants sub-group under
-        // "Morning" -- every other Personal routine (Laundry, etc.) stays
-        // above it, in its normal order.
-        const lettered = list.filter(t => RTN_LETTER_RE.test(t.title))
-          .sort((a, b) => a.title.match(RTN_LETTER_RE)[1].localeCompare(b.title.match(RTN_LETTER_RE)[1]));
-        const rest = list.filter(t => !RTN_LETTER_RE.test(t.title));
-        bodyHtml = `<div class="rtn-panel">${rest.map(routineRow).join("")}${lettered.length ? `<div class="rtn-subhead">Morning</div>${lettered.map(routineRow).join("")}` : ""}</div>`;
-      } else {
-        bodyHtml = panelFor(list);
-      }
+      const uncategorized = list.filter(t => !t.category);
+      const byCat = new Map();
+      list.filter(t => t.category).forEach(t => {
+        if (!byCat.has(t.category)) byCat.set(t.category, []);
+        byCat.get(t.category).push(t);
+      });
+      const order = RTN_SUBS[area] || [];
+      const catNames = [...byCat.keys()].sort((a, b) => {
+        const ia = order.indexOf(a), ib = order.indexOf(b);
+        if (ia === -1 && ib === -1) return a.localeCompare(b);
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+      const catsHtml = catNames.map(cat =>
+        `<div class="rtn-subhead">${esc(cat)}</div>${panelFor(byCat.get(cat))}`
+      ).join("");
+      const bodyHtml = `${panelFor(uncategorized)}${catsHtml}`;
       return `<div class="rtn-group">
         <div class="rtn-group-head"><span class="rtn-track-dot" style="background:${dotColor}"></span><span class="rtn-group-name">${esc(label)}</span><span class="rtn-group-count">${list.length}</span></div>
         ${bodyHtml}
@@ -21587,6 +21610,7 @@
     document.getElementById("peoplePage").hidden = state.view !== "people";
     document.getElementById("pregPage").hidden = state.view !== "pregnancies";
     document.getElementById("chainsPage").hidden = state.view !== "chains";
+    document.getElementById("medicalPage").hidden = state.view !== "medical";
     document.getElementById("routinesPage").hidden = state.view !== "routines";
     document.getElementById("workManualPage").hidden = state.view !== "workManual";
     document.getElementById("cpdPage").hidden = state.view !== "cpd";
@@ -21619,6 +21643,7 @@
     else if (state.view === "people") renderPeoplePage();
     else if (state.view === "pregnancies") renderPregnancies();
     else if (state.view === "chains") renderChainsPage();
+    else if (state.view === "medical") renderMedical();
     else if (state.view === "routines") renderRoutines();
     else if (state.view === "workManual") renderWorkManual();
     else if (state.view === "cpd") renderCpd();
