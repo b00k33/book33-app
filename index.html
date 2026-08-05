@@ -20513,6 +20513,12 @@
     else renderBirthdays();
     syncFastTimer();
     refreshLocList();   // keep the shared "Where" dropdown current with her latest saves
+    // 2026-08-06 (Linh: "i started with it and it glitched to the day page"): the cloud
+    // sync layer hard-reloads this tab whenever another device pushes changes, and a
+    // reload always booted to Day — yanking her off whatever page she was mid-use on.
+    // Remember where she is on every render (per-tab, survives reload, dies with the
+    // tab) so boot can put her straight back. Boot-side restore sits above render().
+    try { sessionStorage.setItem("b33-restore", JSON.stringify({ view: state.view, anchor: keyOf(state.anchor) })); } catch (e) {}
   }
 
   function renderNav() {
@@ -26670,7 +26676,18 @@
 
   buildHours();
   syncTrack();
-  Book33Notify.consumeOpenParam();   // a tapped notification's ?nday= — before first paint
+  // 2026-08-06 ("i started with it and it glitched to the day page"): restore the page
+  // she was on before a reload — the sync layer reloads the tab to adopt another
+  // device's changes, and landing back on Day every time read as the app glitching.
+  // Per-tab sessionStorage: a genuinely fresh open still starts on Day as always.
+  try {
+    const rst = JSON.parse(sessionStorage.getItem("b33-restore"));
+    if (rst && rst.view && categoryOf(rst.view)) {
+      state.view = rst.view;
+      if (rst.anchor && /^\d{4}-\d{2}-\d{2}$/.test(rst.anchor)) state.anchor = parseKey(rst.anchor);
+    }
+  } catch (e) {}
+  Book33Notify.consumeOpenParam();   // a tapped notification's ?nday= — before first paint (wins over the restore)
   render();
   // offline-first boot: the app is now fully rendered from localStorage -- reveal it
   // immediately. This never waits on network, sign-in, or Supabase (that layer loads
@@ -26862,16 +26879,25 @@
   // reload to show fresh data — but never yank a field she's typing in
   function isEditing() {
     var el = document.activeElement;
-    return !!(el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) || !!el && el.isContentEditable;
+    if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable)) return true;
+    // 2026-08-06 ("i started with it and it glitched to the day page"): the Chains
+    // page's half-built sequence lives only in memory and its flow is button taps,
+    // not focused fields — a reload mid-build wipes it. An open builder counts as
+    // editing; the pending reload lands after she saves/cancels (release below).
+    return !!document.querySelector(".cb-build");
   }
   function reloadWhenIdle() {
     if (!isEditing()) { location.reload(); return; }
     pendingReload = true;                                  // wait until she stops typing
   }
-  document.addEventListener("focusout", function () {
+  // focusout alone can leave a pending reload stranded when the guard was the chain
+  // builder (button taps don't always shuffle focus) — any later click re-checks too
+  function releasePendingReload() {
     if (!pendingReload) return;
     setTimeout(function () { if (pendingReload && !isEditing()) location.reload(); }, 500);
-  }, true);
+  }
+  document.addEventListener("focusout", releasePendingReload, true);
+  document.addEventListener("click", releasePendingReload, true);
 
   /* ---- little live indicator ------------------------------------------- */
   // 2026-08-02 (Linh, three rounds: "i dont like sign out page its intrusive" ->
