@@ -1,7 +1,7 @@
-// Book33 service worker -- offline app-shell cache.
+﻿// Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260805z5";
+var CACHE_VERSION = "b33-20260805z6";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -20,7 +20,7 @@ self.addEventListener("install", function (e) {
 
 // 2026-08-05 (Linh: "offline design is off"): deleting the old cache wholesale on every
 // CACHE_VERSION bump also threw away the opportunistically-cached Google Fonts css/woff2
-// (and the Supabase CDN script) — so an offline launch right after an update rendered in
+// (and the Supabase CDN script) â€” so an offline launch right after an update rendered in
 // fallback system type until the next ONLINE visit re-fetched them. Cross-origin assets
 // never change per app version, so migrate them into the fresh cache before the old one
 // is deleted; the app shell itself still refreshes per version exactly as before.
@@ -29,7 +29,7 @@ self.addEventListener("activate", function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
       // "b33-share" is the share-target's tiny hand-off stash, not an app-shell
-      // version — never sweep it (a shared .ics could be mid-flight during an update)
+      // version â€” never sweep it (a shared .ics could be mid-flight during an update)
       var olds = keys.filter(function (k) { return k !== CACHE_VERSION && k !== "b33-share"; });
       return caches.open(CACHE_VERSION).then(function (fresh) {
         return Promise.all(olds.map(function (name) {
@@ -50,7 +50,7 @@ self.addEventListener("activate", function (e) {
 });
 
 // Notification taps (Book33Notify, 2026-08-05): focus the app if a window is already
-// open — telling it which day the notification was about so it can jump there — or
+// open â€” telling it which day the notification was about so it can jump there â€” or
 // cold-open it with ?nday=<date>, which the app's boot consumes (consumeOpenParam()).
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
@@ -69,7 +69,7 @@ self.addEventListener("notificationclick", function (e) {
 });
 
 // Cloud push (2026-08-05 pt 2): the Supabase Edge Function (supabase/functions/
-// b33-push) delivers the app-precomputed reminder as the push payload — show it
+// b33-push) delivers the app-precomputed reminder as the push payload â€” show it
 // verbatim; no storage reads needed here. notificationclick above already routes
 // the tap to the right day. Chrome requires a visible notification per push
 // (userVisibleOnly), so even a malformed payload shows a generic Book33 line.
@@ -104,7 +104,7 @@ self.addEventListener("fetch", function (e) {
   var req = e.request;
   // Share target (2026-08-05, Linh: "sometimes i get ical"): Android's share sheet
   // POSTs the shared .ics here (see manifest.json share_target). Stash the file text
-  // in its own small cache, then bounce into the app with ?shareics=1 — the calendar
+  // in its own small cache, then bounce into the app with ?shareics=1 â€” the calendar
   // import module reads the stash on boot and opens its normal import preview.
   if (req.method === "POST" && new URL(req.url).pathname.indexOf("share-ics") !== -1) {
     e.respondWith(
@@ -140,7 +140,7 @@ self.addEventListener("fetch", function (e) {
         return res;
       }).catch(function () {
         // offline and no exact hit: accept a query-string-variant match (Google Fonts
-        // css2 URLs can differ by subset params) — a near-match beats fallback type
+        // css2 URLs can differ by subset params) â€” a near-match beats fallback type
         return cached || caches.match(req, { ignoreSearch: true });
       });
     })
