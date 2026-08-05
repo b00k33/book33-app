@@ -5169,6 +5169,26 @@
   .fast-resume:hover { border-color: var(--fast); color: var(--fast); }
   .fast-bar-row.fast-idle .fast-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fast) 55%, transparent); }
   .fast-bar-row.fast-idle .sb-amt { color: var(--ink-faint); font-weight: 600; }
+  /* 2026-08-06 (Linh, desktop mini fasting bar): one-line status under the app title on
+     every page (see #deskFastBar in .astro) -- same colour language as #fastStatus above
+     (--fast dot/fill, .fast-resume chip) condensed to a single row with no sub-line. */
+  .desk-fast-bar {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; max-width: 300px; margin: -2px auto 0; font-size: 11px; color: var(--ink-soft);
+  }
+  .desk-fast-bar:empty { display: none; }
+  .desk-fast-bar .dfb-dot {
+    flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--fast);
+    box-shadow: 0 0 4px color-mix(in oklab, var(--fast) 70%, transparent);
+  }
+  .desk-fast-bar.fast-idle .dfb-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fast) 55%, transparent); }
+  .desk-fast-bar .dfb-amt { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .desk-fast-bar.fast-idle .dfb-amt { color: var(--ink-faint); font-weight: 600; }
+  .desk-fast-bar.goal-met .dfb-amt { color: var(--fast); }
+  .desk-fast-bar .dfb-track { flex: 1; height: 5px; min-width: 40px; border-radius: 999px; background: var(--dot-empty); overflow: hidden; }
+  .desk-fast-bar .dfb-fill { height: 100%; border-radius: 999px; background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent); }
+  .desk-fast-bar .dfb-sub { flex: none; color: var(--ink-faint); white-space: nowrap; }
+  .desk-fast-bar .fast-resume { padding: 2px 10px; font-size: 10.5px; margin-left: 0; }
   /* 2026-08-05 ("small day arrow below fasting bar"): a slim pager row — arrows at the
      two edges so either thumb reaches its side.
      2026-08-05 later ("make it smaller and more discrete so it doesnt take up too much
@@ -7818,12 +7838,24 @@
      of page to allow that") — >=1024px only; phones keep the swap-in-place form. ==== */
   .rtn-side { display: none; }
   @media (min-width: 1024px) {
+    /* 2026-08-06 (Linh: "i like this but instead of pop up make it part of the
+       page"): SUPERSEDES the position:fixed/viewport-docked version above — that
+       pinned to the viewport with a heavy shadow and covered the header on
+       scroll, reading as a popup despite living in the DOM as a page sibling.
+       Now a genuine second grid column, same 2-column pattern #deskGrid already
+       uses on the Day page: routinesPage becomes the grid, every child except
+       the aside stays in column 1, the aside takes column 2. Sticky (not fixed)
+       so it travels with the page's own scroll and simply holds position within
+       its column once reached — never detached from the page, never over the header. */
+    #routinesPage.rtn-editing {
+      display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start;
+    }
+    #routinesPage.rtn-editing > :not(.rtn-side) { grid-column: 1; }
+    #routinesPage.rtn-editing > .rtn-side { grid-column: 2; grid-row: 1 / -1; }
     .rtn-side {
-      display: flex; flex-direction: column; position: fixed; z-index: 150;
-      top: 16px; bottom: 16px; width: 400px;
-      right: max(16px, calc(50vw - 620px));   /* hugs the content column's right edge */
-      background: var(--desk-pop-bg); border-radius: 16px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      display: flex; flex-direction: column; position: sticky; top: 16px;
+      max-height: calc(100vh - 32px);
+      background: var(--note-bg); border-radius: var(--radius-md);
     }
     .rtn-side[hidden] { display: none; }
     .rtn-side-head {
@@ -7841,8 +7873,6 @@
     /* the form sheds its card chrome inside the rail (the rail IS the card) and
        stacks one column at 400px */
     .rtn-side-body .add-form { grid-template-columns: 1fr; margin-top: 8px; border: none; box-shadow: none; background: none; padding: 4px; }
-    /* content shrinks so nothing hides under the docked editor */
-    #routinesPage.rtn-editing { padding-right: 416px; }
     /* --- compactness: the page reads like a workspace, not a poster --- */
     #routinesPage .bd-head { margin-bottom: 8px; }
     #routinesPage .bd-head h1 { font-size: 24px; }
@@ -8224,6 +8254,12 @@
          weekday/moon line instead — see #dayAstroBits in the DAY page markup below. -->
     <div class="astro-line" id="astroLine" hidden></div>
     <div class="app-title">Book 33</div>
+    <!-- 2026-08-06 (Linh: "mini fasting bar just for the desktop version... visible on
+         every page, just underneath the title"): a child of .astro so it inherits the
+         same desktop-only visibility (.astro { display:none } under 640px) and travels
+         with the title wherever .astro is placed -- persistent across every page, unlike
+         #fastStatus below which is Day-page-only. renderDeskFastBar() fills it. -->
+    <div class="desk-fast-bar" id="deskFastBar"></div>
   </div>
 
   <!-- 2026-08-04 (Step 2, GCal-style header rebuild -- "the top features overlap and are
@@ -18136,6 +18172,32 @@
     // computed-style lookup that works even while the Day page isn't the visible one.
     renderFastLine();
     renderFastBar();
+    renderDeskFastBar();
+  }
+  // 2026-08-06 (Linh: "mini fasting bar just for the desktop version... visible on every
+  // page, just underneath the title"): #deskFastBar lives inside .astro, the persistent
+  // page-independent header -- unlike #fastStatus above (Day-page-only), this one is
+  // never gated to which page is active. Same data/logic as renderFastBar(), condensed
+  // to a single line; reuses .fast-resume as-is for the Continue chip.
+  function renderDeskFastBar() {
+    const bar = document.getElementById("deskFastBar");
+    if (!bar) return;
+    if (!HEALTH.activeFast) {
+      bar.classList.add("fast-idle");
+      bar.classList.remove("goal-met");
+      const lf = lastEndedFast();
+      const agoMs = lf ? Date.now() - new Date(lf.end).getTime() : 0;
+      bar.innerHTML = `<span class="dfb-dot"></span><span class="dfb-amt">Not fasting</span>` +
+        (lf ? `<span class="dfb-sub">ended ${agoMs < 60000 ? "just now" : fmtHrs(agoMs) + " ago"}</span><button type="button" class="fast-resume" data-fast-resume>Continue</button>` : "");
+      return;
+    }
+    bar.classList.remove("fast-idle");
+    const goalH = HEALTH.fastGoalHours || 16;
+    const goalMs = goalH * 3600000;
+    const elapsedMs = Math.max(0, Date.now() - new Date(HEALTH.activeFast).getTime());
+    const over = elapsedMs >= goalMs;
+    bar.classList.toggle("goal-met", over);
+    bar.innerHTML = `<span class="dfb-dot"></span><span class="dfb-amt">${fmtHrs(elapsedMs)} / ${goalH}h${over ? " ✓" : ""}</span><span class="dfb-track"><span class="dfb-fill" style="width:${(Math.min(elapsedMs / goalMs, 1) * 100).toFixed(1)}%"></span></span>`;
   }
   // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
   // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
@@ -18200,6 +18262,7 @@
     });
     document.querySelectorAll("[data-fast-encourage]").forEach(el => el.textContent = fastEncouragement(pct, over));
     renderFastBar();
+    renderDeskFastBar();
   }
 
   /* ---- fasting summary graph: hours fasted per day, past week or month.
