@@ -3318,28 +3318,11 @@
     transition: color .12s, background .12s;
   }
   .chain-unlink:hover { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 12%, transparent); }
-  .chain-builder {
-    border: 1px solid var(--note-line); border-radius: var(--radius-sm);
-    padding: 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px;
-  }
-  .chain-builder select, .chain-builder input[type="time"], .chain-builder input[type="text"] {
-    background: var(--field-bg); color: var(--ink); border: none; border-radius: var(--radius-sm);
-    padding: 8px 10px; font-size: 13px; font-family: var(--font-body); min-height: 44px; width: 100%;
-  }
-  /* 2026-08-06 (chain UX): moves/stays captions over the two selects + the swap link —
-     the direction-blindness of the old bare selects is how the backwards Pilates
-     chain got built. Same quiet small-caps voice as .fit-field-lbl. */
-  .chain-b-lbl {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--ink-faint); margin-bottom: -4px;
-  }
-  .chain-swap { align-self: flex-end; padding: 4px 0; }
-  .chain-mode { flex-wrap: wrap; gap: 6px; }
-  .chain-preview {
-    background: var(--field-bg); border-radius: var(--radius-sm); padding: 8px 10px;
-    font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; font-variant-numeric: tabular-nums;
-  }
-  .chain-preview b { color: var(--ink); }
+  /* .chain-b-actions is shared with the Chains page's own builder (Cancel/Save row) —
+     the single-link dropdown builder that used to own .chain-builder/.chain-b-lbl/
+     .chain-mode/.chain-preview/.chain-swap is gone (2026-08-06, "allow to make a
+     chain with a table 3 column template" -> loadChainIntoBuilder routes to the
+     Chains page's 3-column builder instead), rules deleted with it. */
   .chain-b-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .rtn-chain-pill { font-size: 11px; color: var(--ink-faint); }
   /* ---- Chains PAGE (2026-08-06, "make me a chain building page"; same day:
@@ -20083,64 +20066,6 @@
   const chainNodeById = id => ROUTINE_TASKS.find(x => x.id === id) || RECURRING_EVENTS.find(x => x.id === id) || EVENTS.find(x => x.id === id) || null;
   // save whichever store the node lives in
   function saveChainNode(x) { if (isPlainEvent(x)) saveEvents(EVENTS); else if (isRecurEvent(x)) saveRecurringEvents(); else saveRoutines(); }
-  // next day (within a fortnight) a chain actually fires, as a short label — shared
-  // by the chain rows and the builder's live preview sentence
-  function nextChainTxt(t) {
-    for (let i = 0; i < 14; i++) {
-      const d = addDays(TODAY, i);
-      if (!chainNodeOccursOn(t, d)) continue;
-      const cm = chainedStartMinOn(t, d);
-      if (cm == null) continue;
-      const dayLbl = i === 0 ? "today" : i === 1 ? "tmrw" : `${WD_FULL[dowIndex(d)].slice(0, 3)} ${d.getDate()}`;
-      return `${dayLbl} ${fmtTime(minToTime(cm))}–${fmtTime(minToTime(Math.min(cm + routineDurMin(t), 1439)))}`;
-    }
-    return "";
-  }
-  // deadline-root counterpart to nextChainTxt() above — same "next real occurrence"
-  // preview, but t has no anchorTo to walk (chainedStartMinOn needs one), so this
-  // computes straight from t's own occurs-on pattern + the prospective deadline.
-  function nextDeadlineTxt(who, deadlineStr) {
-    if (!deadlineStr) return "";
-    const dur = routineDurMin(who);
-    const endMin = timeToMin(deadlineStr);
-    const clone = Object.assign({}, who, { anchorTo: undefined, deadline: deadlineStr });
-    for (let i = 0; i < 14; i++) {
-      const d = addDays(TODAY, i);
-      if (!chainNodeOccursOn(clone, d)) continue;
-      const dayLbl = i === 0 ? "today" : i === 1 ? "tmrw" : `${WD_FULL[dowIndex(d)].slice(0, 3)} ${d.getDate()}`;
-      return `${dayLbl} ${fmtTime(minToTime(Math.max(0, endMin - dur)))}–${fmtTime(deadlineStr)}`;
-    }
-    return "";
-  }
-  // the builder's live "so THIS will happen" sentence — recomputed on every pick so
-  // she sees the outcome in plain words (with real times) before saving anything
-  function updateChainPreview() {
-    const box = document.getElementById("rtnChainPreview");
-    if (!box) return;
-    const who = chainNodeById(document.getElementById("rtnChainWho").value);
-    if (!who) { box.textContent = "Pick something."; return; }
-    if (rtnChainTarget === "deadline") {
-      const timeEl = document.getElementById("rtnChainDeadlineTime");
-      const t = timeEl && timeEl.value;
-      if (!t) { box.textContent = "Pick a time."; return; }
-      const labelEl = document.getElementById("rtnChainDeadlineLabel");
-      const lbl = labelEl && labelEl.value.trim();
-      const nxt = nextDeadlineTxt(who, t);
-      box.innerHTML = `So <b>${esc(who.title)}</b> must be done by <b>${fmtTime(t)}</b>${lbl ? ` (${esc(lbl)})` : ""}${nxt ? ` — next: ${esc(nxt)}` : ""}.<br>Anything chained before it follows.`;
-      return;
-    }
-    const anchor = chainNodeById(document.getElementById("rtnChainAnchor").value);
-    if (!anchor || who.id === anchor.id) { box.textContent = "Pick two different things."; return; }
-    const after = rtnChainMode !== "before";
-    // preview on a temp copy so nothing is saved until she hits Save; a clone isn't
-    // identity-equal to its RECURRING_EVENTS original, so the routine occurs-on path
-    // runs — same weekly/schedules shape, only recurUntil goes unchecked (preview-only)
-    const nxt = nextChainTxt(Object.assign({}, who, { anchorTo: anchor.id, anchorMode: rtnChainMode }));
-    // 2026-08-06 ("easier to use"): the closing line now names which side is locked —
-    // the old "Move one, the other follows" read the same both ways round, which is
-    // how the backwards Pilates chain slipped through unnoticed.
-    box.innerHTML = `So <b>${esc(who.title)}</b> will ${after ? "start the moment" : "finish right as"} <b>${esc(anchor.title)}</b> ${after ? "ends" : "starts"}${nxt ? ` — next: ${esc(nxt)}` : ""}.<br>🔒 ${esc(anchor.title)} keeps its own time · ⛓ ${esc(who.title)} follows it.`;
-  }
   function renderChains() {
     const host = document.getElementById("rtnChains");
     if (!host) return;
@@ -20204,75 +20129,15 @@
       });
       return `<div class="rtb-tbl"><div class="rtb-grid">${bandsHtml}</div></div>`;
     };
-    let builderHtml = "";
-    if (rtnChainOpen) {
-      const pre = rtnChainPrefill ? chainNodeById(rtnChainPrefill) : null;
-      const preAnchor = pre ? chainAnchorOf(pre) : null;
-      const group = (label, list, sel, exclude, dated) => {
-        const rows = list.filter(t => t.id !== exclude)
-          .sort((x, y) => dated ? 0 : x.title.localeCompare(y.title))
-          .map(t => {
-            // one-off events keep date order and carry their day in the label — two
-            // "Dinner" entries on different days must be tellable apart
-            const dLbl = dated ? ` · ${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}` : "";
-            return `<option value="${t.id}"${sel && t.id === sel.id ? " selected" : ""}>${esc(t.title)}${dLbl}</option>`;
-          }).join("");
-        return rows ? `<optgroup label="${label}">${rows}</optgroup>` : "";
-      };
-      // a prefilled one-off event may be in the past (opened from an old day's popup)
-      // — splice it into the list anyway so the select can actually show it
-      const evList = (sel) => {
-        const list = chainableEvents();
-        if (sel && isPlainEvent(sel) && !list.includes(sel)) list.unshift(sel);
-        return list;
-      };
-      const opts = (sel, exclude) =>
-        group("Routines", ROUTINE_TASKS, sel, exclude)
-        + group("Repeating events", RECURRING_EVENTS, sel, exclude)
-        + group("One-off events", evList(sel), sel, exclude, true);
-      // 2026-08-06 (Linh: "assign anchor or deadline to" -- and "allow 3+ event
-      // chaining"): a step's time comes from exactly ONE source -- another step
-      // (chain to, any depth: chain C to B, then B to A, and chainedStartMinOn's own
-      // recursion already walks the whole thing) or a fixed clock deadline. This
-      // toggle picks which; the two field groups below are mutually exclusive, never
-      // shown together, matching how Save always clears whichever one isn't in use.
-      // 2026-08-06 (Linh: "make the chain system easier to use and more user
-      // friendly"): the old bare "This one"/"That one" selects were direction-blind
-      // — her Pilates chain got built BACKWARDS exactly because nothing said which
-      // side moves and which stays. Each select now carries a ⛓-moves / 🔒-stays
-      // caption, and a ⇄ swap link flips the two picks in place (anchor mode only —
-      // a deadline has no second item to swap with).
-      const anchorBlock = `
-        <span class="chain-b-lbl">🔒 glued to — this one keeps its time</span>
-        <select id="rtnChainAnchor" aria-label="Glued to — keeps its time">${opts(preAnchor, null)}</select>
-        <div class="track-picker chain-mode" id="rtnChainModePick" role="group" aria-label="Right after, or just before?">
-          <button type="button" class="track-opt" data-mode="after" aria-pressed="${rtnChainMode !== "before"}">right after</button>
-          <button type="button" class="track-opt" data-mode="before" aria-pressed="${rtnChainMode === "before"}">just before</button>
-        </div>
-        <button type="button" class="tab-link chain-swap" id="rtnChainSwap">⇄ swap which one moves</button>`;
-      const deadlineBlock = `
-        <input type="time" id="rtnChainDeadlineTime" aria-label="Deadline time" value="${pre && pre.deadline ? esc(pre.deadline) : ""}">
-        <input type="text" id="rtnChainDeadlineLabel" aria-label="Deadline label (optional)" placeholder="e.g. leave for work (optional)" value="${pre && pre.deadlineLabel ? esc(pre.deadlineLabel) : ""}">`;
-      builderHtml = `<div class="chain-builder">
-        <span class="chain-b-lbl">⛓ this one moves — its time will follow</span>
-        <select id="rtnChainWho" aria-label="This one moves">${opts(pre, null)}</select>
-        <div class="track-picker chain-mode" id="rtnChainTargetPick" role="group" aria-label="Chain to another, or set a deadline?">
-          <button type="button" class="track-opt" data-target="anchor" aria-pressed="${rtnChainTarget !== "deadline"}">chain to…</button>
-          <button type="button" class="track-opt" data-target="deadline" aria-pressed="${rtnChainTarget === "deadline"}">by a deadline</button>
-        </div>
-        ${rtnChainTarget === "deadline" ? deadlineBlock : anchorBlock}
-        <div class="chain-preview" id="rtnChainPreview"></div>
-        <div class="chain-b-actions">
-          <button type="button" class="btn-cancel" id="rtnChainCancel">Cancel</button>
-          <button type="button" class="btn-save" id="rtnChainSave">Save</button>
-        </div>
-      </div>`;
-    }
+    // 2026-08-06 (Linh, on this exact dropdown-based single-pair form: "allow to
+    // make a chain with a table 3 column template"): SUPERSEDES the old inline
+    // rtnChainOpen builder entirely (selects + before/after toggle + swap link) —
+    // she now has the real 3-column drag builder on the Chains page, so "Make a
+    // chain" and editing an existing link both jump there instead of duplicating
+    // it here. See the #rtnChains delegate below for the navigation.
     host.innerHTML = (chained.length ? chainTableHtml()
-        : (rtnChainOpen ? "" : `<div class="fam-empty">No chains yet — a chain glues one thing to another, like 👗 getting changed right after 🧘 Pilates.</div>`))
-      + builderHtml
-      + (rtnChainOpen ? "" : `<div class="add-row"><button type="button" class="add-btn" id="rtnChainAddBtn">⛓ Make a chain</button></div>`);
-    if (rtnChainOpen) updateChainPreview();
+        : `<div class="fam-empty">No chains yet — a chain glues one thing to another, like 👗 getting changed right after 🧘 Pilates.</div>`)
+      + `<div class="add-row"><button type="button" class="add-btn" id="rtnChainAddBtn">⛓ Make a chain</button></div>`;
   }
 
   let rtnListMode = "list";
@@ -20396,19 +20261,12 @@
     const host = document.getElementById("rtnTable");
     if (!host || rtnListMode !== "table") return;
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
-    const TRACK_NAME = { work: "Work", marriage: "Marriage", personal: "Personal" };
-    const AREA_ORDER = ["work", "marriage", "personal"];
     const tKey = keyOf(TODAY);
-    // bands = (track, category) pairs, first-seen order, tracks walked in AREA_ORDER
-    // so the table reads top-to-bottom the same as the List's own group order
-    const order = [], bands = new Map();
-    const bandOf = t => {
-      const key = `${t.track}::${t.category || ""}`;
-      if (!bands.has(key)) { bands.set(key, { track: t.track, cat: t.category || "", list: [] }); order.push(key); }
-      return bands.get(key);
-    };
-    AREA_ORDER.forEach(tr => ROUTINE_TASKS.filter(t => t.track === tr).forEach(t => bandOf(t).list.push(t)));
-    ROUTINE_TASKS.filter(t => !AREA_ORDER.includes(t.track)).forEach(t => bandOf(t).list.push(t));
+    // 2026-08-05 (Linh: "i dont understand the category of morning work, work etc.
+    // remove these categories and just group everything together for now"): the
+    // (track, category) banding is GONE — one Before / Event / After spread holds
+    // every routine at once. All cells share band key "all" so the drag/drop,
+    // pick-strip and add plumbing work unchanged.
     const pill = t => {
       const occId = chainOccIdFor(t, tKey);
       const done = isDone(occId);
@@ -20417,35 +20275,25 @@
         <span class="rtb-nm">${esc(t.title)}</span>
       </div>`;
     };
-    const cell = (list, key, track, cat, label, cls, first) => `<div class="rtb-cell${first ? " rtb-cell-first" : ""}" data-rtb-cell="${cls}" data-rtb-band="${esc(key)}">
+    const cell = (list, label, cls, first) => `<div class="rtb-cell${first ? " rtb-cell-first" : ""}" data-rtb-cell="${cls}" data-rtb-band="all">
         <span class="rtb-cell-lab rtb-cell-lab-${cls}">${label}</span>
         ${list.length ? list.map(pill).join("") : ""}
-        <button type="button" class="rtb-add" data-rtb-add-track="${esc(track)}" data-rtb-add-cat="${esc(cat)}">+ add</button>
+        <button type="button" class="rtb-add" data-rtb-add-track="personal" data-rtb-add-cat="">+ add</button>
       </div>`;
-    // two tracks can share a category name (Work-Morning vs Personal-Morning both
-    // read "MORNING" — her screenshot) — suffix the track whenever a label repeats
-    const labCount = {};
-    order.forEach(k => { const b = bands.get(k); const lab = b.cat || TRACK_NAME[b.track] || "Other"; labCount[lab] = (labCount[lab] || 0) + 1; });
+    const before = [], evt = [], after = [];
+    ROUTINE_TASKS.forEach(t => (t.anchorTo && chainAnchorOf(t) ? (t.anchorMode === "before" ? before : after) : evt).push(t));
     let html = `<div class="rtb-tbl"><div class="rtb-grid">`;
-    order.forEach(key => {
-      const b = bands.get(key);
-      const before = [], evt = [], after = [];
-      b.list.forEach(t => (t.anchorTo && chainAnchorOf(t) ? (t.anchorMode === "before" ? before : after) : evt).push(t));
-      let label = b.cat || TRACK_NAME[b.track] || "Other";
-      if (labCount[label] > 1) label += ` · ${TRACK_NAME[b.track] || "Other"}`;
-      html += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--${b.track}-seed, var(--ink-faint))"></span><span class="rtb-lab">${esc(label)}</span><span class="rtb-ct">${b.list.length}</span></div>`;
-      html += cell(before, key, b.track, b.cat, "Before", "before", true) + cell(evt, key, b.track, b.cat, "Event", "during", false) + cell(after, key, b.track, b.cat, "After", "after", false);
-      // a Before/After drop with several possible anchors parks here until she picks
-      if (rtbPick && rtbPick.bandKey === key) {
-        const pt = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
-        const cands = ROUTINE_TASKS.filter(x => `${x.track}::${x.category || ""}` === key && x.id !== rtbPick.id && !(x.anchorTo && chainAnchorOf(x)));
-        html += `<div class="rtb-pickrow">${rtbPick.none
-          ? `Nothing in this band's Event column to glue <b>${esc(pt ? pt.title : "")}</b> to — chain it from the ⛓ builder instead, or drop something into Event first.`
-          : `⛓ Glue <b>${esc(pt ? pt.title : "")}</b> ${rtbPick.mode === "before" ? "just before" : "right after"} which one?
-             ${cands.map(c => `<button type="button" class="add-btn" data-rtb-pick-anchor="${esc(c.id)}">${esc(c.title)}</button>`).join("")}`}
-          <button type="button" class="add-btn" data-rtb-pick-cancel>Cancel</button></div>`;
-      }
-    });
+    html += cell(before, "Before", "before", true) + cell(evt, "Event", "during", false) + cell(after, "After", "after", false);
+    // a Before/After drop with several possible anchors parks here until she picks
+    if (rtbPick) {
+      const pt = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
+      const cands = ROUTINE_TASKS.filter(x => x.id !== rtbPick.id && !(x.anchorTo && chainAnchorOf(x)));
+      html += `<div class="rtb-pickrow">${rtbPick.none
+        ? `Nothing in the Event column to glue <b>${esc(pt ? pt.title : "")}</b> to — chain it from the ⛓ builder instead, or drop something into Event first.`
+        : `⛓ Glue <b>${esc(pt ? pt.title : "")}</b> ${rtbPick.mode === "before" ? "just before" : "right after"} which one?
+           ${cands.map(c => `<button type="button" class="add-btn" data-rtb-pick-anchor="${esc(c.id)}">${esc(c.title)}</button>`).join("")}`}
+        <button type="button" class="add-btn" data-rtb-pick-cancel>Cancel</button></div>`;
+    }
     host.innerHTML = html + `</div></div>`;
   }
   document.getElementById("rtnTable").addEventListener("click", e => {
@@ -20539,7 +20387,8 @@
       return;
     }
     const mode = d.over === "before" ? "before" : "after";
-    const cands = ROUTINE_TASKS.filter(x => `${x.track}::${x.category || ""}` === d.bandKey && x.id !== t.id && !(x.anchorTo && chainAnchorOf(x)));
+    // single flattened band (bandKey "all") — every unchained routine is a candidate
+    const cands = ROUTINE_TASKS.filter(x => x.id !== t.id && !(x.anchorTo && chainAnchorOf(x)));
     if (cands.length === 1) {
       t.anchorTo = cands[0].id; t.anchorMode = mode;
       delete t.deadline; delete t.deadlineLabel;
@@ -22653,8 +22502,37 @@
   syncFamFreqFields();
 
   /* ---- ⛓ Chains card wiring: one delegate on the persistent host — renderChains()
-     replaces the children wholesale, so nothing inside can hold its own listener. ---- */
-  let rtnChainOpen = false, rtnChainPrefill = null, rtnChainMode = "after", rtnChainTarget = "anchor";
+     replaces the children wholesale, so nothing inside can hold its own listener.
+     2026-08-06 (Linh: "allow to make a chain with a table 3 column template" — on
+     the old dropdown builder): SUPERSEDES that inline builder. Both "Make a chain"
+     and tapping an existing link now open the Chains page's own 3-column drag
+     builder instead — loadChainIntoBuilder() (shared with the global [data-chain-
+     open] delegate below) seeds it either empty or with the tapped item's whole
+     chain, in true running order, exactly like that page's own Edit button does. ---- */
+  function loadChainIntoBuilder(seedId) {
+    const seed = seedId ? chainNodeById(seedId) : null;
+    // an unchained seed with nothing chained to it either is a FRESH start (same
+    // seed-by-tap the Chains page's own pool chips do), not an edit of something
+    // that exists yet — cbEditOrig/cbEditRoot stay null so Save never tries to
+    // migrate a chain name off a "root" that was never really one
+    const hasChain = seed && (seed.anchorTo || seed.deadline || chainPool().some(k => k.anchorTo === seed.id));
+    if (hasChain) {
+      const root = seed.anchorTo ? chainRootOf(seed) : seed;
+      const seq = cbChainSeq(root);
+      cbItems = seq.map(n => n.id);
+      cbAnchorIdx = Math.max(0, seq.findIndex(n => n.id === root.id));
+      cbEditRoot = root.id;
+      cbName = root.chainName || "";
+      cbEditOrig = cbItems.slice();
+    } else {
+      cbItems = seed ? [seed.id] : [];
+      cbAnchorIdx = 0;
+      cbEditRoot = null; cbName = ""; cbEditOrig = null;
+    }
+    cbBuilding = true;
+    state.view = "chains"; render();
+    document.getElementById("chainsPage").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   document.getElementById("rtnChains").addEventListener("click", e => {
     const unlink = e.target.closest("[data-chain-unlink]");
     if (unlink) {
@@ -22662,74 +22540,9 @@
       if (t) { delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel; saveChainNode(t); renderRoutines(); renderDay(); }
       return;
     }
-    const modeBtn = e.target.closest("#rtnChainModePick .track-opt");
-    if (modeBtn) {
-      rtnChainMode = modeBtn.dataset.mode;
-      document.querySelectorAll("#rtnChainModePick .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b === modeBtn)));
-      updateChainPreview();
-      return;
-    }
-    // 2026-08-06: chain-to-another vs by-a-deadline swaps which fields are on screen
-    // (select+after/before vs time+label), so this re-renders the whole builder
-    // rather than just toggling aria-pressed like the after/before buttons above.
-    const targetBtn = e.target.closest("#rtnChainTargetPick .track-opt");
-    if (targetBtn) {
-      rtnChainTarget = targetBtn.dataset.target;
-      renderChains();
-      return;
-    }
-    // 2026-08-06 ("easier to use"): one tap flips which side moves and which stays —
-    // the exact mistake the backwards Pilates chain was built from. Values swap in
-    // place; the preview re-speaks the outcome immediately.
-    if (e.target.closest("#rtnChainSwap")) {
-      const whoSel = document.getElementById("rtnChainWho");
-      const anchorSel = document.getElementById("rtnChainAnchor");
-      if (whoSel && anchorSel) {
-        const w = whoSel.value;
-        whoSel.value = anchorSel.value;
-        anchorSel.value = w;
-        updateChainPreview();
-      }
-      return;
-    }
-    if (e.target.closest("#rtnChainCancel")) { rtnChainOpen = false; renderChains(); return; }
-    if (e.target.closest("#rtnChainSave")) {
-      const who = chainNodeById(document.getElementById("rtnChainWho").value);
-      if (!who) return;
-      if (rtnChainTarget === "deadline") {
-        const timeEl = document.getElementById("rtnChainDeadlineTime");
-        const t = timeEl && timeEl.value;
-        if (!t) return;
-        const labelEl = document.getElementById("rtnChainDeadlineLabel");
-        const lbl = labelEl && labelEl.value.trim();
-        who.deadline = t; who.deadlineLabel = lbl || undefined;
-        delete who.anchorTo; delete who.anchorMode;
-      } else {
-        const anchorId = document.getElementById("rtnChainAnchor").value;
-        if (!anchorId || anchorId === who.id) return;
-        who.anchorTo = anchorId; who.anchorMode = rtnChainMode;
-        delete who.deadline; delete who.deadlineLabel;
-      }
-      rtnChainOpen = false; rtnChainPrefill = null;
-      saveChainNode(who); renderRoutines(); renderDay();
-      return;
-    }
-    if (e.target.closest("#rtnChainAddBtn")) {
-      rtnChainOpen = true; rtnChainPrefill = null; rtnChainMode = "after"; rtnChainTarget = "anchor";
-      renderChains(); return;
-    }
+    if (e.target.closest("#rtnChainAddBtn")) { loadChainIntoBuilder(null); return; }
     const row = e.target.closest("[data-chain-edit]");
-    if (row) {
-      const t = chainNodeById(row.dataset.chainEdit);
-      rtnChainOpen = true; rtnChainPrefill = t ? t.id : null;
-      rtnChainMode = t && t.anchorMode === "before" ? "before" : "after";
-      rtnChainTarget = t && t.deadline && !t.anchorTo ? "deadline" : "anchor";
-      renderChains();
-    }
-  });
-  // the builder's fields: re-speak the plain-English outcome on every pick
-  document.getElementById("rtnChains").addEventListener("change", e => {
-    if (["rtnChainWho", "rtnChainAnchor", "rtnChainDeadlineTime", "rtnChainDeadlineLabel"].includes(e.target.id)) updateChainPreview();
+    if (row) { loadChainIntoBuilder(row.dataset.chainEdit); }
   });
 
   /* ---- ⛓ CHAINS PAGE (2026-08-06, Linh: "make me a chain building page so i can do
@@ -24486,23 +24299,12 @@
       return;
     }
     // 2026-08-06 (chain UX): "Chain it" / "Change" from an event popup — jump to the
-    // Routines page with the Chains builder already open and THIS item prefilled as
-    // the one that moves; mode/target mirror its current chain so "Change" edits in
-    // place rather than starting blank. Same navigate-then-scroll pattern as
-    // data-rt-open above.
+    // Chains page's 3-column builder, already loaded with THIS item's whole chain
+    // (2026-08-06: SUPERSEDES the old Routines-card dropdown builder it used to
+    // open — loadChainIntoBuilder lives by the #rtnChains delegate above, shared
+    // by both entry points). Same navigate-then-scroll pattern as data-rt-open.
     const chainOpen = e.target.closest("[data-chain-open]");
-    if (chainOpen) {
-      const t = chainNodeById(chainOpen.dataset.chainOpen);
-      if (t) {
-        rtnChainOpen = true; rtnChainPrefill = t.id;
-        rtnChainMode = t.anchorMode === "before" ? "before" : "after";
-        rtnChainTarget = t.deadline && !t.anchorTo ? "deadline" : "anchor";
-        state.view = "routines"; render();
-        const card = document.getElementById("rtnChains");
-        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      return;
-    }
+    if (chainOpen) { loadChainIntoBuilder(chainOpen.dataset.chainOpen); return; }
     // tap a timeline block (event, routine, or task) to open its detail sheet — not
     // when the tap lands on the tick button (2026-08-02, GCal reference: "use this when
     // i select event"; 2026-08-06: .tl-edit/.tl-del dropped from this guard along with
