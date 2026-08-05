@@ -12470,18 +12470,34 @@
     document.getElementById("templateLayer").innerHTML = html;
   }
 
+  // 2026-08-05 ("now line sometimes in the wrong position"): topForMin() is a COMPUTED
+  // model of the row heights (state.compactHours + HOUR_H). Whenever the real rendered
+  // rows disagree with that model for a moment (mid-render, a row resized by another
+  // layer, rounding of the compact height), the line drifted. This measures the ACTUAL
+  // rendered hour row for the current hour instead — offset within #hours plus the
+  // documented layerTopOffset() padding bridge — so variable row heights can never
+  // misplace it. Falls back to the model only if the row isn't in the DOM yet.
+  // Must run AFTER buildHours() has laid out the rows (renderDay calls it last, and the
+  // 30s tick / visibilitychange only ever fire between renders).
+  function nowLineYFor(nowMin) {
+    const clamped = Math.max(START_MIN, Math.min(END_MIN, nowMin));
+    const hoursEl = document.getElementById("hours");
+    const h = Math.min(END_HOUR - 1, Math.floor(clamped / 60));
+    const row = hoursEl && hoursEl.querySelector(`.hour-row[data-hour="${h}"]`);
+    if (!row) return topForMin(clamped);
+    const hoursTop = hoursEl.getBoundingClientRect().top;
+    const r = row.getBoundingClientRect();
+    return layerTopOffset() + (r.top - hoursTop) + ((clamped - h * 60) / 60) * r.height;
+  }
   // washes out everything already passed today, so "now" reads at a glance —
   // only meaningful (and only shown) when the day being viewed is actually today
   function renderElapsedFade() {
     const layer = document.getElementById("elapsedLayer");
     const nowLine = document.getElementById("nowLine");
     if (keyOf(state.anchor) !== keyOf(TODAY)) { layer.hidden = true; nowLine.hidden = true; return; }
-    const now = new Date();
+    const now = new Date();   // device-local clock, same basis as the hour ruler
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const clamped = Math.max(START_MIN, Math.min(END_MIN, nowMin));
-    // 2026-08-02 (code44 per-block expand): topForMin so the now-line still lands on the
-    // real current hour even after an expanded block.
-    const y = topForMin(clamped);
+    const y = nowLineYFor(nowMin);
     if (y <= 0) { layer.hidden = true; } else { layer.hidden = false; layer.style.height = `${y}px`; }
     // the live now-line rides the same current-time position, updated on a timer so it moves
     nowLine.hidden = false;
@@ -19703,6 +19719,11 @@
   });
   // keep the "now" line and elapsed fade live — nudge them every 30s so the line visibly moves
   setInterval(() => { if (state.view === "day") { renderElapsedFade(); orderDayRail(); } }, 30000);
+  // …and immediately on refocus: a backgrounded tab's timers are throttled, so without
+  // this the line sits wherever it was when the app was last visible until the next tick
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.view === "day") { renderElapsedFade(); orderDayRail(); }
+  });
   /* ---- weekly review ---- */
   document.getElementById("rvPrev").addEventListener("click", () => { state.reviewAnchor = addDays(startOfWeek(state.reviewAnchor), -7); renderReview(); });
   document.getElementById("rvNext").addEventListener("click", () => { state.reviewAnchor = addDays(startOfWeek(state.reviewAnchor), 7); renderReview(); });
