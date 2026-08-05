@@ -20428,6 +20428,15 @@
     rtnListMode = b.dataset.rtnview;
     document.querySelectorAll("#rtnViewPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.rtnview === rtnListMode)));
     renderRoutines();
+    // toggling List/Table calls renderRoutines() directly, not the top-level render()
+    // that normally writes b33-restore -- without this, a reload landing right after
+    // she switches to Table (before any other full render happens) would still find
+    // the stale "list" snapshot and revert her, same bug the fix above targets.
+    try {
+      const rst = JSON.parse(sessionStorage.getItem("b33-restore")) || {};
+      rst.rtnView = rtnListMode;
+      sessionStorage.setItem("b33-restore", JSON.stringify(rst));
+    } catch (e) {}
   });
 
   /* ============================================================
@@ -20951,7 +20960,11 @@
     // reload always booted to Day — yanking her off whatever page she was mid-use on.
     // Remember where she is on every render (per-tab, survives reload, dies with the
     // tab) so boot can put her straight back. Boot-side restore sits above render().
-    try { sessionStorage.setItem("b33-restore", JSON.stringify({ view: state.view, anchor: keyOf(state.anchor) })); } catch (e) {}
+    // 2026-08-06 ("when i drag items across, the page glitches and takes me to list
+    // page"): rtnListMode (List/Table on the Routines page) is a plain in-memory var,
+    // same blind spot the Day-page fix above closed for state.view — a reload wiped it
+    // back to its "list" default. Carried in the same restore payload for the same fix.
+    try { sessionStorage.setItem("b33-restore", JSON.stringify({ view: state.view, anchor: keyOf(state.anchor), rtnView: rtnListMode })); } catch (e) {}
   }
 
   function renderNav() {
@@ -27380,6 +27393,7 @@
       state.view = rst.view;
       if (rst.anchor && /^\d{4}-\d{2}-\d{2}$/.test(rst.anchor)) state.anchor = parseKey(rst.anchor);
     }
+    if (rst && rst.rtnView === "table") rtnListMode = "table";
   } catch (e) {}
   Book33Notify.consumeOpenParam();   // a tapped notification's ?nday= — before first paint (wins over the restore)
   render();
@@ -27578,7 +27592,14 @@
     // page's half-built sequence lives only in memory and its flow is button taps,
     // not focused fields — a reload mid-build wipes it. An open builder counts as
     // editing; the pending reload lands after she saves/cancels (release below).
-    return !!document.querySelector(".cb-build");
+    if (document.querySelector(".cb-build")) return true;
+    // 2026-08-06 ("when i drag items across, the page glitches and takes me to list
+    // page"): the Routines Table's column drag (rtbDrag) and its "glue it to which
+    // one?" pick-strip (rtbPick) are module vars in the OTHER script's closure —
+    // unreachable from here (same cross-closure trap as placeDateLine/miniCalDeskMq,
+    // see project_book33_app_push_checklist memory) — so read the DOM markers they
+    // already set instead of the vars themselves, same trick as .cb-build above.
+    return !!document.querySelector("#rtnTable .rtb-dragging, .rtb-pickrow");
   }
   function reloadWhenIdle() {
     if (!isEditing()) { location.reload(); return; }
