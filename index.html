@@ -982,6 +982,14 @@
   .num-hover-pop .num-hover-trigger:hover > .num-hover-pop,
   .num-hover-pop .num-hover-trigger:focus-within > .num-hover-pop,
   .num-hover-pop .num-hover-trigger.pop-open > .num-hover-pop { display: block; }
+  /* 2026-08-06 (Linh: "after i click today... i want the calendar to disappear"):
+     .pop-done = a terminal action inside this trigger's popover just completed (Today,
+     a mini-cal day pick, an add-to-day chip — see the document click delegate). Must
+     beat ALL the reveal paths above, including mobile's sticky :hover (a tapped
+     element stays hovered until the next tap) and :focus-within on the tapped button
+     — hence !important. Cleared on a direct trigger-face tap or on mouseout. */
+  .pop-done .num-hover-pop, .pop-done .wcard-hover-pop,
+  .pop-done .wrn-hover-pop, .pop-done .mo-hover-pop { display: none !important; }
   .num-hover-pop .df-tile {
     background: #1A140C !important; border: 1px solid rgba(233,200,119,0.20) !important;
     border-radius: 14px !important; box-shadow: 0 8px 24px rgba(0,0,0,.35) !important;
@@ -1846,6 +1854,10 @@
     position: fixed; z-index: 300; width: min(410px, calc(100vw - 32px));
     background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
     box-shadow: var(--page-shadow); padding: 12px 15px 14px;
+    /* 2026-08-05 (CD-pill dropdown revival): the panel grew (grouped symptoms) — on a
+       short screen it scrolls inside itself instead of running off the bottom edge,
+       per the design rule that popups are never cut off. */
+    max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
   }
   .cyc-pop-head {
     display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px;
@@ -13758,7 +13770,7 @@
             <div class="cyc-pop-head"><b>CD${cycleDay ?? "—"}${phase ? " · " + esc(phase) : ""} — log this day</b>
               <button type="button" class="cyc-pop-close" data-cyc-close aria-label="Close">×</button></div>
             ${rows}
-            <div class="cyc-pop-actions"><button type="button" class="btn-save" data-cyc-log>✓ Log day</button></div>
+            <div class="cyc-pop-actions"><button type="button" class="btn-save" data-cyc-log>✓ Log day</button><button type="button" class="tab-link" data-jump-view="cycle" data-cyc-close>Full Cycle page →</button></div>
           </div>`;
         }
         return "";
@@ -23803,25 +23815,41 @@
     const chip = e.target.closest("[data-add-action]");
     if (chip) { e.preventDefault(); openFormWithAction(chip.dataset.addAction); }
   });
-  // the CD/fertile badge used to open a floating cycle-log panel right where you
-  // clicked — mucus, symptoms, pain, bleeding, notes — no jumping to the sidebar widget.
-  // 2026-08-04: dormant now, not deleted -- #periodBadge (its only trigger) is gone
-  // (CD moved to the numerology-bar chip + 5am marker, both of which just navigate to
-  // CH5 per her instructions, no popover). state.cyclePopoverOpen can never become
-  // true any more, so this and closeCycleLog() are unreachable; left in place rather
-  // than untangling them from the still-very-much-alive shared bits they touch
-  // (cycleLogFor/MUCUS_TYPES/SYMPTOM_LIST/renderDayHealth, all still used by the
-  // Cycle page's own day-detail panel) in a single pass. Safe to remove outright in
-  // a dedicated follow-up if she confirms the popover shortcut itself should go too.
-  function openCycleLog() {
-    const r = document.getElementById("periodBadge").getBoundingClientRect();
+  // The CD pill opens a floating cycle-log panel right where you clicked — mucus,
+  // symptoms, pain, bleeding, notes — no jumping to the Cycle page.
+  // 2026-08-05 (Linh, CD-pill screenshot: "When I click on CD widget, give a dropdown
+  // to update small things for menses"): REVIVED — SUPERSEDES the 2026-08-04 note that
+  // sat here while this was dormant (its old #periodBadge trigger had been removed and
+  // both CD pills just navigated to CH5). Both pills (#numGrpCd in the numerology bar
+  // + the 5am .cd-mark) now carry data-cd-log and anchor this panel to themselves; the
+  // full Cycle page stays one tap away via the link inside the panel.
+  function openCycleLog(trigger) {
+    const r = trigger.getBoundingClientRect();
     state.cyclePopoverOpen = true;
     state.cyclePopoverPos = {
       x: Math.round(Math.max(12, Math.min(r.left, window.innerWidth - 430))),
       y: Math.round(Math.min(r.bottom + 10, window.innerHeight - 320)),
     };
     renderDayHealth();
+    // the panel's height varies (grouped symptoms, notes) — if it runs past the
+    // bottom edge, slide it up just enough to fit; it also scrolls internally (CSS)
+    const pop = document.querySelector(".cyc-popover");
+    if (pop) {
+      const pr = pop.getBoundingClientRect();
+      if (pr.bottom > window.innerHeight - 12) {
+        pop.style.top = `${Math.max(12, window.innerHeight - pr.height - 12)}px`;
+      }
+    }
   }
+  document.addEventListener("click", e => {
+    const pill = e.target.closest("[data-cd-log]");
+    if (pill) openCycleLog(pill);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const pill = e.target.closest("[data-cd-log]");
+    if (pill) { e.preventDefault(); openCycleLog(pill); }
+  });
   function closeCycleLog() {
     if (!state.cyclePopoverOpen) return;
     state.cyclePopoverOpen = false;
@@ -23906,13 +23934,14 @@
       const notes = document.getElementById("dhNotesInput");
       if (notes) setCycleLogField(dk, "notes", notes.value.trim());
       closeCycleLog();
-      const badge = document.getElementById("periodBadge");
+      // confirm-flash on the numerology-bar CD pill (the old #periodBadge is gone)
+      const badge = document.getElementById("numGrpCd");
       if (badge) { badge.classList.add("logged-flash"); setTimeout(() => badge.classList.remove("logged-flash"), 1400); }
     }
   });
   document.addEventListener("click", e => {
     if (!state.cyclePopoverOpen) return;
-    if (e.target.closest(".cyc-popover") || e.target.closest("#periodBadge")) return;
+    if (e.target.closest(".cyc-popover") || e.target.closest("[data-cd-log]")) return;
     closeCycleLog();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeCycleLog(); });
@@ -23970,12 +23999,44 @@
     document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => {
       if (el !== trig) el.classList.remove("pop-open");
     });
+    // 2026-08-06 (Linh: "after i click today when i open the mini calendar, i want the
+    // calendar to disappear... reduce redundant moves like this"): a TERMINAL action
+    // inside a popover — Today, a mini-calendar day pick, an add-to-day chip, a
+    // jump-to-page button — means the popover's job is done, so it closes outright.
+    // Dropping pop-open alone isn't enough on a phone: a tapped element stays :hover
+    // until the next tap lands elsewhere, and the tapped button keeps :focus-within,
+    // either of which re-reveals the pop through the pure-CSS rules. .pop-done is the
+    // explicit "stay shut" override (display:none !important beats all three reveal
+    // paths); it re-arms on a direct tap of the trigger face (below) or when the
+    // pointer fully leaves the trigger (the mouseout listener), so re-opening always
+    // works. Incremental controls (‹ › day arrows, mini-cal month arrows) are
+    // deliberately NOT in this list — you tap those repeatedly, closing between taps
+    // would be its own redundant-move bug in the other direction.
+    const act = e.target.closest("[data-add-action], [data-jump-view], #todayPill, #miniCalGrid [data-jump]");
+    if (act) {
+      const host = act.closest(POP_TRIGGER_SEL);
+      if (host) {
+        host.classList.add("pop-done");
+        host.classList.remove("pop-open");
+        if (host.contains(document.activeElement)) document.activeElement.blur();
+        return;
+      }
+    }
     if (trig) {
+      // a tap on the trigger FACE (not inside its popover) re-arms a pop-done trigger
+      if (!e.target.closest(POP_SEL)) trig.classList.remove("pop-done");
       trig.classList.toggle("pop-open");
       if (trig.classList.contains("pop-open")) {
         clampPopoverToViewport(trig, trig.querySelector(".num-hover-pop, .wcard-hover-pop"));
       }
     }
+  });
+  // pointer fully leaving a suppressed trigger re-arms it, so desktop hover-away →
+  // hover-back reopens naturally (touch gets the same effect from the next tap's
+  // hover shift, since mouseout fires there too)
+  document.addEventListener("mouseout", e => {
+    const t = e.target.closest(".pop-done");
+    if (t && !t.contains(e.relatedTarget)) t.classList.remove("pop-done");
   });
   // desktop hover + keyboard focus open these same popovers via pure CSS with no JS
   // in the loop at all (including .wrn/.mo-cell-wrap, which never got the tap-toggle
