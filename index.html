@@ -7854,6 +7854,20 @@
       border-color: color-mix(in oklab, var(--gold-bright) 40%, transparent);
     }
     .desk-tool--star { border-color: rgba(216, 120, 60, 0.5); color: var(--gold-bright); }
+    /* 2026-08-06 (Linh, screenshot of this row: "why are these here, they do
+       nothing"): the birthday icon silently no-ops on every day without an
+       upcoming-enough birthday (most days) — looked identical to a working button.
+       renderBirthdayWidget() now toggles :disabled the moment it knows, so an
+       inactive day reads as inactive instead of pretending to be clickable. */
+    .desk-tool:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+    /* the star/numerology-info icons jump to a card that's already always visible on
+       desktop (no collapsed panel to reveal, unlike mobile) — a brief glow says
+       "look here" instead of a silent, invisible scroll. */
+    .desk-jump-flash { animation: deskJumpFlash 1.1s ease; }
+    @keyframes deskJumpFlash {
+      0%, 100% { box-shadow: none; }
+      25% { box-shadow: 0 0 0 2px var(--gold-bright), 0 0 22px -4px var(--gold-bright); }
+    }
     /* --- 3. star rating on the block face + click-to-select --- */
     .tl-rate {
       display: block; position: absolute; right: 8px; top: 3px; font-size: 9.5px;
@@ -9302,7 +9316,7 @@
       </div>
       <div class="desk-date" id="deskDateBlock"></div>
       <div class="desk-tools">
-        <button type="button" class="desk-tool desk-tool--star" id="deskToolStar" title="Numerology & astrology" aria-label="Numerology and astrology panel" aria-pressed="false">★</button>
+        <button type="button" class="desk-tool desk-tool--star" id="deskToolStar" title="Jump to numerology" aria-label="Jump to the numerology card">★</button>
         <button type="button" class="desk-tool" id="deskToolMoon" title="Light / dark" aria-label="Toggle light or dark mode" aria-pressed="false">🌙</button>
         <button type="button" class="desk-tool" id="deskToolZodiac" title="Solar month zodiac" aria-label="Solar month zodiac details" aria-pressed="false">🐐</button>
         <button type="button" class="desk-tool" id="deskToolBday" title="Birthdays" aria-label="Birthday details" aria-pressed="false">🎖</button>
@@ -15293,6 +15307,13 @@
     // popover content (pop) unchanged, still opens on tap same as every other
     // .num-hover-trigger — just the always-visible text label dropped.
     if (pop) el.innerHTML = `🎂${pop}`;
+    // 2026-08-06 (Linh, screenshot of the desktop icon row: "why are these here,
+    // they do nothing"): the desk-tool proxy for this (#deskToolBday) silently
+    // no-ops on any day with nothing upcoming enough to show — most days — and
+    // looked identical to a live one. Mirror the hidden state onto it the moment
+    // it's known, so an inactive day reads as inactive instead of pretending.
+    const bdayBtn = document.getElementById("deskToolBday");
+    if (bdayBtn) bdayBtn.disabled = !pop;
   }
 
   /* ================= Day-tile manager =================
@@ -22232,16 +22253,27 @@
     deskPatOpen = !deskPatOpen;
     renderDeskRail();
   });
-  document.getElementById("railNumInfo")?.addEventListener("click", () => {
-    document.getElementById("tilesDate")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
+  // scrolls to + briefly glows an already-visible desktop card — shared by the two
+  // "jump to numerology" triggers below (2026-08-06, see the deskToolStar note)
+  function jumpFlash(id) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.classList.remove("desk-jump-flash");
+    void card.offsetWidth;
+    card.classList.add("desk-jump-flash");
+  }
+  document.getElementById("railNumInfo")?.addEventListener("click", () => jumpFlash("railNum"));
   // toolbar: each icon drives an EXISTING control — no new features, just desktop homes
+  // 2026-08-06 (Linh, screenshot of this row: "why are these here, they do nothing"):
+  // the star used to toggle #tilesDate's "expanded" class — dead code, that class has
+  // NO rule anywhere in the stylesheet (confirmed by search), almost certainly a
+  // leftover from before desktop started always showing Universal/Personal/Month in
+  // the rail card. Repointed at the one thing that's actually true now: jump to +
+  // flash that card. Not a toggle anymore, so aria-pressed is gone too.
   document.getElementById("deskToolStar")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    toggleNumPanel();
-    const open = !!document.getElementById("tilesDate")?.classList.contains("expanded");
-    e.currentTarget.setAttribute("aria-pressed", String(open));
-    document.getElementById("tilesDate")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    jumpFlash("railNum");
   });
   document.getElementById("deskToolMoon")?.addEventListener("click", (e) => {
     const btn = e.currentTarget;
