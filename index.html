@@ -22725,6 +22725,23 @@
       after: ai >= 0 ? cbItems.slice(ai + 1).map((id, i) => slot(id, ai + 1 + i)).join("") : "",
     };
   }
+  // shared by both renderChainsPage() branches below — same column ids either way,
+  // so a drag straight into the empty (not-yet-building) table finds real drop
+  // targets immediately, not just after "Start a chain" is tapped first.
+  const cbColumnsHtml = cols => `<div class="cb-columns" id="cbColumns">
+      <div class="cb-col" data-cb-col="before">
+        <div class="cb-col-head"><span class="phase-dot phase-dot-before"></span>Before</div>
+        <div class="cb-col-body" id="cbColBefore" data-cb-col-body="before">${cols.before || `<div class="cb-col-empty">Drop here</div>`}</div>
+      </div>
+      <div class="cb-col" data-cb-col="during">
+        <div class="cb-col-head"><span class="phase-dot phase-dot-during"></span>Event</div>
+        <div class="cb-col-body" id="cbColDuring" data-cb-col-body="during">${cols.during || `<div class="cb-col-empty">Drop your anchor here</div>`}</div>
+      </div>
+      <div class="cb-col" data-cb-col="after">
+        <div class="cb-col-head"><span class="phase-dot phase-dot-after"></span>After</div>
+        <div class="cb-col-body" id="cbColAfter" data-cb-col-body="after">${cols.after || `<div class="cb-col-empty">Drop here</div>`}</div>
+      </div>
+    </div>`;
   function renderChainsPage() {
     const host = document.getElementById("chainsPageBody");
     if (!host) return;
@@ -22738,20 +22755,7 @@
         <div class="preg-cel-lab">Build a chain${dayLbl ? ` · ${esc(dayLbl)}` : ""}</div>
         <input type="text" class="cb-name-input" id="cbName" maxlength="40" placeholder="Name this chain (optional)" value="${esc(cbName)}" aria-label="Chain name">
         <div class="cb-hint">Drag a step from Steps into a column, or tap to add · drag ⋮⋮ within the table to reorder or move it between columns · Event holds your one fixed anchor.</div>
-        <div class="cb-columns" id="cbColumns">
-          <div class="cb-col" data-cb-col="before">
-            <div class="cb-col-head"><span class="phase-dot phase-dot-before"></span>Before</div>
-            <div class="cb-col-body" id="cbColBefore" data-cb-col-body="before">${cols.before || `<div class="cb-col-empty">Drop here</div>`}</div>
-          </div>
-          <div class="cb-col" data-cb-col="during">
-            <div class="cb-col-head"><span class="phase-dot phase-dot-during"></span>Event</div>
-            <div class="cb-col-body" id="cbColDuring" data-cb-col-body="during">${cols.during || `<div class="cb-col-empty">Drop your anchor here</div>`}</div>
-          </div>
-          <div class="cb-col" data-cb-col="after">
-            <div class="cb-col-head"><span class="phase-dot phase-dot-after"></span>After</div>
-            <div class="cb-col-body" id="cbColAfter" data-cb-col-body="after">${cols.after || `<div class="cb-col-empty">Drop here</div>`}</div>
-          </div>
-        </div>
+        ${cbColumnsHtml(cols)}
         ${warn}
         ${cbPoolHtml()}
         <div class="chain-b-actions">
@@ -22760,12 +22764,22 @@
         </div>
       </div>`;
     } else {
-      builderHtml = `<div class="add-row"><button type="button" class="add-btn" id="cbStart">⛓ Start a chain</button></div>`;
+      // 2026-08-05 (Linh, screenshot of this page: "provide the table so i can drag
+      // from table to make the chain"): the empty table shows from the start now,
+      // not just the bare "Start a chain" button — engaging any step (drag or tap,
+      // see the pointermove/click delegates below) flips cbBuilding true and this
+      // re-renders straight into the full builder above, seamlessly.
+      builderHtml = `<div class="cb-build">
+        <div class="cb-hint">Drag a step from Steps into a column to start a chain — Event holds your one fixed anchor.</div>
+        ${cbColumnsHtml({ before: "", during: "", after: "" })}
+        ${cbPoolHtml()}
+        <div class="add-row"><button type="button" class="add-btn" id="cbStart">⛓ Start a chain</button></div>
+      </div>`;
     }
     host.innerHTML = `<div class="cb-layout">
       <aside class="cb-side">
         <div class="cb-side-head">Steps</div>
-        <div class="cb-side-hint">${cbBuilding ? "Tap a step to add it — or drag it across into your chain." : "Tap a step to start a new chain with it."}</div>
+        <div class="cb-side-hint">Tap a step to add it — or drag it across into your chain.</div>
         ${cbPoolHtml()}
       </aside>
       <div class="cb-main">` + builderHtml
