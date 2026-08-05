@@ -1737,6 +1737,13 @@
     text-align: center; font-variant-numeric: tabular-nums;
   }
   .bw-in input:focus { outline: none; border-color: var(--nav-active); box-shadow: 0 0 0 2px color-mix(in oklab, var(--nav-active) 25%, transparent); }
+  @keyframes bwSavedPulse { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1); } 70% { opacity: 1; } 100% { opacity: 0; } }
+  .bw-saved {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+    background: var(--personal-ink, var(--nav-active)); color: #fff; font-size: 9px; line-height: 1;
+    animation: bwSavedPulse 1400ms ease forwards;
+  }
 
   /* Cycle page — hormone rhythm chart (LH/FSH/Estrogen/Progesterone + uterine lining) */
   .cyc-hormone-wrap {
@@ -14931,25 +14938,25 @@
   // shared by #dayBodyCard and #todayBodyCard — the DISPLAYED weight is always the
   // most-recently-logged value overall (latestVal doesn't take a date), only WHICH day
   // a new entry gets filed under differs, so the two hosts only need distinct input ids
-  function bodyWidgetHTML(inputId) {
+  function bodyWidgetHTML(inputId, justSaved) {
     const kg = latestVal(HEALTH.weights, "kg");
     const bmi = bmiFor(kg), band = bmiBand(bmi);
     return `
       <div class="bc-label bw-title">⚖️ Weight</div>
-      <label class="bw-in"><input type="number" step="0.1" inputmode="decimal" id="${inputId}" value="${kg ?? ""}" placeholder="kg" aria-label="Weight in kg"><span>kg</span></label>
+      <label class="bw-in"><input type="number" step="0.1" inputmode="decimal" id="${inputId}" value="${kg ?? ""}" placeholder="kg" aria-label="Weight in kg"><span>kg</span>${justSaved ? `<span class="bw-saved" aria-hidden="true">✓</span>` : ""}</label>
       ${bmi != null
         ? `<div class="bw-bmi"><b style="color:${band.col}">${bmi.toFixed(1)}</b> BMI · <span style="color:${band.col}">${band.label}</span></div>`
         : `<div class="bw-bmi bw-bmi-empty">Log weight for BMI</div>`}`;
   }
-  function renderBodyWidget() {
+  function renderBodyWidget(justSaved) {
     const host = document.getElementById("dayBodyCard");
-    if (host) host.innerHTML = bodyWidgetHTML("bwWeight");
+    if (host) host.innerHTML = bodyWidgetHTML("bwWeight", justSaved);
   }
   // 2026-08-06 (Linh: "remove the wellness widget"): renderWellnessGlance() and its
   // #wellnessBox host are gone -- see the HTML-side removal note near #biomechTip.
-  function renderTodayBody() {
+  function renderTodayBody(justSaved) {
     const host = document.getElementById("todayBodyCard");
-    if (host) host.innerHTML = bodyWidgetHTML("twWeight");
+    if (host) host.innerHTML = bodyWidgetHTML("twWeight", justSaved);
   }
   // trimmed status line, not the floating cycle-log popover — that popover is wired
   // to #dayHealthBody/#periodBadge specifically (state.anchor-based bounding-rect
@@ -14983,8 +14990,11 @@
     };
     if (id === "bwWeight" || id === "twWeight") upsert(HEALTH.weights, "kg");
     saveHealth();
-    renderBodyWidget();
-    renderTodayBody();
+    // 2026-08-06 (Linh: "difficult to log my weight"): this field only ever saved
+    // silently on blur -- no confirmation it actually took. Flash a checkmark on
+    // whichever widget the edit came from so logging reads as done, not lost.
+    renderBodyWidget(id === "bwWeight");
+    renderTodayBody(id === "twWeight");
     if (state.view === "health") renderHealth();
   }
 
@@ -17936,6 +17946,17 @@
   function saveHealth() { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(HEALTH)); } catch (e) {} }
   let HEALTH = loadHealth();
   HEALTH.weights   = HEALTH.weights   || [];   // { id, date, kg }
+  // one-time cleanup (2026-08-06): #weightForm used to push a new entry on every
+  // submit instead of updating the existing one for that date, so re-logging/
+  // correcting a day's weight silently left an old duplicate sitting alongside
+  // the new value -- collapse any same-date duplicates down to the last-logged one.
+  if (HEALTH.weights.length) {
+    const byDate = new Map();
+    HEALTH.weights.forEach(w => byDate.set(w.date, w));
+    const deduped = [...byDate.values()];
+    if (deduped.length !== HEALTH.weights.length) { HEALTH.weights = deduped; saveHealth(); }
+    else HEALTH.weights = deduped;
+  }
   HEALTH.bodyFat   = HEALTH.bodyFat   || [];   // { id, date, pct }
   HEALTH.periods   = HEALTH.periods   || [];   // legacy, superseded by HEALTH.flow
   HEALTH.flow      = HEALTH.flow      || {};   // { "YYYY-MM-DD": "spotting"|"light"|"medium"|"heavy" }
@@ -22483,7 +22504,13 @@
     e.preventDefault();
     const kg = parseFloat(document.getElementById("weightVal").value);
     if (!isFinite(kg)) return;
-    HEALTH.weights.push({ id: uid(), date: document.getElementById("weightDate").value || todayISO(), kg });
+    // upsert-by-date (2026-08-06, Linh: "difficult to log my weight") -- this used
+    // to be a blind push, so re-logging/correcting the SAME day created a second
+    // entry instead of updating the first; which one .find() picked up elsewhere
+    // was insertion-order-dependent, so a correction could silently not "take".
+    const k = document.getElementById("weightDate").value || todayISO();
+    const existing = HEALTH.weights.find(x => x.date === k);
+    if (existing) existing.kg = kg; else HEALTH.weights.push({ id: uid(), date: k, kg });
     saveHealth(); e.target.reset(); renderHealth();
   });
   document.getElementById("bfForm").addEventListener("submit", e => {
