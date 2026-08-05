@@ -4906,6 +4906,8 @@
     font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-faint);
   }
   .cyc-sym-group-label::after { content: ""; flex: 1; height: 1px; background: var(--note-line); }
+  /* the popover's phase filter escape hatch — quiet dashed chip, self-aligned left */
+  .cyc-sym-showall { border-style: dashed; color: var(--ink-faint); align-self: flex-start; }
   .cyc-chip {
     border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft);
     border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-body);
@@ -9598,12 +9600,12 @@
   // instead of a bare 1 — same slash notation the impure/master days already use.
   // 28 is GG33's wealth number; isMoneyDay() below already treats these days as
   // money days, this makes the number itself visible everywhere the UD shows.
-  // 2026-08-06 (Linh: "13 is also a semi-master number"): same treatment — a
-  // Method-A total of 13 (e.g. 4 Aug 2026 → 4+8+1) reads "13/4". Everything
+  // 2026-08-06 (Linh: "13 is also a semi-master number", "31 is a semi master too"): a
+  // Method-A total of 13 (4 Aug 2026 → 4+8+1) reads "13/4", 31 (22 Aug 2026 → 22+8+1) reads "31/4". Everything
   // downstream is already generic over this set (universalDay's semi branch,
   // dpScoreDay scoring the reduced value, focusFor falling back to the reduced
   // digit for the popover text).
-  const SEMI_MASTERS = new Set([28, 13]);
+  const SEMI_MASTERS = new Set([28, 13, 31]);
   // 20 is a hidden 11 — it doesn't reduce further, and carries 11's meaning
   const HIDDEN_MASTER_OF = { 20: 11 };
   const isMasterLike = n => MASTERS.has(n) || (n in HIDDEN_MASTER_OF);
@@ -20718,8 +20720,13 @@
       if (btn) { btn.classList.add("saved"); setTimeout(() => btn.classList.remove("saved"), 900); }
       return;
     }
-    const dk = keyOf(state.anchor);
-    // the same log renders in two shells — the sidebar <details> and the floating CD-badge popover
+    // the same log renders in two shells — the sidebar <details> writes to the Day
+    // anchor; the floating CD popover writes to the day it was opened FOR
+    // (state.cyclePopoverDate — a calendar CD can be any day, 2026-08-05)
+    const inPop = !!e.target.closest(".cyc-popover");
+    const dk = (inPop && state.cyclePopoverDate) || keyOf(state.anchor);
+    const showAll = e.target.closest(".cyc-popover [data-sym-showall]");
+    if (showAll) { cdSymShowAll = !cdSymShowAll; renderDayHealth(); return; }
     const flowSet = e.target.closest("#dhCycleDetail [data-flowset], .cyc-popover [data-flowset]");
     if (flowSet) {
       const val = flowSet.dataset.flowset;
@@ -20747,7 +20754,8 @@
     }
   });
   document.getElementById("dayHealthBody").addEventListener("change", e => {
-    const dk = keyOf(state.anchor);
+    // pain/notes only render inside the popover now — commit to its own day
+    const dk = (state.cyclePopoverOpen && state.cyclePopoverDate) || keyOf(state.anchor);
     if (e.target.id === "dhPainSlider") setCycleLogField(dk, "pain", parseInt(e.target.value, 10) || 0);
     else if (e.target.id === "dhNotesInput") setCycleLogField(dk, "notes", e.target.value.trim());
   });
@@ -23971,7 +23979,7 @@
     if (e.target.closest("[data-cyc-log]")) {
       // the chips already saved as they were tapped — this commits the free-text
       // fields (pain, notes), closes the popover and flashes the badge to confirm
-      const dk = keyOf(state.anchor);
+      const dk = state.cyclePopoverDate || keyOf(state.anchor);
       const pain = document.getElementById("dhPainSlider");
       if (pain) setCycleLogField(dk, "pain", parseInt(pain.value, 10) || 0);
       const notes = document.getElementById("dhNotesInput");
