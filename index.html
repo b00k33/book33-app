@@ -3286,6 +3286,36 @@
   .chain-preview b { color: var(--ink); }
   .chain-b-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .rtn-chain-pill { font-size: 11px; color: var(--ink-faint); }
+  /* ---- Chains PAGE (2026-08-06, "make me a chain building page"): the sequence
+     builder's slot list + grouped existing-chain blocks. Reuses .chain-unlink /
+     .chain-b-actions / .chain-rel / .fam-empty from the card above. ---- */
+  .cb-build { background: var(--note-bg); border-radius: var(--radius-md); padding: 14px; }
+  .cb-hint { font-size: 11.5px; color: var(--ink-soft); line-height: 1.5; margin-bottom: 12px; }
+  .cb-slot {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    background: var(--field-bg); border-radius: var(--radius-sm);
+    padding: 8px 44px 8px 12px; margin-bottom: 8px; min-height: 44px; cursor: pointer;
+  }
+  .cb-slot.cb-anchor { box-shadow: inset 0 0 0 1.5px var(--accent-seed); }
+  .cb-slot-pin { flex: none; font-size: 13px; }
+  .cb-slot-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cb-slot-time { flex: none; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .cb-anchor .cb-slot-time { color: var(--accent-seed); font-weight: 700; }
+  .cb-warn { font-size: 11.5px; color: var(--warn); line-height: 1.5; margin: 4px 0 8px; }
+  .cb-addrow { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+  .cb-addrow select {
+    flex: 1; background: var(--field-bg); color: var(--ink); border: none; border-radius: var(--radius-sm);
+    padding: 8px 10px; font-size: 13px; font-family: var(--font-body); min-height: 44px; min-width: 0;
+  }
+  .cb-addrow .add-btn { flex: none; }
+  .cb-chain { background: var(--note-bg); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 12px; }
+  .cb-chain-root { position: relative; font-size: 13px; font-weight: 700; margin-bottom: 6px; padding-right: 40px; }
+  .cb-chain-link {
+    position: relative; display: flex; align-items: center; padding: 6px 40px 6px 14px;
+    border-left: 2px solid color-mix(in oklab, var(--accent-seed) 45%, transparent);
+    margin-left: 5px; min-height: 36px;
+  }
+  .cb-link-tx { font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .rtn-date-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .rtn-date-list:empty { display: none; }
@@ -8446,6 +8476,22 @@
     <p class="footnote" style="margin:14px auto 0">Add someone from your People, set a due date, and Book33 fills in the weekly count, trimesters and standard milestones — then nudges you to reach out. Custom milestones can drop onto your calendar too.</p>
   </div>
 
+  <!-- ================= CHAINS ================= -->
+  <!-- 2026-08-06 (Linh: "make me a chain building page so i can do that" — right after
+       the 4-events walkthrough): a whole-sequence builder. Pick items in timeline
+       order, tap one to make it the 🔒 anchor, watch the computed schedule update
+       live, save once — the page writes the same pairwise anchorTo links the Chains
+       card builds one at a time, so everything downstream (spine, popups, unchain,
+       the card) keeps working unchanged. Content rendered by renderChainsPage(). -->
+  <div class="page" id="chainsPage" hidden>
+    <div class="bd-head">
+      <div class="eyebrow">Glue a whole run of your day together</div>
+      <h1>Chains</h1>
+    </div>
+    <div id="chainsPageBody"></div>
+    <p class="footnote" style="margin:14px auto 0">Add steps in the order they happen, tap the one with the fixed time to make it the 🔒 anchor, and save. Everything before it backs up from it; everything after flows on from it. Move the anchor later and the whole chain moves with it.</p>
+  </div>
+
   <!-- ================= FAMILY ================= -->
   <div class="page" id="familyPage" hidden>
     <div class="bd-head">
@@ -12540,6 +12586,9 @@
         { id: "eightDays", label: "Numerology" },
         { id: "shopping", label: "Shopping List", sep: true },
         { id: "family", label: "Family Dinh" }, { id: "routines", label: "Routines" },
+        // 2026-08-06 (Linh: "make me a chain building page"): whole-sequence chain
+        // builder — sits by Routines since the pairwise Chains card lives there
+        { id: "chains", label: "Chains" },
         { id: "goals", label: "Goals", sep: true },
         { id: "review", label: "Weekly Review" },
         // 2026-08-05 ("B33 Notification"): the phone-notification settings panel —
@@ -20415,6 +20464,7 @@
     document.getElementById("goalsPage").hidden = state.view !== "goals";
     document.getElementById("peoplePage").hidden = state.view !== "people";
     document.getElementById("pregPage").hidden = state.view !== "pregnancies";
+    document.getElementById("chainsPage").hidden = state.view !== "chains";
     document.getElementById("routinesPage").hidden = state.view !== "routines";
     document.getElementById("workManualPage").hidden = state.view !== "workManual";
     document.getElementById("cpdPage").hidden = state.view !== "cpd";
@@ -20446,6 +20496,7 @@
     else if (state.view === "goals") renderGoals();
     else if (state.view === "people") renderPeoplePage();
     else if (state.view === "pregnancies") renderPregnancies();
+    else if (state.view === "chains") renderChainsPage();
     else if (state.view === "routines") renderRoutines();
     else if (state.view === "workManual") renderWorkManual();
     else if (state.view === "cpd") renderCpd();
@@ -22111,6 +22162,168 @@
   // the builder's fields: re-speak the plain-English outcome on every pick
   document.getElementById("rtnChains").addEventListener("change", e => {
     if (["rtnChainWho", "rtnChainAnchor", "rtnChainDeadlineTime", "rtnChainDeadlineLabel"].includes(e.target.id)) updateChainPreview();
+  });
+
+  /* ---- ⛓ CHAINS PAGE (2026-08-06, Linh: "make me a chain building page so i can do
+     that" — right after the chain-4-events walkthrough): a whole-sequence builder on
+     top of the SAME pairwise anchorTo model. She stacks steps in timeline order, taps
+     one to be the 🔒 anchor, and Save writes each neighbour pair as one link: steps
+     after the anchor chain "after" to the one above them, steps before it chain
+     "before" to the one below. Nothing new in the data model — the Day spine, the
+     popups' Chain/Unchain, and the Routines-page card all keep working unchanged. */
+  let cbItems = [], cbAnchorIdx = 0, cbBuilding = false;
+  // options for the add-a-step select — same three groups as the card's builder,
+  // one-off events date-labelled, minus anything already in the sequence
+  function cbOptsHtml() {
+    const used = new Set(cbItems);
+    const opt = (t, dLbl) => `<option value="${t.id}">${esc(t.title)}${dLbl || ""}</option>`;
+    const g = (label, rows) => rows.length ? `<optgroup label="${label}">${rows.join("")}</optgroup>` : "";
+    return `<option value="">Pick a step…</option>`
+      + g("Routines", ROUTINE_TASKS.filter(t => !used.has(t.id)).slice().sort((a, b) => a.title.localeCompare(b.title)).map(t => opt(t)))
+      + g("Repeating events", RECURRING_EVENTS.filter(t => !used.has(t.id)).slice().sort((a, b) => a.title.localeCompare(b.title)).map(t => opt(t)))
+      + g("One-off events", chainableEvents().filter(t => !used.has(t.id)).map(t => opt(t, ` · ${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}`)));
+  }
+  // the whole sequence's computed schedule, walked out from the anchor's own raw
+  // time by durations — the same arithmetic the live chain does day-to-day, so what
+  // the preview shows is what the calendar will do
+  function cbSchedule() {
+    const items = cbItems.map(chainNodeById).filter(Boolean);
+    if (!items.length) return null;
+    const ai = Math.min(cbAnchorIdx, items.length - 1);
+    const anchor = items[ai];
+    const previewDate = isPlainEvent(anchor) ? parseKey(anchor.date) : TODAY;
+    const aStart = rawRoutineStartMin(anchor, previewDate);
+    if (aStart == null) return { items, ai, noTime: true };
+    const times = new Array(items.length);
+    times[ai] = { s: aStart, e: aStart + routineDurMin(anchor) };
+    for (let i = ai + 1; i < items.length; i++) times[i] = { s: times[i - 1].e, e: times[i - 1].e + routineDurMin(items[i]) };
+    for (let i = ai - 1; i >= 0; i--) times[i] = { e: times[i + 1].s, s: times[i + 1].s - routineDurMin(items[i]) };
+    return { items, ai, times, previewDate };
+  }
+  // existing chains, grouped: every link walked up to its root so one real-world
+  // chain (A→B→C→D) reads as one block, not three scattered rows
+  function cbExistingHtml() {
+    const links = chainPool().filter(t => t.anchorTo && chainAnchorOf(t));
+    const rootOf = t => {
+      const seen = new Set([t.id]);
+      let cur = t;
+      while (cur.anchorTo) {
+        const a = chainAnchorOf(cur);
+        if (!a || seen.has(a.id)) break;
+        seen.add(a.id); cur = a;
+      }
+      return cur;
+    };
+    const groups = new Map();
+    links.forEach(l => {
+      const r = rootOf(l);
+      if (!groups.has(r.id)) groups.set(r.id, { root: r, links: [] });
+      groups.get(r.id).links.push(l);
+    });
+    const deadlineRoots = chainPool().filter(t => t.deadline && !t.anchorTo && !groups.has(t.id));
+    if (!groups.size && !deadlineRoots.length) return `<div class="fam-empty">No chains yet — build your first one above.</div>`;
+    let html = "";
+    groups.forEach(gr => {
+      const rootTime = gr.root.start ? ` · ${fmtTime(gr.root.start)}` : gr.root.deadline ? ` · by ${fmtTime(gr.root.deadline)}` : "";
+      html += `<div class="cb-chain">
+        <div class="cb-chain-root">🔒 ${esc(gr.root.title)}${rootTime}</div>
+        ${gr.links.map(l => `<div class="cb-chain-link">
+          <span class="cb-link-tx">⛓ ${esc(l.title)} <span class="chain-rel">${l.anchorMode === "before" ? "before" : "after"}</span> ${esc(chainAnchorOf(l).title)}</span>
+          <button type="button" class="chain-unlink" data-cb-unlink="${esc(l.id)}" aria-label="Unchain ${esc(l.title)}" title="Unchain — it keeps its own saved time">×</button>
+        </div>`).join("")}
+      </div>`;
+    });
+    deadlineRoots.forEach(t => {
+      html += `<div class="cb-chain"><div class="cb-chain-root">⏰ ${esc(t.title)} · by ${fmtTime(t.deadline)}${t.deadlineLabel ? ` (${esc(t.deadlineLabel)})` : ""}
+        <button type="button" class="chain-unlink" data-cb-unlink="${esc(t.id)}" aria-label="Remove deadline" title="Remove the deadline">×</button></div></div>`;
+    });
+    return html;
+  }
+  function renderChainsPage() {
+    const host = document.getElementById("chainsPageBody");
+    if (!host) return;
+    let builderHtml = "";
+    if (cbBuilding) {
+      const sched = cbSchedule();
+      const rows = cbItems.map((id, i) => {
+        const t = chainNodeById(id);
+        if (!t) return "";
+        const isA = sched && i === sched.ai;
+        const time = sched && sched.times ? `${fmtTime(minToTime(Math.max(0, sched.times[i].s)))} – ${fmtTime(minToTime(Math.min(1439, sched.times[i].e)))}` : "";
+        return `<div class="cb-slot${isA ? " cb-anchor" : ""}" data-cb-set-anchor="${i}" role="button" tabindex="0"
+            title="${isA ? "The anchor — keeps its own time" : "Tap to make this the anchor"}">
+          <span class="cb-slot-pin">${isA ? "🔒" : "⛓"}</span>
+          <span class="cb-slot-title">${esc(t.title)}</span>
+          <span class="cb-slot-time">${time}</span>
+          <button type="button" class="chain-unlink" data-cb-remove="${i}" aria-label="Remove ${esc(t.title)} from the chain">×</button>
+        </div>`;
+      }).join("");
+      const warn = sched && sched.noTime ? `<div class="cb-warn">The 🔒 anchor needs its own start time — give it one on its form, or pick a different anchor.</div>` : "";
+      const dayLbl = sched && sched.previewDate ? `${WD_FULL[dowIndex(sched.previewDate)]} ${sched.previewDate.getDate()} ${MON_SHORT[sched.previewDate.getMonth()]}` : "";
+      builderHtml = `<div class="cb-build">
+        <div class="preg-cel-lab">Build a chain${dayLbl ? ` · ${esc(dayLbl)}` : ""}</div>
+        <div class="cb-hint">Steps run top to bottom. Tap a step to make it the 🔒 anchor — everything else counts out from it.</div>
+        ${rows || ""}
+        ${warn}
+        <div class="cb-addrow">
+          <select id="cbAddSel" aria-label="Add a step">${cbOptsHtml()}</select>
+          <button type="button" class="add-btn" id="cbAddBtn">＋ Add</button>
+        </div>
+        <div class="chain-b-actions">
+          <button type="button" class="btn-cancel" id="cbCancel">Cancel</button>
+          <button type="button" class="btn-save" id="cbSave"${cbItems.length >= 2 && sched && !sched.noTime ? "" : " disabled"}>Save chain</button>
+        </div>
+      </div>`;
+    } else {
+      builderHtml = `<div class="add-row"><button type="button" class="add-btn" id="cbStart">⛓ Start a chain</button></div>`;
+    }
+    host.innerHTML = builderHtml
+      + `<div class="section-head" style="margin-top:22px"><h2>Your chains</h2><span class="rule"></span></div>`
+      + cbExistingHtml();
+  }
+  document.getElementById("chainsPage").addEventListener("click", e => {
+    if (e.target.closest("#cbStart")) { cbBuilding = true; cbItems = []; cbAnchorIdx = 0; renderChainsPage(); return; }
+    if (e.target.closest("#cbCancel")) { cbBuilding = false; cbItems = []; renderChainsPage(); return; }
+    if (e.target.closest("#cbAddBtn")) {
+      const sel = document.getElementById("cbAddSel");
+      if (sel && sel.value) { cbItems.push(sel.value); renderChainsPage(); }
+      return;
+    }
+    const rm = e.target.closest("[data-cb-remove]");
+    if (rm) {
+      e.stopPropagation();
+      const i = +rm.dataset.cbRemove;
+      cbItems.splice(i, 1);
+      if (cbAnchorIdx >= cbItems.length) cbAnchorIdx = Math.max(0, cbItems.length - 1);
+      renderChainsPage(); return;
+    }
+    const unlink = e.target.closest("[data-cb-unlink]");
+    if (unlink) {
+      const t = chainNodeById(unlink.dataset.cbUnlink);
+      if (t) { delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel; saveChainNode(t); renderChainsPage(); }
+      return;
+    }
+    if (e.target.closest("#cbSave")) {
+      const items = cbItems.map(chainNodeById).filter(Boolean);
+      if (items.length < 2) return;
+      const ai = Math.min(cbAnchorIdx, items.length - 1);
+      // each neighbour pair becomes one ordinary pairwise link — the exact writes
+      // the Chains card's Save does, just several at once
+      for (let i = ai + 1; i < items.length; i++) {
+        const t = items[i];
+        t.anchorTo = items[i - 1].id; t.anchorMode = "after";
+        delete t.deadline; delete t.deadlineLabel; saveChainNode(t);
+      }
+      for (let i = ai - 1; i >= 0; i--) {
+        const t = items[i];
+        t.anchorTo = items[i + 1].id; t.anchorMode = "before";
+        delete t.deadline; delete t.deadlineLabel; saveChainNode(t);
+      }
+      cbBuilding = false; cbItems = [];
+      renderChainsPage(); return;
+    }
+    const slot = e.target.closest("[data-cb-set-anchor]");
+    if (slot) { cbAnchorIdx = +slot.dataset.cbSetAnchor; renderChainsPage(); return; }
   });
 
   /* ---- routine task form ---- */
