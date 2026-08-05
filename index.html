@@ -4372,6 +4372,56 @@
     --wk-tint: linear-gradient(180deg, rgba(216,185,121,.08), transparent);
   }
   .wk-pm-line { font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; margin: 0 0 8px 2px; }
+  /* ============ GCal-STYLE DESKTOP TIME GRID (2026-08-05, Linh's GCal screenshot:
+     "make the week page look like this") — >=1024px only; phones keep the dot rows.
+     Reuses the week palette (--wk-*), the gold today-circle, and the Day page's
+     cosmic-gold now-line voice. ============ */
+  .week-time { display: none; }
+  @media (min-width: 1024px) {
+    .week-time { display: block; margin-top: 8px; }
+    .week-grid { display: none; }
+  }
+  .wt-headrow {
+    display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+    position: sticky; top: 0; z-index: 5; background: var(--paper);
+    border-bottom: 1px solid var(--note-line);
+  }
+  .wt-day { text-align: center; padding: 4px 4px 8px; cursor: pointer; border-left: 1px solid var(--wk-line); min-width: 0; }
+  .wt-day[data-today="true"] { background: var(--wk-tint); }
+  .wt-day[data-today="true"] .wk-num {
+    background: var(--wk-gold); color: #17130A; border-radius: 50%;
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .wt-chips { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .wt-chip {
+    font-size: 10px; line-height: 1.2; padding: 2px 8px; border-radius: 999px;
+    background: color-mix(in oklab, var(--wt-c, var(--wk-personal)) 24%, transparent);
+    color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wt-chip.more { background: none; color: var(--ink-faint); }
+  .wt-body { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); position: relative; }
+  .wt-gutter { position: relative; }
+  .wt-gutter span {
+    position: absolute; right: 8px; transform: translateY(-50%);
+    font-size: 10px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  }
+  .wt-col {
+    position: relative; border-left: 1px solid var(--wk-line); cursor: pointer; min-width: 0;
+    background-image: repeating-linear-gradient(to bottom, var(--wk-line) 0 1px, transparent 1px 48px);
+  }
+  .wt-col[data-today="true"] { background-color: color-mix(in oklab, var(--wk-gold) 4%, transparent); }
+  .wt-ev {
+    position: absolute; left: 2px; right: 3px; overflow: hidden; border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--wt-c) 26%, transparent);
+    border-left: 3px solid var(--wt-c);
+    padding: 3px 6px; font-size: 11px; line-height: 1.25; color: var(--ink);
+  }
+  .wt-ev b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt-ev span { font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .wt-ev.done { opacity: .45; }
+  .wt-ev.done b { text-decoration: line-through; }
+  .wt-now { position: absolute; left: 0; right: 0; z-index: 4; pointer-events: none; border-top: 2px solid var(--cosmic-gold, #D9A93F); }
+  .wt-now::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--cosmic-gold, #D9A93F); }
   .week-grid > .week-col { border-left: 1px solid var(--wk-line); }
   .week-grid > .week-col:first-child { border-left: none; }
   .week-col {
@@ -9741,6 +9791,12 @@
          one aligned Habits & trackers grid. The old PM/UD/PD pill rows are gone — UD
          folded into the calendar day headers, PM is this one line. -->
     <div class="wk-pm-line" id="wkPmLine"></div>
+    <!-- 2026-08-05 (Linh, GCal week screenshot: "make the week page look like this"):
+         desktop-only TIME grid — hour gutter + 7 columns, events at their real times,
+         gold today-circle and now-line. Filled by renderWeek() from the SAME per-day
+         data as the dot rows below; >=1024px shows this and hides #weekGrid, phones
+         keep the dot-row layout untouched. -->
+    <div class="week-time" id="weekTime"></div>
     <div class="week-grid" id="weekGrid"></div>
     <div class="week-rows" id="weekRows"></div>
     <div class="week-fast" id="weekFast"></div>
@@ -16476,6 +16532,11 @@
     document.getElementById("wkEyebrow").textContent = `Week ${wkNo} of ${addDays(start, 3).getFullYear()} · seven days at a glance`;
 
     let html = "";
+    // GCal-style desktop time grid (2026-08-05, Linh's screenshot): built in the SAME
+    // per-day loop from the same evs — 06:00–24:00 window, 48px per hour
+    let wtHead = "", wtCols = "";
+    const WT_START = 360, WT_END = 1440, WT_HOUR = 48;
+    const wtY = m => (m - WT_START) / 60 * WT_HOUR;
     const wkPred = cyclePrediction();
     // part-of-life / category → the light row's 7px dot colour (Linh's week-redesign
     // spec palette, defined as --wk-* vars on #weekPage)
@@ -16538,8 +16599,66 @@
           ${(rows || routineChip) ? rows + more + routineChip : `<div class="wk-empty">—</div>`}
         </div>
       </div>`;
+
+      // ---- desktop time grid: same evs on the clock. Timed items (routines with a
+      // time included — they're real schedule, same as the Day page) become positioned
+      // blocks; all-day/untimed stay chips in the header. Overlaps split into
+      // side-by-side lanes — the same cluster approach the Day timeline uses. ----
+      const wtAllday = shown.filter(e => e.allDay || toMin(e.start) === null);
+      const timed = evs.filter(e => !e.ghostSkip && !e.allDay && toMin(e.start) !== null);
+      const placed = [];
+      timed.forEach(e => {
+        const s = toMin(e.start), en = Math.max(itemEndMin(e), s + 30);
+        const cs = Math.max(s, WT_START), ce = Math.min(en, WT_END);
+        if (ce - cs < 5) return;   // fully outside the visible window
+        placed.push({ e, top: wtY(cs), h: Math.max(wtY(ce) - wtY(cs) - 2, 18) });
+      });
+      placed.sort((a, b) => a.top - b.top || b.h - a.h);
+      let cl = [], clEnd = -1;
+      const closeCl = () => {
+        const ends = [];
+        cl.forEach(p => { let c = 0; while (ends[c] !== undefined && ends[c] > p.top) c++; p.col = c; ends[c] = p.top + p.h; });
+        cl.forEach(p => { p.cols = ends.length; });
+        cl = [];
+      };
+      placed.forEach(p => {
+        if (cl.length && p.top >= clEnd) closeCl();
+        clEnd = cl.length ? Math.max(clEnd, p.top + p.h) : p.top + p.h;
+        cl.push(p);
+      });
+      if (cl.length) closeCl();
+      const blocks = placed.map(p => {
+        const e = p.e, done = isDone(e.id);
+        const lane = p.cols > 1 ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 2px);width:calc(${(100 / p.cols).toFixed(2)}% - 5px);` : "";
+        const endLbl = fmtTime(e.end || minToTime(Math.min(Math.max(itemEndMin(e), toMin(e.start) + 30), WT_END)));
+        return `<div class="wt-ev${done ? " done" : ""}" style="top:${p.top.toFixed(1)}px;height:${p.h.toFixed(1)}px;${lane}--wt-c:var(${dotVar(e)})"${e.generated ? "" : ` data-eid="${e.id}"`} title="${esc(`${fmtTime(e.start)} · ${e.title}${e.generated ? "" : " — right-click to edit"}`)}">
+          <b>${esc(e.title)}</b><span>${fmtTime(e.start)} – ${endLbl}</span>
+        </div>`;
+      }).join("");
+      const chips = wtAllday.slice(0, 2).map(e =>
+        `<span class="wt-chip" style="--wt-c:var(${dotVar(e)})"${e.generated ? "" : ` data-eid="${e.id}"`} title="${esc(e.title)}">${esc(e.title)}</span>`).join("")
+        + (wtAllday.length > 2 ? `<span class="wt-chip more">+${wtAllday.length - 2}</span>` : "");
+      const wtToday = k === keyOf(TODAY);
+      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+      const nowLine = wtToday && nowMin >= WT_START && nowMin <= WT_END
+        ? `<div class="wt-now" style="top:${wtY(nowMin).toFixed(1)}px"></div>` : "";
+      wtHead += `<div class="wt-day" data-jump="${k}" data-today="${wtToday}">
+        <div class="wk-dow">${WD_FULL[i].slice(0, 3)}</div><div class="wk-num">${d.getDate()}</div>
+        <div class="wk-meta">${metaBits.join(" · ")}${metaIcons ? " " + metaIcons : ""}</div>
+        <div class="wt-chips">${chips}</div>
+      </div>`;
+      wtCols += `<div class="wt-col" data-jump="${k}" data-today="${wtToday}">${blocks}${nowLine}</div>`;
     }
     document.getElementById("weekGrid").innerHTML = html;
+    // first label skipped — at top:0 it would clip against the body's top edge (GCal
+    // leaves its first hour unlabelled for the same reason)
+    const wtHours = Array.from({ length: (WT_END - WT_START) / 60 - 1 }, (_, h) =>
+      `<span style="top:${(h + 1) * WT_HOUR}px">${fmtTime(minToTime(WT_START + (h + 1) * 60))}</span>`).join("");
+    document.getElementById("weekTime").innerHTML = `
+      <div class="wt-headrow"><div class="wt-gcell"></div>${wtHead}</div>
+      <div class="wt-body" style="height:${(WT_END - WT_START) / 60 * WT_HOUR}px">
+        <div class="wt-gutter">${wtHours}</div>${wtCols}
+      </div>`;
     renderWeekGoals();
     renderWeekTodo();
     renderWeekRows(start);
@@ -21238,6 +21357,13 @@
     }
     // the CD tap in the header opens the quick-log popover (document-level
     // [data-cd-log] delegate) — it must not ALSO ride the column's data-jump
+    if (e.target.closest("[data-cd-log]")) return;
+    const col = e.target.closest("[data-jump]"); if (!col) return;
+    state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
+  });
+  // desktop time grid: same tap-through-to-day as the dot rows (its own container,
+  // so it needs its own delegate; the CD guard mirrors the one above)
+  document.getElementById("weekTime").addEventListener("click", e => {
     if (e.target.closest("[data-cd-log]")) return;
     const col = e.target.closest("[data-jump]"); if (!col) return;
     state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
