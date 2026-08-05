@@ -3265,6 +3265,14 @@
     background: var(--field-bg); color: var(--ink); border: none; border-radius: var(--radius-sm);
     padding: 8px 10px; font-size: 13px; font-family: var(--font-body); min-height: 44px; width: 100%;
   }
+  /* 2026-08-06 (chain UX): moves/stays captions over the two selects + the swap link —
+     the direction-blindness of the old bare selects is how the backwards Pilates
+     chain got built. Same quiet small-caps voice as .fit-field-lbl. */
+  .chain-b-lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-faint); margin-bottom: -4px;
+  }
+  .chain-swap { align-self: flex-end; padding: 4px 0; }
   .chain-mode { flex-wrap: wrap; gap: 6px; }
   .chain-preview {
     background: var(--field-bg); border-radius: var(--radius-sm); padding: 8px 10px;
@@ -13395,6 +13403,27 @@
     // event's template) and only while Settings → Notifications allows overrides.
     // undefined = category default, -1 = off, N = custom minutes-before; the pills
     // write straight onto the stored event, and the wrapped saver re-arms the engine.
+    // 2026-08-06 (Linh: "make the chain system easier to use and more user friendly"):
+    // chains surface right here in the popup — where she actually SEES the blocks —
+    // instead of only on the Routines page. A chained item reads its chain in plain
+    // words with one-tap Change/Unchain; an unchained routine/recurring event gets a
+    // quiet "Chain it →" that opens the Chains builder prefilled with this item.
+    const chainT = (e.fromRoutine && e.rtTaskId) ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId)
+      : (e.fromRecurringEvent && e.recurId) ? RECURRING_EVENTS.find(t => t.id === e.recurId) : null;
+    let chainRowHtml = "";
+    if (chainT) {
+      const chainA = chainT.anchorTo ? chainAnchorOf(chainT) : null;
+      if (chainA) {
+        const after = chainT.anchorMode !== "before";
+        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span>${after ? "Starts the moment" : "Finishes right as"} <b>${esc(chainA.title)}</b> ${after ? "ends" : "starts"}
+          <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
+      } else if (chainT.deadline) {
+        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span>Must be done by <b>${fmtTime(chainT.deadline)}</b>${chainT.deadlineLabel ? ` (${esc(chainT.deadlineLabel)})` : ""}
+          <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
+      } else {
+        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span><button type="button" class="tab-link" data-chain-open="${chainT.id}" style="margin-left:0">Chain it — glue this to another routine, event, or a deadline →</button></span></div>`;
+      }
+    }
     const remT = tlRemindTargetOf(e);
     const remV = remT ? remT.obj.remind : undefined;
     const remMode = remV == null ? "default" : remV === -1 ? "off" : "custom";
@@ -13410,6 +13439,7 @@
       <div class="tl-detail-row"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      ${chainRowHtml}
       ${remHtml}
       ${starsHtml}
       <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
@@ -13588,6 +13618,20 @@
     // the global document click delegate (near ROUTINE_TASKS.find) does the actual
     // navigate-to-Routines-page-and-open-the-form work once this bubbles up to it.
     if (e.target.closest("[data-rt-open]")) { closeTlDetail(); return; }
+    // 2026-08-06 (chain UX): one-tap unchain right in the sheet — the item keeps its
+    // own saved time, same contract as the Chains card's × button. Sheet stays open,
+    // its ⛓ row flips to the "Chain it →" state; the timeline re-renders behind it.
+    const unchain = e.target.closest("[data-tl-unchain]");
+    if (unchain) {
+      e.stopPropagation();
+      const t = chainNodeById(unchain.dataset.tlUnchain);
+      if (t) { delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel; saveChainNode(t); renderDay(); refreshOpenTlDetail(); }
+      return;
+    }
+    // "Chain it" / "Change" — close the sheet and let the tap bubble to the global
+    // [data-chain-open] delegate (near data-rt-open's), which navigates to the
+    // Routines page with the Chains builder open and this item prefilled.
+    if (e.target.closest("[data-chain-open]")) { closeTlDetail(); return; }
     // 2026-08-06: time/duration/location fields + notes now render inline right
     // here (see renderTlDetailBody's fitSessionHtml) instead of linking out to the
     // old Habits page editor, so there's no more "Open in Habits" jump to handle.
@@ -19174,7 +19218,10 @@
     // identity-equal to its RECURRING_EVENTS original, so the routine occurs-on path
     // runs — same weekly/schedules shape, only recurUntil goes unchecked (preview-only)
     const nxt = nextChainTxt(Object.assign({}, who, { anchorTo: anchor.id, anchorMode: rtnChainMode }));
-    box.innerHTML = `So <b>${esc(who.title)}</b> will ${after ? "start the moment" : "finish right as"} <b>${esc(anchor.title)}</b> ${after ? "ends" : "starts"}${nxt ? ` — next: ${esc(nxt)}` : ""}.<br>Move one, the other follows.`;
+    // 2026-08-06 ("easier to use"): the closing line now names which side is locked —
+    // the old "Move one, the other follows" read the same both ways round, which is
+    // how the backwards Pilates chain slipped through unnoticed.
+    box.innerHTML = `So <b>${esc(who.title)}</b> will ${after ? "start the moment" : "finish right as"} <b>${esc(anchor.title)}</b> ${after ? "ends" : "starts"}${nxt ? ` — next: ${esc(nxt)}` : ""}.<br>🔒 ${esc(anchor.title)} keeps its own time · ⛓ ${esc(who.title)} follows it.`;
   }
   function renderChains() {
     const host = document.getElementById("rtnChains");
@@ -19216,17 +19263,26 @@
       // recursion already walks the whole thing) or a fixed clock deadline. This
       // toggle picks which; the two field groups below are mutually exclusive, never
       // shown together, matching how Save always clears whichever one isn't in use.
+      // 2026-08-06 (Linh: "make the chain system easier to use and more user
+      // friendly"): the old bare "This one"/"That one" selects were direction-blind
+      // — her Pilates chain got built BACKWARDS exactly because nothing said which
+      // side moves and which stays. Each select now carries a ⛓-moves / 🔒-stays
+      // caption, and a ⇄ swap link flips the two picks in place (anchor mode only —
+      // a deadline has no second item to swap with).
       const anchorBlock = `
-        <select id="rtnChainAnchor" aria-label="That one">${opts(preAnchor, pre ? pre.id : null)}</select>
+        <span class="chain-b-lbl">🔒 glued to — this one keeps its time</span>
+        <select id="rtnChainAnchor" aria-label="Glued to — keeps its time">${opts(preAnchor, null)}</select>
         <div class="track-picker chain-mode" id="rtnChainModePick" role="group" aria-label="Right after, or just before?">
           <button type="button" class="track-opt" data-mode="after" aria-pressed="${rtnChainMode !== "before"}">right after</button>
           <button type="button" class="track-opt" data-mode="before" aria-pressed="${rtnChainMode === "before"}">just before</button>
-        </div>`;
+        </div>
+        <button type="button" class="tab-link chain-swap" id="rtnChainSwap">⇄ swap which one moves</button>`;
       const deadlineBlock = `
         <input type="time" id="rtnChainDeadlineTime" aria-label="Deadline time" value="${pre && pre.deadline ? esc(pre.deadline) : ""}">
         <input type="text" id="rtnChainDeadlineLabel" aria-label="Deadline label (optional)" placeholder="e.g. leave for work (optional)" value="${pre && pre.deadlineLabel ? esc(pre.deadlineLabel) : ""}">`;
       builderHtml = `<div class="chain-builder">
-        <select id="rtnChainWho" aria-label="This one">${opts(pre, null)}</select>
+        <span class="chain-b-lbl">⛓ this one moves — its time will follow</span>
+        <select id="rtnChainWho" aria-label="This one moves">${opts(pre, null)}</select>
         <div class="track-picker chain-mode" id="rtnChainTargetPick" role="group" aria-label="Chain to another, or set a deadline?">
           <button type="button" class="track-opt" data-target="anchor" aria-pressed="${rtnChainTarget !== "deadline"}">chain to…</button>
           <button type="button" class="track-opt" data-target="deadline" aria-pressed="${rtnChainTarget === "deadline"}">by a deadline</button>
@@ -21259,6 +21315,20 @@
       renderChains();
       return;
     }
+    // 2026-08-06 ("easier to use"): one tap flips which side moves and which stays —
+    // the exact mistake the backwards Pilates chain was built from. Values swap in
+    // place; the preview re-speaks the outcome immediately.
+    if (e.target.closest("#rtnChainSwap")) {
+      const whoSel = document.getElementById("rtnChainWho");
+      const anchorSel = document.getElementById("rtnChainAnchor");
+      if (whoSel && anchorSel) {
+        const w = whoSel.value;
+        whoSel.value = anchorSel.value;
+        anchorSel.value = w;
+        updateChainPreview();
+      }
+      return;
+    }
     if (e.target.closest("#rtnChainCancel")) { rtnChainOpen = false; renderChains(); return; }
     if (e.target.closest("#rtnChainSave")) {
       const who = chainNodeById(document.getElementById("rtnChainWho").value);
@@ -22574,6 +22644,24 @@
         openRtnForm(task);
         const form = document.getElementById("rtnAddForm");
         if (form) form.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      return;
+    }
+    // 2026-08-06 (chain UX): "Chain it" / "Change" from an event popup — jump to the
+    // Routines page with the Chains builder already open and THIS item prefilled as
+    // the one that moves; mode/target mirror its current chain so "Change" edits in
+    // place rather than starting blank. Same navigate-then-scroll pattern as
+    // data-rt-open above.
+    const chainOpen = e.target.closest("[data-chain-open]");
+    if (chainOpen) {
+      const t = chainNodeById(chainOpen.dataset.chainOpen);
+      if (t) {
+        rtnChainOpen = true; rtnChainPrefill = t.id;
+        rtnChainMode = t.anchorMode === "before" ? "before" : "after";
+        rtnChainTarget = t.deadline && !t.anchorTo ? "deadline" : "anchor";
+        state.view = "routines"; render();
+        const card = document.getElementById("rtnChains");
+        if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
       }
       return;
     }
