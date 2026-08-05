@@ -3741,8 +3741,20 @@
   .rtb-ring::before { content: ""; position: absolute; inset: -15px; }   /* 44px-ish hit area, invisible */
   .rtb-ring-dot { display: block; width: 100%; height: 100%; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--ink-faint) 60%, transparent); box-sizing: border-box; }
   .rtb-task.done .rtb-ring-dot { background: var(--fast); box-shadow: 0 0 5px color-mix(in oklab, var(--fast) 50%, transparent); }
-  .rtb-nm { color: var(--ink); cursor: pointer; }
+  .rtb-nm { color: var(--ink); cursor: pointer; flex: 1; min-width: 0; }
   .rtb-task.done .rtb-nm { color: var(--ink-faint); text-decoration: line-through; }
+  /* 2026-08-05 (Linh: "i need to be able to drag to different columns" — the
+     mouse-only whole-row drag below didn't reach her on a touchscreen): a
+     dedicated grip, same touch-action:none + no-pointerType-gate pattern as the
+     Chains page's .cb-handle, so dragging this doesn't steal the column's
+     vertical scroll on phone. */
+  .rtb-handle {
+    position: relative; flex: none; margin-left: 2px; padding: 0 2px;
+    color: var(--ink-faint); font-size: 11px; letter-spacing: 1px; line-height: 15px;
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .rtb-handle::before { content: ""; position: absolute; inset: -15px -8px; }   /* 44px-ish hit area, invisible */
+  .rtb-task.rtb-dragging { opacity: .35; }
   .rtb-add {
     position: relative; align-self: flex-start; margin-top: 2px; padding: 2px 0;
     border: none; background: none; color: var(--ink-faint); font-size: 11px;
@@ -20273,6 +20285,7 @@
       return `<div class="rtb-task${done ? " done" : ""}" data-rtb-edit="${esc(t.id)}">
         <button type="button" class="rtb-ring" data-rtb-tick="${esc(t.id)}" data-on="${done}"${t.fitLink ? ` data-fit-link="${esc(t.fitLink)}"` : ""} aria-pressed="${done}" aria-label="${done ? "Mark not done" : "Mark done"} — ${esc(t.title)}"><span class="rtb-ring-dot"></span></button>
         <span class="rtb-nm">${esc(t.title)}</span>
+        <span class="rtb-handle" aria-hidden="true">⋮⋮</span>
       </div>`;
     };
     const cell = (list, label, cls, first) => `<div class="rtb-cell${first ? " rtb-cell-first" : ""}" data-rtb-cell="${cls}" data-rtb-band="all">
@@ -20337,22 +20350,27 @@
       if (t) { openRtnForm(t); document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" }); }
     }
   });
-  /* 2026-08-06 (Linh: "how to move train to work to Before"): drag a routine between
-     its band's columns to rewrite its chain in place — MOUSE ONLY, same web-drag
-     line every other drag in the app draws (on the phone the ⛓ builder and the
-     Chains page cover this). Drop into Before/After glues it to the band's Event
-     item — auto when there's exactly one, the pick-strip asks when there are
-     several; drop back into Event unchains it. Same-band only: dropping into
-     another band's cell is a cancel, not a silent re-categorise. */
+  /* 2026-08-06 (Linh: "how to move train to work to Before") + 2026-08-05 (Linh:
+     "i need to be able to drag to different columns" — the mouse-only version
+     below never reached her on a touchscreen): drag a routine between its band's
+     columns to rewrite its chain in place, from a dedicated ⋮⋮ handle so it works
+     for touch too, same handle-drag pattern as the Chains page's row reorder
+     (grabbing the bare row on a touchscreen would otherwise steal vertical scroll
+     from the column). Drop into Before/After glues it to the band's Event item —
+     auto when there's exactly one, the pick-strip asks when there are several;
+     drop back into Event unchains it. Same-band only: dropping into another
+     band's cell is a cancel, not a silent re-categorise. */
   let rtbDrag = null;
   document.getElementById("rtnTable").addEventListener("pointerdown", e => {
-    if (e.pointerType !== "mouse" || e.button !== 0) return;
-    if (e.target.closest(".rtb-ring, .chain-unlink, .rtb-add, .rtb-pickrow")) return;
-    const row = e.target.closest(".rtb-task");
+    const handle = e.target.closest(".rtb-handle");
+    if (!handle) return;
+    const row = handle.closest(".rtb-task");
     if (!row) return;
     const cellEl = row.closest("[data-rtb-band]");
     if (!cellEl) return;
-    rtbDrag = { id: row.dataset.rtbEdit, bandKey: cellEl.dataset.rtbBand, startX: e.clientX, startY: e.clientY };
+    e.preventDefault();
+    rtbDrag = { id: row.dataset.rtbEdit, bandKey: cellEl.dataset.rtbBand, row, startX: e.clientX, startY: e.clientY };
+    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
   });
   document.addEventListener("pointermove", e => {
     if (!rtbDrag) return;
@@ -20360,6 +20378,7 @@
       if (Math.hypot(e.clientX - rtbDrag.startX, e.clientY - rtbDrag.startY) < 6) return;
       const t = ROUTINE_TASKS.find(x => x.id === rtbDrag.id);
       rtbDrag.ghost = cbDragGhost(t ? t.title : "");   // chains-page ghost helper, same IIFE
+      rtbDrag.row.classList.add("rtb-dragging");
     }
     rtbDrag.ghost.style.left = (e.clientX + 12) + "px";
     rtbDrag.ghost.style.top = (e.clientY - 18) + "px";
@@ -20372,8 +20391,9 @@
   function rtbEndDrag(commit) {
     if (!rtbDrag) return;
     const d = rtbDrag; rtbDrag = null;
-    if (!d.ghost) return;                        // a plain click — the click delegate owns it
+    if (!d.ghost) { d.row.classList.remove("rtb-dragging"); return; }   // a plain tap — the click delegate owns it
     d.ghost.remove();
+    d.row.classList.remove("rtb-dragging");
     document.querySelectorAll("#rtnTable .rtb-cell").forEach(c => c.classList.remove("rtb-drop-over"));
     cbDragEndAt = Date.now();
     if (!commit || !d.over) return;
@@ -20400,6 +20420,8 @@
   }
   document.addEventListener("pointerup", () => rtbEndDrag(true));
   document.addEventListener("pointercancel", () => rtbEndDrag(false));
+  // Android long-press fires contextmenu mid-hold — swallow it while a drag is live
+  document.getElementById("rtnTable").addEventListener("contextmenu", e => { if (rtbDrag) e.preventDefault(); });
   document.getElementById("rtnViewPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-rtnview]");
     if (!b) return;
