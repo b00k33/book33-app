@@ -5220,17 +5220,11 @@
      taps while scrolling were silently ending her fast. The row is display-only again
      (data-fast-toggle removed from the markup); starting/stopping lives on the Fasting
      page. Idle state still dims the dot so green unambiguously means "actively fasting". */
-  .fast-resume {
-    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft);
-    border-radius: 999px; padding: 3px 12px; font-size: 11.5px; cursor: pointer;
-    font-family: var(--font-body); margin-left: 8px;
-  }
-  .fast-resume:hover { border-color: var(--fast); color: var(--fast); }
   .fast-bar-row.fast-idle .fast-dot { background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--fast) 55%, transparent); }
   .fast-bar-row.fast-idle .sb-amt { color: var(--ink-faint); font-weight: 600; }
   /* 2026-08-06 (Linh, desktop mini fasting bar): one-line status under the app title on
      every page (see #deskFastBar in .astro) -- same colour language as #fastStatus above
-     (--fast dot/fill, .fast-resume chip) condensed to a single row with no sub-line. */
+     (--fast dot/fill) condensed to a single row with no sub-line. */
   .desk-fast-bar {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     width: 100%; max-width: 300px; margin: -2px auto 0; font-size: 11px; color: var(--ink-soft);
@@ -5247,7 +5241,6 @@
   .desk-fast-bar .dfb-track { flex: 1; height: 5px; min-width: 40px; border-radius: 999px; background: var(--dot-empty); overflow: hidden; }
   .desk-fast-bar .dfb-fill { height: 100%; border-radius: 999px; background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent); }
   .desk-fast-bar .dfb-sub { flex: none; color: var(--ink-faint); white-space: nowrap; }
-  .desk-fast-bar .fast-resume { padding: 2px 10px; font-size: 10.5px; margin-left: 0; }
   /* 2026-08-05 ("small day arrow below fasting bar"): a slim pager row — arrows at the
      two edges so either thumb reaches its side.
      2026-08-05 later ("make it smaller and more discrete so it doesnt take up too much
@@ -18363,6 +18356,15 @@
   // status role, same reasoning applies here: read-only idle text, no button. The
   // Health-page fastCardHTML "Continue last fast" button is the one deliberately-kept
   // exception and is untouched.
+  // 2026-08-06 (glitchy-app fix, "the whole app is glitchy again" -> flicker, desktop):
+  // this used to rebuild the bar's innerHTML on EVERY 1s tick (via tickDeskFastBar()
+  // below), which -- unlike renderFastBar()'s targeted .textContent/.style.width
+  // writes just above -- destroys and recreates DOM nodes every second, forever, on
+  // every page (this bar isn't Day-page-gated like #fastStatus). A console full of a
+  // clinical-scribe extension's MutationObserver erroring on "removed node" processing
+  // pointed straight at it. Now renderDeskFastBar() only rebuilds markup on a real
+  // state change (idle<->active, called from renderFastEverywhere()); the 1s tick
+  // calls the new tickDeskFastBar() instead, which just updates the two numbers.
   function renderDeskFastBar() {
     const bar = document.getElementById("deskFastBar");
     if (!bar) return;
@@ -18376,12 +18378,19 @@
       return;
     }
     bar.classList.remove("fast-idle");
+    bar.innerHTML = `<span class="dfb-dot"></span><span class="dfb-amt" id="deskFastAmt"></span><span class="dfb-track"><span class="dfb-fill" id="deskFastFill"></span></span>`;
+    tickDeskFastBar();
+  }
+  function tickDeskFastBar() {
+    const amt = document.getElementById("deskFastAmt");
+    if (!amt || !HEALTH.activeFast) return;
     const goalH = HEALTH.fastGoalHours || 16;
     const goalMs = goalH * 3600000;
     const elapsedMs = Math.max(0, Date.now() - new Date(HEALTH.activeFast).getTime());
     const over = elapsedMs >= goalMs;
-    bar.classList.toggle("goal-met", over);
-    bar.innerHTML = `<span class="dfb-dot"></span><span class="dfb-amt">${fmtHrs(elapsedMs)} / ${goalH}h${over ? " ✓" : ""}</span><span class="dfb-track"><span class="dfb-fill" style="width:${(Math.min(elapsedMs / goalMs, 1) * 100).toFixed(1)}%"></span></span>`;
+    document.getElementById("deskFastBar").classList.toggle("goal-met", over);
+    amt.textContent = `${fmtHrs(elapsedMs)} / ${goalH}h${over ? " ✓" : ""}`;
+    document.getElementById("deskFastFill").style.width = `${(Math.min(elapsedMs / goalMs, 1) * 100).toFixed(1)}%`;
   }
   // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
   // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
@@ -18449,7 +18458,7 @@
     });
     document.querySelectorAll("[data-fast-encourage]").forEach(el => el.textContent = fastEncouragement(pct, over));
     renderFastBar();
-    renderDeskFastBar();
+    tickDeskFastBar();
   }
 
   /* ---- fasting summary graph: hours fasted per day, past week or month.
