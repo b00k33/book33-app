@@ -3721,16 +3721,25 @@
   .rtb-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
   .rtb-band {
     grid-column: 1 / -1; display: flex; align-items: center; gap: 8px;
-    padding: 12px 14px 6px; border-top: 1px solid var(--note-line);
+    padding: 10px 14px 4px; border-top: 1px solid var(--note-line);
   }
   .rtb-tbl .rtb-band:first-child { border-top: none; }
   .rtb-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .rtb-lab { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink); }
   .rtb-ct { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .rtb-cell {
-    padding: 8px 12px 12px; border-left: 1px solid var(--note-line);
+    padding: 6px 12px 10px; border-left: 1px solid var(--note-line);
     display: flex; flex-direction: column; gap: 7px; min-height: 44px;
   }
+  /* a column flashes gold while a dragged routine hovers over it (mouse drag between
+     columns rewrites the chain — see the #rtnTable pointer controller) */
+  .rtb-cell.rtb-drop-over { background: color-mix(in oklab, var(--accent-seed) 8%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent-seed); border-radius: var(--radius-sm); }
+  /* the "glue it to which one?" strip a >1-candidate drop opens under its band */
+  .rtb-pickrow { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 14px 12px; font-size: 12px; color: var(--ink-soft); }
+  .rtb-pickrow .add-btn { padding: 4px 12px; font-size: 12px; }
+  /* chain members shown inside the horizontal chains table (Routines page) */
+  .chain-h-item { position: relative; padding-right: 40px; min-height: 44px; align-items: center; }
+  .chain-h-time { color: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
   .rtb-cell-first { border-left: none; }
   .rtb-cell-lab { display: flex; align-items: center; gap: 5px; font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; }
   .rtb-cell-lab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; }
@@ -3776,11 +3785,11 @@
   #routinesPage .rtn-group { margin-bottom: 14px; }
   #routinesPage .rtn-panel { padding: 0 10px; }
   #routinesPage .rtn-row { padding: 3px 2px; }
+  /* the List/Table switch was two ~900px-wide bars — cap it to a small centred pair */
+  #routinesPage #rtnViewPicker { max-width: 360px; margin: 0 auto 12px; }
+  /* (the old #rtnChains card grid is gone — the chains card renders as its own
+     horizontal Before/Event/After .rtb-tbl now, which spans naturally) */
   @media (min-width: 901px) {
-    #routinesPage #rtnChains { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; align-items: start; }
-    #routinesPage #rtnChains .chain-row { margin-bottom: 0; }
-    #routinesPage #rtnChains .chain-builder, #routinesPage #rtnChains .add-row,
-    #routinesPage #rtnChains .fam-empty { grid-column: 1 / -1; }
     #routinesPage #rtnManage { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
     #routinesPage #rtnManage .fam-empty { grid-column: 1 / -1; }
   }
@@ -20138,26 +20147,62 @@
     // deadline roots (no anchorTo of their own, see chainDeadlineStartMin) now count
     // as "chained" too — they're the other half of the anchor/deadline choice below
     const chained = chainPool().filter(t => (t.anchorTo && chainAnchorOf(t)) || t.deadline);
-    const rowFor = t => {
-      const isDeadline = !t.anchorTo && t.deadline;
-      let subLine;
-      if (isDeadline) {
-        subLine = `<span class="chain-rel">by</span> ${esc(fmtTime(t.deadline))}${t.deadlineLabel ? ` · ${esc(t.deadlineLabel)}` : ""}`;
-      } else {
-        const a = chainAnchorOf(t);
-        const after = t.anchorMode !== "before";
-        const nextTxt = nextChainTxt(t);
-        subLine = `<span class="chain-rel">${after ? "after" : "before"}</span> ${esc(a.title)}${nextTxt ? ` · ${esc(nextTxt)}` : ""}`;
-      }
-      // a plain event's chip carries its date — a one-off chain only means anything
-      // on that one day, and two same-titled events need telling apart
-      const kindChip = isRecurEvent(t) ? ` <span class="chain-kind">event</span>`
-        : isPlainEvent(t) ? ` <span class="chain-kind">${parseKey(t.date).getDate()} ${MON_SHORT[parseKey(t.date).getMonth()]}</span>` : "";
-      return `<div class="chain-row" data-chain-edit="${t.id}" role="button" tabindex="0" aria-label="Edit chain — ${esc(t.title)}">
-        <div class="chain-title">${esc(t.title)}${kindChip}</div>
-        <div class="chain-sub">${subLine}</div>
-        <button type="button" class="chain-unlink" data-chain-unlink="${t.id}" aria-label="Unchain ${esc(t.title)}" title="Unchain — it keeps its own saved time">×</button>
-      </div>`;
+    // 2026-08-06 (Linh, looking at the routines Table view: "I like this table
+    // format. I want it for the chain events so the chain is horizontal"): each
+    // chain is one BAND now — Before | Event | After cells reading left to right,
+    // the whole sequence split around its root (cbChainSeq keeps multi-link chains
+    // in true running order). SUPERSEDES the stacked one-row-per-link cards.
+    const chainTableHtml = () => {
+      const links = chained.filter(t => t.anchorTo && chainAnchorOf(t));
+      const roots = new Map();
+      links.forEach(l => {
+        const seen = new Set([l.id]);
+        let cur = l;
+        while (cur.anchorTo) {
+          const a = chainAnchorOf(cur);
+          if (!a || seen.has(a.id)) break;
+          seen.add(a.id); cur = a;
+        }
+        if (!roots.has(cur.id)) roots.set(cur.id, cur);
+      });
+      const deadlineRoots = chained.filter(t => !t.anchorTo && t.deadline && !roots.has(t.id));
+      const chip = (n, isRoot, previewDate) => {
+        const m = isRoot ? (rawRoutineStartMin(n, previewDate) ?? chainDeadlineStartMin(n)) : chainedStartMinOn(n, previewDate);
+        const time = m != null ? fmtTime(minToTime(Math.max(0, Math.min(1439, m)))) : "";
+        const kindChip = isPlainEvent(n) ? ` <span class="chain-kind">${parseKey(n.date).getDate()} ${MON_SHORT[parseKey(n.date).getMonth()]}</span>` : "";
+        const dl = isRoot && n.deadline ? ` · by ${fmtTime(n.deadline)}` : "";
+        return `<div class="rtb-task chain-h-item"${isRoot ? "" : ` data-chain-edit="${esc(n.id)}" role="button" tabindex="0" aria-label="Edit chain — ${esc(n.title)}"`}>
+          <span class="rtb-nm">${isRoot ? "🔒 " : ""}${esc(n.title)}${kindChip}${dl ? esc(dl) : ""}${time ? ` <span class="chain-h-time">${time}</span>` : ""}</span>
+          ${isRoot ? "" : `<button type="button" class="chain-unlink" data-chain-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
+        </div>`;
+      };
+      const cellH = (rows, cls, label) => `<div class="rtb-cell${cls === "before" ? " rtb-cell-first" : ""}">
+          <span class="rtb-cell-lab rtb-cell-lab-${cls}">${label}</span>
+          ${rows.length ? rows.join("") : `<span class="rtb-empty">—</span>`}
+        </div>`;
+      let bandsHtml = "";
+      roots.forEach(root => {
+        let previewDate = TODAY;
+        if (isPlainEvent(root) && root.date) previewDate = parseKey(root.date);
+        else for (let i = 0; i < 8; i++) { const d = addDays(TODAY, i); if (chainNodeOccursOn(root, d)) { previewDate = d; break; } }
+        const seq = cbChainSeq(root);
+        const ri = Math.max(0, seq.findIndex(n => n.id === root.id));
+        const dayLbl = `${WD_FULL[dowIndex(previewDate)]} ${previewDate.getDate()} ${MON_SHORT[previewDate.getMonth()]}`;
+        bandsHtml += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⛓ ${esc(root.chainName || root.title)}</span><span class="rtb-ct">${esc(dayLbl)}</span></div>`
+          + cellH(seq.slice(0, ri).map(n => chip(n, false, previewDate)), "before", "Before")
+          + cellH([chip(root, true, previewDate)], "during", "Event")
+          + cellH(seq.slice(ri + 1).map(n => chip(n, false, previewDate)), "after", "After");
+      });
+      deadlineRoots.forEach(t => {
+        bandsHtml += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⏰ ${esc(t.chainName || t.title)}</span><span class="rtb-ct"></span></div>`
+          + cellH([], "before", "Before")
+          + cellH([`<div class="rtb-task chain-h-item" data-chain-edit="${esc(t.id)}" role="button" tabindex="0" aria-label="Edit deadline — ${esc(t.title)}">
+              <span class="rtb-nm">${esc(t.title)} <span class="chain-h-time">by ${fmtTime(t.deadline)}${t.deadlineLabel ? ` · ${esc(t.deadlineLabel)}` : ""}</span></span>
+              <button type="button" class="chain-unlink" data-chain-unlink="${esc(t.id)}" aria-label="Remove deadline" title="Remove the deadline">×</button>
+            </div>`], "during", "Event")
+          + cellH([], "after", "After");
+      });
+      return `<div class="rtb-tbl"><div class="rtb-grid">${bandsHtml}</div></div>`;
     };
     let builderHtml = "";
     if (rtnChainOpen) {
@@ -20223,7 +20268,7 @@
         </div>
       </div>`;
     }
-    host.innerHTML = (chained.length ? chained.map(rowFor).join("")
+    host.innerHTML = (chained.length ? chainTableHtml()
         : (rtnChainOpen ? "" : `<div class="fam-empty">No chains yet — a chain glues one thing to another, like 👗 getting changed right after 🧘 Pilates.</div>`))
       + builderHtml
       + (rtnChainOpen ? "" : `<div class="add-row"><button type="button" class="add-btn" id="rtnChainAddBtn">⛓ Make a chain</button></div>`);
@@ -20231,6 +20276,7 @@
   }
 
   let rtnListMode = "list";
+  let rtbPick = null;   // pending "glue it to which one?" from a multi-candidate column drop
   function renderRoutines() {
     renderChains();
     document.getElementById("rtnManage").hidden = rtnListMode !== "list";
@@ -20371,23 +20417,50 @@
         <span class="rtb-nm">${esc(t.title)}</span>
       </div>`;
     };
-    const cell = (list, track, cat, label, cls, first) => `<div class="rtb-cell${first ? " rtb-cell-first" : ""}">
+    const cell = (list, key, track, cat, label, cls, first) => `<div class="rtb-cell${first ? " rtb-cell-first" : ""}" data-rtb-cell="${cls}" data-rtb-band="${esc(key)}">
         <span class="rtb-cell-lab rtb-cell-lab-${cls}">${label}</span>
-        ${list.length ? list.map(pill).join("") : `<span class="rtb-empty">—</span>`}
+        ${list.length ? list.map(pill).join("") : ""}
         <button type="button" class="rtb-add" data-rtb-add-track="${esc(track)}" data-rtb-add-cat="${esc(cat)}">+ add</button>
       </div>`;
+    // two tracks can share a category name (Work-Morning vs Personal-Morning both
+    // read "MORNING" — her screenshot) — suffix the track whenever a label repeats
+    const labCount = {};
+    order.forEach(k => { const b = bands.get(k); const lab = b.cat || TRACK_NAME[b.track] || "Other"; labCount[lab] = (labCount[lab] || 0) + 1; });
     let html = `<div class="rtb-tbl"><div class="rtb-grid">`;
     order.forEach(key => {
       const b = bands.get(key);
       const before = [], evt = [], after = [];
       b.list.forEach(t => (t.anchorTo && chainAnchorOf(t) ? (t.anchorMode === "before" ? before : after) : evt).push(t));
-      const label = b.cat || TRACK_NAME[b.track] || "Other";
+      let label = b.cat || TRACK_NAME[b.track] || "Other";
+      if (labCount[label] > 1) label += ` · ${TRACK_NAME[b.track] || "Other"}`;
       html += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--${b.track}-seed, var(--ink-faint))"></span><span class="rtb-lab">${esc(label)}</span><span class="rtb-ct">${b.list.length}</span></div>`;
-      html += cell(before, b.track, b.cat, "Before", "before", true) + cell(evt, b.track, b.cat, "Event", "during", false) + cell(after, b.track, b.cat, "After", "after", false);
+      html += cell(before, key, b.track, b.cat, "Before", "before", true) + cell(evt, key, b.track, b.cat, "Event", "during", false) + cell(after, key, b.track, b.cat, "After", "after", false);
+      // a Before/After drop with several possible anchors parks here until she picks
+      if (rtbPick && rtbPick.bandKey === key) {
+        const pt = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
+        const cands = ROUTINE_TASKS.filter(x => `${x.track}::${x.category || ""}` === key && x.id !== rtbPick.id && !(x.anchorTo && chainAnchorOf(x)));
+        html += `<div class="rtb-pickrow">${rtbPick.none
+          ? `Nothing in this band's Event column to glue <b>${esc(pt ? pt.title : "")}</b> to — chain it from the ⛓ builder instead, or drop something into Event first.`
+          : `⛓ Glue <b>${esc(pt ? pt.title : "")}</b> ${rtbPick.mode === "before" ? "just before" : "right after"} which one?
+             ${cands.map(c => `<button type="button" class="add-btn" data-rtb-pick-anchor="${esc(c.id)}">${esc(c.title)}</button>`).join("")}`}
+          <button type="button" class="add-btn" data-rtb-pick-cancel>Cancel</button></div>`;
+      }
     });
     host.innerHTML = html + `</div></div>`;
   }
   document.getElementById("rtnTable").addEventListener("click", e => {
+    // the "glue it to which one?" strip a multi-candidate column drop leaves open
+    const pickA = e.target.closest("[data-rtb-pick-anchor]");
+    if (pickA && rtbPick) {
+      const t = ROUTINE_TASKS.find(x => x.id === rtbPick.id);
+      if (t) {
+        t.anchorTo = pickA.dataset.rtbPickAnchor; t.anchorMode = rtbPick.mode;
+        delete t.deadline; delete t.deadlineLabel;
+        saveChainNode(t);
+      }
+      rtbPick = null; renderRoutines(); renderDay(); return;
+    }
+    if (e.target.closest("[data-rtb-pick-cancel]")) { rtbPick = null; renderRtnTable(); return; }
     // own attribute, not the app-wide [data-tick-ev] delegate — that one always
     // calls renderDay() afterward, never renderRtnTable(), and both delegates would
     // otherwise fire on the same click (bubbling) and double-toggle it back off
@@ -20410,10 +20483,74 @@
     }
     const edit = e.target.closest("[data-rtb-edit]");
     if (edit) {
+      // a column-drop's trailing click must not pop the editor open over the result
+      if (Date.now() - cbDragEndAt < 500) return;
       const t = ROUTINE_TASKS.find(x => x.id === edit.dataset.rtbEdit);
       if (t) { openRtnForm(t); document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" }); }
     }
   });
+  /* 2026-08-06 (Linh: "how to move train to work to Before"): drag a routine between
+     its band's columns to rewrite its chain in place — MOUSE ONLY, same web-drag
+     line every other drag in the app draws (on the phone the ⛓ builder and the
+     Chains page cover this). Drop into Before/After glues it to the band's Event
+     item — auto when there's exactly one, the pick-strip asks when there are
+     several; drop back into Event unchains it. Same-band only: dropping into
+     another band's cell is a cancel, not a silent re-categorise. */
+  let rtbDrag = null;
+  document.getElementById("rtnTable").addEventListener("pointerdown", e => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    if (e.target.closest(".rtb-ring, .chain-unlink, .rtb-add, .rtb-pickrow")) return;
+    const row = e.target.closest(".rtb-task");
+    if (!row) return;
+    const cellEl = row.closest("[data-rtb-band]");
+    if (!cellEl) return;
+    rtbDrag = { id: row.dataset.rtbEdit, bandKey: cellEl.dataset.rtbBand, startX: e.clientX, startY: e.clientY };
+  });
+  document.addEventListener("pointermove", e => {
+    if (!rtbDrag) return;
+    if (!rtbDrag.ghost) {
+      if (Math.hypot(e.clientX - rtbDrag.startX, e.clientY - rtbDrag.startY) < 6) return;
+      const t = ROUTINE_TASKS.find(x => x.id === rtbDrag.id);
+      rtbDrag.ghost = cbDragGhost(t ? t.title : "");   // chains-page ghost helper, same IIFE
+    }
+    rtbDrag.ghost.style.left = (e.clientX + 12) + "px";
+    rtbDrag.ghost.style.top = (e.clientY - 18) + "px";
+    document.querySelectorAll("#rtnTable .rtb-cell").forEach(c => c.classList.remove("rtb-drop-over"));
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const cellEl = under && under.closest ? under.closest("#rtnTable .rtb-cell") : null;
+    rtbDrag.over = cellEl && cellEl.dataset.rtbBand === rtbDrag.bandKey ? cellEl.dataset.rtbCell : null;
+    if (rtbDrag.over && cellEl) cellEl.classList.add("rtb-drop-over");
+  });
+  function rtbEndDrag(commit) {
+    if (!rtbDrag) return;
+    const d = rtbDrag; rtbDrag = null;
+    if (!d.ghost) return;                        // a plain click — the click delegate owns it
+    d.ghost.remove();
+    document.querySelectorAll("#rtnTable .rtb-cell").forEach(c => c.classList.remove("rtb-drop-over"));
+    cbDragEndAt = Date.now();
+    if (!commit || !d.over) return;
+    const t = ROUTINE_TASKS.find(x => x.id === d.id);
+    if (!t) return;
+    if (d.over === "during") {
+      if (t.anchorTo || t.deadline) {
+        delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel;
+        saveChainNode(t); renderRoutines(); renderDay();
+      }
+      return;
+    }
+    const mode = d.over === "before" ? "before" : "after";
+    const cands = ROUTINE_TASKS.filter(x => `${x.track}::${x.category || ""}` === d.bandKey && x.id !== t.id && !(x.anchorTo && chainAnchorOf(x)));
+    if (cands.length === 1) {
+      t.anchorTo = cands[0].id; t.anchorMode = mode;
+      delete t.deadline; delete t.deadlineLabel;
+      saveChainNode(t); renderRoutines(); renderDay();
+      return;
+    }
+    rtbPick = { id: t.id, mode, bandKey: d.bandKey, none: !cands.length };
+    renderRtnTable();
+  }
+  document.addEventListener("pointerup", () => rtbEndDrag(true));
+  document.addEventListener("pointercancel", () => rtbEndDrag(false));
   document.getElementById("rtnViewPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-rtnview]");
     if (!b) return;
