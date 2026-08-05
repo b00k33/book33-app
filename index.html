@@ -1378,6 +1378,19 @@
   .power-marker[data-k="good"]  .power-dot, .power-marker[data-k="good"]  .power-line { background: var(--pwr-good-mark); }
   .power-marker[data-k="bad"]   .power-dot, .power-marker[data-k="bad"]   .power-line { background: var(--pwr-bad-mark); }
   .power-marker[data-k="money"] .power-dot, .power-marker[data-k="money"] .power-line { background: var(--pwr-money-mark); }
+  /* 2026-08-06 (Linh: "Make money hour more golden glowing"): the money marker alone
+     gets a soft gold bloom + full-strength dots — same two-layer glow language the
+     fasting dot and chain anchor node already use, so "glowing gold = money time"
+     reads at a glance without the good/bad markers getting any louder. */
+  .power-marker[data-k="money"] .power-dot {
+    opacity: 1;
+    box-shadow: 0 0 3px var(--pwr-money-mark),
+                0 0 9px color-mix(in oklab, var(--pwr-money-mark) 75%, transparent);
+  }
+  .power-marker[data-k="money"] .power-line {
+    opacity: 0.75;
+    box-shadow: 0 0 6px color-mix(in oklab, var(--pwr-money-mark) 60%, transparent);
+  }
   .power-marker:hover .power-dot, .power-marker:focus-visible .power-dot,
   .power-marker:hover .power-line, .power-marker:focus-visible .power-line { opacity: 1; }
   /* the Best/Worst time-range labels read on the opposite (right) side of the
@@ -5336,13 +5349,15 @@
        GREEN=good"): dedicated colours for the marker only -- redefining --power-good/
        --power-bad above directly would also ripple into --pb-good/bad-text (feeding
        the old, now-dead .pb-lbl pills) and, for --power-bad specifically, an unrelated
-       delete-button hover elsewhere (.rtn-sub-del/.rtn-date-chip). Money reuses
-       --cosmic-gold-soft -- already a deliberately duller gold than --cosmic-gold,
-       which the now-line uses -- so the two golds read as related but never identical,
-       exactly her "distinct... so the two aren't confused" ask. */
+       delete-button hover elsewhere (.rtn-sub-del/.rtn-date-chip).
+       2026-08-06 later (Linh: "Make money hour more golden glowing"): SUPERSEDES the
+       duller-than-the-now-line choice that used --cosmic-gold-soft here -- money is
+       full --cosmic-gold now, plus a bloom on the marker itself (see the
+       [data-k="money"] glow rules by .power-dot). The now-line stays distinct by
+       SHAPE (full-width horizontal line vs this vertical dot-line-dot), not hue. */
     --pwr-good-mark: #3EAD73;
     --pwr-bad-mark: var(--power-bad);
-    --pwr-money-mark: var(--cosmic-gold-soft);
+    --pwr-money-mark: var(--cosmic-gold);
     color: var(--ink);   /* body's inherited colour was computed OUTSIDE this scope */
   }
   /* buttons don't inherit color — any button without its own colour rule was falling
@@ -6073,6 +6088,13 @@
       bottom: max(14px, env(safe-area-inset-bottom));
       left: max(14px, env(safe-area-inset-left));
     }
+    /* 2026-08-05 (Linh: "the day and night button should be at bottom of the day page
+       not floating"): SUPERSEDES the fixed bottom-left corner above — on the Day page
+       placeThemeToggle() parents the button into #themeToggleRow, where this makes it
+       a normal in-flow element at the end of the page instead of a floating overlay. */
+    .theme-toggle-row { display: flex; justify-content: center; padding: 16px 0 24px; }
+    .theme-toggle-row:empty { display: none; }
+    .theme-toggle-row .theme-toggle { position: static; bottom: auto; left: auto; box-shadow: none; }
     /* 2026-08-05 (Linh: "the three top-right icons must be one aligned set — same size
        and style, evenly spaced"): search stood out from its two neighbours -- it kept
        its DESKTOP treatment (gold ring, transparent fill, from the base .jump-btn rule
@@ -7587,8 +7609,10 @@
            renderNav/#navSearchBtn near CATEGORIES.map). "/" still opens it from
            anywhere (see the keydown listener near openJump), so nothing reachable
            by keyboard was lost, only the icon's home moved. -->
-      <!-- 2026-08-03: restored with the rest of light mode. -->
-      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
+      <!-- 2026-08-03: restored with the rest of light mode.
+           2026-08-05: #themeToggleHome marks this original spot so placeThemeToggle()
+           can restore the button here when leaving phone widths. -->
+      <span id="themeToggleHome" hidden></span><button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
     </div>
   </div>
 
@@ -9108,6 +9132,11 @@
         <div id="dayHealthBody"></div>
       </div>
     </div>
+    <!-- 2026-08-05 (Linh: "the day and night button should be at bottom of the day
+         page not floating"): on phone widths placeThemeToggle() reparents #themeToggle
+         in here — a normal in-flow row after the day's content, so the moon no longer
+         hovers over the timeline. Desktop keeps its fixed top-right circle. -->
+    <div class="theme-toggle-row" id="themeToggleRow"></div>
   </div>
 
   <!-- ================= WEEK ================= -->
@@ -25767,7 +25796,19 @@
   // first visible frame already has the final header. Both are idempotent (.contains /
   // parentElement guards), so go()'s own later calls and the resize listeners are
   // unchanged and harmless.
-  try { placeCosmicMascot(); placeDateLine(); } catch (e) {}
+  // 2026-08-05 (Linh: "the day and night button should be at bottom of the day page
+  // not floating"): phone widths park #themeToggle in the Day page's own end-of-page
+  // row (in-flow, scrolls with content); desktop restores it to its header home.
+  // Same idempotent reparent-and-restore pattern as the two placers above.
+  function placeThemeToggle() {
+    var btn = document.getElementById("themeToggle");
+    var row = document.getElementById("themeToggleRow");
+    var home = document.getElementById("themeToggleHome");
+    if (!btn || !row || !home) return;
+    if (isMobile()) { if (btn.parentElement !== row) row.appendChild(btn); }
+    else if (btn.parentElement === row) home.parentElement.insertBefore(btn, home.nextSibling);
+  }
+  try { placeCosmicMascot(); placeDateLine(); placeThemeToggle(); } catch (e) {}
   // 2026-08-06 (Linh: "move the online button to bottom right of mobile screen page"):
   // SUPERSEDES the mobile-only early-return + every earlier "live inside the header row"
   // placement this dot has cycled through (.nav-tiers, .topbar-right, .toprow) — now a
@@ -25954,8 +25995,10 @@
     hideOverlay(); badge(); signoutBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
+    placeThemeToggle();
     window.addEventListener("resize", placeCosmicMascot);
     window.addEventListener("resize", placeDateLine);
+    window.addEventListener("resize", placeThemeToggle);
     // catch up on anything that changed while this device was away
     withTimeout(fetchCloud(), 6000).then(function (row) { if (row) reconcile(row); }, function () {});
   }
