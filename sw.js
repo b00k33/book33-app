@@ -1,7 +1,7 @@
 // Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260805n";
+var CACHE_VERSION = "b33-20260805o";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -43,6 +43,24 @@ self.addEventListener("notificationclick", function (e) {
       return self.clients.openWindow(day ? "./?nday=" + encodeURIComponent(day) : "./");
     }).catch(function () {})
   );
+});
+
+// Cloud push (2026-08-05 pt 2): the Supabase Edge Function (supabase/functions/
+// b33-push) delivers the app-precomputed reminder as the push payload — show it
+// verbatim; no storage reads needed here. notificationclick above already routes
+// the tap to the right day. Chrome requires a visible notification per push
+// (userVisibleOnly), so even a malformed payload shows a generic Book33 line.
+self.addEventListener("push", function (e) {
+  var p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (err) {}
+  var opts = {
+    body: p.body || "", data: p.data || {},
+    icon: "./icon-192.png", badge: "./icon-192.png",
+    silent: !!p.silent,
+  };
+  if (p.tag) opts.tag = p.tag;
+  if (p.vibrate !== false) opts.vibrate = [200, 100, 200];
+  e.waitUntil(self.registration.showNotification(p.title || "Book33", opts));
 });
 
 // A hung connection (flaky wifi, captive portal) must never leave a navigation pending
