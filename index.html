@@ -3941,6 +3941,7 @@
     display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; color: var(--ink-soft);
   }
   .rtg-ic:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
+  .rtg-ic-del:hover { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn); }
   .rtg-edit-in {
     width: 100%; font: inherit; color: var(--ink); background: var(--field-bg);
     border: 1px solid var(--accent-seed); border-radius: 6px; padding: 4px 7px; min-height: 0;
@@ -21765,6 +21766,7 @@
           <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add to calendar" aria-label="Add ${esc(t.title)} to the calendar">📅</button>
           <button type="button" class="rtg-ic" data-rtg-chain="${esc(t.id)}" title="Start a chain from this" aria-label="Start a chain from ${esc(t.title)}">🔗</button>
           <button type="button" class="rtg-ic" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
+          <button type="button" class="rtg-ic rtg-ic-del" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
         </div></td>
       </tr>`;
     };
@@ -21835,6 +21837,24 @@
     if (editIcon) {
       const t = ROUTINE_TASKS.find(x => x.id === editIcon.dataset.rtgEdit);
       if (t) openRtnFormInline(t, "table");
+      return;
+    }
+    // delete straight from the row -- same guard/confirm/undo as the full edit
+    // form's own Delete button (rtnDeleteBtn), just without opening the form first
+    const delIcon = e.target.closest("[data-rtg-del]");
+    if (delIcon) {
+      const id = delIcon.dataset.rtgDel;
+      const victim = ROUTINE_TASKS.find(t => t.id === id);
+      if (!victim) return;
+      if (HAIR_TYPE_IDS.has(id)) {
+        alert(`"${victim.title}" can't be deleted — the hair wash rotation always needs its 3 types. Edit its name or steps instead, or turn it off the calendar with the switch.`);
+        return;
+      }
+      if (!confirm(`Delete "${victim.title}"?`)) return;
+      ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== id);
+      if (rtnEditId === id) closeRtnForm();
+      saveRoutines(); renderRtnGrid(); renderDay();
+      showRtnDeleteUndo(victim);
       return;
     }
     if (e.target.closest("#rtgAddBtn")) { openRtnForm(null); return; }
