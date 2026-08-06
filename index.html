@@ -1493,12 +1493,27 @@
      day column, top/height set per-render from topForMin() (renderFastLine()) --
      covers the fast's [start, goalEnd] span clamped to the visible day/grid, same
      positioning approach as .now-line above just vertical instead of horizontal.
-     Colour is --fast (points at the Fitness token, never its own hex -- see :root). */
-  .fast-line { position: absolute; right: 0; width: 3px; border-radius: 2px; z-index: 5; pointer-events: none;
-    background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent); }
+     Colour is --fast (points at the Fitness token, never its own hex -- see :root).
+     2026-08-06 pt.2 (Linh: "make the fasting rail tappable... at least ~24px wide"):
+     the visible bar stays a slim 3px (moved onto ::before so it doesn't have to grow),
+     but .fast-line itself widens to a real 24px tap target -- .timeline-wrap has
+     overflow:hidden, so an oversized ::before hit-zone (the pattern used elsewhere in
+     this app) would just get clipped; only the element's OWN box-width survives that.
+     Tapping/Entering it opens the Fasting page (see jumpToFastHistory() wiring below). */
+  .fast-line { position: absolute; right: 0; width: 24px; z-index: 5; cursor: pointer; }
+  .fast-line::before {
+    content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 3px; border-radius: 2px;
+    background: var(--fast); box-shadow: 0 0 6px color-mix(in oklab, var(--fast) 55%, transparent);
+    transition: box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+  .fast-line:hover::before, .fast-line:active::before {
+    box-shadow: 0 0 10px color-mix(in oklab, var(--fast) 75%, transparent), 0 0 2px var(--fast);
+  }
+  .fast-line:focus-visible { outline: 2px solid var(--fast); outline-offset: 1px; border-radius: 2px; }
   .fast-line::after {
     content: "FASTING"; position: absolute; right: 6px; top: 6px; writing-mode: vertical-rl;
     font-size: 9px; font-weight: 600; letter-spacing: 0.08em; color: var(--fast); opacity: 0.5;
+    pointer-events: none;
   }
 
   /* --- chains (linked routines) — Stage 2 visuals --- */
@@ -5504,7 +5519,26 @@
   /* 2026-08-06 (Linh, fasting indicator 2b): reuses .spend-bar-row/.sb-label/.sb-track/
      .sb-fill/.sb-amt as-is (the app's one label-bar-value component) for the Day page's
      Fasting status row, just overriding the fill colour to --fast. */
-  .fast-status { display: flex; flex-direction: column; gap: 4px; margin: 0 0 16px; }
+  /* 2026-08-06 pt.2 (Linh: "center the fasting toolbar... make the whole strip
+     tappable -> open the Fasting page"): capping the width and centering it turns the
+     row from an edge-to-edge stretched bar into a tight, centred cluster (.sb-track is
+     flex:1 same as always -- it just no longer has a whole content column to stretch
+     across). The hover/press tint lives on ::before, not a real background, so it
+     can't add any padding/box-model change that would nudge anything else on the page.
+     Scoped to #fastStatus -- .spend-bar-row/.sb-* stay untouched for the Spending
+     widget that also uses them. */
+  .fast-status {
+    display: flex; flex-direction: column; gap: 4px; margin: 0 auto 16px;
+    max-width: 360px; position: relative; cursor: pointer; border-radius: var(--radius-md);
+  }
+  .fast-status::before {
+    content: ""; position: absolute; inset: -6px -10px; border-radius: var(--radius-md);
+    background: transparent; transition: background 0.15s ease; pointer-events: none;
+  }
+  .fast-status:hover::before { background: color-mix(in oklab, var(--fast) 7%, transparent); }
+  .fast-status:active::before { background: color-mix(in oklab, var(--fast) 13%, transparent); }
+  .fast-status:focus-visible { outline: 2px solid var(--fast); outline-offset: 3px; }
+  .fast-bar-sub { text-align: center; }
   /* 2026-08-06 (Linh: "text looks cut off" on the mobile Day timeline): .sb-amt's
      84px comes from the spending widget this row-bar-value component was borrowed
      from ("$1,234.56"-shaped text), sized with zero slack -- a fasting duration
@@ -8935,72 +8969,79 @@
   <div class="page" id="healthPage" hidden>
     <div class="bd-head">
       <div class="eyebrow">Body & rhythm</div>
-      <h1>Fasting</h1>
+      <h1>Body</h1>
     </div>
 
-    <div class="view-tabs" id="healthSubNav" style="margin-bottom:20px">
-      <button type="button" data-hsub="fasting">Fasting</button>
-      <button type="button" data-hsub="body">Weight & Body</button>
-    </div>
+    <!-- 2026-08-06 (Linh, "Body" mockup: "Fasting + Weight + Body fat on one compact,
+         tessellated page — no tabs"): SUPERSEDES #healthSubNav's old Fasting / Weight &
+         Body two-tab split (state.healthSubTab removed with it) — everything below is
+         always visible now. KPI strip first, then a 2-column tessellated layout: a
+         narrower Fasting + Body-fat column beside a wider Weight column. Every card's
+         id/behaviour is unchanged from before the merge (fastCardHTML, renderFastChart,
+         the PART B inline history editor, weight/body-fat charts + forms) — only the
+         outer shell and the weight chart's visual language changed. -->
+    <div class="bdy-kpis" id="bdyKpis"></div>
 
-    <!-- fasting -->
-    <div id="healthSubFasting">
-      <div class="h-card">
-        <div class="section-head"><h2>Fasting</h2><span class="rule"></span></div>
-        <div class="fast-live" id="fastLive"></div>
+    <div class="bdy-cols">
+      <div class="bdy-col bdy-col-fast">
+        <!-- fasting -->
+        <div class="h-card">
+          <div class="section-head"><h2>Fasting</h2><span class="rule"></span></div>
+          <div class="fast-live" id="fastLive"></div>
 
-        <div class="fast-log-tuck">
-          <div class="log-head">Log a fast — pick your own start &amp; end</div>
-          <form class="fast-manual" id="fastManualForm">
-            <label>Start <input type="datetime-local" id="fmStart" required></label>
-            <label>End <input type="datetime-local" id="fmEnd" required></label>
-            <button type="submit" class="btn-save" id="fmSubmit">Log fast</button>
+          <div class="fast-log-tuck">
+            <div class="log-head">Log a fast — pick your own start &amp; end</div>
+            <form class="fast-manual" id="fastManualForm">
+              <label>Start <input type="datetime-local" id="fmStart" required></label>
+              <label>End <input type="datetime-local" id="fmEnd" required></label>
+              <button type="submit" class="btn-save" id="fmSubmit">Log fast</button>
+            </form>
+            <div class="fm-error" id="fmError" hidden></div>
+          </div>
+
+          <div id="fastChart"></div>
+          <div id="fastStats"></div>
+          <div id="fastHistory"></div>
+        </div>
+
+        <!-- body fat -->
+        <div class="h-card">
+          <div class="section-head"><h2>Body fat</h2><span class="rule"></span></div>
+          <div class="h-current" id="bfCurrent"></div>
+          <div class="ideal-row">
+            <label for="idealBf">Target</label>
+            <input type="number" id="idealBf" step="0.1" placeholder="17" aria-label="Ideal body fat percent">
+            <span class="unit">%</span>
+          </div>
+          <div class="chart-wrap" id="bfChart"></div>
+          <form class="h-add" id="bfForm">
+            <input type="date" id="bfDate" aria-label="Date">
+            <input type="number" id="bfVal" step="0.1" placeholder="%" aria-label="Body fat percent" required>
+            <button type="submit" class="btn-save">Log</button>
           </form>
-          <div class="fm-error" id="fmError" hidden></div>
         </div>
-
-        <div id="fastChart"></div>
-        <div id="fastStats"></div>
-        <div id="fastHistory"></div>
-      </div>
-    </div>
-
-    <div id="healthSubBody">
-      <!-- weight -->
-      <div class="h-card">
-        <div class="section-head"><h2>Weight</h2><span class="rule"></span></div>
-        <div class="h-current" id="weightCurrent"></div>
-        <div class="ideal-row">
-          <label>Ideal range</label>
-          <input type="number" id="idealMin" step="0.1" placeholder="min" aria-label="Ideal weight minimum">
-          <span class="dash">–</span>
-          <input type="number" id="idealMax" step="0.1" placeholder="max" aria-label="Ideal weight maximum">
-          <span class="unit">kg</span>
-        </div>
-        <div class="chart-wrap" id="weightChart"></div>
-        <form class="h-add" id="weightForm">
-          <input type="date" id="weightDate" aria-label="Date">
-          <input type="number" id="weightVal" step="0.1" placeholder="kg" aria-label="Weight in kg" required>
-          <button type="submit" class="btn-save">Log</button>
-        </form>
-        <div id="weightList"></div>
       </div>
 
-      <!-- body fat -->
-      <div class="h-card">
-        <div class="section-head"><h2>Body fat</h2><span class="rule"></span></div>
-        <div class="h-current" id="bfCurrent"></div>
-        <div class="ideal-row">
-          <label for="idealBf">Target</label>
-          <input type="number" id="idealBf" step="0.1" placeholder="17" aria-label="Ideal body fat percent">
-          <span class="unit">%</span>
+      <div class="bdy-col bdy-col-weight">
+        <!-- weight -->
+        <div class="h-card">
+          <div class="section-head"><h2>Weight</h2><span class="rule"></span></div>
+          <div class="h-current" id="weightCurrent"></div>
+          <div class="ideal-row">
+            <label>Ideal range</label>
+            <input type="number" id="idealMin" step="0.1" placeholder="min" aria-label="Ideal weight minimum">
+            <span class="dash">–</span>
+            <input type="number" id="idealMax" step="0.1" placeholder="max" aria-label="Ideal weight maximum">
+            <span class="unit">kg</span>
+          </div>
+          <div class="chart-wrap" id="weightChart"></div>
+          <form class="h-add" id="weightForm">
+            <input type="date" id="weightDate" aria-label="Date">
+            <input type="number" id="weightVal" step="0.1" placeholder="kg" aria-label="Weight in kg" required>
+            <button type="submit" class="btn-save">Log</button>
+          </form>
+          <div id="weightList"></div>
         </div>
-        <div class="chart-wrap" id="bfChart"></div>
-        <form class="h-add" id="bfForm">
-          <input type="date" id="bfDate" aria-label="Date">
-          <input type="number" id="bfVal" step="0.1" placeholder="%" aria-label="Body fat percent" required>
-          <button type="submit" class="btn-save">Log</button>
-        </form>
       </div>
     </div>
 
@@ -10165,7 +10206,7 @@
              briefly lived here -- accidental taps while scrolling were ending her fast.
              Display-only now; start/stop stays on the Fasting page, and a small Resume
              chip appears in the sub-line when a fast ended in the last few hours. -->
-        <div class="fast-status" id="fastStatus">
+        <div class="fast-status" id="fastStatus" role="button" tabindex="0" aria-label="Open the Fasting page">
           <div class="spend-bar-row fast-bar-row" id="fastBarRow">
             <span class="sb-label"><span class="fast-dot"></span>Fasting</span>
             <div class="sb-track"><div class="sb-fill" id="fastBarFill"></div></div>
@@ -10199,7 +10240,7 @@
           <div class="now-line" id="nowLine" hidden><span class="now-time"></span></div>
           <!-- 2026-08-06 (Linh, fasting indicator 2a): renderFastLine() positions top/height
                via topForMin(), same approach as .now-line just vertical -- see CSS .fast-line. -->
-          <div class="fast-line" id="fastLine" hidden></div>
+          <div class="fast-line" id="fastLine" hidden role="button" tabindex="0" aria-label="Open the Fasting page"></div>
           <!-- 2026-08-06 (chains Stage 2): spine + nodes + dashed deadline line,
                positioned per-render by renderChainLayer() via topForMin(). -->
           <div class="chain-layer" id="chainLayer"></div>
@@ -27588,6 +27629,22 @@
   document.getElementById("weekPage").addEventListener("click", e => {
     if (e.target.closest("[data-fast-history]")) jumpToFastHistory();
   });
+  // 2026-08-06 (Linh: "make the whole fasting toolbar tappable... make the vertical
+  // FASTING rail tappable too"): both are static, always-in-the-DOM elements (see
+  // #fastStatus/#fastLine markup -- renderFastBar()/renderFastLine() only ever toggle
+  // .hidden/textContent/style on them, never rebuild them), so a one-time listener here
+  // is safe -- no risk of stacking duplicate handlers on every render. Same destination
+  // as the two call sites just above: reuses jumpToFastHistory(), doesn't invent a new
+  // route. Space is included alongside Enter since both are role="button".
+  function fastTapNav(e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    jumpToFastHistory();
+  }
+  document.getElementById("fastStatus")?.addEventListener("click", fastTapNav);
+  document.getElementById("fastStatus")?.addEventListener("keydown", fastTapNav);
+  document.getElementById("fastLine")?.addEventListener("click", fastTapNav);
+  document.getElementById("fastLine")?.addEventListener("keydown", fastTapNav);
   document.getElementById("dayPickerBtn").addEventListener("click", () => {
     const p = document.getElementById("dayPicker");
     p.hidden = !p.hidden;
