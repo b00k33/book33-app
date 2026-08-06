@@ -3882,7 +3882,7 @@
     border-radius: 999px; padding: 8px 12px; font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
   }
   .rtg-tbl { background: var(--note-bg); border-radius: var(--radius-md); overflow-x: auto; }
-  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 700px; }
   .rtg-tbl thead th {
     text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
     font-weight: 700; padding: 11px 12px; cursor: pointer; white-space: nowrap; user-select: none;
@@ -21301,6 +21301,7 @@
     const PHASE_ORDER = { before: 0, during: 1, after: 2 };
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
+      track: (a, b) => TRACK_LABEL[a.track].localeCompare(TRACK_LABEL[b.track]) || a.title.localeCompare(b.title),
       category: (a, b) => (a.category || "").localeCompare(b.category || "") || a.title.localeCompare(b.title),
       phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
       freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
@@ -21325,7 +21326,8 @@
       const chained = t.anchorTo && chainAnchorOf(t);
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle">${esc(t.title)}</td>
-        <td data-rtg-cell="rtnCategory"><span class="rtg-trk"><span class="rtg-dot" style="background:var(--${t.track}-seed)"></span>${t.category ? esc(t.category) : `<span class="rtg-muted">Uncategorized</span>`}</span></td>
+        <td data-rtg-cell="rtnTrack"><span class="rtg-trk"><span class="rtg-dot" style="background:var(--${t.track}-seed)"></span>${esc(TRACK_LABEL[t.track])}</span></td>
+        <td data-rtg-cell="rtnCategory">${t.category ? esc(t.category) : `<span class="rtg-muted">Uncategorized</span>`}</td>
         <td><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
@@ -21340,13 +21342,14 @@
     if (rtnGridGroupBy === "none") {
       bodyHtml = rows.map(row).join("");
     } else {
-      const groupKeyOf = t => rtnGridGroupBy === "category" ? (t.category || "Uncategorized")
+      const groupKeyOf = t => rtnGridGroupBy === "track" ? TRACK_LABEL[t.track]
+        : rtnGridGroupBy === "category" ? (t.category || "Uncategorized")
         : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
         : routineFreqLabel(t).split(" · ")[0].split(" + ")[0];   // "freq": coarse type only, not the full per-row text
       const groups = new Map();
       rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
       bodyHtml = [...groups.entries()].map(([k, list]) =>
-        `<tr class="rtg-group-row"><td colspan="6">${esc(k)}</td></tr>${list.map(row).join("")}`
+        `<tr class="rtg-group-row"><td colspan="7">${esc(k)}</td></tr>${list.map(row).join("")}`
       ).join("");
     }
     const th = (col, label) => {
@@ -21359,6 +21362,7 @@
         <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…" value="${esc(rtnGridSearch)}">
         <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
           <option value="none"${rtnGridGroupBy === "none" ? " selected" : ""}>Group by: None</option>
+          <option value="track"${rtnGridGroupBy === "track" ? " selected" : ""}>Group by: Track</option>
           <option value="category"${rtnGridGroupBy === "category" ? " selected" : ""}>Group by: Category</option>
           <option value="phase"${rtnGridGroupBy === "phase" ? " selected" : ""}>Group by: Phase</option>
           <option value="freq"${rtnGridGroupBy === "freq" ? " selected" : ""}>Group by: Repeats</option>
@@ -21366,7 +21370,7 @@
         <button type="button" class="add-btn" id="rtgAddBtn">＋ Add routine</button>
       </div>
       <div class="rtg-tbl"><table>
-        <thead><tr>${th("title", "Routine")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
   }
@@ -21423,8 +21427,23 @@
   // value a plain inline control could represent.
   function rtgEditCell(cell, t) {
     const field = cell.dataset.rtgCell;
-    if (cell.querySelector("input")) return;   // already mid-edit
+    if (cell.querySelector("input,select")) return;   // already mid-edit
     if (field === "rtnFreqGroup") { openRtnForm(t, field); return; }
+    if (field === "rtnTrack") {
+      // a closed 3-way set (Work/Marriage/Personal) -- a picker, not free text.
+      // Doesn't touch t.category: the form's own track picker leaves the category
+      // value alone on a track change too, so a re-pick can restore a stale-looking
+      // category rather than silently losing it.
+      const orig = t.track;
+      cell.innerHTML = `<select class="rtg-edit-in">${Object.keys(TRACK_LABEL).map(k =>
+        `<option value="${k}"${k === orig ? " selected" : ""}>${esc(TRACK_LABEL[k])}</option>`).join("")}</select>`;
+      const sel = cell.querySelector("select");
+      let committed = false;
+      sel.addEventListener("change", () => { committed = true; t.track = sel.value; saveRoutines(); renderRtnGrid(); });
+      sel.addEventListener("blur", () => { if (!committed) renderRtnGrid(); });
+      sel.focus();
+      return;
+    }
     const finish = (inp, commit) => {
       inp.addEventListener("keydown", e => {
         if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
