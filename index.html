@@ -4384,6 +4384,7 @@
   .btn-save, .btn-cancel { border-radius: 999px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: var(--font-body); }
   .btn-save { border: 1px solid var(--margin-rule); background: var(--margin-rule); color: var(--accent-on); }
   .btn-save:hover { filter: brightness(1.06); }
+  .btn-save:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
   .btn-cancel { border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft); }
   .btn-cancel:hover { color: var(--ink); }
   .btn-save:focus-visible, .btn-cancel:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
@@ -5116,6 +5117,33 @@
   .fast-log-tuck .log-head { margin-top: 0; }
   .log-row .edit { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 12px; padding: 2px 6px; }
   .log-row .edit:hover { color: var(--margin-rule); }
+  .log-row.editing .edit { color: var(--margin-rule); }
+  /* 2026-08-06 PART B: inline past-fast editor -- expands directly under its .log-row.
+     Flat, no card: a dashed top rule anchors it to the row it edits (same "quiet
+     separator, not a box" language as .fast-log-tuck above), inputs match the exact
+     dark/light color-scheme + flat field styling already used by .fast-manual input. */
+  .fast-hist-edit { padding: 10px 0 12px; border-top: 1px dashed var(--note-line); margin: -2px 0 6px; }
+  .fhe-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .fhe-row label { display: flex; flex-direction: column; gap: 3px; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); flex: 1 1 140px; }
+  .fhe-row input {
+    font-family: var(--font-body); font-size: 12.5px; color: var(--ink); background: var(--field-bg);
+    border: 1px solid var(--note-line); border-radius: 8px; padding: 6px 9px; color-scheme: light dark; width: 100%;
+  }
+  .fhe-dur { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; }
+  .fhe-dur-val { font-weight: 700; color: var(--ink); }
+  .fhe-met { color: var(--fast-green); font-size: 11.5px; font-weight: 600; }
+  .fhe-err { color: var(--warn); font-size: 11.5px; }
+  .fhe-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .fhe-actions .fhe-cancel {
+    border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft); font-family: var(--font-body);
+    font-size: 12px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  }
+  .fhe-actions .fhe-cancel:hover { color: var(--ink); border-color: var(--ink-soft); }
+  .fhe-del {
+    margin-left: auto; padding: 6px 12px; border: none; background: none; color: var(--warn);
+    font-family: var(--font-body); font-size: 12px; cursor: pointer; border-radius: 999px;
+  }
+  .fhe-del:hover { background: color-mix(in oklab, var(--warn) 12%, transparent); }
   /* fasting summary bar graph */
   .fast-chart-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 6px; }
   .fast-chart-toggle { display: inline-flex; gap: 3px; }
@@ -18911,6 +18939,22 @@
     } else bestWeek = hrs.reduce((a, b) => a + b, 0) / hrs.length;
     return { current, best, bestWeek };
   }
+  // 2026-08-06 (Linh, fasting chart spec: "one meaning per encoding: bar HEIGHT =
+  // hours fasted; bar COLOUR = cycle phase"): a deliberately simplified 3-bucket
+  // version of the app's full 4-phase PHASE_COL/CYCLE_PHASE_INFO (menstrual/
+  // follicular/fertile/luteal) -- follicular, fertile, and no-cycle-data all read as
+  // "Other" here, since the chart's job is "how does my cycle affect fasting", not a
+  // full phase breakdown. See --fast-chart-* tokens near --fast-green for the hexes.
+  function fastChartPhaseCol(ph) {
+    if (ph === "menstrual") return "var(--fast-chart-menstrual)";
+    if (ph === "luteal") return "var(--fast-chart-luteal)";
+    return "var(--fast-chart-other)";
+  }
+  function fastChartPhaseLabel(ph) {
+    if (ph === "menstrual") return "Menstrual";
+    if (ph === "luteal") return "Luteal";
+    return "Untracked";
+  }
   function renderFastChart() {
     const host = document.getElementById("fastChart");
     if (!host) return;
@@ -18922,37 +18966,41 @@
     const maxH = Math.max(goalH + 2, ...data.map(p => p.hrs), 1);
     const bw = iw / days;
     const y = v => PT + ih - (v / maxH) * ih;
+    const fcPred = cyclePrediction();
+    // thin bars, small gaps: the bar itself is a shrinking fraction of its column as
+    // more columns pack into the same width (month view), so the gap stays visible
+    // instead of the bars fusing into a solid block.
+    const barFrac = days === 7 ? 0.55 : 0.62;
     const bars = data.map((p, i) => {
       const h = Math.max((p.hrs / maxH) * ih, p.hrs > 0 ? 2 : 0);
-      const met = p.hrs >= goalH;
+      const ph = phaseOn(p.day, fcPred);
+      const col = fastChartPhaseCol(ph);
       const cx = (PL + i * bw + bw / 2).toFixed(1);
       const label = days === 7
         ? `<text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${"MTWTFSS"[(p.day.getDay() + 6) % 7]} ${p.day.getDate()}</text>`
         : (p.day.getDate() === 1 || i % 7 === 0
           ? `<text x="${cx}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${p.day.getDate()}/${p.day.getMonth() + 1}</text>` : "");
       // the hours themselves, printed on each bar — INSIDE the column whenever it is
-      // tall enough to hold the numeral, floating above it only on short bars
+      // tall enough to hold the numeral, floating above it only on short bars. Colour
+      // no longer encodes met/missed (that was double-encoding with the goal line) —
+      // white reads on all three phase fills, ink-soft on the plain chart background.
       const fs = days === 7 ? 11 : 7.5;
       const fitsInside = h >= fs + 9;
       const hrsLabel = p.hrs > 0
         ? `<text x="${cx}" y="${(fitsInside ? PT + ih - h + fs + 3 : Math.max(PT + ih - h - 5, 11)).toFixed(1)}" text-anchor="middle"
             font-size="${fs}" font-weight="700"
-            fill="${fitsInside ? (met ? "#17130A" : "var(--ink)") : met ? "var(--fit-workout)" : "var(--ink-soft)"}">${days === 7 ? p.hrs.toFixed(1) : Math.round(p.hrs)}</text>`
+            fill="${fitsInside ? "#FFFFFF" : "var(--ink-soft)"}">${days === 7 ? p.hrs.toFixed(1) : Math.round(p.hrs)}</text>`
         : "";
-      return `<rect x="${(PL + i * bw + bw * 0.15).toFixed(1)}" y="${(PT + ih - h).toFixed(1)}" width="${(bw * 0.7).toFixed(1)}" height="${h.toFixed(1)}"
-          rx="3" fill="${met ? "var(--fit-workout)" : "color-mix(in oklab, var(--margin-rule) 55%, transparent)"}">
-          <title>${p.day.getDate()} ${MON_SHORT[p.day.getMonth()]} — ${p.hrs.toFixed(1)}h fasted</title>
+      const bw2 = bw * barFrac;
+      return `<rect x="${(PL + i * bw + (bw - bw2) / 2).toFixed(1)}" y="${(PT + ih - h).toFixed(1)}" width="${bw2.toFixed(1)}" height="${h.toFixed(1)}"
+          rx="4" fill="${col}">
+          <title>${p.day.getDate()} ${MON_SHORT[p.day.getMonth()]} · ${p.hrs.toFixed(1)}h · ${fastChartPhaseLabel(ph)}</title>
         </rect>${hrsLabel}${label}`;
     }).join("");
     const gy = y(goalH).toFixed(1);
-    // cycle-phase wash behind the bars — see how the phase shifts what fasting feels like
-    const fcPred = cyclePrediction();
-    const phases = data.map(p => phaseOn(p.day, fcPred));
-    const phaseBands = phases.map((ph, i) => ph
-      ? `<rect x="${(PL + i * bw).toFixed(1)}" y="${PT}" width="${bw.toFixed(2)}" height="${ih}" fill="${PHASE_COL[ph]}" opacity="0.13"/>` : "").join("");
-    const phaseLegend = phases.some(Boolean)
-      ? `<div class="phase-key">${Object.keys(PHASE_COL).filter(k => phases.includes(k))
-          .map(k => `<span><i style="background:${PHASE_COL[k]}"></i>${CYCLE_PHASE_INFO[k].icon} ${CYCLE_PHASE_INFO[k].label}</span>`).join("")}</div>` : "";
+    // fixed 0/12/24h gridlines (not maxH-relative) — recessive: thin, faint, under
+    // the dashed gold goal line so the goal always reads as the one line that matters
+    const gridVals = [0, 12, 24].filter(v => v <= maxH);
     host.innerHTML = `
       <div class="fast-chart-head">
         <div class="log-head" style="margin:0">Hours fasted per day</div>
@@ -18962,14 +19010,17 @@
         </div>
       </div>
       <svg viewBox="0 0 ${W} ${H}" class="fast-chart-svg" role="img" aria-label="Hours fasted per day, past ${days} days">
-        ${phaseBands}
-        ${[0, Math.round(maxH / 2), Math.round(maxH)].map(v => `
+        ${gridVals.map(v => `
           <text x="${PL - 5}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-faint)">${v}h</text>
-          <line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}" stroke="var(--paper-line)" stroke-width="1"/>`).join("")}
+          <line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}" stroke="var(--paper-line)" stroke-width="1" opacity="0.55"/>`).join("")}
         <line x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}" stroke="var(--margin-rule)" stroke-width="1.5" stroke-dasharray="5 4"/>
         <text x="${W - PR}" y="${(parseFloat(gy) - 4).toFixed(1)}" text-anchor="end" font-size="9" font-weight="700" fill="var(--margin-rule)">goal ${goalH}h</text>
         ${bars}
-      </svg>${phaseLegend}`;
+      </svg>
+      <div class="phase-key">
+        <span><i style="background:var(--fast-chart-menstrual)"></i>Menstrual</span>
+        <span><i style="background:var(--fast-chart-luteal)"></i>Luteal</span>
+      </div>`;
   }
 
   /* ---- weight zones: green inside the ideal range, escalating above it ---- */
@@ -19076,7 +19127,7 @@
           ? `🎉 Your last fast (${fmtHrs(lastDur)}) is a new personal best!`
         : "";
       document.getElementById("fastStats").innerHTML = `<div class="h-stats">
-        <div class="h-stat"><div class="n">${rec ? "🔥 " + rec.current : "—"}</div><div class="l">Current streak</div></div>
+        <div class="h-stat h-stat-streak"><div class="n">${rec ? "🔥 " + rec.current : "—"}</div><div class="l">Current streak</div></div>
         <div class="h-stat"><div class="n">${rec ? rec.best : "—"}</div><div class="l">Best streak</div></div>
         <div class="h-stat"><div class="n">${fmtHrs(longest)}</div><div class="l">Longest fast</div></div>
         <div class="h-stat"><div class="n">${rec ? rec.bestWeek.toFixed(1) + "h" : "—"}</div><div class="l">Best week avg</div></div>
@@ -19087,12 +19138,15 @@
       const recentTotal = recent.reduce((a, f) => a + (new Date(f.end) - new Date(f.start)), 0);
       document.getElementById("fastHistory").innerHTML =
         `<div class="log-head">Recent — ${recent.length} fast${recent.length === 1 ? "" : "s"} · <b>${fmtHrs(recentTotal)}</b> total · <b>${fmtHrs(recentTotal / recent.length)}</b> avg</div>`
-        + recent.map(f => `<div class="log-row">
+        + recent.map(f => {
+          const editing = fastHistEditId === f.id;
+          return `<div class="log-row${editing ? " editing" : ""}">
           <span class="when">${shortDate(f.start)}</span>
           <span class="val">${fmtHrs(new Date(f.end) - new Date(f.start))}<span style="color:var(--ink-faint);font-size:11px"> → ${shortDate(f.end)}</span></span>
-          <button class="edit" data-fast-edit="${f.id}" aria-label="Edit fast">✎</button>
+          <button class="edit" data-fast-edit="${f.id}" aria-label="${editing ? "Close editor" : "Edit fast"}" aria-expanded="${editing}">${editing ? "︿" : "✎"}</button>
           <button class="del" data-fast-del="${f.id}" aria-label="Delete fast">×</button>
-        </div>`).join("");
+        </div>` + (editing ? fastHistEditorHTML(f) : "");
+        }).join("");
     } else {
       document.getElementById("fastStats").innerHTML = "";
       document.getElementById("fastHistory").innerHTML = `<div class="h-empty">No fasts recorded yet. Hit Start fast when you begin, or log one above with your own times.</div>`;
@@ -23148,42 +23202,103 @@
     const d = new Date(iso);
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
-  let fastEditId = null;
-  function resetFastForm() {
-    fastEditId = null;
-    const form = document.getElementById("fastManualForm");
-    form.reset(); form.dataset.editing = "false";
-    document.getElementById("fmSubmit").textContent = "Log fast";
-    document.getElementById("fmCancel").hidden = true;
-    const err = document.getElementById("fmError"); err.hidden = true; err.textContent = "";
+  // 2026-08-06 (PART B, "clicking ✎ on a fast row expands an inline editor under that
+  // row"): SUPERSEDES the old fastEditId/resetFastForm scheme, which repurposed THIS
+  // form (scroll up, swap its Submit label to "Save changes", show a Cancel button) as
+  // the edit UI for a past fast. #fastManualForm is single-purpose again -- logging a
+  // NEW fast only; editing an existing one is fastHistEditId's own inline editor below
+  // (see renderFastHistory/fastHistEditorHTML), never this form.
+  let fastHistEditId = null;
+  // draft survives an INCIDENTAL renderHealth() mid-edit (e.g. clicking a goal chip
+  // while the editor is open) -- only cleared on open/close/save, never on re-render.
+  let fastHistDraft = { start: "", end: "" };
+  function closeFastHistEdit() { fastHistEditId = null; fastHistDraft = { start: "", end: "" }; }
+  function fastHistEditorHTML(f) {
+    const startVal = fastHistDraft.start || toLocalDT(f.start);
+    const endVal = fastHistDraft.end || toLocalDT(f.end);
+    const goalH = HEALTH.fastGoalHours || 16;
+    const start = new Date(startVal), end = new Date(endVal);
+    const validRange = !!(startVal && endVal) && end > start;
+    const durMs = validRange ? end - start : 0;
+    const met = validRange && durMs / 36e5 >= goalH;
+    return `<div class="fast-hist-edit">
+      <div class="fhe-row">
+        <label>Start <input type="datetime-local" data-fhe-start="${f.id}" value="${startVal}"></label>
+        <label>End <input type="datetime-local" data-fhe-end="${f.id}" value="${endVal}"></label>
+      </div>
+      <div class="fhe-dur">${validRange
+        ? `<span class="fhe-dur-val">${fmtHrs(durMs)}</span>${met ? `<span class="fhe-met">✓ met ${goalH}h goal</span>` : ""}`
+        : `<span class="fhe-err">End must be after start</span>`}</div>
+      <div class="fhe-actions">
+        <button type="button" class="btn-save" data-fhe-save="${f.id}"${validRange ? "" : " disabled"}>Save</button>
+        <button type="button" class="fhe-cancel" data-fhe-cancel="${f.id}">Cancel</button>
+        <button type="button" class="fhe-del" data-fhe-del="${f.id}">Delete fast</button>
+      </div>
+    </div>`;
   }
   document.getElementById("healthPage").addEventListener("click", e => {
     const fd = e.target.closest("[data-fast-del]");
     if (fd) {
       HEALTH.fasts = HEALTH.fasts.filter(f => f.id !== fd.dataset.fastDel);
-      if (fastEditId === fd.dataset.fastDel) resetFastForm();
+      if (fastHistEditId === fd.dataset.fastDel) closeFastHistEdit();
       saveHealth(); renderHealth(); return;
     }
     const fe = e.target.closest("[data-fast-edit]");
     if (fe) {
-      const f = HEALTH.fasts.find(x => x.id === fe.dataset.fastEdit);
-      if (!f) return;
-      fastEditId = f.id;
-      const form = document.getElementById("fastManualForm");
-      form.dataset.editing = "true";
-      document.getElementById("fmStart").value = toLocalDT(f.start);
-      document.getElementById("fmEnd").value = toLocalDT(f.end);
-      document.getElementById("fmSubmit").textContent = "Save changes";
-      document.getElementById("fmCancel").hidden = false;
-      form.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
+      const id = fe.dataset.fastEdit;
+      fastHistEditId = fastHistEditId === id ? null : id;
+      fastHistDraft = { start: "", end: "" };
+      renderHealth(); return;
+    }
+    const fheCancel = e.target.closest("[data-fhe-cancel]");
+    if (fheCancel) { closeFastHistEdit(); renderHealth(); return; }
+    const fheSave = e.target.closest("[data-fhe-save]");
+    if (fheSave) {
+      const f = HEALTH.fasts.find(x => x.id === fheSave.dataset.fheSave);
+      const wrap = fheSave.closest(".fast-hist-edit");
+      const s = wrap.querySelector("[data-fhe-start]").value;
+      const en = wrap.querySelector("[data-fhe-end]").value;
+      if (!f || !s || !en) return;
+      const start = new Date(s), end = new Date(en);
+      if (end <= start) return;
+      f.start = start.toISOString(); f.end = end.toISOString();
+      closeFastHistEdit(); saveHealth(); renderHealth(); return;
+    }
+    const fheDel = e.target.closest("[data-fhe-del]");
+    if (fheDel) {
+      // confirm() works here -- this app deploys straight to GitHub Pages, not a
+      // sandboxed artifact iframe (see the routine/session-delete confirms elsewhere).
+      if (!confirm("Delete this fast?")) return;
+      HEALTH.fasts = HEALTH.fasts.filter(x => x.id !== fheDel.dataset.fheDel);
+      closeFastHistEdit(); saveHealth(); renderHealth(); return;
     }
     const fr = e.target.closest("[data-fast-range]");
     if (fr) { fastChartRange = fr.dataset.fastRange; renderFastChart(); return; }
     const wd = e.target.closest("[data-w-del]");
     if (wd) { HEALTH.weights = HEALTH.weights.filter(w => w.id !== wd.dataset.wDel); saveHealth(); renderHealth(); return; }
   });
-  document.getElementById("fmCancel").addEventListener("click", resetFastForm);
+  // live duration recompute as Start/End change -- patches just the .fhe-dur span
+  // rather than a full renderHealth(), so the datetime-local input never loses focus
+  // mid-edit; fastHistDraft is updated here so the value survives an incidental rerender.
+  document.getElementById("healthPage").addEventListener("input", e => {
+    const inp = e.target.closest("[data-fhe-start],[data-fhe-end]");
+    if (!inp) return;
+    if (inp.matches("[data-fhe-start]")) fastHistDraft.start = inp.value;
+    else fastHistDraft.end = inp.value;
+    const wrap = inp.closest(".fast-hist-edit");
+    if (!wrap) return;
+    const sEl = wrap.querySelector("[data-fhe-start]"), eEl = wrap.querySelector("[data-fhe-end]");
+    const goalH = HEALTH.fastGoalHours || 16;
+    const start = new Date(sEl.value), end = new Date(eEl.value);
+    const validRange = !!(sEl.value && eEl.value) && end > start;
+    const durMs = validRange ? end - start : 0;
+    const met = validRange && durMs / 36e5 >= goalH;
+    wrap.querySelector(".fhe-dur").innerHTML = validRange
+      ? `<span class="fhe-dur-val">${fmtHrs(durMs)}</span>${met ? `<span class="fhe-met">✓ met ${goalH}h goal</span>` : ""}`
+      : `<span class="fhe-err">End must be after start</span>`;
+    const saveBtn = wrap.querySelector("[data-fhe-save]");
+    if (saveBtn) saveBtn.disabled = !validRange;
+  });
   // native alert()/confirm() are blocked inside the published-app iframe — same trap
   // documented at the backup/restore block — so validation shows inline instead
   const fmError = document.getElementById("fmError");
@@ -23197,13 +23312,8 @@
     const start = new Date(s), end = new Date(en);
     if (end <= start) { fmError.textContent = "End must be after start."; fmError.hidden = false; return; }
     clearFmError();
-    if (fastEditId) {
-      const f = HEALTH.fasts.find(x => x.id === fastEditId);
-      if (f) { f.start = start.toISOString(); f.end = end.toISOString(); }
-    } else {
-      HEALTH.fasts.push({ id: uid(), start: start.toISOString(), end: end.toISOString() });
-    }
-    resetFastForm();
+    HEALTH.fasts.push({ id: uid(), start: start.toISOString(), end: end.toISOString() });
+    e.target.reset();
     saveHealth(); renderHealth();
   });
 
