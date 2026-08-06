@@ -3912,6 +3912,17 @@
     border: 1px solid var(--accent-seed); border-radius: 6px; padding: 4px 7px; min-height: 0;
   }
   .rtg-edit-in:focus { outline: none; }
+  .rtg-freq-edit { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 4px 0; min-width: 220px; }
+  .rtg-freq-edit .rtg-edit-in { width: auto; }
+  .rtg-freq-wd { display: flex; gap: 3px; flex-wrap: wrap; }
+  .rtg-freq-wd button {
+    width: 26px; height: 26px; min-height: 0; border-radius: 6px; border: 1px solid var(--note-line);
+    background: var(--field-bg); font-size: 10px; font-weight: 700; color: var(--ink-soft); cursor: pointer;
+  }
+  .rtg-freq-wd button[aria-pressed="true"] { background: var(--accent-seed); color: var(--ink-bright); border-color: var(--accent-seed); }
+  .rtg-freq-row { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-soft); flex-wrap: wrap; }
+  .rtg-freq-row input[type="number"] { width: 48px; }
+  .rtg-freq-actions { display: flex; gap: 4px; margin-top: 2px; }
   .rtg-group-row td {
     padding: 13px 12px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--ink-faint); font-weight: 700; border-top: none;
@@ -21422,13 +21433,110 @@
     if (t) openRtnForm(t);
   });
   // Inline cell editing: swap the clicked cell's content for a real input, save on
-  // blur/Enter, discard on Escape -- Repeats stays a form-jump because a recurrence
-  // pattern (weekdays, every-N-weeks, multiple time layers) isn't a single scalar
-  // value a plain inline control could represent.
+  // blur/Enter, discard on Escape. Repeats gets its own multi-field editor (rtgEditFreq
+  // below) instead, since a recurrence pattern is several fields, not one scalar --
+  // only a multi-time-layer weekly routine still form-jumps (see its own guard).
+  const RTG_FREQ_TYPES = ["daily", "weekly", "monthly", "yearly", "interval", "once"];
+  // Repeats editor: a type picker plus one panel per type, matching exactly the field
+  // set/shape the full form's own submit handler writes (see the routine form's submit
+  // listener) -- kept in lockstep with that so a routine edited here round-trips
+  // identically through the form afterward.
+  function rtgEditFreq(cell, t) {
+    const pad2 = n => String(n).padStart(2, "0");
+    const wd = Array.isArray(t.weekdays) ? t.weekdays.slice() : [];
+    const wi = t.weekInterval || 1;
+    const wa = t.weekAnchor || keyOf(startOfWeek(TODAY));
+    const monthlyDay = t.day || 1;
+    const yearlyDate = `${TODAY.getFullYear()}-${pad2(t.month || (TODAY.getMonth() + 1))}-${pad2(t.freq === "yearly" ? (t.day || 1) : TODAY.getDate())}`;
+    const onceDate = t.date || keyOf(TODAY);
+    const intervalDays = t.intervalDays || 2;
+    const anchor = t.anchor || keyOf(TODAY);
+    const typeOpts = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["yearly", "Yearly"], ["interval", "Custom interval"], ["once", "One-off"]]
+      .map(([v, l]) => `<option value="${v}"${v === t.freq ? " selected" : ""}>${l}</option>`).join("");
+    const panel = (name, hiddenNow, inner) => `<div data-rtgf-panel="${name}"${hiddenNow ? " hidden" : ""}>${inner}</div>`;
+    cell.innerHTML = `<div class="rtg-freq-edit">
+      <select class="rtg-edit-in" data-rtgf="type">${typeOpts}</select>
+      ${panel("weekly", t.freq !== "weekly", `
+        <div class="rtg-freq-wd">${WD_FULL.map((d, i) => `<button type="button" data-rtgf-wd="${i}" aria-pressed="${wd.includes(i)}">${d.slice(0, 2)}</button>`).join("")}</div>
+        <div class="rtg-freq-row">every <input type="number" class="rtg-edit-in" data-rtgf="wi" min="1" value="${wi}"> week(s)
+          <span data-rtgf-wa${wi > 1 ? "" : " hidden"}>starting <input type="date" class="rtg-edit-in" data-rtgf="wa" value="${esc(wa)}"></span></div>`)}
+      ${panel("monthly", t.freq !== "monthly", `<div class="rtg-freq-row">day <input type="number" class="rtg-edit-in" data-rtgf="day" min="1" max="31" value="${monthlyDay}"> of the month</div>`)}
+      ${panel("yearly", t.freq !== "yearly", `<div class="rtg-freq-row"><input type="date" class="rtg-edit-in" data-rtgf="yearly" value="${esc(yearlyDate)}"></div>`)}
+      ${panel("interval", t.freq !== "interval", `<div class="rtg-freq-row">every <input type="number" class="rtg-edit-in" data-rtgf="intervalDays" min="1" value="${intervalDays}"> days, from <input type="date" class="rtg-edit-in" data-rtgf="anchor" value="${esc(anchor)}"></div>`)}
+      ${panel("once", t.freq !== "once", `<div class="rtg-freq-row"><input type="date" class="rtg-edit-in" data-rtgf="once" value="${esc(onceDate)}"></div>`)}
+      ${panel("daily", t.freq !== "daily", `<div class="rtg-freq-row rtg-muted">Every day -- no extra options</div>`)}
+      <div class="rtg-freq-actions">
+        <button type="button" class="rtg-ic" data-rtgf-save title="Save" aria-label="Save repeat pattern">✓</button>
+        <button type="button" class="rtg-ic" data-rtgf-cancel title="Cancel" aria-label="Cancel">✕</button>
+      </div>
+    </div>`;
+    const root = cell.querySelector(".rtg-freq-edit");
+    const typeSel = root.querySelector('[data-rtgf="type"]');
+    typeSel.addEventListener("change", () => {
+      root.querySelectorAll("[data-rtgf-panel]").forEach(p => { p.hidden = p.dataset.rtgfPanel !== typeSel.value; });
+    });
+    root.querySelectorAll("[data-rtgf-wd]").forEach(b => b.addEventListener("click", () => {
+      b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+    }));
+    const wiInp = root.querySelector('[data-rtgf="wi"]');
+    wiInp.addEventListener("input", () => {
+      root.querySelector("[data-rtgf-wa]").hidden = (parseInt(wiInp.value, 10) || 1) <= 1;
+    });
+    root.querySelector("[data-rtgf-cancel]").addEventListener("click", () => renderRtnGrid());
+    root.querySelector("[data-rtgf-save]").addEventListener("click", () => {
+      const type = typeSel.value;
+      // strip every freq-specific field first -- switching type must never leave a
+      // stale weekdays/day/date/etc behind from whatever type this routine had before
+      delete t.date; delete t.month; delete t.day; delete t.weekdays; delete t.weekInterval;
+      delete t.weekAnchor; delete t.schedules; delete t.intervalDays; delete t.anchor;
+      if (type === "weekly") {
+        const days = [...root.querySelectorAll("[data-rtgf-wd]")].filter(b => b.getAttribute("aria-pressed") === "true").map(b => +b.dataset.rtgfWd).sort((a, b) => a - b);
+        if (!days.length) { alert("Pick at least one day of the week."); return; }
+        const n = parseInt(root.querySelector('[data-rtgf="wi"]').value, 10) || 1;
+        let waVal = "";
+        if (n > 1) {
+          waVal = root.querySelector('[data-rtgf="wa"]').value;
+          if (!waVal) { root.querySelector('[data-rtgf="wa"]').focus(); return; }
+        }
+        t.weekdays = days;
+        if (n > 1) { t.weekInterval = n; t.weekAnchor = waVal; }
+      } else if (type === "monthly") {
+        const dv = parseInt(root.querySelector('[data-rtgf="day"]').value, 10);
+        if (!dv || dv < 1 || dv > 31) { root.querySelector('[data-rtgf="day"]').focus(); return; }
+        t.day = dv;
+      } else if (type === "yearly") {
+        const dv = root.querySelector('[data-rtgf="yearly"]').value;
+        if (!dv) { root.querySelector('[data-rtgf="yearly"]').focus(); return; }
+        const dd = parseKey(dv);
+        t.month = dd.getMonth() + 1; t.day = dd.getDate();
+      } else if (type === "interval") {
+        const n = parseInt(root.querySelector('[data-rtgf="intervalDays"]').value, 10);
+        if (!n || n < 1) { root.querySelector('[data-rtgf="intervalDays"]').focus(); return; }
+        const av = root.querySelector('[data-rtgf="anchor"]').value;
+        if (!av) { root.querySelector('[data-rtgf="anchor"]').focus(); return; }
+        t.intervalDays = n; t.anchor = av;
+      } else if (type === "once") {
+        const dv = root.querySelector('[data-rtgf="once"]').value;
+        if (!dv) { root.querySelector('[data-rtgf="once"]').focus(); return; }
+        t.date = dv;
+      }
+      t.freq = type;
+      saveRoutines();
+      renderRtnGrid();
+    });
+  }
   function rtgEditCell(cell, t) {
     const field = cell.dataset.rtgCell;
     if (cell.querySelector("input,select")) return;   // already mid-edit
-    if (field === "rtnFreqGroup") { openRtnForm(t, field); return; }
+    if (field === "rtnFreqGroup") {
+      // a multi-time-layer weekly routine (2+ day/time schedules on one routine) has
+      // no single pattern this editor's one-layer weekly panel could represent --
+      // same reasoning the Time cell already uses to send those to the full form.
+      const multiLayer = t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length > 1;
+      if (multiLayer || !RTG_FREQ_TYPES.includes(t.freq)) { openRtnForm(t, field); return; }
+      rtgEditFreq(cell, t);
+      return;
+    }
     if (field === "rtnTrack") {
       // a closed 3-way set (Work/Marriage/Personal) -- a picker, not free text.
       // Doesn't touch t.category: the form's own track picker leaves the category
