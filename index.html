@@ -29660,6 +29660,20 @@
     if (!ready || document.hidden) return;
     fetchCloud().then(reconcile, function () {});
   });
+  // 2026-08-06 pt.2 (Linh: "phone edits don't reach desktop" — live-traced: an edit
+  // made right before locking the phone or switching apps never pushed at all).
+  // schedulePush() waits 1400ms before calling pushNow() — the OS can freeze a
+  // backgrounded tab's timers within that window, so the debounced push never
+  // fires and the edit just sits marked DIRTY until something else happens to
+  // retry it (matching exactly what she saw: it eventually caught up once she
+  // reopened the phone, per the visibilitychange handler above, but not before).
+  // Flushing immediately the instant the tab goes hidden closes that window —
+  // pushNow() itself still no-ops harmlessly if there's nothing new to send.
+  document.addEventListener("visibilitychange", function () {
+    if (!ready || !document.hidden) return;
+    clearTimeout(pushTimer);
+    pushNow();
+  });
 
   // reload to show fresh data — but never yank a field she's typing in
   function isEditing() {
