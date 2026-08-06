@@ -3866,6 +3866,52 @@
     .rtb-cell { border-left: none; border-top: 1px solid var(--note-line); }
     .rtb-cell-first { border-top: none; }
   }
+  /* ============ ROUTINE TABLE (grid view) ============
+     2026-08-06 (Linh pasted a "Routine Library (table)" mock): sortable/groupable
+     spreadsheet lens on the SAME ROUTINE_TASKS the List/Board views already edit --
+     colours/type ride the app's own tokens throughout, not the mock's own bespoke
+     palette (--phase-*/--*-seed are already the app's shared source of truth for
+     phase and track colour, same ones Board and the flow chips use). */
+  .rtg-hd { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; }
+  .rtg-hd h2 { font-size: 16px; font-weight: 700; }
+  .rtg-n { font-size: 12px; color: var(--ink-faint); }
+  .rtg-toolbar { display: flex; gap: 9px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .rtg-search { flex: 1; min-width: 160px; }
+  .rtg-grp {
+    background: var(--field-bg); color: var(--ink-soft); border: 1px solid var(--note-line);
+    border-radius: 999px; padding: 8px 12px; font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
+  }
+  .rtg-tbl { background: var(--note-bg); border-radius: var(--radius-md); overflow-x: auto; }
+  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+  .rtg-tbl thead th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
+    font-weight: 700; padding: 11px 12px; cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  .rtg-tbl thead th .c { opacity: 0.55; font-size: 9px; margin-left: 3px; }
+  .rtg-tbl thead th.sorted { color: var(--accent-seed); }
+  .rtg-tbl thead th:hover { color: var(--ink); }
+  .rtg-tbl tbody td { padding: 10px 12px; border-top: 1px solid var(--note-line); vertical-align: middle; }
+  .rtg-tbl tbody tr[data-rtg-row]:hover { background: color-mix(in oklab, var(--accent-seed) 5%, transparent); }
+  .rtg-tbl tbody td[data-rtg-cell] { cursor: pointer; }
+  .rtg-name { font-weight: 600; color: var(--ink); }
+  .rtg-trk { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .rtg-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .rtg-phase { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; border-radius: 5px; padding: 2px 7px; }
+  .rtg-phase.phase-lbl-before { background: color-mix(in oklab, var(--phase-before) 16%, transparent); }
+  .rtg-phase.phase-lbl-during { background: color-mix(in oklab, var(--phase-during) 14%, transparent); }
+  .rtg-phase.phase-lbl-after { background: color-mix(in oklab, var(--phase-after) 16%, transparent); }
+  .rtg-muted { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rtg-acts { display: flex; gap: 4px; }
+  .rtg-ic {
+    width: 30px; height: 30px; min-height: 0; border-radius: 7px; border: none; background: var(--field-bg);
+    display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; color: var(--ink-soft);
+  }
+  .rtg-ic:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
+  .rtg-group-row td {
+    padding: 13px 12px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-faint); font-weight: 700; border-top: none;
+  }
+  .rtg-group-row:first-child td { padding-top: 6px; }
   /* Routines page compaction (2026-08-06, Linh + desktop screenshot: "make content
      more compact"): page-scoped (#routinesPage prefix, her preferred pattern) — the
      page was one sparse full-width column on desktop. Chains flow as a multi-column
@@ -9299,13 +9345,22 @@
          routine at once (not just chains live today, which is what the flow chip +
          detail sheet on the Day page already covers). renderRoutines() keeps
          whichever is hidden in sync too. -->
+    <!-- 2026-08-06 (Linh pasted a "Routine Library (table)" mock, code44 not needed --
+         only two real forks, both resolved: this is a 3rd view alongside List/Board
+         (not a replacement), and its "edit any cell inline" opens the existing edit
+         form focused on that field rather than growing real per-cell mini-editors.
+         Renamed the old Before/Event/After board's key+label from "table" to "board"
+         so this new sortable/groupable spreadsheet view can own "Table", matching her
+         mock's own title exactly. -->
     <div class="track-picker" id="rtnViewPicker" role="group" aria-label="Routines view">
       <button type="button" class="track-opt" data-rtnview="list" aria-pressed="true">List</button>
+      <button type="button" class="track-opt" data-rtnview="board" aria-pressed="false">Board</button>
       <button type="button" class="track-opt" data-rtnview="table" aria-pressed="false">Table</button>
     </div>
     <div id="rtnDeleteNote" class="note-inline" hidden></div>
     <div id="rtnManage"></div>
     <div id="rtnTable" hidden></div>
+    <div id="rtnGrid" hidden></div>
     <!-- docked side editor (>=1024px): placeRtnForm() moves #rtnAddForm into the body
          here whenever an edit/add opens on desktop — same page, no popup, no scroll-away -->
     <aside class="rtn-side" id="rtnSide" hidden>
@@ -20952,8 +21007,10 @@
   function renderRoutines() {
     renderChains();
     document.getElementById("rtnManage").hidden = rtnListMode !== "list";
-    document.getElementById("rtnTable").hidden = rtnListMode !== "table";
+    document.getElementById("rtnTable").hidden = rtnListMode !== "board";
+    document.getElementById("rtnGrid").hidden = rtnListMode !== "table";
     renderRtnTable();
+    renderRtnGrid();
     const manageEl = document.getElementById("rtnManage");
     if (!ROUTINE_TASKS.length) {
       manageEl.innerHTML = `<div class="fam-empty">No routines yet.<br>Add a task below — what it is, which life area, and how often.</div>`;
@@ -21080,7 +21137,7 @@
   // match everywhere she meets them, not just here.
   function renderRtnTable() {
     const host = document.getElementById("rtnTable");
-    if (!host || rtnListMode !== "table") return;
+    if (!host || rtnListMode !== "board") return;
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const tKey = keyOf(TODAY);
     // 2026-08-05 (Linh: "i dont understand the category of morning work, work etc.
@@ -21207,6 +21264,156 @@
   document.addEventListener("pointercancel", () => rtbEndDrag(false));
   // Android long-press fires contextmenu mid-hold — swallow it while a drag is live
   document.getElementById("rtnTable").addEventListener("contextmenu", e => { if (rtbDrag) e.preventDefault(); });
+
+  /* ============ ROUTINE TABLE (grid view) ============
+     2026-08-06 (Linh pasted a "Routine Library (table)" mock, "sort by any column
+     header, edit any cell inline, group by whatever you choose"): a 3rd lens on the
+     SAME ROUTINE_TASKS List/Board already edit -- List groups by category, Board
+     glues Before/Event/After, this one is a flat sortable/groupable spreadsheet.
+     "Edit any cell inline" resolved to opening the existing edit form focused on
+     that field (openRtnForm's new 2nd param) rather than growing real per-cell
+     mini-editors -- far less surface area, reuses everything already working. */
+  let rtnGridSort = { col: "title", dir: 1 };
+  let rtnGridGroupBy = "none";
+  let rtnGridSearch = "";
+  // Phase has no home on the edit form (it's only ever set by dragging on the
+  // Board, or by a real chain link) -- so unlike every other column, its cell
+  // isn't clickable-to-edit; the pill is read-only info here.
+  function rtnGridPhaseOf(t) { return (t.anchorTo && chainAnchorOf(t)) ? t.anchorMode : (t.phase || "during"); }
+  // a chain-linked step has no raw time of its own -- fall back to the same
+  // chain-computed time the Chains page's own preview shows, so it doesn't read
+  // as blank just because it's a link rather than an anchor.
+  function rtnGridTimeMin(t) {
+    const raw = rawRoutineStartMin(t, TODAY);
+    return raw != null ? raw : chainedStartMinOn(t, TODAY);
+  }
+  function renderRtnGrid() {
+    const host = document.getElementById("rtnGrid");
+    if (!host || rtnListMode !== "table") return;
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
+    const q = rtnGridSearch.trim().toLowerCase();
+    const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
+    const PHASE_ORDER = { before: 0, during: 1, after: 2 };
+    const sorters = {
+      title: (a, b) => a.title.localeCompare(b.title),
+      track: (a, b) => TRACK_LABEL[a.track].localeCompare(TRACK_LABEL[b.track]) || a.title.localeCompare(b.title),
+      phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
+      freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
+      time: (a, b) => {
+        const ma = rtnGridTimeMin(a), mb = rtnGridTimeMin(b);
+        if (ma == null && mb == null) return a.title.localeCompare(b.title);
+        if (ma == null) return 1;
+        if (mb == null) return -1;
+        return ma - mb;
+      },
+    };
+    rows.sort(sorters[rtnGridSort.col] || sorters.title);
+    if (rtnGridSort.dir === -1) rows.reverse();
+    const row = t => {
+      const phase = rtnGridPhaseOf(t);
+      const phaseLbl = phase === "during" ? "event" : phase;
+      const timeMin = rtnGridTimeMin(t);
+      return `<tr data-rtg-row="${esc(t.id)}">
+        <td class="rtg-name" data-rtg-cell="rtnTitle">${esc(t.title)}</td>
+        <td data-rtg-cell="rtnTrackPicker"><span class="rtg-trk"><span class="rtg-dot" style="background:var(--${t.track}-seed)"></span>${esc(TRACK_LABEL[t.track])}</span></td>
+        <td><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
+        <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
+        <td class="rtg-muted" data-rtg-cell="rtnStart">${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
+        <td><div class="rtg-acts">
+          <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add to calendar" aria-label="Add ${esc(t.title)} to the calendar">📅</button>
+          <button type="button" class="rtg-ic" data-rtg-chain="${esc(t.id)}" title="Start a chain from this" aria-label="Start a chain from ${esc(t.title)}">🔗</button>
+          <button type="button" class="rtg-ic" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
+        </div></td>
+      </tr>`;
+    };
+    let bodyHtml;
+    if (rtnGridGroupBy === "none") {
+      bodyHtml = rows.map(row).join("");
+    } else {
+      const groupKeyOf = t => rtnGridGroupBy === "track" ? TRACK_LABEL[t.track]
+        : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
+        : routineFreqLabel(t).split(" · ")[0].split(" + ")[0];   // "freq": coarse type only, not the full per-row text
+      const groups = new Map();
+      rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+      bodyHtml = [...groups.entries()].map(([k, list]) =>
+        `<tr class="rtg-group-row"><td colspan="6">${esc(k)}</td></tr>${list.map(row).join("")}`
+      ).join("");
+    }
+    const th = (col, label) => {
+      const arrow = rtnGridSort.col === col ? (rtnGridSort.dir === 1 ? "▲" : "▼") : "↕";
+      return `<th data-rtg-sort="${col}" class="${rtnGridSort.col === col ? "sorted" : ""}">${label} <span class="c">${arrow}</span></th>`;
+    };
+    host.innerHTML = `
+      <div class="rtg-hd"><h2>Routine Library</h2><span class="rtg-n">${rows.length} routine${rows.length === 1 ? "" : "s"}</span></div>
+      <div class="rtg-toolbar">
+        <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…" value="${esc(rtnGridSearch)}">
+        <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
+          <option value="none"${rtnGridGroupBy === "none" ? " selected" : ""}>Group by: None</option>
+          <option value="track"${rtnGridGroupBy === "track" ? " selected" : ""}>Group by: Track</option>
+          <option value="phase"${rtnGridGroupBy === "phase" ? " selected" : ""}>Group by: Phase</option>
+          <option value="freq"${rtnGridGroupBy === "freq" ? " selected" : ""}>Group by: Repeats</option>
+        </select>
+        <button type="button" class="add-btn" id="rtgAddBtn">＋ Add routine</button>
+      </div>
+      <div class="rtg-tbl"><table>
+        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
+        <tbody>${bodyHtml}</tbody>
+      </table></div>`;
+  }
+  document.getElementById("rtnGrid").addEventListener("click", e => {
+    const sortTh = e.target.closest("[data-rtg-sort]");
+    if (sortTh) {
+      const col = sortTh.dataset.rtgSort;
+      if (rtnGridSort.col === col) rtnGridSort.dir *= -1; else { rtnGridSort = { col, dir: 1 }; }
+      renderRtnGrid();
+      return;
+    }
+    const cal = e.target.closest("[data-rtg-cal]");
+    if (cal) {
+      const t = ROUTINE_TASKS.find(x => x.id === cal.dataset.rtgCal);
+      if (t) rtnAddOnce(t);   // the existing "drop a routine onto the calendar as a one-off, no editor" flow
+      return;
+    }
+    const chain = e.target.closest("[data-rtg-chain]");
+    if (chain) {
+      const t = ROUTINE_TASKS.find(x => x.id === chain.dataset.rtgChain);
+      if (t) {
+        // seeds the Chains builder with this routine, same as tapping its step
+        // chip in the Steps pool would -- see the chainsPage click delegate's
+        // own `if (!cbBuilding) { cbBuilding = true; ... }` tap-to-start path.
+        cbBuilding = true; cbItems = [t.id]; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = "";
+        state.view = "chains"; render();
+      }
+      return;
+    }
+    const editIcon = e.target.closest("[data-rtg-edit]");
+    if (editIcon) {
+      const t = ROUTINE_TASKS.find(x => x.id === editIcon.dataset.rtgEdit);
+      if (t) openRtnForm(t);
+      return;
+    }
+    if (e.target.closest("#rtgAddBtn")) { openRtnForm(null); return; }
+    const row = e.target.closest("[data-rtg-row]");
+    if (!row) return;
+    const t = ROUTINE_TASKS.find(x => x.id === row.dataset.rtgRow);
+    if (!t) return;
+    const cell = e.target.closest("[data-rtg-cell]");
+    openRtnForm(t, cell ? cell.dataset.rtgCell : null);
+  });
+  document.getElementById("rtnGrid").addEventListener("input", e => {
+    if (e.target.id !== "rtgSearch") return;
+    rtnGridSearch = e.target.value;
+    // renderRtnGrid() rebuilds the whole table via innerHTML, which would otherwise
+    // drop focus/cursor out of this exact input after every single keystroke
+    const pos = e.target.selectionStart;
+    renderRtnGrid();
+    const inp = document.getElementById("rtgSearch");
+    if (inp) { inp.focus(); inp.setSelectionRange(pos, pos); }
+  });
+  document.getElementById("rtnGrid").addEventListener("change", e => {
+    if (e.target.id === "rtgGroupBy") { rtnGridGroupBy = e.target.value; renderRtnGrid(); }
+  });
+
   document.getElementById("rtnViewPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-rtnview]");
     if (!b) return;
@@ -24161,7 +24368,7 @@
     document.getElementById("rtnDeleteBtn").hidden = true;
     placeRtnForm(false);   // undock the side rail, return the form to its anchor
   }
-  function openRtnForm(task) {
+  function openRtnForm(task, focusField) {
     rtnAddRow.hidden = true; rtnForm.hidden = false;
     document.getElementById("rtnDeleteBtn").hidden = !task;
     document.getElementById("rtnAnchorDate").value = keyOf(TODAY);
@@ -24222,7 +24429,16 @@
     renderRtnSchedExtra();
     renderRtnCatList(); updateRtnSubTotal();
     placeRtnForm(true);   // >=1024px: dock into the side rail (no scroll-away)
-    document.getElementById("rtnTitle").focus();
+    // 2026-08-06 (Table view, "click a cell -> open the edit form focused there"):
+    // optional 2nd param scrolls/focuses a specific field instead of the default
+    // title focus below -- e.g. clicking the Time cell jumps straight to rtnStart.
+    const focusEl = focusField && document.getElementById(focusField);
+    if (focusEl) {
+      focusEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof focusEl.focus === "function") focusEl.focus();
+    } else {
+      document.getElementById("rtnTitle").focus();
+    }
   }
   // 2026-08-06 (Linh: "a simple, obvious way to drop a routine onto the calendar as a
   // ONE-OFF single event on a day I choose — WITHOUT going through the whole routine
@@ -28374,7 +28590,7 @@
       state.view = rst.view;
       if (rst.anchor && /^\d{4}-\d{2}-\d{2}$/.test(rst.anchor)) state.anchor = parseKey(rst.anchor);
     }
-    if (rst && rst.rtnView === "table") rtnListMode = "table";
+    if (rst && (rst.rtnView === "board" || rst.rtnView === "table")) rtnListMode = rst.rtnView;
   } catch (e) {}
   Book33Notify.consumeOpenParam();   // a tapped notification's ?nday= — before first paint (wins over the restore)
   render();
