@@ -5183,6 +5183,33 @@
   }
   .ideal-row .dash, .ideal-row .unit { font-size: 12px; color: var(--ink-soft); }
 
+  /* 2026-08-06 (Linh, "Body" mockup): page-level KPI strip above the tessellated
+     Fasting/Weight/Body-fat cards — distinct from the shared .h-stats/.h-stat used
+     INSIDE those cards (bigger number, its own delta line), so this doesn't ripple
+     into every other page reusing .h-stat. auto-fit wraps cleanly at any width
+     (360px phone through desktop) without a breakpoint. */
+  .bdy-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .bdy-kpi { background: var(--raised); border-radius: var(--radius-md); padding: 12px; }
+  .bdy-kpi .v { font-family: var(--font-display); font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; color: var(--ink); }
+  .bdy-kpi .v small { font-size: 11px; color: var(--ink-soft); font-weight: 400; font-family: var(--font-body); }
+  .bdy-kpi .k { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-faint); margin-top: 3px; font-weight: 700; }
+  .bdy-kpi .d { font-size: 10.5px; margin-top: 4px; color: var(--ink-soft); }
+  .bdy-kpi .d.over { color: var(--warn); }
+  .bdy-kpi .d.good { color: var(--fast-green); }
+
+  /* tessellated 2-column body layout: a narrower Fasting+Body-fat column beside a
+     wider Weight column (order, not source position, decides which renders left —
+     lets the DOM keep Fasting first without fighting the visual weighting). Single
+     column under 720px — two ~150px-wide columns would crush the weight chart's
+     30px-plus y-axis label margin well before the 360px phone floor. */
+  .bdy-cols { display: grid; grid-template-columns: 1fr 1.35fr; gap: 12px; align-items: start; }
+  .bdy-col { display: flex; flex-direction: column; gap: 12px; }
+  .bdy-col-fast { order: 1; }
+  .bdy-col-weight { order: 2; }
+  @media (max-width: 720px) {
+    .bdy-cols { grid-template-columns: 1fr; }
+  }
+
   .chart-wrap { margin: 4px 0 14px; overflow-x: auto; }
   .chart-wrap svg { display: block; width: 100%; height: auto; }
   .zone-key { display: flex; flex-wrap: wrap; gap: 12px; font-size: 10.5px; color: var(--ink-soft); margin-top: 6px; }
@@ -13756,7 +13783,7 @@
                   cycSelectedDate: keyOf(TODAY),
                   moShowEvents: true, evlTrack: "all",
                   track: "work", year: TODAY.getFullYear(),
-                  habit: "all", openStep: null, dhCycleDetailOpen: false, healthSubTab: "fasting", suppEditingId: null,
+                  habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
                   miniCalAnchor: new Date(TODAY), spendAnchor: new Date(TODAY),
                   // 2026-08-06: Habits page (real routines + weight, Week/Month/Manage)
@@ -19135,13 +19162,68 @@
     </svg>`;
   }
 
-  function renderHealth() {
-    document.querySelectorAll("#healthSubNav [data-hsub]").forEach(b =>
-      b.setAttribute("aria-pressed", String(b.dataset.hsub === state.healthSubTab)));
-    if (state.healthSubTab === "period") state.healthSubTab = "fasting"; // tab removed — cycle page owns period now
-    document.getElementById("healthSubFasting").hidden = state.healthSubTab !== "fasting";
-    document.getElementById("healthSubBody").hidden = state.healthSubTab !== "body";
+  // 2026-08-06 (Linh, "Body" mockup: "the muddy weight bands are now a clean ideal
+  // line + over-target tint"): SUPERSEDES the 5-band filled-zone chart for weight
+  // specifically (that escalating under/ideal/yellow/orange/red fill read as "muddy")
+  // -- two dashed reference lines (ideal max, +12% over) plus one soft tint above the
+  // over line. Per-point fill/ring colour is UNCHANGED (still weightZone()/PHASE_COL),
+  // so the data meaning is identical, only the chart's own visual language changed.
+  // Body fat keeps the plain lineChart() -- it only ever has one target band, no
+  // escalating zones, so there was nothing "muddy" there to simplify.
+  function weightLineChart(points, idealMin, idealMax) {
+    if (!points.length) return `<div class="h-empty">Log a weight to start the graph.</div>`;
+    const W = 560, H = 190, PL = 40, PR = 12, PT = 14, PB = 26;
+    const iw = W - PL - PR, ih = H - PT - PB;
+    const vals = points.map(p => p.v);
+    const overLine = idealMax != null ? idealMax * 1.12 : null;
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    if (idealMin != null) lo = Math.min(lo, idealMin);
+    if (overLine != null) hi = Math.max(hi, overLine);
+    const pad = Math.max((hi - lo) * 0.18, 1);
+    lo -= pad; hi += pad;
+    const span = hi - lo || 1;
 
+    const x = i => PL + (points.length === 1 ? iw / 2 : (i / (points.length - 1)) * iw);
+    const y = v => PT + ih - ((v - lo) / span) * ih;
+
+    const overTint = (overLine != null && overLine < hi)
+      ? `<rect x="${PL}" y="${PT}" width="${iw}" height="${(y(overLine) - PT).toFixed(1)}" fill="var(--warn)" opacity="0.08"/>` : "";
+    const idealLine = idealMax != null
+      ? `<line x1="${PL}" y1="${y(idealMax).toFixed(1)}" x2="${W - PR}" y2="${y(idealMax).toFixed(1)}" stroke="var(--fast-green)" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.65"/>
+         <text x="${W - PR}" y="${(y(idealMax) - 4).toFixed(1)}" text-anchor="end" font-size="9" font-weight="700" fill="var(--fast-green)">ideal ${idealMax}</text>` : "";
+    const overLineSvg = overLine != null
+      ? `<line x1="${PL}" y1="${y(overLine).toFixed(1)}" x2="${W - PR}" y2="${y(overLine).toFixed(1)}" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.6"/>
+         <text x="${W - PR}" y="${(y(overLine) - 4).toFixed(1)}" text-anchor="end" font-size="9" font-weight="700" fill="var(--warn)">+12%</text>` : "";
+
+    const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+    const dots = points.map((p, i) =>
+      `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${i === points.length - 1 ? 4.5 : 3}"
+        fill="${p.col || "var(--ink)"}" stroke="${p.ring || "var(--paper)"}" stroke-width="${p.ring ? 2 : 1.5}"/>`).join("");
+
+    const ticks = [lo + span * 0.05, (lo + hi) / 2, hi - span * 0.05].map(v =>
+      `<text x="${PL - 7}" y="${(y(v) + 3.5).toFixed(1)}" text-anchor="end" font-size="9"
+         fill="var(--ink-faint)" font-family="system-ui">${v.toFixed(1)}</text>`).join("");
+
+    const first = points[0].label, lastL = points[points.length - 1].label;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weight over time">
+      ${overTint}
+      <line x1="${PL}" y1="${PT + ih}" x2="${W - PR}" y2="${PT + ih}" stroke="var(--note-line)"/>
+      ${ticks}
+      ${overLineSvg}
+      ${idealLine}
+      <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="1.8"
+        stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>
+      ${dots}
+      <text x="${PL}" y="${H - 8}" font-size="9" fill="var(--ink-faint)" font-family="system-ui">${esc(first)}</text>
+      ${points.length > 1 ? `<text x="${W - PR}" y="${H - 8}" text-anchor="end" font-size="9"
+        fill="var(--ink-faint)" font-family="system-ui">${esc(lastL)}</text>` : ""}
+    </svg>`;
+  }
+
+  function renderHealth() {
+    // KPI strip HTML built up as each section below computes its own numbers —
+    // assembled and written to #bdyKpis at the very end of this function.
+    let kpiWeightHTML = "", kpiBfHTML = "", kpiFastHTML = "";
     // prefill the date fields with today
     ["weightDate", "bfDate"].forEach(id => {
       const el = document.getElementById(id);
@@ -19188,9 +19270,15 @@
           <button class="del" data-fast-del="${f.id}" aria-label="Delete fast">×</button>
         </div>` + (editing ? fastHistEditorHTML(f) : "");
         }).join("");
+      kpiFastHTML = `
+        <div class="bdy-kpi"><div class="v">${rec ? "🔥 " + rec.current : "—"}</div><div class="k">Fast streak</div><div class="d${rec && rec.current ? " good" : ""}">${rec ? "best " + rec.best : "no streak yet"}</div></div>
+        <div class="bdy-kpi"><div class="v">${fmtHrs(avg)}</div><div class="k">Avg fast</div><div class="d">goal ${HEALTH.fastGoalHours || 16}h</div></div>`;
     } else {
       document.getElementById("fastStats").innerHTML = "";
       document.getElementById("fastHistory").innerHTML = `<div class="h-empty">No fasts recorded yet. Hit Start fast when you begin, or log one above with your own times.</div>`;
+      kpiFastHTML = `
+        <div class="bdy-kpi"><div class="v">—</div><div class="k">Fast streak</div><div class="d">not started</div></div>
+        <div class="bdy-kpi"><div class="v">—</div><div class="k">Avg fast</div><div class="d">goal ${HEALTH.fastGoalHours || 16}h</div></div>`;
     }
 
     /* ---------- weight ---------- */
@@ -19205,19 +19293,16 @@
           ${lastW.kg >= prevW.kg ? "▲" : "▼"} ${Math.abs(lastW.kg - prevW.kg).toFixed(1)} kg</span>` : ""}
          ${zc ? `<span class="delta" style="color:${zoneCol(zc)}">● ${ZONES.find(z=>z.key===zc).label}</span>` : ""}`
       : `<span class="none">No weight logged yet.</span>`;
+    kpiWeightHTML = lastW
+      ? `<div class="bdy-kpi"><div class="v">${lastW.kg}<small>kg</small></div><div class="k">Weight</div>
+          <div class="d${zc === "orange" || zc === "red" ? " over" : ""}">${prevW ? `${lastW.kg >= prevW.kg ? "▲" : "▼"} ${Math.abs(lastW.kg - prevW.kg).toFixed(1)}` : ""}${zc && zc !== "ideal" ? ` · ${ZONES.find(z => z.key === zc).label.toLowerCase()}` : ""}</div></div>`
+      : `<div class="bdy-kpi"><div class="v">—</div><div class="k">Weight</div><div class="d">no entries yet</div></div>`;
 
     document.getElementById("idealMin").value = HEALTH.idealMin ?? "";
     document.getElementById("idealMax").value = HEALTH.idealMax ?? "";
     document.getElementById("idealBf").value = HEALTH.idealBodyFat ?? "";
 
     const lo = HEALTH.idealMin, hi = HEALTH.idealMax;
-    const bands = (lo != null && hi != null) ? [
-      { from: -Infinity, to: lo, col: zoneCol("under") },
-      { from: lo, to: hi, col: zoneCol("ideal"), extend: true },
-      { from: hi, to: hi * 1.05, col: zoneCol("yellow") },
-      { from: hi * 1.05, to: hi * 1.12, col: zoneCol("orange") },
-      { from: hi * 1.12, to: Infinity, col: zoneCol("red") },
-    ].map(b => ({ ...b, from: b.from === -Infinity ? null : b.from, to: b.to === Infinity ? null : b.to })) : [];
 
     // ring each dot in its cycle-phase colour (fill keeps the weight-zone meaning)
     const wPred = cyclePrediction();
@@ -19228,7 +19313,7 @@
                ring: ph ? PHASE_COL[ph] : null };
     });
     document.getElementById("weightChart").innerHTML =
-      lineChart(wPts, { bands, empty: "Log a weight to start the graph.", aria: "Weight over time" })
+      weightLineChart(wPts, lo, hi)
       + (lo != null && hi != null
         ? `<div class="zone-key">${ZONES.map(z => `<span><i style="background:${z.col};opacity:.55"></i>${z.label}</span>`).join("")}</div>`
         : `<div class="zone-key"><span>Set your ideal range above to colour the zones.</span></div>`)
@@ -19257,7 +19342,17 @@
       { empty: "Log a reading to start the graph.", aria: "Body fat over time",
         bands: bfTarget != null ? [{ from: bfTarget - 1, to: bfTarget + 1, col: zoneCol("ideal"), extend: true }] : [] })
       + (bfTarget != null ? `<div class="zone-key"><span><i style="background:${zoneCol("ideal")};opacity:.55"></i>Target ~${bfTarget}%</span></div>` : "");
+    kpiBfHTML = lastB
+      ? `<div class="bdy-kpi"><div class="v">${lastB.pct}<small>%</small></div><div class="k">Body fat</div><div class="d">${bfTarget != null ? `target ${bfTarget}%` : ""}</div></div>`
+      : `<div class="bdy-kpi"><div class="v">—</div><div class="k">Body fat</div><div class="d">${bfTarget != null ? `target ${bfTarget}%` : "no reading yet"}</div></div>`;
 
+    /* ---------- KPI strip ---------- */
+    const kpiCd = cycleDayFor(TODAY);
+    const kpiPhase = kpiCd ? phaseOn(TODAY, wPred) : null;
+    const kpiCycleHTML = kpiCd
+      ? `<div class="bdy-kpi"><div class="v">${kpiPhase ? CYCLE_PHASE_INFO[kpiPhase].label : "—"}</div><div class="k">Cycle</div><div class="d" style="color:${kpiPhase ? PHASE_COL[kpiPhase] : "var(--ink-soft)"}">Day ${kpiCd}</div></div>`
+      : `<div class="bdy-kpi"><div class="v">—</div><div class="k">Cycle</div><div class="d">no cycle data</div></div>`;
+    document.getElementById("bdyKpis").innerHTML = kpiWeightHTML + kpiBfHTML + kpiFastHTML + kpiCycleHTML;
   }
 
   // live ticking clock while a fast is running
@@ -22729,11 +22824,6 @@
     if (!rv.closedAt) delete rv.closedAt;
     saveReviews(); renderReview();
   });
-  document.getElementById("healthSubNav").addEventListener("click", e => {
-    const b = e.target.closest("[data-hsub]"); if (!b) return;
-    state.healthSubTab = b.dataset.hsub; renderHealth();
-  });
-
   document.getElementById("miniCalPrev").addEventListener("click", () => {
     state.miniCalAnchor = new Date(state.miniCalAnchor.getFullYear(), state.miniCalAnchor.getMonth() - 1, 1);
     renderMiniCal();
@@ -27622,7 +27712,7 @@
   }
   // fasting widgets (Day header + Week strip) → jump straight to the fasting history editor
   function jumpToFastHistory() {
-    state.view = "health"; state.healthSubTab = "fasting"; render();
+    state.view = "health"; render();
     document.getElementById("fastManualForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   document.getElementById("fastHistoryLink")?.addEventListener("click", jumpToFastHistory);
