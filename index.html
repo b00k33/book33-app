@@ -3882,7 +3882,7 @@
     border-radius: 999px; padding: 8px 12px; font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
   }
   .rtg-tbl { background: var(--note-bg); border-radius: var(--radius-md); overflow-x: auto; }
-  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 700px; }
   .rtg-tbl thead th {
     text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
     font-weight: 700; padding: 11px 12px; cursor: pointer; white-space: nowrap; user-select: none;
@@ -21355,6 +21355,7 @@
     const PHASE_ORDER = { before: 0, during: 1, after: 2 };
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
+      fitlink: (a, b) => (a.fitLink || "").localeCompare(b.fitLink || "") || a.title.localeCompare(b.title),
       category: (a, b) => (a.category || "").localeCompare(b.category || "") || a.title.localeCompare(b.title),
       phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
       freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
@@ -21379,6 +21380,7 @@
       const chained = t.anchorTo && chainAnchorOf(t);
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle">${esc(t.title)}</td>
+        <td data-rtg-cell="rtnFitLink">${t.fitLink ? `🏋 ${esc(t.fitLink)}` : `<span class="rtg-muted">—</span>`}</td>
         <td data-rtg-cell="rtnCategory">${t.category ? esc(t.category) : `<span class="rtg-muted">Uncategorized</span>`}</td>
         <td><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
@@ -21394,13 +21396,14 @@
     if (rtnGridGroupBy === "none") {
       bodyHtml = rows.map(row).join("");
     } else {
-      const groupKeyOf = t => rtnGridGroupBy === "category" ? (t.category || "Uncategorized")
+      const groupKeyOf = t => rtnGridGroupBy === "fitlink" ? (t.fitLink || "No fitness link")
+        : rtnGridGroupBy === "category" ? (t.category || "Uncategorized")
         : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
         : routineFreqLabel(t).split(" · ")[0].split(" + ")[0];   // "freq": coarse type only, not the full per-row text
       const groups = new Map();
       rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
       bodyHtml = [...groups.entries()].map(([k, list]) =>
-        `<tr class="rtg-group-row"><td colspan="6">${esc(k)}</td></tr>${list.map(row).join("")}`
+        `<tr class="rtg-group-row"><td colspan="7">${esc(k)}</td></tr>${list.map(row).join("")}`
       ).join("");
     }
     const th = (col, label) => {
@@ -21413,6 +21416,7 @@
         <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…" value="${esc(rtnGridSearch)}">
         <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
           <option value="none"${rtnGridGroupBy === "none" ? " selected" : ""}>Group by: None</option>
+          <option value="fitlink"${rtnGridGroupBy === "fitlink" ? " selected" : ""}>Group by: Fitness</option>
           <option value="category"${rtnGridGroupBy === "category" ? " selected" : ""}>Group by: Category</option>
           <option value="phase"${rtnGridGroupBy === "phase" ? " selected" : ""}>Group by: Phase</option>
           <option value="freq"${rtnGridGroupBy === "freq" ? " selected" : ""}>Group by: Repeats</option>
@@ -21420,7 +21424,7 @@
         <button type="button" class="add-btn" id="rtgAddBtn">＋ Add routine</button>
       </div>
       <div class="rtg-tbl"><table>
-        <thead><tr>${th("title", "Routine")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("fitlink", "Fitness")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
   }
@@ -21574,6 +21578,25 @@
       const multiLayer = t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length > 1;
       if (multiLayer || !RTG_FREQ_TYPES.includes(t.freq)) { openRtnForm(t, field); return; }
       rtgEditFreq(cell, t);
+      return;
+    }
+    if (field === "rtnFitLink") {
+      // a closed set (the same FITNESS_TYPES list the form's own "Fitness tracker
+      // link" select offers) -- a picker, not free text. Ticking this routine off
+      // then auto-logs a session of whatever's picked here (see applyFitLink).
+      const orig = t.fitLink || "";
+      const opts = ["", ...FITNESS_TYPES].map(v =>
+        `<option value="${esc(v)}"${v === orig ? " selected" : ""}>${v ? esc(v) : "None"}</option>`).join("");
+      cell.innerHTML = `<select class="rtg-edit-in">${opts}</select>`;
+      const sel = cell.querySelector("select");
+      let committed = false;
+      sel.addEventListener("change", () => {
+        committed = true;
+        if (sel.value) t.fitLink = sel.value; else delete t.fitLink;
+        saveRoutines(); renderRtnGrid();
+      });
+      sel.addEventListener("blur", () => { if (!committed) renderRtnGrid(); });
+      sel.focus();
       return;
     }
     const finish = (inp, commit) => {
