@@ -4168,6 +4168,14 @@
     #rtnAddForm .rtn-fieldrow > .field.rtn-fw-130,
     #rtnAddForm .rtn-fieldrow > .field.rtn-fw-90 { flex-basis: auto; }
   }
+  /* 2026-08-06 (Linh's "New routine" mockup): icon box beside the Name input --
+     stays side-by-side even at phone width, unlike .rtn-fieldrow above, since a
+     single-character icon box never needs its own full-width line. */
+  .rtn-name-row { display: flex; gap: 8px; }
+  .rtn-name-row .rtn-icon-input {
+    flex: 0 0 44px; width: 44px; text-align: center; font-size: 18px; padding: 8px 4px;
+  }
+  .rtn-name-row #rtnTitle { flex: 1 1 auto; min-width: 0; }
   /* Repeats/Days-of-week chips have no per-item colour of their own (unlike Part of
      life's work/family/marriage/personal ink) -- the dot next to their label was
      inheriting a default ink colour with no real meaning, just visual noise. Days of
@@ -4180,10 +4188,16 @@
      to the full row width by itself. Same bug on all three since they share this markup.
      A 4-col grid on mobile keeps every pill the same size across both rows instead. */
   @media (max-width: 640px) {
-    #suppWeekdayPicker, #famWeekdayPicker, #rtnWeekdayPicker, #fWeekdayPicker {
+    #suppWeekdayPicker, #famWeekdayPicker, #fWeekdayPicker {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     }
   }
+  /* 2026-08-06 (Linh's "New routine" mockup): the Routines form's own Days picker
+     drops the planet icon + 3-letter label for a single bold initial (M T W T F S S)
+     -- compact enough that all 7 fit one row even at 360px, so it no longer needs the
+     4-col-grid wrap workaround above (that existed only to fix "Mon"/"Tue" overflow). */
+  #rtnWeekdayPicker.track-picker { flex-wrap: nowrap; }
+  #rtnWeekdayPicker .track-opt { flex: 0 0 auto; width: 40px; padding: 0; font-weight: 700; }
   /* 2026-08-06: #rtnFreqPicker's old mobile grid override (3 equal-width columns,
      stretching "Daily" to match "Custom interval") is gone -- SUPERSEDED by the
      #rtnAddForm .track-opt redesign above (flex:0 0 auto + flex-wrap on the picker),
@@ -9241,9 +9255,18 @@
          at >=1024px and brings it back here below that (phone behaviour unchanged). -->
     <div id="rtnFormHome" hidden></div>
     <form class="add-form" id="rtnAddForm" hidden>
+      <!-- 2026-08-06 (Linh's "New routine" mockup): an icon box beside the name --
+           reuses her existing convention (an emoji she's always typed by hand at the
+           start of the title, e.g. "🌅 A · Before Pilates") rather than a new field:
+           this input is just a convenience for that same leading character, split out
+           and recombined on open/save (see openRtnForm/the submit handler). Her own
+           device emoji keyboard is the picker -- no in-app emoji browser to build. -->
       <div class="field full">
-        <label for="rtnTitle">Task</label>
-        <input type="text" id="rtnTitle" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
+        <label for="rtnTitle">Name</label>
+        <div class="rtn-name-row">
+          <input type="text" id="rtnIcon" class="rtn-icon-input" placeholder="＋" maxlength="8" autocomplete="off" aria-label="Icon (optional, tap to type an emoji)">
+          <input type="text" id="rtnTitle" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
+        </div>
       </div>
       <div class="field full">
         <label>Part of life</label>
@@ -9289,7 +9312,7 @@
           <button type="button" class="track-opt" data-freq="weekly" aria-pressed="true">Weekly</button>
           <button type="button" class="track-opt" data-freq="monthly" aria-pressed="false">Monthly</button>
           <button type="button" class="track-opt" data-freq="yearly" aria-pressed="false">Yearly</button>
-          <button type="button" class="track-opt" data-freq="interval" aria-pressed="false">Custom interval</button>
+          <button type="button" class="track-opt" data-freq="interval" aria-pressed="false">Custom</button>
           <button type="button" class="track-opt" data-freq="once" aria-pressed="false">One-off</button>
         </div>
       </div>
@@ -9347,7 +9370,7 @@
            Auto-opens in openRtnForm() when the routine being edited already has data in
            any of these, so editing never hides something already filled in. -->
       <button type="button" class="more-opts-toggle full" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
-        <span id="rtnMoreOptsLabel">More options — sub-tasks, schedule, dates, tracker, note</span><span class="moreopts-chevron">›</span>
+        <span id="rtnMoreOptsLabel">More options — sub-tasks · extra schedules · dates · tracker · note</span><span class="moreopts-chevron">›</span>
       </button>
       <div class="addform-more" id="rtnAddFormMore" hidden>
         <div class="field full">
@@ -21495,7 +21518,7 @@
     const onceDate = t.date || keyOf(TODAY);
     const intervalDays = t.intervalDays || 2;
     const anchor = t.anchor || keyOf(TODAY);
-    const typeOpts = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["yearly", "Yearly"], ["interval", "Custom interval"], ["once", "One-off"]]
+    const typeOpts = [["daily", "Daily"], ["weekly", "Weekly"], ["monthly", "Monthly"], ["yearly", "Yearly"], ["interval", "Custom"], ["once", "One-off"]]
       .map(([v, l]) => `<option value="${v}"${v === t.freq ? " selected" : ""}>${l}</option>`).join("");
     const panel = (name, hiddenNow, inner) => `<div data-rtgf-panel="${name}"${hiddenNow ? " hidden" : ""}>${inner}</div>`;
     cell.innerHTML = `<div class="rtg-freq-edit">
@@ -24493,9 +24516,10 @@
   let rtnTrack = "personal";
   let rtnEditId = null;
 
+  // 2026-08-06 (Linh's "New routine" mockup): single bold initial, no planet icon --
+  // this form's own compact style, see the #rtnWeekdayPicker CSS above for why.
   document.getElementById("rtnWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
-    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="${i === 0}">
-      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="${i === 0}" aria-label="${wd}">${wd[0]}</button>`).join("");
   let rtnWeekdays = [0];   // multi-select: a weekly routine can run on several weekdays
   const syncRtnWeekdayButtons = () => document.querySelectorAll("#rtnWeekdayPicker .track-opt")
     .forEach(b => b.setAttribute("aria-pressed", String(rtnWeekdays.includes(+b.dataset.weekday))));
@@ -24609,7 +24633,7 @@
   // pattern as #addForm's setMoreOptionsOpen() -- closed on every fresh open, but
   // openRtnForm() below re-opens it automatically when the routine being edited already
   // has data tucked inside, so editing never hides something already filled in.
-  const RTN_MORE_OPTS_LABEL = "More options — sub-tasks, schedule, dates, tracker, note";
+  const RTN_MORE_OPTS_LABEL = "More options — sub-tasks · extra schedules · dates · tracker · note";
   function setRtnMoreOptionsOpen(open) {
     const wrap = document.getElementById("rtnAddFormMore");
     const btn = document.getElementById("rtnMoreOptsToggle");
@@ -24658,6 +24682,25 @@
     setRtnMoreOptionsOpen(false);
     placeRtnForm(false);   // undock the side rail, return the form to its anchor
   }
+  // splits a routine's stored title into its leading emoji "icon" (her existing
+  // hand-typed convention, e.g. sunrise-emoji-space-"A - Before Pilates") and the plain
+  // rest, for the form's two-input Name row. Uses Intl.Segmenter's grapheme mode rather
+  // than a hand-rolled emoji regex -- a compound emoji (a runner + a joiner + a gender
+  // sign) is several Unicode codepoints that must split as ONE unit, and building that
+  // matcher by hand means embedding invisible joiner/variation-selector characters
+  // directly in this source file, which risks silent corruption on save/copy. A
+  // leading grapheme is only ever treated as an icon when it isn't plain a-z/0-9, so a
+  // normal name never loses its first letter; no Segmenter support just skips the
+  // split (whole string stays the title, nothing is lost either way).
+  function splitRtnIconTitle(title) {
+    title = title || "";
+    if (!title || typeof Intl === "undefined" || !Intl.Segmenter) return { icon: "", rest: title };
+    const first = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(title)[Symbol.iterator]().next();
+    if (first.done) return { icon: "", rest: title };
+    const cluster = first.value.segment;
+    if (/[a-zA-Z0-9]/.test(cluster)) return { icon: "", rest: title };
+    return { icon: cluster, rest: title.slice(cluster.length).replace(/^\s+/, "") };
+  }
   function openRtnForm(task, focusField) {
     rtnAddRow.hidden = true; rtnForm.hidden = false;
     document.getElementById("rtnDeleteBtn").hidden = !task;
@@ -24667,7 +24710,9 @@
     if (task) {
       rtnEditId = task.id;
       document.getElementById("rtnSubmitBtn").textContent = "Save changes";
-      document.getElementById("rtnTitle").value = task.title;
+      const { icon, rest } = splitRtnIconTitle(task.title);
+      document.getElementById("rtnIcon").value = icon;
+      document.getElementById("rtnTitle").value = rest;
       document.getElementById("rtnCategory").value = task.category || "";
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
@@ -24833,8 +24878,10 @@
   });
   rtnForm.addEventListener("submit", e => {
     e.preventDefault();
-    const title = document.getElementById("rtnTitle").value.trim();
-    if (!title) return;
+    const titleText = document.getElementById("rtnTitle").value.trim();
+    if (!titleText) return;
+    const iconVal = document.getElementById("rtnIcon").value.trim();
+    const title = iconVal ? `${iconVal} ${titleText}` : titleText;
     const category = document.getElementById("rtnCategory").value.trim();
     const note = document.getElementById("rtnNote").value.trim();
     const fitLink = document.getElementById("rtnFitLink").value;
