@@ -53,6 +53,15 @@
     --wide-max: 1040px;
     /* Ink & Brass — Day pair (fixed; was previously only ever set per data-element) */
     --desk: #EFE3CC; --paper: #FBF6EC; --note-bg: #F5EEDD; --field-bg: #F7F1E2;
+    /* 2026-08-06 (Linh, inline routine editor spec: "sub-task rows use the --raised
+       fill"): a flat, borderless "one step up from the surface" tone for rows inside
+       a panel (sub-tasks, chips) that need to read as a distinct unit without a
+       border. Derived from --ink via color-mix rather than its own hex so it never
+       needs a separate light/dark value -- it re-resolves against whichever theme's
+       --ink is active automatically, same derive-from-central-tokens rule as
+       --fast/--chain-spine. Defined once here, not repeated in the light/dark
+       overrides below -- it's a formula against --ink, not a literal to redefine. */
+    --raised: color-mix(in oklab, var(--ink) 6%, transparent);
     --ink: #2A2015; --ink-soft: #5C4F3C; --ink-faint: #8A7D68; --ink-bright: #15100A;
     /* life tracks — simplified palette (2026-08-06, Linh: "simplified colour system").
        Block colour = subcategory if it has one, else the part-of-life colour; small dot
@@ -3986,8 +3995,12 @@
   }
   .rtn-cal-toggle[aria-pressed="true"] { background: var(--margin-rule); }
   .rtn-cal-toggle[aria-pressed="true"]::before { left: 17px; }
-  /* delete-with-confirm, moved into the editor sheet (form-actions above it) */
-  .rtn-del-full { width: 100%; padding: 12px; border: none; background: none; color: var(--warn); font-size: 13px; cursor: pointer; margin-top: 6px; }
+  /* delete-with-confirm, sharing .form-actions' row with Cancel/Save (2026-08-06:
+     "Save changes (gold), Cancel (quiet), Delete routine (red text, right)") -- DOM
+     order below is Cancel, Save, Delete, so inside the row's flex-end alignment Delete
+     naturally lands rightmost/outermost, matching "right" literally. */
+  .rtn-del-full { padding: 8px 12px; border: none; background: none; color: var(--warn); font-size: 13px; cursor: pointer; border-radius: 999px; }
+  .rtn-del-full:hover { background: color-mix(in oklab, var(--warn) 12%, transparent); }
   .note-inline {
     font-size: 13px; color: var(--ink-soft); background: var(--note-bg);
     border: 1px solid var(--note-line); border-radius: var(--radius-sm);
@@ -4167,6 +4180,67 @@
     #rtnAddForm .rtn-fieldrow { flex-direction: column; align-items: stretch; }
     #rtnAddForm .rtn-fieldrow > .field.rtn-fw-130,
     #rtnAddForm .rtn-fieldrow > .field.rtn-fw-90 { flex-basis: auto; }
+  }
+  /* 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE under that row --
+     instead of opening the separate drawer"): #rtnAddForm is the SAME element used for
+     the Add flow, the >=1024px side rail, and now this dock -- only WHERE it's parented
+     changes (openRtnFormInline/rtnOpenInline/rtnCloseInline), so save/schema logic never
+     forks. .rtn-inline-mode is added only while docked this way, so none of this touches
+     the Add-routine drawer's own look. */
+  .rtn-inline-row > td { padding: 0 !important; border-top: none !important; background: none; }
+  .rtn-inline-dock { padding: 2px 0 10px; }
+  /* the clicked row stays visibly "open" while its editor is expanded under it */
+  tr.rtn-inline-anchor, .rtn-row.rtn-inline-anchor, .rtb-task.rtn-inline-anchor {
+    background: color-mix(in oklab, var(--accent-seed, var(--margin-rule)) 10%, transparent) !important;
+  }
+  #rtnAddForm.rtn-inline-mode {
+    margin: 6px 0; padding: 12px 14px; border-radius: var(--radius-md, 10px);
+    background: var(--note-bg); max-width: none;
+  }
+  /* flat + compact per spec: unselected chips get a subtle tone fill instead of a
+     border so they still read against the panel; selected keeps the existing solid
+     gold fill. No borders anywhere in this mode. */
+  #rtnAddForm.rtn-inline-mode .track-opt,
+  #rtnAddForm.rtn-inline-mode #rtnWeekdayPicker .track-opt {
+    border: none; background: var(--raised);
+  }
+  #rtnAddForm.rtn-inline-mode .track-opt[aria-pressed="true"] {
+    background: var(--margin-rule); border-color: var(--margin-rule); color: #17130A; box-shadow: none;
+  }
+  /* !important on background/border here (and on every input override below) is not
+     a style choice -- it's fighting the app-wide "ONE FIELD LANGUAGE" law a few
+     hundred lines down (input:is(...):not(.field-bare) { background: var(--field-bg)
+     !important; border: 1px solid var(--note-line) !important; ... }), which outranks
+     any plain override regardless of selector specificity. That law's own comment
+     names .field-bare as its escape hatch, but .field-bare's paired look is defined
+     only under #addForm (a different form) -- adopting it here would mean redefining
+     it from scratch anyway, so matching its own !important is the smaller, more
+     surgical change. */
+  #rtnAddForm.rtn-inline-mode .field input[type="text"], #rtnAddForm.rtn-inline-mode .field input[type="time"],
+  #rtnAddForm.rtn-inline-mode .field input[type="number"], #rtnAddForm.rtn-inline-mode .field input[type="date"],
+  #rtnAddForm.rtn-inline-mode .field select, #rtnAddForm.rtn-inline-mode .rtn-icon-input {
+    background: var(--raised) !important; border: none !important;
+  }
+  /* the gold focus ring reads as "an outline" at this density -- a quiet neutral ring
+     keeps keyboard focus visible without one */
+  #rtnAddForm.rtn-inline-mode .field input:focus-visible,
+  #rtnAddForm.rtn-inline-mode .field select:focus-visible {
+    outline: none; box-shadow: 0 0 0 2px color-mix(in oklab, var(--ink) 22%, transparent);
+  }
+  /* sub-tasks: flat --raised-filled rows, not outlined boxes inside a box -- the number
+     badge stays, the text/minutes inputs go borderless+transparent so each row reads as
+     one tone-filled unit. */
+  #rtnAddForm.rtn-inline-mode .rtn-sub-row { background: var(--raised); border: none; }
+  #rtnAddForm.rtn-inline-mode #rtnSubList .rtn-sub-row .rtn-sub-text,
+  #rtnAddForm.rtn-inline-mode #rtnSubList .rtn-sub-row .rtn-sub-min {
+    background: transparent !important; border: none !important;
+  }
+  #rtnAddForm.rtn-inline-mode .rtn-sched-extra-row { background: var(--raised); border: none; }
+  #rtnAddForm.rtn-inline-mode .field .rtn-sched-extra-row2 input[type=time],
+  #rtnAddForm.rtn-inline-mode .field .rtn-sched-extra-row2 input[type=number],
+  #rtnAddForm.rtn-inline-mode .field .rtn-sched-extra-row2 input[type=date],
+  #rtnAddForm.rtn-inline-mode .field .rtn-sched-extra-row .rtn-sched-extra-anchor {
+    background: var(--raised) !important; border: none !important;
   }
   /* 2026-08-06 (Linh's "New routine" mockup): icon box beside the Name input --
      stays side-by-side even at phone width, unlike .rtn-fieldrow above, since a
@@ -9404,14 +9478,16 @@
           <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
         </div>
       </div>
+      <!-- 2026-08-06 (routines redesign, "delete-with-confirm" in the editor, inline
+           editor spec: "Delete routine (red text, right)"): shares .form-actions' own
+           flex row so it sits on the same line as Cancel/Save instead of a separate
+           full-width row below -- only shown when editing (openRtnForm/closeRtnForm
+           toggle .hidden). -->
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="rtnCancelBtn">Cancel</button>
         <button type="submit" class="btn-save" id="rtnSubmitBtn">Add routine</button>
+        <button type="button" class="del rtn-del-full" id="rtnDeleteBtn" hidden>Delete routine</button>
       </div>
-      <!-- 2026-08-06 (routines redesign, "delete-with-confirm" in the editor): only
-           shown when editing (openRtnForm/closeRtnForm toggle .hidden) -- row-level
-           delete/edit icons are gone, this is the only delete entry point now. -->
-      <button type="button" class="del rtn-del-full" id="rtnDeleteBtn" hidden>Delete routine</button>
     </form>
 
     <!-- ⛓ Chains (2026-08-05, Linh: "make a chain page with routines? it needs to
@@ -21094,6 +21170,7 @@
     renderRtnTable();
     renderRtnGrid();
     const manageEl = document.getElementById("rtnManage");
+    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
     if (!ROUTINE_TASKS.length) {
       manageEl.innerHTML = `<div class="fam-empty">No routines yet.<br>Add a task below — what it is, which life area, and how often.</div>`;
       return;
@@ -21208,6 +21285,7 @@
     ).join("");
     const otherHtml = groupFor("other", "Other", "var(--ink-faint)", ROUTINE_TASKS.filter(t => !knownAreas.has(t.track)));
     manageEl.innerHTML = groupsHtml + otherHtml;
+    rtnInlineRedock("list");
   }
   // 2026-08-06 (Linh pasted a "3-phase table by category" mock; a sibling session
   // shipped the per-chain flow-chip + detail-sheet version of the same mock — she
@@ -21220,6 +21298,7 @@
   function renderRtnTable() {
     const host = document.getElementById("rtnTable");
     if (!host || rtnListMode !== "board") return;
+    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const tKey = keyOf(TODAY);
     // 2026-08-05 (Linh: "i dont understand the category of morning work, work etc.
@@ -21255,6 +21334,7 @@
     let html = `<div class="rtb-tbl"><div class="rtb-grid">`;
     html += cell(before, "Before", "before", true) + cell(evt, "Event", "during", false) + cell(after, "After", "after", false);
     host.innerHTML = html + `</div></div>`;
+    rtnInlineRedock("board");
   }
   document.getElementById("rtnTable").addEventListener("click", e => {
     // own attribute, not the app-wide [data-tick-ev] delegate — that one always
@@ -21283,7 +21363,7 @@
       // a column-drop's trailing click must not pop the editor open over the result
       if (Date.now() - cbDragEndAt < 500) return;
       const t = ROUTINE_TASKS.find(x => x.id === edit.dataset.rtbEdit);
-      if (t) { openRtnForm(t); if (!rtnSideMq.matches) document.getElementById("rtnAddRow").scrollIntoView({ behavior: "smooth", block: "start" }); }
+      if (t) openRtnFormInline(t, "board");
     }
   });
   /* 2026-08-06 (Linh: "how to move train to work to Before") + 2026-08-05 (Linh:
@@ -21373,6 +21453,7 @@
   function renderRtnGrid() {
     const host = document.getElementById("rtnGrid");
     if (!host || rtnListMode !== "table") return;
+    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const q = rtnGridSearch.trim().toLowerCase();
     const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
@@ -21451,6 +21532,7 @@
         <thead><tr>${th("title", "Routine")}${th("fitlink", "Tracking")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
+    rtnInlineRedock("table");
   }
   document.getElementById("rtnGrid").addEventListener("click", e => {
     const sortTh = e.target.closest("[data-rtg-sort]");
@@ -21481,7 +21563,7 @@
     const editIcon = e.target.closest("[data-rtg-edit]");
     if (editIcon) {
       const t = ROUTINE_TASKS.find(x => x.id === editIcon.dataset.rtgEdit);
-      if (t) openRtnForm(t);
+      if (t) openRtnFormInline(t, "table");
       return;
     }
     if (e.target.closest("#rtgAddBtn")) { openRtnForm(null); return; }
@@ -21497,7 +21579,7 @@
     const row = e.target.closest("[data-rtg-row]");
     if (!row) return;
     const t = ROUTINE_TASKS.find(x => x.id === row.dataset.rtgRow);
-    if (t) openRtnForm(t);
+    if (t) openRtnFormInline(t, "table");
   });
   // Inline cell editing: swap the clicked cell's content for a real input, save on
   // blur/Enter, discard on Escape. Repeats gets its own multi-field editor (rtgEditFreq
@@ -24515,6 +24597,13 @@
   let rtnFreq = "weekly";
   let rtnTrack = "personal";
   let rtnEditId = null;
+  // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
+  // that row -- instead of opening the separate slide-over drawer"): which routine (if
+  // any) is currently being edited inline, and which view (table/list/board) owns that
+  // dock -- so a later re-render of THAT view's rows can find the same row again and
+  // redock the (reused, never duplicated) #rtnAddForm rather than losing it.
+  let rtnInlineId = null;
+  let rtnInlineView = null;
 
   // 2026-08-06 (Linh's "New routine" mockup): single bold initial, no planet icon --
   // this form's own compact style, see the #rtnWeekdayPicker CSS above for why.
@@ -24664,8 +24753,75 @@
     const t = document.getElementById("rtnSideTitle");
     if (t) t.textContent = rtnEditId ? "Edit routine" : "New routine";
   }
-  if (rtnSideMq.addEventListener) rtnSideMq.addEventListener("change", () => placeRtnForm(!rtnForm.hidden));
+  // resize crossing the 1024px breakpoint must not yank the form out of an open inline
+  // dock and into the side rail -- inline docking (below) wins over placeRtnForm at
+  // every width, exactly like the mobile "stay at #rtnFormHome" branch already does.
+  if (rtnSideMq.addEventListener) rtnSideMq.addEventListener("change", () => { if (!rtnInlineId) placeRtnForm(!rtnForm.hidden); });
   document.getElementById("rtnSideClose")?.addEventListener("click", () => closeRtnForm());
+  // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
+  // that row -- instead of opening the separate slide-over drawer"): #rtnAddForm is
+  // reparented into a dock immediately after the clicked row/card -- the SAME
+  // traveling-element move placeRtnForm already does into #rtnSideBody, just a third
+  // possible parent. Only EDITING an existing routine goes inline (openRtnFormInline is
+  // never called with a null task) -- "+ Add routine" keeps its existing side-rail/
+  // mobile-home placement untouched, so this never touches that flow.
+  function rtnInlineDetach() {
+    // called at the top of each of the 3 routine render functions, before they rebuild
+    // their own rows with innerHTML -- if #rtnAddForm is currently living inside the
+    // container about to be wiped, innerHTML would destroy it (and any unsaved edits)
+    // along with the old markup, so pull it out to a safe neutral parent first.
+    if (rtnForm.closest(".rtn-inline-dock")) document.body.appendChild(rtnForm);
+  }
+  function rtnInlineRedock(view) {
+    // called at the end of that same view's render, once its rows exist again --
+    // finds the same routine's row/card and redocks the form under it; if the routine
+    // no longer shows in this view (filtered out, deleted, view switched), closes
+    // cleanly instead of leaving the form stranded in its neutral parent.
+    if (rtnInlineId == null || rtnInlineView !== view) return;
+    let anchor = null, dock = null;
+    const idSel = CSS.escape(rtnInlineId);
+    if (view === "table") {
+      anchor = document.querySelector(`#rtnGrid tr[data-rtg-row="${idSel}"]`);
+      if (anchor) {
+        const tr = document.createElement("tr");
+        tr.className = "rtn-inline-row";
+        tr.innerHTML = `<td colspan="${anchor.children.length}"><div class="rtn-inline-dock"></div></td>`;
+        anchor.after(tr);
+        dock = tr.querySelector(".rtn-inline-dock");
+      }
+    } else if (view === "list") {
+      anchor = document.querySelector(`#rtnManage .rtn-row[data-rtn-edit="${idSel}"]`);
+      if (anchor) { dock = document.createElement("div"); dock.className = "rtn-inline-dock"; anchor.after(dock); }
+    } else if (view === "board") {
+      anchor = document.querySelector(`#rtnTable .rtb-task[data-rtb-edit="${idSel}"]`);
+      if (anchor) { dock = document.createElement("div"); dock.className = "rtn-inline-dock"; anchor.after(dock); }
+    }
+    if (!anchor || !dock) { closeRtnForm(); return; }
+    anchor.classList.add("rtn-inline-anchor");
+    dock.appendChild(rtnForm);
+    dock.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  function rtnCloseInline() {
+    document.querySelectorAll(".rtn-inline-anchor").forEach(el => el.classList.remove("rtn-inline-anchor"));
+    document.querySelectorAll(".rtn-inline-row, .rtn-inline-dock").forEach(el => el.remove());
+    rtnForm.classList.remove("rtn-inline-mode");
+    rtnInlineId = null; rtnInlineView = null;
+    const home = document.getElementById("rtnFormHome");
+    if (home && rtnForm.previousElementSibling !== home) home.after(rtnForm);
+    document.getElementById("rtnSide").hidden = true;
+    document.getElementById("routinesPage").classList.remove("rtn-editing");
+  }
+  // one editor open at a time (toggle-close on a second click of the same row's ✎;
+  // opening a different row's editor closes whichever one was already open)
+  function openRtnFormInline(task, view) {
+    if (!task) return;
+    if (rtnInlineId === task.id && rtnInlineView === view) { closeRtnForm(); return; }
+    if (rtnInlineId != null) closeRtnForm();
+    rtnInlineId = task.id; rtnInlineView = view;
+    rtnForm.classList.add("rtn-inline-mode");
+    openRtnForm(task);
+    rtnInlineRedock(view);
+  }
   function closeRtnForm() {
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
@@ -24680,7 +24836,7 @@
     document.getElementById("rtnHairNote").hidden = true;
     document.getElementById("rtnDeleteBtn").hidden = true;
     setRtnMoreOptionsOpen(false);
-    placeRtnForm(false);   // undock the side rail, return the form to its anchor
+    if (rtnInlineId != null) rtnCloseInline(); else placeRtnForm(false);   // undock inline row OR the side rail, return the form to its anchor
   }
   // splits a routine's stored title into its leading emoji "icon" (her existing
   // hand-typed convention, e.g. sunrise-emoji-space-"A - Before Pilates") and the plain
@@ -24702,7 +24858,8 @@
     return { icon: cluster, rest: title.slice(cluster.length).replace(/^\s+/, "") };
   }
   function openRtnForm(task, focusField) {
-    rtnAddRow.hidden = true; rtnForm.hidden = false;
+    if (!rtnInlineId) rtnAddRow.hidden = true;   // inline mode leaves the top "+ Add routine" banner alone
+    rtnForm.hidden = false;
     document.getElementById("rtnDeleteBtn").hidden = !task;
     document.getElementById("rtnAnchorDate").value = keyOf(TODAY);
     clearRtnSubRows();
@@ -24768,7 +24925,7 @@
       task.fitLink || (task.note && task.note.trim())
     ));
     setRtnMoreOptionsOpen(hasMoreOptsData);
-    placeRtnForm(true);   // >=1024px: dock into the side rail (no scroll-away)
+    if (!rtnInlineId) placeRtnForm(true);   // >=1024px: dock into the side rail (no scroll-away) -- inline mode docks itself instead, see openRtnFormInline
     // 2026-08-06 (Table view, "click a cell -> open the edit form focused there"):
     // optional 2nd param scrolls/focuses a specific field instead of the default
     // title focus below -- e.g. clicking the Time cell jumps straight to rtnStart.
@@ -25848,7 +26005,7 @@
     const rtnEdit = e.target.closest("[data-rtn-edit]");
     if (rtnEdit) {
       const task = ROUTINE_TASKS.find(t => t.id === rtnEdit.dataset.rtnEdit);
-      if (task) openRtnForm(task);
+      if (task) openRtnFormInline(task, "list");
       return;
     }
     // beauty/hair routine rows in the Routines table link out to the Beauty page
@@ -29146,7 +29303,11 @@
     // Table's 📅 button) was open, so it reloaded right out from under her before
     // she could tap "Add it". Same class of bug as .cb-build/.rtb-dragging above,
     // same fix: count it as editing until she saves or cancels.
-    return !!document.querySelector("#qaPreview:not([hidden])");
+    if (document.querySelector("#qaPreview:not([hidden])")) return true;
+    // 2026-08-06 (inline routine editor, same cross-closure trap as .rtb-dragging
+    // above -- rtnInlineId lives in the OTHER script's closure): a reload mid-edit
+    // would wipe an in-progress inline edit exactly like it did the quick-add preview.
+    return !!document.querySelector("#rtnAddForm.rtn-inline-mode");
   }
   function reloadWhenIdle() {
     if (!isEditing()) { location.reload(); return; }
