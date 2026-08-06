@@ -4151,6 +4151,23 @@
   #rtnAddForm .track-opt[aria-pressed="true"] {
     background: var(--margin-rule); border-color: var(--margin-rule); color: #17130A; box-shadow: none;
   }
+  /* 2026-08-06 (Linh: "compact the form, pair short fields onto shared rows"): a plain
+     flex row (not the outer .add-form grid) for Sub-category/Start/Mins and Days/Every --
+     .rtn-fw-130/-90 give the fixed member its target width, the unmarked field(s) take
+     the rest. Stacks to one-per-line under 520px, same breakpoint .add-form itself
+     already collapses at -- the flexible field has no usable room left once a fixed
+     ~130px sibling claims its share on a phone-width screen. */
+  #rtnAddForm .rtn-fieldrow { grid-column: 1 / -1; display: flex; gap: 10px; align-items: flex-end; }
+  #rtnAddForm .rtn-fieldrow > .field { flex: 1 1 auto; min-width: 0; }
+  /* higher specificity than the plain ".field" rule just above on purpose -- these two
+     need to override its flex:1, not lose to it via source order */
+  #rtnAddForm .rtn-fieldrow > .field.rtn-fw-130 { flex: 0 0 130px; }
+  #rtnAddForm .rtn-fieldrow > .field.rtn-fw-90 { flex: 0 0 90px; }
+  @media (max-width: 520px) {
+    #rtnAddForm .rtn-fieldrow { flex-direction: column; align-items: stretch; }
+    #rtnAddForm .rtn-fieldrow > .field.rtn-fw-130,
+    #rtnAddForm .rtn-fieldrow > .field.rtn-fw-90 { flex-basis: auto; }
+  }
   /* Repeats/Days-of-week chips have no per-item colour of their own (unlike Part of
      life's work/family/marriage/personal ink) -- the dot next to their label was
      inheriting a default ink colour with no real meaning, just visual noise. Days of
@@ -9236,32 +9253,34 @@
           <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
         </div>
       </div>
-      <div class="field full">
-        <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
-        <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
-        <datalist id="rtnCatList"></datalist>
-      </div>
-      <div class="field full">
-        <label for="rtnStart">Start time <span class="field-hint">optional — sets when it lands on the calendar</span></label>
-        <input type="time" id="rtnStart" style="max-width:150px">
-      </div>
-      <!-- 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
-           WITHOUT adding a sub-task... if I add none, I just set a start time + a
-           Duration (min) field"): mirrors #addForm's own Start/Duration pattern (fDur ->
-           syncs an end time) -- rtnDuration only matters when there are no sub-tasks
-           (toggled by updateRtnSubTotal(), which already re-runs on every add/remove/
-           edit of a sub-task row); when subs.length > 0 their own minutes decide the
-           block length instead, same back-to-back behaviour as before, untouched. -->
-      <div class="field full" id="rtnDurationField">
-        <label for="rtnDuration">Duration (min) <span class="field-hint">optional — sets the block length</span></label>
-        <input type="number" id="rtnDuration" min="5" step="5" placeholder="e.g. 30" style="max-width:150px">
-      </div>
-      <div class="field full">
-        <label>Sub-tasks <span class="field-hint">optional — each with its minutes, back-to-back on the calendar</span></label>
-        <div id="rtnSubHead" class="rtn-sub-head" hidden><span class="rsh-step">Step</span><span class="rsh-min">Minutes</span></div>
-        <div id="rtnSubList" class="rtn-sub-list"></div>
-        <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
-        <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
+      <!-- 2026-08-06 (Linh: "compact the form so it fits without endless scrolling"):
+           short fields now share rows instead of each claiming a full-width line of its
+           own -- Sub-category/Start/Mins here, Days/Every further down. .rtn-fieldrow is
+           a plain flex row (not the outer .add-form grid); .rtn-fw-130/-90 give the fixed
+           members their target width, the unmarked sibling(s) take the rest. Stacks back
+           to one-per-line under 520px (same breakpoint .add-form itself already stacks
+           at) -- side-by-side at that width leaves the flexible field too narrow to use. -->
+      <div class="rtn-fieldrow full">
+        <div class="field">
+          <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
+          <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
+          <datalist id="rtnCatList"></datalist>
+        </div>
+        <div class="field rtn-fw-130">
+          <label for="rtnStart">Start</label>
+          <input type="time" id="rtnStart">
+        </div>
+        <!-- 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
+             WITHOUT adding a sub-task... if I add none, I just set a start time + a
+             Duration (min) field"): mirrors #addForm's own Start/Duration pattern (fDur ->
+             syncs an end time) -- rtnDuration only matters when there are no sub-tasks
+             (toggled by updateRtnSubTotal(), which already re-runs on every add/remove/
+             edit of a sub-task row); when subs.length > 0 their own minutes decide the
+             block length instead, same back-to-back behaviour as before, untouched. -->
+        <div class="field rtn-fw-90" id="rtnDurationField">
+          <label for="rtnDuration">Mins</label>
+          <input type="number" id="rtnDuration" min="5" step="5" placeholder="30">
+        </div>
       </div>
       <div class="field full" id="rtnFreqGroup">
         <label>Repeats</label>
@@ -9277,15 +9296,36 @@
       <div class="field full note-inline" id="rtnHairNote" hidden>
         This wash type's day is decided by the every-2-days rotation, not a repeat pattern here — use the calendar switch on its row to show or hide it, or the date list below for an extra one-off wash.
       </div>
+      <!-- Days + "every N weeks" grouped right after Repeats (Repeats -> Days -> Every) and
+           sharing one row -- both only ever show for freq=weekly, same syncRtnFreqFields()
+           hidden-toggles as before, just now driving sibling flex items instead of two
+           separate full-width blocks. -->
+      <div class="rtn-fieldrow full" id="rtnWeeklyField">
+        <div class="field">
+          <label>Days <span class="field-hint">tap to toggle</span></label>
+          <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
+        </div>
+        <div class="field rtn-fw-130" id="rtnWeekIntervalField">
+          <label for="rtnWeekInterval">Every</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:44px">
+            <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+          </div>
+        </div>
+      </div>
+      <div class="field full" id="rtnWeekAnchorField" hidden>
+        <label for="rtnWeekAnchorDate">Starting the week of <span class="field-hint">week 1 of the cycle</span></label>
+        <input type="date" id="rtnWeekAnchorDate">
+      </div>
       <div class="field full" id="rtnIntervalField" hidden>
-        <label for="rtnIntervalDays">Repeat every <span class="field-hint">e.g. "every 2 days"</span></label>
+        <label for="rtnIntervalDays">Repeat every <span class="field-hint">e.g. every 2 days</span></label>
         <div style="display:flex;align-items:center;gap:8px">
           <input type="number" id="rtnIntervalDays" min="1" value="2" style="width:70px">
           <span style="font-size:12px;color:var(--ink-soft)">days</span>
         </div>
       </div>
       <div class="field full" id="rtnAnchorField" hidden>
-        <label for="rtnAnchorDate">Anchor date <span class="field-hint">the interval counts from here</span></label>
+        <label for="rtnAnchorDate">Anchor date <span class="field-hint">interval counts from here</span></label>
         <input type="date" id="rtnAnchorDate">
       </div>
       <div class="field full" id="rtnOnceField" hidden>
@@ -9300,43 +9340,46 @@
         <label for="rtnMonthlyDay">Day of month</label>
         <input type="number" id="rtnMonthlyDay" min="1" max="31" placeholder="1–31">
       </div>
-      <div class="field full" id="rtnWeeklyField">
-        <label>Days of week <span class="field-hint">tap one or more</span></label>
-        <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
-      </div>
-      <div class="field full" id="rtnWeekIntervalField">
-        <label for="rtnWeekInterval">Repeat every <span class="field-hint">1 = every week</span></label>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:70px">
-          <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+      <!-- 2026-08-06 (Linh: "fold rarely-used fields into a collapsed More options"):
+           same collapsible pattern as #addForm's own .more-opts-toggle/.addform-more
+           (display:contents when open, so these lay out as plain direct children of
+           #rtnAddForm's grid, same as before -- not a new nested layout to keep in sync).
+           Auto-opens in openRtnForm() when the routine being edited already has data in
+           any of these, so editing never hides something already filled in. -->
+      <button type="button" class="more-opts-toggle full" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
+        <span id="rtnMoreOptsLabel">More options — sub-tasks, schedule, dates, tracker, note</span><span class="moreopts-chevron">›</span>
+      </button>
+      <div class="addform-more" id="rtnAddFormMore" hidden>
+        <div class="field full">
+          <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
+          <div id="rtnSubHead" class="rtn-sub-head" hidden><span class="rsh-step">Step</span><span class="rsh-min">Minutes</span></div>
+          <div id="rtnSubList" class="rtn-sub-list"></div>
+          <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
+          <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
         </div>
-      </div>
-      <div class="field full" id="rtnWeekAnchorField" hidden>
-        <label for="rtnWeekAnchorDate">Starting the week of <span class="field-hint">this week counts as week 1 of the cycle</span></label>
-        <input type="date" id="rtnWeekAnchorDate">
-      </div>
-      <div class="field full" id="rtnSchedExtraField">
-        <label>Additional schedule <span class="field-hint">optional — a second (or third) day/time pattern on this same routine</span></label>
-        <div id="rtnSchedExtraList" class="rtn-sched-extra-list"></div>
-        <button type="button" class="add-btn" id="rtnSchedAddBtn">+ Add another schedule</button>
-      </div>
-      <div class="field full">
-        <label>Also runs on <span class="field-hint">extra one-off dates on top of the pattern</span></label>
-        <div id="rtnExtraList" class="rtn-date-list"></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="date" id="rtnExtraDate" style="max-width:170px">
-          <button type="button" class="add-btn" id="rtnExtraAdd">+ Add date</button>
+        <div class="field full" id="rtnSchedExtraField">
+          <label>Additional schedule <span class="field-hint">optional — a second day/time pattern</span></label>
+          <div id="rtnSchedExtraList" class="rtn-sched-extra-list"></div>
+          <button type="button" class="add-btn" id="rtnSchedAddBtn">+ Add another schedule</button>
         </div>
-      </div>
-      <div class="field full">
-        <label for="rtnFitLink">Fitness tracker link <span class="field-hint">optional — logs a session when ticked done</span></label>
-        <select id="rtnFitLink">
-          <option value="">None</option>
-        </select>
-      </div>
-      <div class="field full">
-        <label for="rtnNote">Note <span class="field-hint">optional</span></label>
-        <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
+        <div class="field full">
+          <label>Also runs on <span class="field-hint">extra one-off dates</span></label>
+          <div id="rtnExtraList" class="rtn-date-list"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="date" id="rtnExtraDate" style="max-width:170px">
+            <button type="button" class="add-btn" id="rtnExtraAdd">+ Add date</button>
+          </div>
+        </div>
+        <div class="field full">
+          <label for="rtnFitLink">Fitness tracker link <span class="field-hint">optional</span></label>
+          <select id="rtnFitLink">
+            <option value="">None</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="rtnNote">Note <span class="field-hint">optional</span></label>
+          <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
+        </div>
       </div>
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="rtnCancelBtn">Cancel</button>
@@ -24535,6 +24578,22 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  // 2026-08-06 (Linh: "fold rarely-used fields into a collapsed More options"): same
+  // pattern as #addForm's setMoreOptionsOpen() -- closed on every fresh open, but
+  // openRtnForm() below re-opens it automatically when the routine being edited already
+  // has data tucked inside, so editing never hides something already filled in.
+  const RTN_MORE_OPTS_LABEL = "More options — sub-tasks, schedule, dates, tracker, note";
+  function setRtnMoreOptionsOpen(open) {
+    const wrap = document.getElementById("rtnAddFormMore");
+    const btn = document.getElementById("rtnMoreOptsToggle");
+    if (!wrap || !btn) return;
+    wrap.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    document.getElementById("rtnMoreOptsLabel").textContent = open ? "Fewer options" : RTN_MORE_OPTS_LABEL;
+  }
+  document.getElementById("rtnMoreOptsToggle").addEventListener("click", () => {
+    setRtnMoreOptionsOpen(document.getElementById("rtnAddFormMore").hidden);
+  });
   // 2026-08-06 (Linh: "bring it to the side so I can edit directly without changing
   // pages or have a popup"): >=1024px the routine form docks into the #rtnSide rail
   // (fixed, aligned to the content column, internally scrolling); below that it stays
@@ -24569,6 +24628,7 @@
     document.getElementById("rtnFreqGroup").hidden = false;
     document.getElementById("rtnHairNote").hidden = true;
     document.getElementById("rtnDeleteBtn").hidden = true;
+    setRtnMoreOptionsOpen(false);
     placeRtnForm(false);   // undock the side rail, return the form to its anchor
   }
   function openRtnForm(task, focusField) {
@@ -24631,6 +24691,11 @@
     renderRtnExtraDates();
     renderRtnSchedExtra();
     renderRtnCatList(); updateRtnSubTotal();
+    const hasMoreOptsData = !!(task && (
+      (task.subtasks && task.subtasks.length) || rtnExtraSchedules.length || rtnExtraDates.length ||
+      task.fitLink || (task.note && task.note.trim())
+    ));
+    setRtnMoreOptionsOpen(hasMoreOptsData);
     placeRtnForm(true);   // >=1024px: dock into the side rail (no scroll-away)
     // 2026-08-06 (Table view, "click a cell -> open the edit form focused there"):
     // optional 2nd param scrolls/focuses a specific field instead of the default
