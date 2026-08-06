@@ -13722,7 +13722,9 @@
     const start = new Date(HEALTH.activeFast);
     const goalEnd = new Date(start.getTime() + goalH * 3600000);
     const dayStart = new Date(state.anchor.getFullYear(), state.anchor.getMonth(), state.anchor.getDate());
-    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    // addDays(), not +86400000 -- a calendar day is 23 or 25 real hours on Sydney's two
+    // DST-transition days (bug audit 2026-08-06), so a flat ms add lands off midnight then.
+    const dayEnd = addDays(dayStart, 1);
     const rangeStart = start < dayStart ? dayStart : start;
     const rangeEnd = goalEnd > dayEnd ? dayEnd : goalEnd;
     if (rangeEnd <= dayStart || rangeStart >= dayEnd || rangeStart >= rangeEnd) { el.hidden = true; return; }
@@ -17977,6 +17979,15 @@
     else HEALTH.weights = deduped;
   }
   HEALTH.bodyFat   = HEALTH.bodyFat   || [];   // { id, date, pct }
+  // one-time cleanup (bug audit 2026-08-06): #bfForm had the same blind-push bug as
+  // #weightForm above -- collapse any same-date duplicates down to the last-logged one.
+  if (HEALTH.bodyFat.length) {
+    const byDateBf = new Map();
+    HEALTH.bodyFat.forEach(b => byDateBf.set(b.date, b));
+    const dedupedBf = [...byDateBf.values()];
+    if (dedupedBf.length !== HEALTH.bodyFat.length) { HEALTH.bodyFat = dedupedBf; saveHealth(); }
+    else HEALTH.bodyFat = dedupedBf;
+  }
   HEALTH.periods   = HEALTH.periods   || [];   // legacy, superseded by HEALTH.flow
   HEALTH.flow      = HEALTH.flow      || {};   // { "YYYY-MM-DD": "spotting"|"light"|"medium"|"heavy" }
   HEALTH.fasts     = HEALTH.fasts     || [];   // { id, start, end }  ISO
@@ -18156,7 +18167,8 @@
         ${!RECIPES.length ? `<div class="wr-pop-foot">No recipes yet — add some on the Kitchen page.</div>` : ""}`;
     }
     // fasting: every recorded fast touching the day, editable + a quick manual add
-    const d0 = d.getTime(), d1 = d0 + 86400000;
+    // addDays(), not +86400000 -- DST-unsafe on Sydney's two transition days (bug audit 2026-08-06)
+    const d0 = d.getTime(), d1 = addDays(d, 1).getTime();
     const touching = HEALTH.fasts
       .filter(f => new Date(f.start).getTime() < d1 && new Date(f.end).getTime() > d0)
       .sort((a, b) => new Date(a.start) - new Date(b.start));
@@ -18545,7 +18557,8 @@
   // a fast belongs wholly to the day it ends — an overnight 16h fast reads as
   // 16 on the morning it's broken, never split 4+12 across the midnight line
   function fastedHoursOn(day) {
-    const d0 = day.getTime(), d1 = d0 + 86400000;
+    // addDays(), not +86400000 -- DST-unsafe on Sydney's two transition days (bug audit 2026-08-06)
+    const d0 = day.getTime(), d1 = addDays(day, 1).getTime();
     let ms = 0;
     HEALTH.fasts.forEach(f => {
       const e = new Date(f.end).getTime();
@@ -22536,7 +22549,13 @@
     e.preventDefault();
     const pct = parseFloat(document.getElementById("bfVal").value);
     if (!isFinite(pct)) return;
-    HEALTH.bodyFat.push({ id: uid(), date: document.getElementById("bfDate").value || todayISO(), pct });
+    // upsert-by-date (bug audit 2026-08-06) -- this was a blind push, the same bug
+    // weightForm just got fixed for: re-logging/correcting the SAME day's body fat %
+    // created a second entry instead of updating the first, so a correction could
+    // silently not "take" depending on which duplicate a .find() elsewhere picked up.
+    const k = document.getElementById("bfDate").value || todayISO();
+    const existing = HEALTH.bodyFat.find(x => x.date === k);
+    if (existing) existing.pct = pct; else HEALTH.bodyFat.push({ id: uid(), date: k, pct });
     saveHealth(); e.target.reset(); renderHealth();
   });
   document.getElementById("idealBf").addEventListener("change", e => {
@@ -27824,7 +27843,9 @@
       const fireKey = keyOf(new Date(fireTs));
       if (evKey === fireKey) return "";
       const d = parseKey(evKey), f = parseKey(fireKey);
-      return (d - f === 86400000 ? "Tomorrow " : `${d.getDate()} ${MON_SHORT[d.getMonth()]} `);
+      // dayDiff(), not a raw ms equality -- DST-unsafe on Sydney's two transition
+      // days (bug audit 2026-08-06), where adjacent local midnights are 23/25h apart
+      return (dayDiff(d, f) === 1 ? "Tomorrow " : `${d.getDate()} ${MON_SHORT[d.getMonth()]} `);
     }
 
     /* ---- Step 3: the engine — build { when, title, body, tag, data } for ~48h ---- */
