@@ -3907,6 +3907,11 @@
     display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; color: var(--ink-soft);
   }
   .rtg-ic:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
+  .rtg-edit-in {
+    width: 100%; font: inherit; color: var(--ink); background: var(--field-bg);
+    border: 1px solid var(--accent-seed); border-radius: 6px; padding: 4px 7px; min-height: 0;
+  }
+  .rtg-edit-in:focus { outline: none; }
   .rtg-group-row td {
     padding: 13px 12px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
     color: var(--ink-faint); font-weight: 700; border-top: none;
@@ -21296,7 +21301,7 @@
     const PHASE_ORDER = { before: 0, during: 1, after: 2 };
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
-      track: (a, b) => TRACK_LABEL[a.track].localeCompare(TRACK_LABEL[b.track]) || a.title.localeCompare(b.title),
+      category: (a, b) => (a.category || "").localeCompare(b.category || "") || a.title.localeCompare(b.title),
       phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
       freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
       time: (a, b) => {
@@ -21313,12 +21318,17 @@
       const phase = rtnGridPhaseOf(t);
       const phaseLbl = phase === "during" ? "event" : phase;
       const timeMin = rtnGridTimeMin(t);
+      // a chain-linked step's Time cell shows the chain-computed time (see rtnGridTimeMin),
+      // not a value of its own -- editing it inline would silently write a fallback-only
+      // time that the chain overrides whenever the anchor actually fires, which would look
+      // like the edit "did nothing". Same reasoning Phase already uses to stay read-only.
+      const chained = t.anchorTo && chainAnchorOf(t);
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle">${esc(t.title)}</td>
-        <td data-rtg-cell="rtnTrackPicker"><span class="rtg-trk"><span class="rtg-dot" style="background:var(--${t.track}-seed)"></span>${esc(TRACK_LABEL[t.track])}</span></td>
+        <td data-rtg-cell="rtnCategory"><span class="rtg-trk"><span class="rtg-dot" style="background:var(--${t.track}-seed)"></span>${t.category ? esc(t.category) : `<span class="rtg-muted">Uncategorized</span>`}</span></td>
         <td><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
-        <td class="rtg-muted" data-rtg-cell="rtnStart">${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
+        <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
         <td><div class="rtg-acts">
           <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add to calendar" aria-label="Add ${esc(t.title)} to the calendar">📅</button>
           <button type="button" class="rtg-ic" data-rtg-chain="${esc(t.id)}" title="Start a chain from this" aria-label="Start a chain from ${esc(t.title)}">🔗</button>
@@ -21330,7 +21340,7 @@
     if (rtnGridGroupBy === "none") {
       bodyHtml = rows.map(row).join("");
     } else {
-      const groupKeyOf = t => rtnGridGroupBy === "track" ? TRACK_LABEL[t.track]
+      const groupKeyOf = t => rtnGridGroupBy === "category" ? (t.category || "Uncategorized")
         : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
         : routineFreqLabel(t).split(" · ")[0].split(" + ")[0];   // "freq": coarse type only, not the full per-row text
       const groups = new Map();
@@ -21349,14 +21359,14 @@
         <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…" value="${esc(rtnGridSearch)}">
         <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
           <option value="none"${rtnGridGroupBy === "none" ? " selected" : ""}>Group by: None</option>
-          <option value="track"${rtnGridGroupBy === "track" ? " selected" : ""}>Group by: Track</option>
+          <option value="category"${rtnGridGroupBy === "category" ? " selected" : ""}>Group by: Category</option>
           <option value="phase"${rtnGridGroupBy === "phase" ? " selected" : ""}>Group by: Phase</option>
           <option value="freq"${rtnGridGroupBy === "freq" ? " selected" : ""}>Group by: Repeats</option>
         </select>
         <button type="button" class="add-btn" id="rtgAddBtn">＋ Add routine</button>
       </div>
       <div class="rtg-tbl"><table>
-        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("category", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
   }
@@ -21393,13 +21403,79 @@
       return;
     }
     if (e.target.closest("#rtgAddBtn")) { openRtnForm(null); return; }
+    const cell = e.target.closest("[data-rtg-cell]");
+    if (cell) {
+      const cellRow = cell.closest("[data-rtg-row]");
+      const ct = cellRow && ROUTINE_TASKS.find(x => x.id === cellRow.dataset.rtgRow);
+      if (ct) rtgEditCell(cell, ct);
+      return;
+    }
+    // clicking elsewhere in the row (not an editable cell -- e.g. the Phase pill,
+    // or blank space) still opens the full form, as a fallback/escape hatch
     const row = e.target.closest("[data-rtg-row]");
     if (!row) return;
     const t = ROUTINE_TASKS.find(x => x.id === row.dataset.rtgRow);
-    if (!t) return;
-    const cell = e.target.closest("[data-rtg-cell]");
-    openRtnForm(t, cell ? cell.dataset.rtgCell : null);
+    if (t) openRtnForm(t);
   });
+  // Inline cell editing: swap the clicked cell's content for a real input, save on
+  // blur/Enter, discard on Escape -- Repeats stays a form-jump because a recurrence
+  // pattern (weekdays, every-N-weeks, multiple time layers) isn't a single scalar
+  // value a plain inline control could represent.
+  function rtgEditCell(cell, t) {
+    const field = cell.dataset.rtgCell;
+    if (cell.querySelector("input")) return;   // already mid-edit
+    if (field === "rtnFreqGroup") { openRtnForm(t, field); return; }
+    const finish = (inp, commit) => {
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+        else if (e.key === "Escape") { e.preventDefault(); inp.onblur = null; renderRtnGrid(); }
+      });
+      inp.onblur = commit;
+      inp.focus();
+      if (inp.select) inp.select();
+    };
+    if (field === "rtnTitle") {
+      const orig = t.title;
+      cell.innerHTML = `<input type="text" class="rtg-edit-in" value="${esc(orig)}">`;
+      const inp = cell.querySelector("input");
+      finish(inp, () => {
+        const v = inp.value.trim();
+        if (v && v !== orig) { t.title = v; saveRoutines(); }
+        renderRtnGrid();
+      });
+      return;
+    }
+    if (field === "rtnCategory") {
+      const orig = t.category || "";
+      const dlOpts = (RTN_SUBS[t.track] || []).map(s => `<option value="${esc(s)}">`).join("");
+      cell.innerHTML = `<input type="text" class="rtg-edit-in" value="${esc(orig)}" list="rtgCatDl" placeholder="Uncategorized"><datalist id="rtgCatDl">${dlOpts}</datalist>`;
+      const inp = cell.querySelector("input");
+      finish(inp, () => {
+        const v = inp.value.trim();
+        if (v !== orig) { t.category = v; saveRoutines(); }
+        renderRtnGrid();
+      });
+      return;
+    }
+    if (field === "rtnStart") {
+      // a routine with more than one weekly time layer has no single "the" time to
+      // edit inline -- send those to the form, same reasoning as Repeats above
+      if (t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length > 1) { openRtnForm(t, field); return; }
+      const origVal = rtnGridTimeMin(t) != null ? minToTime(rtnGridTimeMin(t)) : "";
+      cell.innerHTML = `<input type="time" class="rtg-edit-in" value="${esc(origVal)}">`;
+      const inp = cell.querySelector("input");
+      finish(inp, () => {
+        const v = inp.value;
+        if (v !== origVal) {
+          if (t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length === 1) t.schedules[0].start = v;
+          else t.start = v;
+          saveRoutines();
+        }
+        renderRtnGrid();
+      });
+      return;
+    }
+  }
   document.getElementById("rtnGrid").addEventListener("input", e => {
     if (e.target.id !== "rtgSearch") return;
     rtnGridSearch = e.target.value;
