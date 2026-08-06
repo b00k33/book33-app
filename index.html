@@ -18439,23 +18439,42 @@
   function renderNumGrpFast(d) {
     const el = document.getElementById("numGrpFast");
     if (!el) return;
-    el.innerHTML = keyOf(d) === keyOf(TODAY) ? miniFastRing("num-grp-fast-ring", true) : "";
+    el.innerHTML = keyOf(d) === keyOf(TODAY) ? miniFastRing("num-grp-fast-ring", true, true) : "";
   }
-  function miniFastRing(cls, showIdle) {
+  // 2026-08-06 (Linh, screenshot of the numerology-bar ring: "give this ring a
+  // hover"): withPopover swaps the plain native title="..." tooltip for the same
+  // .num-hover-trigger/.num-hover-pop styled card its row-neighbours (mascot,
+  // birthday, imprint medal) already use — component reuse, not a one-off. Only
+  // opted into by the numerology-bar call site: the Month today-cell ring
+  // (mo-fast-mini) sits inside .mo-cell's overflow:hidden, where an absolutely-
+  // positioned popover would just get clipped, so it keeps the plain title.
+  function miniFastRing(cls, showIdle, withPopover) {
     const active = !!HEALTH.activeFast;
     if (!active && !showIdle) return "";
     const elapsedMs = active ? Date.now() - new Date(HEALTH.activeFast).getTime() : 0;
     const goalH = HEALTH.fastGoalHours || 16;
     const pct = active ? Math.min(elapsedMs / 3600000 / goalH, 1) : 0;
     const over = active && elapsedMs / 3600000 > goalH;
-    const title = active ? `🔥 ${Math.round(pct * 100)}% fasted` : "Not fasting";
-    return `<span class="fast-ring-wrap ${cls}" title="${esc(title)}">
+    const status = active ? `🔥 ${Math.round(pct * 100)}% fasted` : "Not fasting";
+    // --right: this ring is the LAST item in .num-group-strip (far right of the row),
+    // same edge-case every other trigger out here (moon badge, imprint medal) already
+    // hit -- a left-anchored popover would run 26px+ past the viewport's right edge.
+    const pop = withPopover
+      ? `<div class="num-hover-pop num-hover-pop--right"><div class="df-tile">
+          <div class="t-label">Fasting</div>
+          <div class="t-title">${esc(status)}</div>
+          ${active ? `<div class="t-sub">Goal <b>${goalH}h</b></div>` : ""}
+        </div></div>`
+      : "";
+    return `<span class="fast-ring-wrap ${cls}${withPopover ? " num-hover-trigger" : ""}"
+        ${withPopover ? `tabindex="0"` : `title="${esc(status)}"`}>
       <svg viewBox="0 0 120 120" class="fast-ring-svg">
         <circle cx="60" cy="60" r="${FAST_R}" class="fast-ring-track"/>
         <circle cx="60" cy="60" r="${FAST_R}" class="fast-ring-prog" data-fast-ring
           data-over="${over}" transform="rotate(-90 60 60)"
           style="stroke-dasharray:${FAST_C.toFixed(1)};stroke-dashoffset:${(FAST_C * (1 - pct)).toFixed(1)}"/>
       </svg>
+      ${pop}
     </span>`;
   }
   // encouraging milestone copy so the fast reads as a small climb with landmarks,
