@@ -5,9 +5,19 @@ name: Deploy to GitHub Pages
 # changed -- confirmed it wasn't a Jekyll-processing issue (adding .nojekyll didn't
 # help), which points at GitHub's older Pages build pipeline itself being retired
 # rather than anything in this repo. Switches deployment to the newer Actions-based
-# pipeline: this workflow builds an artifact from the repo root (same "/" path the
-# old source used, so nothing about what's served changes) and deploys it to Pages
-# directly, bypassing the broken legacy builder entirely.
+# pipeline: this workflow builds an artifact from just the files the app actually
+# serves and deploys it to Pages directly, bypassing the broken legacy builder.
+#
+# Deploy speed/reliability notes (2026-08-06 pt.2, Linh: "how to improve deploy
+# time"): the first three Actions-based attempts all stalled at deployment_queued
+# on GitHub's own Pages backend for the full 10-minute timeout (deploy-pages@v4
+# hard-caps its own timeout input at 600000ms regardless of what's set here, so
+# raising it does nothing -- confirmed by trying 1200000 and watching it get
+# clamped back down with a warning). That stall is on GitHub's side for this repo/
+# environment, not something workflow config fixes. What IS a real improvement:
+# cancel-in-progress below, so several sessions pushing to main in quick succession
+# don't each queue a full deploy attempt behind a slow/stuck one -- only the newest
+# commit's deploy matters, so cancelling stale in-flight ones is strictly better.
 
 on:
   push:
@@ -21,7 +31,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -32,20 +42,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Stage only what the app actually serves
+        # supabase/ (deploy scripts + SQL schema), .github/, and the repo's own
+        # planning docs (ABOUT-ME.md, CLAUDE.md) were never meant to be public --
+        # this list mirrors sw.js's own SHELL precache array exactly, plus sw.js
+        # itself. Smaller artifact, and stops publishing files that don't belong
+        # on the live site at all.
+        run: |
+          mkdir _site
+          cp index.html sw.js manifest.json apple-touch-icon.png favicon-32.png icon-192.png icon-512.png _site/
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          # 2026-08-06: the first two Actions-based deploys both got stuck at
-          # deployment_queued/in_progress on GitHub's own Pages backend for the
-          # full default 10-minute timeout and were cancelled -- no error, no
-          # incident on githubstatus.com, just slower than default for this repo/
-          # environment. Doubling it gives GitHub's side room to actually finish
-          # rather than getting cut off mid-deploy every single time.
-          timeout: 1200000
