@@ -3419,6 +3419,9 @@
   .cb-slot-time { flex: none; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .cb-anchor .cb-slot-time { color: var(--accent-seed); font-weight: 700; }
   .cb-warn { font-size: 11.5px; color: var(--warn); line-height: 1.5; margin: 4px 0 8px; }
+  /* 2026-08-06 (code44, timeless "template" chains): informational, not an error --
+     a chain with no time yet is valid and save-able, just not on the calendar yet. */
+  .cb-warn.cb-note { color: var(--ink-faint); }
   /* existing chains: one block per chain, a mini timeline in true running order */
   .cb-tl { background: var(--note-bg); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; }
   .cb-tl-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
@@ -3436,7 +3439,7 @@
   /* 2026-08-06 (Linh: "give an option to push chain to calendar"): inline date-picker
      row under the chain header, same Cancel/Save row language as .chain-b-actions. */
   .cb-push-row { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
-  .cb-push-row input[type="date"] { flex: 1; min-width: 140px; }
+  .cb-push-row input[type="date"], .cb-push-row input[type="time"] { flex: 1; min-width: 120px; }
   .cb-push-row .btn-save, .cb-push-row .btn-cancel { padding: 8px 16px; font-size: 12px; }
   .cb-tl-row { position: relative; display: flex; align-items: center; gap: 10px; padding: 2px 36px 2px 0; min-height: 40px; }
   .cb-tl-rail { flex: none; width: 14px; align-self: stretch; position: relative; }
@@ -23524,9 +23527,19 @@
       // shows for routine/recurring-event roots (the two kinds extraDates works on).
       const pushBtn = isPlainEvent(root) ? "" :
         `<button type="button" class="cb-tl-edit" data-cb-push="${esc(root.id)}" title="Place this chain on a chosen day, even outside its own pattern">📅 Push</button>`;
+      // 2026-08-06 (code44, "when i add to the calendar, i want the anchor's time to
+      // be the primary factor... ask for a time in the push flow"): prefills from
+      // whatever this exact date already resolves to (an existing per-day override
+      // first, else the anchor's own raw pattern time) so a chain that already has a
+      // normal time is a one-tap push -- but a timeless "template" chain (see cbSave's
+      // note above) starts blank and needs one before Push does anything.
+      const pushExistingOvr = chainNodeOvr(root, keyOf(previewDate));
+      const pushNaturalMin = rawRoutineStartMin(root, previewDate);
+      const pushPrefillMin = pushExistingOvr && pushExistingOvr.start ? timeToMin(pushExistingOvr.start) : pushNaturalMin;
       const pushRow = cbPushing === root.id
         ? `<div class="cb-push-row">
             <input type="date" id="cbPushDateInput" value="${esc(keyOf(previewDate))}" min="${esc(keyOf(TODAY))}" aria-label="Date to push this chain to">
+            <input type="time" id="cbPushTimeInput" value="${esc(pushPrefillMin != null ? minToTime(pushPrefillMin) : "")}" aria-label="Time for the anchor on that date">
             <button type="button" class="btn-save" data-cb-push-go="${esc(root.id)}">Push</button>
             <button type="button" class="btn-cancel" data-cb-push-cancel>Cancel</button>
           </div>`
@@ -23606,8 +23619,13 @@
     if (cbBuilding) {
       const sched = cbSchedule();
       const cols = cbColumnRows(sched);
-      const warn = sched && sched.noTime ? `<div class="cb-warn">The 🔒 anchor needs its own start time — give it one on its form, or pick a different anchor.</div>` : "";
-      const dayLbl = sched && sched.previewDate ? `${WD_FULL[dowIndex(sched.previewDate)]} ${sched.previewDate.getDate()} ${MON_SHORT[sched.previewDate.getMonth()]}` : "";
+      // 2026-08-06 (Linh, code44: "make chains without adding time... a template for
+      // me to add to my calendar at a date and time I wish"): SUPERSEDES the old
+      // save-blocking version of this note -- a chain with a timeless anchor is now a
+      // completely valid, save-able "structure only" template (see cbSave below); this
+      // is just a heads-up that it won't show on the calendar until pushed to a date.
+      const warn = sched && sched.noTime ? `<div class="cb-warn cb-note">No time yet — this chain will stay off the calendar until you 📅 Push it to a date.</div>` : "";
+      const dayLbl = sched && sched.previewDate && !sched.noTime ? `${WD_FULL[dowIndex(sched.previewDate)]} ${sched.previewDate.getDate()} ${MON_SHORT[sched.previewDate.getMonth()]}` : "";
       builderHtml = `<div class="cb-build">
         <div class="preg-cel-lab">Build a chain${dayLbl ? ` · ${esc(dayLbl)}` : ""}</div>
         <input type="text" class="cb-name-input" id="cbName" maxlength="40" placeholder="Name this chain (optional)" value="${esc(cbName)}" aria-label="Chain name">
@@ -23616,7 +23634,7 @@
         ${warn}
         <div class="chain-b-actions">
           <button type="button" class="btn-cancel" id="cbCancel">Cancel</button>
-          <button type="button" class="btn-save" id="cbSave"${cbItems.length >= 2 && sched && !sched.noTime ? "" : " disabled"}>Save chain</button>
+          <button type="button" class="btn-save" id="cbSave"${cbItems.length >= 2 ? "" : " disabled"}>Save chain</button>
         </div>
       </div>`;
     } else {
@@ -23711,18 +23729,30 @@
       return;
     }
     if (e.target.closest("[data-cb-push-cancel]")) { cbPushing = null; renderChainsPage(); return; }
-    // grants the ROOT an occurrence on the chosen date -- every linked before/after
-    // step already follows it there for free (chainGrantsOn), same reasoning as the
-    // "attach an existing routine to this day" flow on #addForm's submit handler.
+    // grants the ROOT an occurrence AND a time on the chosen date -- every linked
+    // before/after step already follows it there for free (chainGrantsOn/
+    // chainedStartMinOn), same reasoning as the "attach an existing routine to this
+    // day" flow on #addForm's submit handler. 2026-08-06 (code44, "ask for a time in
+    // the push flow... one-off for this placement only"): the time writes through the
+    // SAME per-day override each type already has (setRtnOvr's t.overrides[date] for
+    // routines, EVENT_TIME_OVR for recurring events) -- the exact mechanism dragging a
+    // block on the Day timeline already writes to (see rescheduleItem) -- so this is
+    // just one more writer of that store, not a new one, and never touches the
+    // routine/event's own default t.start.
     const pushGo = e.target.closest("[data-cb-push-go]");
     if (pushGo) {
       const root = chainNodeById(pushGo.dataset.cbPushGo);
       const dateVal = document.getElementById("cbPushDateInput").value;
-      if (!root || !dateVal) return;
+      const timeVal = document.getElementById("cbPushTimeInput").value;
+      if (!root || !dateVal || !timeVal) return;
       if (!Array.isArray(root.extraDates)) root.extraDates = [];
-      if (!root.extraDates.includes(dateVal)) {
-        root.extraDates.push(dateVal);
-        if (isRecurEvent(root)) saveRecurringEvents(); else saveRoutines();
+      if (!root.extraDates.includes(dateVal)) root.extraDates.push(dateVal);
+      const endVal = minToTime(Math.min(timeToMin(timeVal) + routineDurMin(root), 1439));
+      if (isRecurEvent(root)) {
+        EVENT_TIME_OVR[`ev-${root.id}-${dateVal}`] = { start: timeVal, end: endVal };
+        saveRecurringEvents(); saveEvTimeOvr();
+      } else {
+        setRtnOvr(root.id, dateVal, { start: timeVal, end: endVal });
       }
       // stays on the Chains page (not jumped to Day) so pushing several chains in a
       // row doesn't lose her place -- the card's own day line re-reads the fresh
