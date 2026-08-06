@@ -21335,9 +21335,10 @@
   let rtnGridSort = { col: "title", dir: 1 };
   let rtnGridGroupBy = "none";
   let rtnGridSearch = "";
-  // Phase has no home on the edit form (it's only ever set by dragging on the
-  // Board, or by a real chain link) -- so unlike every other column, its cell
-  // isn't clickable-to-edit; the pill is read-only info here.
+  // Phase has no home on the edit form -- it's set by dragging on the Board, or
+  // by a real chain link, so its inline editor (rtgEditCell's "rtnPhase" case)
+  // mirrors the Board's own drag-drop semantics (rtbEndDrag) rather than adding a
+  // 3rd, different way to set the same thing.
   function rtnGridPhaseOf(t) { return (t.anchorTo && chainAnchorOf(t)) ? t.anchorMode : (t.phase || "during"); }
   // a chain-linked step has no raw time of its own -- fall back to the same
   // chain-computed time the Chains page's own preview shows, so it doesn't read
@@ -21382,7 +21383,7 @@
         <td class="rtg-name" data-rtg-cell="rtnTitle">${esc(t.title)}</td>
         <td data-rtg-cell="rtnFitLink">${t.fitLink ? `🏋 ${esc(t.fitLink)}` : `<span class="rtg-muted">—</span>`}</td>
         <td data-rtg-cell="rtnCategory">${t.category ? esc(t.category) : `<span class="rtg-muted">Uncategorized</span>`}</td>
-        <td><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
+        <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
         <td><div class="rtg-acts">
@@ -21578,6 +21579,28 @@
       const multiLayer = t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length > 1;
       if (multiLayer || !RTG_FREQ_TYPES.includes(t.freq)) { openRtnForm(t, field); return; }
       rtgEditFreq(cell, t);
+      return;
+    }
+    if (field === "rtnPhase") {
+      // matches the Board's own drag-drop semantics exactly (rtbEndDrag): picking a
+      // phase here is a repositioning, same as dropping the card in a new column, so
+      // it clears any chain link/deadline the same way a drop would -- a phase this
+      // cell sets is independent, so it can't also be chain-governed at the same time.
+      const orig = rtnGridPhaseOf(t);
+      const opts = [["before", "Before"], ["during", "Event"], ["after", "After"]]
+        .map(([v, l]) => `<option value="${v}"${v === orig ? " selected" : ""}>${l}</option>`).join("");
+      cell.innerHTML = `<select class="rtg-edit-in">${opts}</select>`;
+      const sel = cell.querySelector("select");
+      let committed = false;
+      sel.addEventListener("change", () => {
+        committed = true;
+        delete t.anchorTo; delete t.anchorMode; delete t.deadline; delete t.deadlineLabel;
+        if (sel.value === "during") delete t.phase; else t.phase = sel.value;
+        saveChainNode(t);
+        renderRtnGrid();
+      });
+      sel.addEventListener("blur", () => { if (!committed) renderRtnGrid(); });
+      sel.focus();
       return;
     }
     if (field === "rtnFitLink") {
