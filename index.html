@@ -4067,21 +4067,49 @@
      source order (same specificity, later rule) -- overflow/ellipsis above stay
      harmless dead weight on this cell since there's nothing left to clip once it wraps. */
   .rtg-wrap { white-space: normal; line-height: 1.35; }
-  /* 2026-08-07 (Routines page rebuild spec, "no horizontal scroll at any width"):
-     table-layout:fixed holds the actions <td> to its colgroup width no matter what,
-     but 4 unwrapped 30px icons (120px+gaps) still don't fit inside that share at
-     narrower table widths -- with no flex-wrap they simply spilled past the cell,
-     widening .rtg-tbl's scrollWidth past its own clientWidth and forcing exactly
-     the scrollbar the spec is asking to never happen. Wrapping keeps every icon at
-     its full size and tap target; a row just grows taller instead of the table
-     growing wider, which a table row can always absorb. */
-  .rtg-acts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  /* 2026-08-07 (Linh: "i dont like that the icons on the right are stacked --
+     makes the row too high"): the original 4-icon row (📅🔗✎🗑) wrapped one-per-
+     line inside the actions column's 9% share, because that share -- minus the
+     column's own 10px/12px text-cell padding -- never had room for even one 30px
+     icon at realistic table widths, mobile or desktop. Fix has three parts: (1)
+     Edit + Delete stay instant-tap, Add-one-off + Start-chain move into a ⋯ menu
+     (openRtnMoreMenu below) -- see .rtg-acts-quick; (2) .rtg-acts-td/.rtg-auto-td
+     get their own tighter 8px padding instead of the text-column default, since
+     icon/switch cells don't need room for a word to breathe; (3) Actions/Auto's
+     colgroup share went up (see RTG_COL_DEFAULTS) to actually fit that content --
+     sized for the WIDEST state (Edit+Delete+⋯, 3 icons) so the narrow ≤640px
+     kebab-only state always has slack to spare, never a squeeze. flex-wrap is
+     gone on purpose: if this ever stops fitting, the fix is the budget above,
+     not a return to per-icon stacking. */
+  .rtg-acts { display: flex; gap: 4px; justify-content: flex-end; }
   .rtg-ic {
     width: 30px; height: 30px; min-height: 0; border-radius: 7px; border: none; background: var(--field-bg);
     display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; color: var(--ink-soft);
+    flex: none;
   }
   .rtg-ic:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
   .rtg-ic-del:hover { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn); }
+  #rtnGrid .rtg-acts-td, #rtnGrid .rtg-auto-td { padding-left: 8px; padding-right: 8px; }
+  #rtnGrid .rtg-auto-td { text-align: center; }
+  /* the ⋯ menu covers every action at any width, so the two quick-tap shortcuts
+     are the only thing that needs to give ground on a phone -- below the app's
+     usual 640px mobile cutoff (see .rtn-g8/g6/g3's own mobile stack rule) there
+     just isn't room for 3 icons next to Auto + a real Repeats column. */
+  @media (max-width: 640px) {
+    #rtnGrid .rtg-acts-quick { display: none; }
+  }
+  .rtg-more-menu {
+    position: fixed; z-index: 60; min-width: 172px; max-width: calc(100vw - 24px);
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+    box-shadow: var(--page-shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .rtg-more-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none;
+    background: none; border-radius: 8px; padding: 8px 10px; min-height: 0; font: inherit; font-size: 13px;
+    color: var(--ink); cursor: pointer;
+  }
+  .rtg-more-item:hover { background: color-mix(in oklab, var(--accent-seed) 12%, transparent); }
+  .rtg-more-item--del:hover { background: color-mix(in oklab, var(--warn) 12%, transparent); color: var(--warn); }
   /* 2026-08-07 (Routines page rebuild spec): Auto column -- a small pill switch, on
      (green, --fit-workout -- the app's one shared "Fitness" green, reused rather than
      inventing a new colour) vs off (grey/--raised), same on/off language the app
@@ -22489,7 +22517,13 @@
   // silently misread as percentages (a saved "100" meant 100px, not 100%).
   const RTG_COLS = ["title", "track", "phase", "freq", "time", "auto", "acts"];
   const RTG_COL_MIN = 5;   // percent
-  const RTG_COL_DEFAULTS = { title: 24, track: 12, phase: 11, freq: 27, time: 8, auto: 9, acts: 9 };
+  // 2026-08-07 (actions-column rebuild, Linh's "option b": Edit+Delete visible,
+  // one-off/chain behind a ⋯ menu): acts/auto both went up from their original
+  // 9% -- acts sized for its widest state (Edit+Delete+⋯, 3 icons, ≥641px) so
+  // it's never tight, auto for the pill switch's own 34px -- freq/title/track/
+  // phase gave back the difference; time held at 8 since it was already the
+  // tightest text column. See the .rtg-acts CSS comment for the full story.
+  const RTG_COL_DEFAULTS = { title: 21, track: 10, phase: 9, freq: 19, time: 8, auto: 15, acts: 18 };
   let rtnGridColWidths = (() => {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths-pct") || "{}"); } catch (e) {}
@@ -22527,6 +22561,7 @@
     const host = document.getElementById("rtnGrid");
     if (!host || rtnListMode !== "table") return;
     rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
+    closeRtnMoreMenu();  // its anchor button is about to be destroyed too
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const q = rtnGridSearch.trim().toLowerCase();
     const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
@@ -22563,12 +22598,11 @@
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted rtg-wrap" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
-        <td><button type="button" class="rtg-auto-switch${t.autoCalendar ? " on" : ""}" data-rtg-auto="${esc(t.id)}" role="switch" aria-checked="${t.autoCalendar ? "true" : "false"}" aria-label="Auto-add ${esc(t.title)} to the calendar"></button></td>
-        <td><div class="rtg-acts">
-          <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add one-off" aria-label="Add a one-off occurrence of ${esc(t.title)} to the calendar">📅</button>
-          <button type="button" class="rtg-ic" data-rtg-chain="${esc(t.id)}" title="Start a chain from this" aria-label="Start a chain from ${esc(t.title)}">🔗</button>
-          <button type="button" class="rtg-ic" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
-          <button type="button" class="rtg-ic rtg-ic-del" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
+        <td class="rtg-auto-td"><button type="button" class="rtg-auto-switch${t.autoCalendar ? " on" : ""}" data-rtg-auto="${esc(t.id)}" role="switch" aria-checked="${t.autoCalendar ? "true" : "false"}" aria-label="Auto-add ${esc(t.title)} to the calendar"></button></td>
+        <td class="rtg-acts-td"><div class="rtg-acts">
+          <button type="button" class="rtg-ic rtg-acts-quick" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
+          <button type="button" class="rtg-ic rtg-ic-del rtg-acts-quick" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
+          <button type="button" class="rtg-ic" data-rtg-more="${esc(t.id)}" title="More actions" aria-label="More actions for ${esc(t.title)}" aria-haspopup="true">⋯</button>
         </div></td>
       </tr>`;
     };
@@ -22598,6 +22632,95 @@
       </table></div>`;
     rtnInlineRedock("table");
   }
+  // Extracted so both the row's quick-tap icons AND the ⋯ menu's own click
+  // handlers (openRtnMoreMenu below -- it's mounted on document.body, past
+  // #rtnGrid, so the delegate below never sees its clicks) can call the exact
+  // same logic instead of forking it.
+  function rtnActCal(id) {
+    const t = ROUTINE_TASKS.find(x => x.id === id);
+    if (t) rtnAddOnce(t);   // the existing "drop a routine onto the calendar as a one-off, no editor" flow
+  }
+  function rtnActChain(id) {
+    const t = ROUTINE_TASKS.find(x => x.id === id);
+    if (t) {
+      // seeds the Chains builder with this routine, same as tapping its step
+      // chip in the Steps pool would -- see the chainsPage click delegate's
+      // own `if (!cbBuilding) { cbBuilding = true; ... }` tap-to-start path.
+      cbBuilding = true; cbItems = [t.id]; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = "";
+      state.view = "chains"; render();
+    }
+  }
+  function rtnActEdit(id) {
+    const t = ROUTINE_TASKS.find(x => x.id === id);
+    if (t) openRtnFormInline(t, "table");
+  }
+  // delete straight from the row -- same guard/confirm/undo as the full edit
+  // form's own Delete button (rtnDeleteBtn), just without opening the form first
+  function rtnActDelete(id) {
+    const victim = ROUTINE_TASKS.find(t => t.id === id);
+    if (!victim) return;
+    if (HAIR_TYPE_IDS.has(id)) {
+      alert(`"${victim.title}" can't be deleted — the hair wash rotation always needs its 3 types. Edit its name or steps instead, or turn it off the calendar with the switch.`);
+      return;
+    }
+    if (!confirm(`Delete "${victim.title}"?`)) return;
+    ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== id);
+    if (rtnEditId === id) closeRtnForm();
+    saveRoutines(); renderRtnGrid(); renderDay();
+    showRtnDeleteUndo(victim);
+  }
+  // ⋯ menu (2026-08-07, "option b"): a single floating popover holding all 4
+  // row actions, mounted on document.body (not nested under .rtg-tbl, whose
+  // overflow:auto would clip anything positioned past its own box -- a real
+  // risk for the last few rows) and positioned via getBoundingClientRect off
+  // the ⋯ button, clamped to the viewport. One open at a time.
+  let rtnMoreMenuEl = null, rtnMoreMenuId = null;
+  function closeRtnMoreMenu() {
+    if (rtnMoreMenuEl) rtnMoreMenuEl.remove();
+    rtnMoreMenuEl = null; rtnMoreMenuId = null;
+    document.removeEventListener("click", rtnMoreMenuOutsideClick, true);
+    document.removeEventListener("keydown", rtnMoreMenuKeydown, true);
+    window.removeEventListener("resize", closeRtnMoreMenu, true);
+    window.removeEventListener("scroll", closeRtnMoreMenu, true);
+  }
+  function rtnMoreMenuOutsideClick(e) {
+    if (rtnMoreMenuEl && !rtnMoreMenuEl.contains(e.target) && !e.target.closest("[data-rtg-more]")) closeRtnMoreMenu();
+  }
+  function rtnMoreMenuKeydown(e) { if (e.key === "Escape") closeRtnMoreMenu(); }
+  function openRtnMoreMenu(id, btn) {
+    if (rtnMoreMenuId === id) { closeRtnMoreMenu(); return; }
+    closeRtnMoreMenu();
+    const t = ROUTINE_TASKS.find(x => x.id === id);
+    if (!t) return;
+    const el = document.createElement("div");
+    el.className = "rtg-more-menu";
+    el.innerHTML = `
+      <button type="button" class="rtg-more-item" data-act="cal"><span aria-hidden="true">📅</span>Add one-off</button>
+      <button type="button" class="rtg-more-item" data-act="chain"><span aria-hidden="true">🔗</span>Start a chain</button>
+      <button type="button" class="rtg-more-item" data-act="edit"><span aria-hidden="true">✎</span>Edit</button>
+      <button type="button" class="rtg-more-item rtg-more-item--del" data-act="del"><span aria-hidden="true">🗑</span>Delete</button>`;
+    document.body.appendChild(el);
+    const r = btn.getBoundingClientRect();
+    const menuW = el.offsetWidth, menuH = el.offsetHeight;
+    let left = Math.max(8, Math.min(r.right - menuW, window.innerWidth - menuW - 8));
+    let top = r.bottom + 4;
+    if (top + menuH > window.innerHeight - 8) top = Math.max(8, r.top - menuH - 4);
+    el.style.left = left + "px"; el.style.top = top + "px";
+    el.addEventListener("click", ev => {
+      const actBtn = ev.target.closest("[data-act]");
+      if (!actBtn) return;
+      closeRtnMoreMenu();
+      if (actBtn.dataset.act === "cal") rtnActCal(id);
+      else if (actBtn.dataset.act === "chain") rtnActChain(id);
+      else if (actBtn.dataset.act === "edit") rtnActEdit(id);
+      else if (actBtn.dataset.act === "del") rtnActDelete(id);
+    });
+    rtnMoreMenuEl = el; rtnMoreMenuId = id;
+    document.addEventListener("click", rtnMoreMenuOutsideClick, true);
+    document.addEventListener("keydown", rtnMoreMenuKeydown, true);
+    window.addEventListener("resize", closeRtnMoreMenu, true);
+    window.addEventListener("scroll", closeRtnMoreMenu, true);
+  }
   document.getElementById("rtnGrid").addEventListener("click", e => {
     if (e.target.closest(".rtg-col-resize")) return;   // drag handle, not a sort click
     const sortTh = e.target.closest("[data-rtg-sort]");
@@ -22605,12 +22728,6 @@
       const col = sortTh.dataset.rtgSort;
       if (rtnGridSort.col === col) rtnGridSort.dir *= -1; else { rtnGridSort = { col, dir: 1 }; }
       renderRtnGrid();
-      return;
-    }
-    const cal = e.target.closest("[data-rtg-cal]");
-    if (cal) {
-      const t = ROUTINE_TASKS.find(x => x.id === cal.dataset.rtgCal);
-      if (t) rtnAddOnce(t);   // the existing "drop a routine onto the calendar as a one-off, no editor" flow
       return;
     }
     // Auto column (rebuild spec): toggles+saves straight from the table, no editor
@@ -22628,42 +22745,12 @@
       }
       return;
     }
-    const chain = e.target.closest("[data-rtg-chain]");
-    if (chain) {
-      const t = ROUTINE_TASKS.find(x => x.id === chain.dataset.rtgChain);
-      if (t) {
-        // seeds the Chains builder with this routine, same as tapping its step
-        // chip in the Steps pool would -- see the chainsPage click delegate's
-        // own `if (!cbBuilding) { cbBuilding = true; ... }` tap-to-start path.
-        cbBuilding = true; cbItems = [t.id]; cbAnchorIdx = 0; cbEditOrig = null; cbEditRoot = null; cbName = "";
-        state.view = "chains"; render();
-      }
-      return;
-    }
+    const moreBtn = e.target.closest("[data-rtg-more]");
+    if (moreBtn) { openRtnMoreMenu(moreBtn.dataset.rtgMore, moreBtn); return; }
     const editIcon = e.target.closest("[data-rtg-edit]");
-    if (editIcon) {
-      const t = ROUTINE_TASKS.find(x => x.id === editIcon.dataset.rtgEdit);
-      if (t) openRtnFormInline(t, "table");
-      return;
-    }
-    // delete straight from the row -- same guard/confirm/undo as the full edit
-    // form's own Delete button (rtnDeleteBtn), just without opening the form first
+    if (editIcon) { rtnActEdit(editIcon.dataset.rtgEdit); return; }
     const delIcon = e.target.closest("[data-rtg-del]");
-    if (delIcon) {
-      const id = delIcon.dataset.rtgDel;
-      const victim = ROUTINE_TASKS.find(t => t.id === id);
-      if (!victim) return;
-      if (HAIR_TYPE_IDS.has(id)) {
-        alert(`"${victim.title}" can't be deleted — the hair wash rotation always needs its 3 types. Edit its name or steps instead, or turn it off the calendar with the switch.`);
-        return;
-      }
-      if (!confirm(`Delete "${victim.title}"?`)) return;
-      ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== id);
-      if (rtnEditId === id) closeRtnForm();
-      saveRoutines(); renderRtnGrid(); renderDay();
-      showRtnDeleteUndo(victim);
-      return;
-    }
+    if (delIcon) { rtnActDelete(delIcon.dataset.rtgDel); return; }
     const cell = e.target.closest("[data-rtg-cell]");
     if (cell) {
       const cellRow = cell.closest("[data-rtg-row]");
