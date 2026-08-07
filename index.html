@@ -4007,17 +4007,32 @@
      "too fiddly on touch" call already made for the timeline handles -- the column
      header itself is still fully usable for sorting on mobile, just not resizable. */
   #rtnGrid .rtg-tbl table { table-layout: fixed; }
-  .rtg-col-resize { position: absolute; top: 0; bottom: 0; right: -6px; width: 12px; cursor: col-resize; opacity: 0; z-index: 2; }
+  /* right:0 (not a negative offset spilling past the border) -- every th in this
+     table has position:relative, so a handle straddling into the NEXT column's box
+     sits under that later-DOM-order sibling for hit-testing purposes and silently
+     eats clicks/drags, even though it's still visibly on top. Found 2026-08-07 after
+     Linh reported dragging did nothing -- confirmed by re-deriving the geometry, not
+     caught earlier because that verification pass dispatched events straight at the
+     handle element, which bypasses real hit-testing entirely. */
+  .rtg-col-resize { position: absolute; top: 0; bottom: 0; right: 0; width: 10px; cursor: col-resize; opacity: 0; z-index: 2; }
   .rtg-col-resize::after {
-    content: ""; position: absolute; left: 50%; top: 20%; bottom: 20%; transform: translateX(-50%);
+    content: ""; position: absolute; right: 2px; top: 20%; bottom: 20%;
     width: 3px; border-radius: 2px; background: var(--accent-seed); opacity: 0.6;
   }
-  @media (hover: hover) and (pointer: fine) {
-    #rtnGrid th:hover .rtg-col-resize { opacity: 1; }
-  }
-  @media (hover: none), (pointer: coarse) {
-    .rtg-col-resize { display: none; }
-  }
+  /* Deliberately NOT gated behind @media (hover)/(pointer) -- unlike the timeline's
+     .tl-resize-handle (which has a real fallback, the popup's Duration field, so
+     hiding it on a media-query-reported "coarse" device is harmless), a column has
+     no alternate way to resize, and (hover)/(pointer) media features reflect the
+     OS's static "primary pointer" hardware classification, not which device is
+     actually driving the current interaction -- Windows commonly reports coarse/
+     no-hover on any touch-capable machine even when it's being used entirely by
+     mouse (found 2026-08-07: this exact mismatch on Linh's own desktop is why the
+     handles rendered but were invisible -- opacity stuck at 0 forever). The real
+     "was this actually a mouse" check already happens where it belongs, in JS, via
+     pointerType on the drag handler below -- a genuine touch tap can still make the
+     :hover pseudo-class flicker on and reveal the handle, but pointerType will
+     correctly no-op the drag itself, so nothing breaks either way. */
+  #rtnGrid th:hover .rtg-col-resize { opacity: 1; }
   body.dragging-col, body.dragging-col * { cursor: col-resize !important; user-select: none !important; }
   .rtg-tbl tbody td { padding: 10px 12px; border-top: 1px solid var(--note-line); vertical-align: middle; }
   .rtg-tbl tbody tr[data-rtg-row]:hover { background: color-mix(in oklab, var(--accent-seed) 5%, transparent); }
