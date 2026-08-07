@@ -9861,6 +9861,14 @@
           <label for="rtnMonthlyDay">Day of month</label>
           <input type="number" id="rtnMonthlyDay" min="1" max="31" placeholder="1–31">
         </div>
+        <!-- 2026-08-07 (Linh: "give an option to indicate when the routine ends"):
+             stops the recurrence after this date -- hidden for One-off since a
+             single date already IS its own end. Optional, so most routines (which
+             run indefinitely) never see an extra field to skip past. -->
+        <div class="field full" id="rtnEndField">
+          <label for="rtnEndDate">Ends <span class="field-hint">optional — stops repeating after this date</span></label>
+          <input type="date" id="rtnEndDate">
+        </div>
         <div class="field rtn-g8">
           <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
           <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
@@ -11708,6 +11716,12 @@
     // the routine's own edit form so it stays a live reference: editing the routine's
     // title/time/steps still updates this occurrence, same as every patterned one
     if (Array.isArray(t.extraDates) && t.extraDates.includes(keyOf(date))) return true;
+    // 2026-08-07 ("give an option to indicate when the routine ends"): checked before
+    // the pattern below, not after, so it gates every freq type in one place -- an
+    // extraDate past the end is still honoured above (an explicit manual placement,
+    // same precedent as extraDates already overriding calOn's own off-switch). endDate
+    // is the LAST day it still occurs (inclusive), same as Google Calendar's "Ends on".
+    if (t.endDate && keyOf(date) > t.endDate) return false;
     if (t.freq === "numMoney") return isMoneyDay(date);
     if (t.freq === "daily") return true;
     if (t.freq === "yearly") return t.month === date.getMonth() + 1 && t.day === date.getDate();
@@ -11969,21 +11983,26 @@
   // display label for a task's recurrence — the only freq whose label needs the task's own
   // data (the interval length), since "every N days" isn't a fixed vocabulary word like the rest
   function routineFreqLabel(t) {
-    if (t.freq === "interval") return `Every ${t.intervalDays} day${t.intervalDays === 1 ? "" : "s"}`;
+    // 2026-08-07 ("give an option to indicate when the routine ends"): appended to
+    // every freq except One-off, which is already its own single end date --
+    // rtnEndSuffix returns "" when t.endDate is unset, so this is a no-op for the
+    // overwhelming majority of routines that don't use it.
+    const endSuffix = t.freq === "once" ? "" : rtnEndSuffix(t.endDate);
+    if (t.freq === "interval") return `Every ${t.intervalDays} day${t.intervalDays === 1 ? "" : "s"}` + endSuffix;
     if (t.freq === "numMoney") return "Money days · 8 / 28 (wkdays)";
     if (t.freq === "count") return `${t.weeklyTarget || 5}×/week`;
     if (t.freq === "weekly") {
       const layers = schedulesOf(t).filter(l => l.weekdays.length);
-      if (!layers.length) return "Weekly · no days set";
+      if (!layers.length) return "Weekly · no days set" + endSuffix;
       const layerLabel = l => {
         const dayList = l.weekdays.slice().sort((a, b) => a - b).map(i => WD_FULL[i].slice(0, 3)).join(", ");
         const prefix = l.weekInterval > 1 ? `every ${l.weekInterval}wk ` : "";
         const time = l.start ? ` ${fmtTime(minToTime(timeToMin(l.start)))}` : "";
         return `${prefix}${dayList}${time}`;
       };
-      return (layers.length > 1 ? "" : "Weekly · ") + layers.map(layerLabel).join(" + ");
+      return (layers.length > 1 ? "" : "Weekly · ") + layers.map(layerLabel).join(" + ") + endSuffix;
     }
-    return ROUTINE_FREQ_LABEL[t.freq] || t.freq;
+    return (ROUTINE_FREQ_LABEL[t.freq] || t.freq) + endSuffix;
   }
 
   function nextRoutineDue(t, from) {
@@ -25770,23 +25789,32 @@
   // weekly gets its chips right there; everything else summarises and taps through
   // to the real pickers inside More options)
   function rtnRepeatSummaryText() {
-    if (rtnFreq === "daily") return "Daily";
-    if (rtnFreq === "monthly") { const d = document.getElementById("rtnMonthlyDay").value; return d ? `Monthly · day ${d}` : "Monthly"; }
-    if (rtnFreq === "yearly") {
-      const v = document.getElementById("rtnYearlyDate").value;
-      if (v) { const d = parseKey(v); return `Yearly · ${d.getDate()} ${MON_SHORT[d.getMonth()]}`; }
-      return "Yearly";
-    }
-    if (rtnFreq === "interval") { const n = document.getElementById("rtnIntervalDays").value || 2; return `Every ${n} days`; }
     if (rtnFreq === "once") {
       const v = document.getElementById("rtnOnceDate").value;
-      if (v) { const d = parseKey(v); return `One-off · ${d.getDate()} ${MON_SHORT[d.getMonth()]}`; }
-      return "One-off";
+      return v ? `One-off · ${parseKey(v).getDate()} ${MON_SHORT[parseKey(v).getMonth()]}` : "One-off";
     }
+    const endSuffix = rtnEndSuffix(document.getElementById("rtnEndDate").value);
+    if (rtnFreq === "daily") return "Daily" + endSuffix;
+    if (rtnFreq === "monthly") { const d = document.getElementById("rtnMonthlyDay").value; return (d ? `Monthly · day ${d}` : "Monthly") + endSuffix; }
+    if (rtnFreq === "yearly") {
+      const v = document.getElementById("rtnYearlyDate").value;
+      if (v) { const d = parseKey(v); return `Yearly · ${d.getDate()} ${MON_SHORT[d.getMonth()]}` + endSuffix; }
+      return "Yearly" + endSuffix;
+    }
+    if (rtnFreq === "interval") { const n = document.getElementById("rtnIntervalDays").value || 2; return `Every ${n} days` + endSuffix; }
     if (rtnFreq === "asNeeded") return "As needed — no schedule";
     return "";
   }
+  // appended to both the form's own live summary line above and the Table's
+  // Repeats column (routineFreqLabel) so "Ends" is visible without opening the
+  // editor -- hidden for One-off (see rtnEndField's own comment for why).
+  function rtnEndSuffix(endDate) {
+    if (!endDate) return "";
+    const d = parseKey(endDate);
+    return ` · ends ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+  }
   function syncRtnFreqFields() {
+    document.getElementById("rtnEndField").hidden = rtnFreq === "once";
     document.getElementById("rtnOnceField").hidden = rtnFreq !== "once";
     document.getElementById("rtnYearlyField").hidden = rtnFreq !== "yearly";
     document.getElementById("rtnMonthlyField").hidden = rtnFreq !== "monthly";
@@ -25980,6 +26008,7 @@
       document.getElementById("rtnCategory").value = task.category || "";
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
+      document.getElementById("rtnEndDate").value = task.endDate || "";
       document.getElementById("rtnStart").value = task.start || "";
       // 2026-08-06: only meaningful without sub-tasks (see updateRtnSubTotal, called at
       // the end of this function, which hides the field again if subtasks got added below)
@@ -26161,6 +26190,11 @@
     if (fitLink) task.fitLink = fitLink;
     if (start) task.start = start;
     if (subtasks.length) task.subtasks = subtasks;
+    // 2026-08-07 ("give an option to indicate when the routine ends"): general across
+    // every freq type, so it's read here rather than nested in the freq-specific
+    // branches below -- hidden (and therefore empty) for One-off, which is its own end.
+    const endDate = document.getElementById("rtnEndDate").value;
+    if (endDate) task.endDate = endDate;
     // 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
     // WITHOUT adding a sub-task"): only applies with no sub-tasks -- their own minutes
     // already decide the block length (generatedFor() sums them), same as before.
