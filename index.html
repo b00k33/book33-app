@@ -30425,10 +30425,7 @@
     // device's snapshot — push ours up instead; the other device reconciles to it.
     // Single-user, two-device reality: protecting unsent edits beats blind cloud-wins.
     if (localStorage.getItem(DIRTY)) { pushNow(); return; }
-    apply(incoming);
-    lastPushed = JSON.stringify(gather());                 // adopting, don't bounce it back
-    if (row.updated_at) sessionStorage.setItem(APPLIED, row.updated_at);
-    reloadWhenIdle();                                      // the app re-reads everything on boot
+    reloadWhenIdle(incoming, row.updated_at);
   }
   function subscribe() {
     sb.channel("book33-sync")
@@ -30511,18 +30508,34 @@
     // would wipe an in-progress inline edit exactly like it did the quick-add preview.
     return !!document.querySelector("#rtnAddForm.rtn-inline-mode");
   }
-  function reloadWhenIdle() {
-    if (!isEditing()) { location.reload(); return; }
-    pendingReload = true;                                  // wait until she stops typing
+  // 2026-08-07 (Linh: "edits not consistently maintained" -- comprehensive audit
+  // after the syncing complaints): apply() used to run immediately in reconcile(),
+  // writing incoming cloud data straight into localStorage while only the RELOAD
+  // waited on isEditing(). That leaves a real data-loss window: apply() never
+  // touches the in-memory HEALTH/etc. objects (only a fresh boot re-reads those),
+  // so if she's actively editing something while the applied data sits waiting for
+  // a safe moment to reload, her own save -- built from the still-stale in-memory
+  // copy -- writes straight back over the just-applied cloud data the moment she
+  // saves, silently erasing whatever the cloud update contained. apply() itself is
+  // now deferred to this single function, which runs it at the EXACT moment of
+  // reload (immediate or delayed) -- nothing ever touches localStorage until the
+  // page is genuinely about to reload and the in-memory copy is about to become
+  // irrelevant, so there's no window left for a local save to race it.
+  function applyAndReload(incoming, updatedAt) {
+    apply(incoming);
+    lastPushed = JSON.stringify(gather());                 // adopting, don't bounce it back
+    if (updatedAt) sessionStorage.setItem(APPLIED, updatedAt);
+    location.reload();
+  }
+  function reloadWhenIdle(incoming, updatedAt) {
+    if (!isEditing()) { applyAndReload(incoming, updatedAt); return; }
+    pendingReload = { incoming: incoming, updatedAt: updatedAt };   // wait until she stops typing
     // 2026-08-07 (Linh: "its not syncing" -- traced live: sync dot showed green/synced
     // on both devices, meaning the data really did land, but the SCREEN kept showing
     // the old state anyway. Root cause: focusout/click below are the ONLY things that
     // ever resolve a pending reload -- if she just looks at a page without tapping
     // anything else (e.g. reading the Fasting card, which has its own edit/date
-    // fields that can hold focus), nothing ever fires and it waits forever. A later
-    // reconcile() can't rescue it either -- once apply() has already written the
-    // incoming data into localStorage, that SAME data now reads as "no visible
-    // change" and short-circuits before ever reaching reloadWhenIdle() again.
+    // fields that can hold focus), nothing ever fires and it waits forever.
     // Polls instead of a single long wait -- a one-shot timer needs the tab to stay
     // foregrounded the whole time to have any chance of firing, and a quick "just
     // checking the app" visit is exactly the case this needs to cover. Reloads the
@@ -30533,14 +30546,15 @@
     pendingReloadTimer = setInterval(function () {
       idleChecks++;
       if (!pendingReload) { clearInterval(pendingReloadTimer); return; }
-      if (!isEditing() || idleChecks >= 10) { clearInterval(pendingReloadTimer); location.reload(); }
+      if (!isEditing() || idleChecks >= 10) { clearInterval(pendingReloadTimer); applyAndReload(pendingReload.incoming, pendingReload.updatedAt); }
     }, 2000);
   }
   // focusout alone can leave a pending reload stranded when the guard was the chain
   // builder (button taps don't always shuffle focus) — any later click re-checks too
   function releasePendingReload() {
     if (!pendingReload) return;
-    setTimeout(function () { if (pendingReload && !isEditing()) location.reload(); }, 500);
+    var pr = pendingReload;
+    setTimeout(function () { if (pendingReload && !isEditing()) applyAndReload(pr.incoming, pr.updatedAt); }, 500);
   }
   document.addEventListener("focusout", releasePendingReload, true);
   document.addEventListener("click", releasePendingReload, true);
@@ -30669,6 +30683,14 @@
     dot.style.right = "max(12px, env(safe-area-inset-right))";
     dot.style.bottom = "max(12px, env(safe-area-inset-bottom))";
   }
+  // 2026-08-07 (Linh: "edits not consistently maintained... this cannot happen
+  // again" -- comprehensive audit): the dot only ever said "Synced" or
+  // "Reconnecting", which tells you the CONNECTION is fine but nothing about
+  // whether this device's own edits have actually reached the cloud. A device
+  // stuck re-pushing a stale local copy (this morning's routines-reappearing bug)
+  // or stuck unable to push at all would show the exact same green dot the whole
+  // time. Surfacing the raw DIRTY flag here means the next "it's not syncing"
+  // report is a 2-second glance instead of a live investigation like this one.
   function setLive(on) {
     var d = document.getElementById("b33Live"); if (!d) return;
     d.style.background = on ? "#8fd6b4" : "#c98b6b";
@@ -30676,7 +30698,11 @@
     d.title = label;
     d.setAttribute("aria-label", "Cloud sync: " + label);
     var pop = document.getElementById("b33LiveLabel");
-    if (pop) pop.textContent = label;
+    if (pop) {
+      var extra = "";
+      if (localStorage.getItem(DIRTY)) extra = on ? " · pushing an edit…" : " · edit waiting to send";
+      pop.textContent = label + extra;
+    }
   }
   // 2026-08-02 (Linh: "what does the top left green light mean" -- asked twice; a
   // title="" tooltip never shows on a touchscreen, so the only real answer she had
@@ -30733,6 +30759,39 @@
       if (sb) sb.auth.signOut().then(done, done); else done();
     };
     (document.querySelector(".wrap") || document.body).appendChild(b);
+  }
+  // 2026-08-07 (Linh: "this cannot happen again" -- comprehensive sync audit): every
+  // fix above closes a specific mechanism, but there was no way to just GET OUT of a
+  // stuck state without finding Claude and tracing it live, the way today's reports
+  // needed. This is that escape hatch -- discards this device's local copy entirely
+  // and adopts whatever's in the cloud right now, bypassing DIRTY protection on
+  // purpose (that protection is exactly what could be wrong if a device is stuck).
+  // Deliberately NOT gated on isEditing() -- she's reaching for this specifically
+  // because normal sync isn't working, so waiting for "idle" could wait forever too;
+  // a confirm() dialog is the safety net instead of a silent guard.
+  function forceResyncBtn() {
+    if (document.getElementById("b33Resync")) return;
+    var b = document.createElement("a");
+    b.id = "b33Resync";
+    b.href = "#";
+    b.textContent = "Force resync from cloud";
+    b.style.cssText = "display:block;text-align:center;margin:0 auto 8px;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#6a5a7c;text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    b.onclick = function (e) {
+      e.preventDefault();
+      if (!confirm("Replace everything on this device with what's currently saved in the cloud? Any edit made only here that hasn't synced yet will be lost.")) return;
+      b.textContent = "Resyncing…";
+      withTimeout(fetchCloud(), 6000).then(function (row) {
+        try { localStorage.removeItem(DIRTY); } catch (e) {}
+        var incoming = {};
+        if (row && row.data) Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
+        applyAndReload(incoming, row && row.updated_at);
+      }, function () {
+        b.textContent = "Force resync from cloud";
+        alert("Couldn't reach the database — check the connection and try again.");
+      });
+    };
+    var out = document.getElementById("b33Signout");
+    (out ? out.parentElement : (document.querySelector(".wrap") || document.body)).insertBefore(b, out);
   }
 
   /* ---- overlay (sign-in) ------------------------------------------------
@@ -30825,9 +30884,14 @@
           sessionStorage.setItem(APPLIED, row.updated_at || "");
           go(); return;
         }
-        apply(row.data);
-        sessionStorage.setItem(APPLIED, row.updated_at || "");
-        location.reload();                                  // clean boot on the adopted data
+        // 2026-08-07: routed through the same applyAndReload/reloadWhenIdle path as
+        // reconcile() below, not an unconditional apply()+reload() -- by the time
+        // this async cloud round-trip resolves, the already-visible page (rendered
+        // from local on first paint, see the module header above) may already have
+        // her mid-edit in it, and an unconditional reload here has the exact same
+        // clobber risk reconcile() had. See reloadWhenIdle()'s comment for the fuller
+        // trace of how that silently loses data.
+        reloadWhenIdle(incoming, row.updated_at);
       } else {
         // nothing in the cloud yet under this login -- this device's local data (even
         // if empty) becomes the seed. No import step: local is already the source of truth.
@@ -30841,7 +30905,7 @@
   }
   function go() {
     ready = true; lastPushed = JSON.stringify(gather());
-    hideOverlay(); badge(); signoutBtn(); subscribe(); setLive(true);
+    hideOverlay(); badge(); signoutBtn(); forceResyncBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
     placeThemeToggle();
