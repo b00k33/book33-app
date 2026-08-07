@@ -30514,6 +30514,19 @@
   function reloadWhenIdle() {
     if (!isEditing()) { location.reload(); return; }
     pendingReload = true;                                  // wait until she stops typing
+    // 2026-08-07 (Linh: "its not syncing" -- traced live: sync dot showed green/synced
+    // on both devices, meaning the data really did land, but the SCREEN kept showing
+    // the old state anyway. Root cause: focusout/click below are the ONLY things that
+    // ever resolve a pending reload -- if she just looks at a page without tapping
+    // anything else (e.g. reading the Fasting card, which has its own edit/date
+    // fields that can hold focus), nothing ever fires and it waits forever. A later
+    // reconcile() can't rescue it either -- once apply() has already written the
+    // incoming data into localStorage, that SAME data now reads as "no visible
+    // change" and short-circuits before ever reaching reloadWhenIdle() again. Cap the
+    // wait so fresh data is never withheld indefinitely -- long enough not to
+    // interrupt a real edit, short enough that "stuck" can't be the real-world result.
+    clearTimeout(pendingReloadTimer);
+    pendingReloadTimer = setTimeout(function () { if (pendingReload) location.reload(); }, 60000);
   }
   // focusout alone can leave a pending reload stranded when the guard was the chain
   // builder (button taps don't always shuffle focus) — any later click re-checks too
