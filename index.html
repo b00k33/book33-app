@@ -4037,14 +4037,22 @@
   .rtg-tbl tbody td { padding: 10px 12px; border-top: 1px solid var(--note-line); vertical-align: middle; }
   .rtg-tbl tbody tr[data-rtg-row]:hover { background: color-mix(in oklab, var(--accent-seed) 5%, transparent); }
   .rtg-tbl tbody td[data-rtg-cell] { cursor: pointer; }
-  .rtg-name { font-weight: 600; color: var(--ink); }
-  .rtg-trk { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .rtg-name { font-weight: 600; color: var(--ink); overflow: hidden; }
+  /* 2026-08-07 (Linh: "shrinking width of columns is causing text to overlap"): the
+     column drag-resize above lets a column go narrower than its own text, and this
+     row's text was never clipped -- with table-layout:fixed a too-narrow column
+     doesn't wrap or shrink the text, it just lets it spill straight over the next
+     cell. .rtg-txt (own flex item, not the dot) is what actually gets the ellipsis:
+     text-overflow needs a real block box to clip, and a bare text node sitting next
+     to .rtg-dot inside the flex row has no addressable box of its own to apply it to. */
+  .rtg-trk { display: flex; align-items: center; gap: 7px; white-space: nowrap; min-width: 0; }
   .rtg-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .rtg-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rtg-phase { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; border-radius: 5px; padding: 2px 7px; }
   .rtg-phase.phase-lbl-before { background: color-mix(in oklab, var(--phase-before) 16%, transparent); }
   .rtg-phase.phase-lbl-during { background: color-mix(in oklab, var(--phase-during) 14%, transparent); }
   .rtg-phase.phase-lbl-after { background: color-mix(in oklab, var(--phase-after) 16%, transparent); }
-  .rtg-muted { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rtg-muted { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
   .rtg-acts { display: flex; gap: 4px; }
   .rtg-ic {
     width: 30px; height: 30px; min-height: 0; border-radius: 7px; border: none; background: var(--field-bg);
@@ -22446,8 +22454,8 @@
       const chained = t.anchorTo && chainAnchorOf(t);
       const dot = `<span class="rtg-dot" style="background:var(--${t.track}-seed, var(--ink-faint))"></span>`;
       return `<tr data-rtg-row="${esc(t.id)}">
-        <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}${esc(t.title)}</span></td>
-        <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}${esc(RTN_TRACK_LABEL[t.track] || "Other")}</span></td>
+        <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(t.title)}</span></span></td>
+        <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(RTN_TRACK_LABEL[t.track] || "Other")}</span></span></td>
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
@@ -30305,7 +30313,7 @@
   // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store
   var EXCLUDE = { "daybook-pharmacy": 1, "daybook-prescriptions": 1 };
 
-  var sb = null, ready = false, suppress = false, pushTimer = null, lastPushed = "", pendingReload = false;
+  var sb = null, ready = false, suppress = false, pushTimer = null, lastPushed = "", pendingReload = false, pendingReloadTimer = null;
 
   // never let a hung connection wedge a network call forever -- every Supabase call
   // this file makes during boot/sign-in goes through this.
