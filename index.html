@@ -30312,6 +30312,28 @@
   var DIRTY = "book33-unsynced";
   // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store
   var EXCLUDE = { "daybook-pharmacy": 1, "daybook-prescriptions": 1 };
+  // 2026-08-07 (Linh: "edits not consistently maintained... this cannot happen
+  // again" -- comprehensive audit, root cause of the day's sync reports): Book33Notify
+  // recomputes and rewrites daybook-push-queue on every boot (~1.2s in), every hour
+  // while open, and every time the tab regains focus -- it embeds a fresh Date.now()
+  // stamp each time, so its content is NEVER identical between two boots even when
+  // nothing she actually did has changed. That write still needs to reach the cloud
+  // (the push Edge Function reads it to know what to send), so it can't just be
+  // excluded from sync -- but it was ALSO being treated exactly like a real edit:
+  // setting DIRTY, and making gather() never byte-match an incoming cloud snapshot.
+  // Combined, that meant DIRTY was true almost immediately after nearly every single
+  // boot for a reason that has nothing to do with anything she typed -- and DIRTY
+  // being true is what makes finishAuth()/reconcile() prefer this device's OWN local
+  // copy over the cloud's, unconditionally. A device could look "stuck" simply for
+  // having been opened recently. NOISY keys still get pushed (so the queue itself
+  // stays current in the cloud) but never set DIRTY and never count toward "is this
+  // meaningfully different from the cloud" -- only an edit she actually made does.
+  var NOISY = { "daybook-push-queue": 1 };
+  function stripNoisy(obj) {
+    var o = {};
+    Object.keys(obj).forEach(function (k) { if (!NOISY[k]) o[k] = obj[k]; });
+    return o;
+  }
 
   var sb = null, ready = false, suppress = false, pushTimer = null, lastPushed = "", pendingReload = false, pendingReloadTimer = null;
 
@@ -30362,8 +30384,11 @@
     if (!suppress && this === window.localStorage &&
         String(k).indexOf("daybook") === 0 && !EXCLUDE[k]) {
       // mark BEFORE the ready-gate: an edit made while offline/signed-out (sync never
-      // booted) must still survive the next online boot's pull — see DIRTY above
-      try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {}
+      // booted) must still survive the next online boot's pull — see DIRTY above.
+      // NOISY keys (see above) still push, but must never mark DIRTY -- that flag
+      // means "a real edit is waiting, don't let a cloud pull overwrite it", and a
+      // recomputed notification queue is never that.
+      if (!NOISY[k]) { try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {} }
       if (ready) schedulePush();
     }
   };
@@ -30416,7 +30441,10 @@
     if (row.updated_at && sessionStorage.getItem(APPLIED) === row.updated_at) return;   // our own echo
     var incoming = {};
     Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
-    if (JSON.stringify(incoming) === JSON.stringify(gather())) {                          // no visible change
+    // stripNoisy() on both sides for the comparison ONLY -- a difference confined
+    // to the notification queue's own timestamp isn't a real change to reconcile
+    // over. incoming itself stays full below so apply() still adopts everything.
+    if (JSON.stringify(stripNoisy(incoming)) === JSON.stringify(stripNoisy(gather()))) {  // no visible change
       if (row.updated_at) sessionStorage.setItem(APPLIED, row.updated_at);
       try { localStorage.removeItem(DIRTY); } catch (e) {}                               // cloud == local, nothing unsynced
       return;
@@ -30691,7 +30719,9 @@
   // or stuck unable to push at all would show the exact same green dot the whole
   // time. Surfacing the raw DIRTY flag here means the next "it's not syncing"
   // report is a 2-second glance instead of a live investigation like this one.
+  var lastLiveOn = false;
   function setLive(on) {
+    lastLiveOn = on;
     var d = document.getElementById("b33Live"); if (!d) return;
     d.style.background = on ? "#8fd6b4" : "#c98b6b";
     var label = on ? "Synced — live" : "Reconnecting…";
@@ -30734,6 +30764,13 @@
     b.addEventListener("click", function (e) {
       e.stopPropagation();
       if (!ready) { screenAuth(); return; }
+      // 2026-08-07: setLive() only re-runs on a connection-status change (go(),
+      // pushNow(), subscribe()) -- the DIRTY flag it reads can change in between
+      // without any of those firing, so the label could show a stale diagnostic
+      // right when she's actually looking at it. Recompute at the moment of the
+      // tap so what she reads is always current, not whenever it last happened
+      // to be set for an unrelated reason.
+      setLive(lastLiveOn);
       pop.style.display = pop.style.display === "block" ? "none" : "block";
       clearTimeout(hideTimer);
       if (pop.style.display === "block") hideTimer = setTimeout(function () { pop.style.display = "none"; }, 2600);
@@ -30878,7 +30915,7 @@
         var incoming = {};
         Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
         if (localHas && (sessionStorage.getItem(APPLIED) === row.updated_at
-            || JSON.stringify(incoming) === JSON.stringify(localSnap))) {
+            || JSON.stringify(stripNoisy(incoming)) === JSON.stringify(stripNoisy(localSnap)))) {
           // identical data — adopt the stamp only, no rewrite and no reload (this used
           // to apply+location.reload() on EVERY cold start, a whole extra boot for nothing)
           sessionStorage.setItem(APPLIED, row.updated_at || "");
