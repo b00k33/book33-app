@@ -3988,8 +3988,15 @@
     background: var(--field-bg); color: var(--ink-soft); border: 1px solid var(--note-line);
     border-radius: 999px; padding: 8px 12px; font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
   }
+  /* 2026-08-07 (Linh, Routines page rebuild spec: "no horizontal scroll at any width"):
+     min-width:700px on the table + drag-resize storing raw PIXEL widths (below) is
+     exactly what let the table outgrow its own card -- widen or drag one column and
+     the table just grew past its container, .rtg-tbl's own overflow-x:auto then
+     kicking in as a scrollbar. Column widths are now PERCENTAGES of the table's own
+     100% (see rtnGridColWidths/RTG_COL_DEFAULTS), which by construction always sum
+     to 100 -- overflow-x stays only as an inert safety net, never actually needed. */
   .rtg-tbl { background: var(--note-bg); border-radius: var(--radius-md); overflow-x: auto; }
-  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 700px; }
+  .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .rtg-tbl thead th {
     position: relative; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
     font-weight: 700; padding: 11px 12px; cursor: pointer; white-space: nowrap; user-select: none;
@@ -4053,13 +4060,46 @@
   .rtg-phase.phase-lbl-during { background: color-mix(in oklab, var(--phase-during) 14%, transparent); }
   .rtg-phase.phase-lbl-after { background: color-mix(in oklab, var(--phase-after) 16%, transparent); }
   .rtg-muted { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
-  .rtg-acts { display: flex; gap: 4px; }
+  /* Repeats (Routines page rebuild spec, "Repeats cell wraps"): a full weekly pattern
+     ("Weekly · Mon, Tue, Wed, Thu, Fri, Sat 9am") is the one cell worth showing in
+     full over letting it ellipsis -- wrapping to 2 lines beats losing the tail end of
+     which days it runs. white-space:normal here wins over .rtg-muted's own nowrap by
+     source order (same specificity, later rule) -- overflow/ellipsis above stay
+     harmless dead weight on this cell since there's nothing left to clip once it wraps. */
+  .rtg-wrap { white-space: normal; line-height: 1.35; }
+  /* 2026-08-07 (Routines page rebuild spec, "no horizontal scroll at any width"):
+     table-layout:fixed holds the actions <td> to its colgroup width no matter what,
+     but 4 unwrapped 30px icons (120px+gaps) still don't fit inside that share at
+     narrower table widths -- with no flex-wrap they simply spilled past the cell,
+     widening .rtg-tbl's scrollWidth past its own clientWidth and forcing exactly
+     the scrollbar the spec is asking to never happen. Wrapping keeps every icon at
+     its full size and tap target; a row just grows taller instead of the table
+     growing wider, which a table row can always absorb. */
+  .rtg-acts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
   .rtg-ic {
     width: 30px; height: 30px; min-height: 0; border-radius: 7px; border: none; background: var(--field-bg);
     display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; color: var(--ink-soft);
   }
   .rtg-ic:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
   .rtg-ic-del:hover { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn); }
+  /* 2026-08-07 (Routines page rebuild spec): Auto column -- a small pill switch, on
+     (green, --fit-workout -- the app's one shared "Fitness" green, reused rather than
+     inventing a new colour) vs off (grey/--raised), same on/off language the app
+     already uses for the hair-wash rotation's calendar switch. Toggling writes +
+     saves straight from the table, no editor needed -- see the data-rtg-auto click
+     handler below, which mirrors this same state into the inline editor's own copy
+     of the switch so neither can go stale relative to the other. */
+  .rtg-auto-switch {
+    width: 34px; height: 20px; padding: 2px; border: none; border-radius: 999px; cursor: pointer;
+    background: var(--raised); display: inline-flex; align-items: center; justify-content: flex-start;
+    transition: background 0.15s ease;
+  }
+  .rtg-auto-switch::after {
+    content: ""; width: 16px; height: 16px; border-radius: 50%; background: var(--card-bg, var(--note-bg));
+    box-shadow: 0 1px 2px rgba(0,0,0,0.25); transition: transform 0.15s ease;
+  }
+  .rtg-auto-switch.on { background: var(--fit-workout); }
+  .rtg-auto-switch.on::after { transform: translateX(14px); }
   .rtg-edit-in {
     width: 100%; font: inherit; color: var(--ink); background: var(--field-bg);
     border: 1px solid var(--accent-seed); border-radius: 6px; padding: 4px 7px; min-height: 0;
@@ -4309,7 +4349,9 @@
   #rtnAddForm .field label { font-size: 10px; }
   #rtnAddForm .field-hint { font-size: 9px; margin-top: 1px; }
   .rtn-g8 { grid-column: span 8; }
+  .rtn-g6 { grid-column: span 6; }
   .rtn-g4 { grid-column: span 4; }
+  .rtn-g3 { grid-column: span 3; }
   /* Start+Mins ride together in ONE span-4 slot as a plain flex pair -- Mins has no
      span of its own in the tessellate spec's field list (it's the rarely-shown "no
      sub-tasks, just a plain duration" field, hidden whenever a sub-task exists -- see
@@ -4328,7 +4370,7 @@
   .rtn-repeat-sum:hover { border-color: var(--margin-rule); }
   @media (max-width: 640px) {
     /* mobile stays a clean single stack -- the tiling above is a desktop/wide gain only */
-    #rtnAddForm .rtn-g8, #rtnAddForm .rtn-g4, #rtnAddForm .rtn-pair.rtn-g4 { grid-column: span 12; }
+    #rtnAddForm .rtn-g8, #rtnAddForm .rtn-g6, #rtnAddForm .rtn-g4, #rtnAddForm .rtn-g3, #rtnAddForm .rtn-pair.rtn-g4 { grid-column: span 12; }
   }
   /* 2026-08-06: the #rtnAddForm-specific cap that used to live here (2026-08-05 pt.2)
      is SUPERSEDED by the shared .add-form desktop cap above (var(--content-max)) —
@@ -4380,9 +4422,43 @@
   }
   /* design44: capped to match the standalone Add-routine form's width -- Table
      view's dock cell can be 1000px+ wide, and max-width:none stretched into it */
+  /* 2026-08-07 (Routines page rebuild spec, item 4): SUPERSEDES the 12-col grid
+     #rtnAddForm otherwise uses (see .rtn-g8/.rtn-g4/etc above) -- grid-column has no
+     effect once the parent is display:flex, so every .rtn-gN field gets an explicit
+     flex-basis below instead, sized to land the same rough groups as the grid
+     fractions did (8/12≈66%, 6/12=50%, 4/12≈33%, 3/12=25%) so wrapping still tessellates
+     into the spec's "~3 rows": Name+track chips / Start+Mins+Repeats chips /
+     Days+Every+Auto-add toggle. align-items:end keeps a label+field pair's baseline
+     level with its neighbour even when one field's label wraps to 2 lines and the
+     other doesn't. */
   #rtnAddForm.rtn-inline-mode {
+    display: flex; flex-wrap: wrap; gap: 9px 16px; align-items: end;
     margin: 6px 0; padding: 12px 14px; border-radius: var(--radius-md, 10px);
     background: var(--note-bg); max-width: 640px;
+  }
+  #rtnAddForm.rtn-inline-mode .field.full { flex: 1 1 100%; }
+  /* Part of life would otherwise pack onto the same row as Start/Mins below it (they
+     fit width-wise) instead of staying grouped under Name -- forcing it to its own
+     full row keeps "Name + track chips" as row 1 regardless of viewport width. */
+  #rtnAddForm.rtn-inline-mode #rtnTrackField { flex: 1 1 100%; }
+  #rtnAddForm.rtn-inline-mode .rtn-g8,
+  #rtnAddForm.rtn-inline-mode #rtnFreqGroup.rtn-g8 { flex: 1 1 62%; }
+  #rtnAddForm.rtn-inline-mode .rtn-g6 { flex: 1 1 46%; }
+  #rtnAddForm.rtn-inline-mode .rtn-g4,
+  #rtnAddForm.rtn-inline-mode .rtn-pair.rtn-g4 { flex: 1 1 30%; min-width: 150px; }
+  #rtnAddForm.rtn-inline-mode .rtn-g3 { flex: 1 1 21%; min-width: 100px; }
+  /* the action bar (rebuild spec: "▾ More options · Save changes · Cancel · Delete")
+     -- More options sits at the LEFT edge, the other three cluster at the right,
+     same one-row-two-clusters shape as most save bars. Scoped to THIS form only --
+     .form-actions/.more-opts-toggle are shared classes other forms on the page use
+     with their own (unrelated) layouts. */
+  #rtnAddForm.rtn-inline-mode .form-actions {
+    flex: 1 1 100%; flex-wrap: wrap; justify-content: space-between; align-items: center;
+    row-gap: 8px; margin-top: 4px;
+  }
+  #rtnAddForm.rtn-inline-mode .form-actions .more-opts-toggle {
+    grid-column: auto; border-top: none; margin-top: 0; padding: 0; justify-content: flex-start;
+    font-size: 12px;
   }
   /* flat + compact per spec: unselected chips get a subtle tone fill instead of a
      border so they still read against the panel; selected keeps the existing solid
@@ -9758,13 +9834,24 @@
           <input type="text" id="rtnTitle" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
         </div>
       </div>
-      <!-- 2026-08-07 (Linh, code44 on "i dont like the ui after edit": her locked
-           answers): the COMPACT-FIRST surface is only what she changes 90% of the
-           time -- Name+icon, Start/Mins, and the days-of-week chips. Part of life
-           and the repeat-TYPE picker moved into More options below; a non-weekly
-           routine shows its pattern as a read-only summary line here instead
-           (#rtnRepeatSummary -- tap opens More options in place, no scrolling).
-           SUPERSEDES the earlier same-day pass that kept track+repeat-type visible. -->
+      <!-- 2026-08-07 (Routines page rebuild spec, "tessellate the inline editor into
+           ~3 rows: Name + track chips / Start + Mins + Repeats chips / Days + Every +
+           Auto-add toggle"): SUPERSEDES the code44 compact-first pass's choice to tuck
+           Part of life and the repeat-TYPE picker into More options -- both are back in
+           the always-visible surface now, just regrouped by row instead of by
+           frequency-of-use. ids are untouched throughout this whole form, so every
+           handler (syncRtnFreqFields/syncRtnTrackButtons, the submit writer, hair's
+           freq-group hide) still finds every field exactly where it always did --
+           only which PARENT each field sits in, and #rtnAddForm.rtn-inline-mode's CSS
+           (flex-wrap instead of the 12-col grid), changed. -->
+      <div class="field rtn-g8" id="rtnTrackField">
+        <label>Part of life</label>
+        <div class="track-picker" id="rtnTrackPicker" role="group" aria-label="Part of life">
+          <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
+          <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
+          <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
+        </div>
+      </div>
       <!-- Mins rides inside Start's own cell rather than claiming a span of its own --
            it's the rarely-shown "no sub-tasks, just a plain duration" field (hidden the
            moment a sub-task exists, see updateRtnSubTotal's durField toggle). -->
@@ -9778,13 +9865,41 @@
           <input type="number" id="rtnDuration" min="5" step="5" placeholder="30">
         </div>
       </div>
-      <div class="field rtn-g8" id="rtnWeeklyField">
+      <div class="field rtn-g8" id="rtnFreqGroup">
+        <label>Repeats</label>
+        <div class="track-picker" id="rtnFreqPicker" role="group" aria-label="Repeats">
+          <button type="button" class="track-opt" data-freq="daily" aria-pressed="false">Daily</button>
+          <button type="button" class="track-opt" data-freq="weekly" aria-pressed="true">Weekly</button>
+          <button type="button" class="track-opt" data-freq="monthly" aria-pressed="false">Monthly</button>
+          <button type="button" class="track-opt" data-freq="yearly" aria-pressed="false">Yearly</button>
+          <button type="button" class="track-opt" data-freq="interval" aria-pressed="false">Custom</button>
+          <button type="button" class="track-opt" data-freq="once" aria-pressed="false">One-off</button>
+        </div>
+      </div>
+      <div class="field rtn-g6" id="rtnWeeklyField">
         <label>Days <span class="field-hint">tap to toggle</span></label>
         <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week"></div>
       </div>
-      <div class="field rtn-g8" id="rtnRepeatSummaryField" hidden>
-        <label>Repeats</label>
+      <div class="field rtn-g6" id="rtnRepeatSummaryField" hidden>
+        <label>Repeats on</label>
         <button type="button" class="rtn-repeat-sum" id="rtnRepeatSummary" aria-label="Change the repeat pattern (opens More options)"></button>
+      </div>
+      <div class="field rtn-g3" id="rtnWeekIntervalField">
+        <label for="rtnWeekInterval">Every</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:44px">
+          <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+        </div>
+      </div>
+      <!-- Auto-add (rebuild spec, item 5): fills the calendar on this routine's own
+           schedule when on; off leaves it as a template she adds one-off (📅) whenever
+           she actually wants it that week. Exactly mirrors the Auto column's own pill
+           switch in the Routine Library table -- both read/write the same
+           task.autoCalendar, kept in sync by syncRtnAutoToggle (see openRtnForm and
+           this button's own click handler). -->
+      <div class="field rtn-g3" id="rtnAutoField">
+        <label for="rtnAutoToggle">Auto-add<span class="field-hint" id="rtnAutoHint"> — off</span></label>
+        <button type="button" class="rtg-auto-switch" id="rtnAutoToggle" role="switch" aria-checked="false" aria-label="Auto-add to calendar — on fills the calendar on this routine's schedule"></button>
       </div>
       <div class="field full note-inline" id="rtnHairNote" hidden>
         This wash type's day is decided by the every-2-days rotation, not a repeat pattern here — use the calendar switch on its row to show or hide it, or the date list below for an extra one-off wash.
@@ -9793,47 +9908,14 @@
            same collapsible pattern as #addForm's own .more-opts-toggle/.addform-more
            (display:contents when open, so these lay out as plain direct children of
            #rtnAddForm's grid, same as before -- not a new nested layout to keep in sync).
-           Auto-opens in openRtnForm() when the routine being edited already has data in
-           any of these, so editing never hides something already filled in. -->
-      <!-- 2026-08-07 (Linh: "unhappy with the routines page... visually inconsistent,
-           especially when I edit... want it cohesive and simpler"): the inline table
-           editor was showing 8 always-visible labelled sections at once against a
-           one-line table row above it -- a much bigger jump in density than the
-           table's own compact language. Sub-category and Every (weeks) are the two
-           genuinely secondary fields here (both edge-case/optional already) -- they
-           move into More options so the DEFAULT edit surface is just Name, Part of
-           life, Start/Mins, Repeats -- the 4 things you're actually changing most of
-           the time. hasMoreOptsData below grew task.category/weekInterval so editing
-           a routine that already uses either never hides it behind the toggle. -->
-      <button type="button" class="more-opts-toggle full" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
-        <span id="rtnMoreOptsLabel">More options — part of life · repeat pattern · sub-category · sub-tasks · dates · tracker · note</span><span class="moreopts-chevron">›</span>
-      </button>
+           Always starts collapsed on open, editing or not (code44: the old
+           auto-open-when-filled rule was dropped for reproducing the "too many fields
+           at once" complaint) -- see openRtnForm's unconditional setRtnMoreOptionsOpen
+           (false) call. Its own toggle BUTTON now lives down in .form-actions (rebuild
+           spec, "Action bar below: More options · Save changes · Cancel · Delete") --
+           only the button moved, aria-controls still points at this same
+           #rtnAddFormMore. -->
       <div class="addform-more" id="rtnAddFormMore" hidden>
-        <!-- 2026-08-07 (code44 compact-first pass): Part of life + the repeat-TYPE
-             picker and its per-type sub-fields live back here now -- the compact
-             surface above keeps only the weekday chips (weekly) or the read-only
-             summary line (everything else). ids are untouched, so every handler
-             (syncRtnFreqFields, the submit writer, hair's freq-group hide) still
-             finds them exactly where it always did. -->
-        <div class="field rtn-g8">
-          <label>Part of life</label>
-          <div class="track-picker" id="rtnTrackPicker" role="group" aria-label="Part of life">
-            <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
-            <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-            <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
-          </div>
-        </div>
-        <div class="field full" id="rtnFreqGroup">
-          <label>Repeats</label>
-          <div class="track-picker" id="rtnFreqPicker" role="group" aria-label="Repeats">
-            <button type="button" class="track-opt" data-freq="daily" aria-pressed="false">Daily</button>
-            <button type="button" class="track-opt" data-freq="weekly" aria-pressed="true">Weekly</button>
-            <button type="button" class="track-opt" data-freq="monthly" aria-pressed="false">Monthly</button>
-            <button type="button" class="track-opt" data-freq="yearly" aria-pressed="false">Yearly</button>
-            <button type="button" class="track-opt" data-freq="interval" aria-pressed="false">Custom</button>
-            <button type="button" class="track-opt" data-freq="once" aria-pressed="false">One-off</button>
-          </div>
-        </div>
         <div class="field full" id="rtnWeekAnchorField" hidden>
           <label for="rtnWeekAnchorDate">Starting the week of <span class="field-hint">week 1 of the cycle</span></label>
           <input type="date" id="rtnWeekAnchorDate">
@@ -9873,15 +9955,6 @@
           <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
           <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
           <datalist id="rtnCatList"></datalist>
-        </div>
-        <!-- Every (weeks) pairs with Sub-category the same 8/4 way it did in the
-             always-visible area before -- Days keeps its own full-width row below. -->
-        <div class="field rtn-g4" id="rtnWeekIntervalField">
-          <label for="rtnWeekInterval">Every</label>
-          <div style="display:flex;align-items:center;gap:6px">
-            <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:44px">
-            <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
-          </div>
         </div>
         <div class="field full">
           <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
@@ -9931,6 +10004,9 @@
            full-width row below -- only shown when editing (openRtnForm/closeRtnForm
            toggle .hidden). -->
       <div class="form-actions">
+        <button type="button" class="more-opts-toggle" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
+          <span id="rtnMoreOptsLabel">More options — sub-category · sub-tasks · additional schedule · dates · tracker · note</span><span class="moreopts-chevron">›</span>
+        </button>
         <button type="button" class="btn-cancel" id="rtnCancelBtn">Cancel</button>
         <button type="submit" class="btn-save" id="rtnSubmitBtn">Add routine</button>
         <button type="button" class="del rtn-del-full" id="rtnDeleteBtn" hidden>Delete routine</button>
@@ -22402,18 +22478,27 @@
   // bakImport's own startsWith("daybook") filter) so it never enters backups or the
   // cloud-sync DIRTY tracking; a column-width tweak on the desktop shouldn't fight
   // a different one made on the phone.
-  const RTG_COLS = ["title", "track", "phase", "freq", "time", "acts"];
-  const RTG_COL_MIN = 60;
-  const RTG_COL_DEFAULTS = { title: 260, track: 130, phase: 100, freq: 300, time: 100, acts: 150 };
+  // 2026-08-07 (Routines page rebuild spec, "no horizontal scroll at any width"):
+  // SUPERSEDES the pixel-width version above -- storing raw px let the table simply
+  // grow past its own card (min-width:700px + a widened column had nowhere to come
+  // from), which is exactly what forced the truncation/scroll Linh reported. Every
+  // width below is now a PERCENT of the table's own 100%, so the seven always sum to
+  // 100 no matter what's been dragged -- resizing one column steals from/gives to
+  // its immediate neighbour (see the drag handler below) instead of growing the
+  // table. New localStorage key: the old one held px values that would otherwise be
+  // silently misread as percentages (a saved "100" meant 100px, not 100%).
+  const RTG_COLS = ["title", "track", "phase", "freq", "time", "auto", "acts"];
+  const RTG_COL_MIN = 5;   // percent
+  const RTG_COL_DEFAULTS = { title: 24, track: 12, phase: 11, freq: 27, time: 8, auto: 9, acts: 9 };
   let rtnGridColWidths = (() => {
     let saved = {};
-    try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths") || "{}"); } catch (e) {}
+    try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths-pct") || "{}"); } catch (e) {}
     const w = { ...RTG_COL_DEFAULTS };
-    RTG_COLS.forEach(c => { if (typeof saved[c] === "number" && saved[c] >= RTG_COL_MIN) w[c] = saved[c]; });
+    RTG_COLS.forEach(c => { if (typeof saved[c] === "number" && saved[c] >= RTG_COL_MIN && saved[c] <= 100) w[c] = saved[c]; });
     return w;
   })();
   function saveRtgColWidths() {
-    try { localStorage.setItem("b33-rtg-col-widths", JSON.stringify(rtnGridColWidths)); } catch (e) {}
+    try { localStorage.setItem("b33-rtg-col-widths-pct", JSON.stringify(rtnGridColWidths)); } catch (e) {}
   }
   // Phase has no home on the edit form -- it's set by dragging on the Board, or
   // by a real chain link, so its inline editor (rtgEditCell's "rtnPhase" case)
@@ -22476,10 +22561,11 @@
         <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(t.title)}</span></span></td>
         <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(RTN_TRACK_LABEL[t.track] || "Other")}</span></span></td>
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
-        <td class="rtg-muted" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
+        <td class="rtg-muted rtg-wrap" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
+        <td><button type="button" class="rtg-auto-switch${t.autoCalendar ? " on" : ""}" data-rtg-auto="${esc(t.id)}" role="switch" aria-checked="${t.autoCalendar ? "true" : "false"}" aria-label="Auto-add ${esc(t.title)} to the calendar"></button></td>
         <td><div class="rtg-acts">
-          <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add to calendar" aria-label="Add ${esc(t.title)} to the calendar">📅</button>
+          <button type="button" class="rtg-ic" data-rtg-cal="${esc(t.id)}" title="Add one-off" aria-label="Add a one-off occurrence of ${esc(t.title)} to the calendar">📅</button>
           <button type="button" class="rtg-ic" data-rtg-chain="${esc(t.id)}" title="Start a chain from this" aria-label="Start a chain from ${esc(t.title)}">🔗</button>
           <button type="button" class="rtg-ic" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
           <button type="button" class="rtg-ic rtg-ic-del" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
@@ -22496,18 +22582,18 @@
       const groups = new Map();
       rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
       bodyHtml = [...groups.entries()].map(([k, list]) =>
-        `<tr class="rtg-group-row"><td colspan="6">${esc(k)}</td></tr>${list.map(row).join("")}`
+        `<tr class="rtg-group-row"><td colspan="${RTG_COLS.length}">${esc(k)}</td></tr>${list.map(row).join("")}`
       ).join("");
     }
     const th = (col, label) => {
       const arrow = rtnGridSort.col === col ? (rtnGridSort.dir === 1 ? "▲" : "▼") : "↕";
       return `<th data-rtg-sort="${col}" class="${rtnGridSort.col === col ? "sorted" : ""}">${label} <span class="c">${arrow}</span><span class="rtg-col-resize" data-rtg-resize="${col}" aria-hidden="true"></span></th>`;
     };
-    const colgroupHtml = `<colgroup>${RTG_COLS.map(c => `<col style="width:${rtnGridColWidths[c]}px">`).join("")}</colgroup>`;
+    const colgroupHtml = `<colgroup>${RTG_COLS.map(c => `<col style="width:${rtnGridColWidths[c]}%">`).join("")}</colgroup>`;
     host.innerHTML = `
       <div class="rtg-tbl"><table>
         ${colgroupHtml}
-        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Auto</th><th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
     rtnInlineRedock("table");
@@ -22525,6 +22611,21 @@
     if (cal) {
       const t = ROUTINE_TASKS.find(x => x.id === cal.dataset.rtgCal);
       if (t) rtnAddOnce(t);   // the existing "drop a routine onto the calendar as a one-off, no editor" flow
+      return;
+    }
+    // Auto column (rebuild spec): toggles+saves straight from the table, no editor
+    // round-trip -- the inline editor's own mirrored switch (openRtnForm/its submit
+    // handler) reads/writes the exact same task.autoCalendar field, so whichever one
+    // she used last is always what the other one shows next time it's opened.
+    const autoSw = e.target.closest("[data-rtg-auto]");
+    if (autoSw) {
+      const t = ROUTINE_TASKS.find(x => x.id === autoSw.dataset.rtgAuto);
+      if (t) {
+        t.autoCalendar = !t.autoCalendar;
+        saveRoutines();
+        autoSw.classList.toggle("on", t.autoCalendar);
+        autoSw.setAttribute("aria-checked", String(t.autoCalendar));
+      }
       return;
     }
     const chain = e.target.closest("[data-rtg-chain]");
@@ -22580,9 +22681,12 @@
   // Column-width drag (2026-08-07, Linh: "allow for adjusting table width") -- same
   // pointerdown/move/up-with-capture shape as the Day timeline's block-resize handles
   // (search .tl-resize-handle), just dragging a <col>'s width instead of a block's
-  // top/bottom. Only the dragged column changes width; the table (min-width:700px,
-  // horizontal-scrolling .rtg-tbl) simply grows wider rather than stealing space from
-  // a neighbour, since that's a much easier mental model while dragging.
+  // top/bottom. SUPERSEDES the pixel version's "table just grows wider" model (see
+  // the rebuild-spec comment on RTG_COL_DEFAULTS above) -- dragging now steals width
+  // from the very next column and gives it to the dragged one (or vice versa), so
+  // the two always sum to what they started with and the full row always sums to
+  // 100%. Mouse pixel movement is converted to a percent of the table's own current
+  // width so the drag still feels 1:1 under the cursor.
   (function () {
     const host = document.getElementById("rtnGrid");
     let cdrag = null;
@@ -22591,19 +22695,31 @@
       if (!handle || e.pointerType !== "mouse") return;
       const col = handle.dataset.rtgResize;
       const idx = RTG_COLS.indexOf(col);
+      const nextCol = RTG_COLS[idx + 1];
       const colEl = host.querySelector(`table > colgroup > col:nth-child(${idx + 1})`);
-      if (!colEl) return;
+      const nextColEl = nextCol ? host.querySelector(`table > colgroup > col:nth-child(${idx + 2})`) : null;
+      const tableEl = host.querySelector("table");
+      if (!colEl || !nextColEl || !tableEl) return;
       e.stopPropagation(); e.preventDefault();
-      cdrag = { col, colEl, startX: e.clientX, startW: rtnGridColWidths[col], liveW: null };
+      cdrag = {
+        col, colEl, nextCol, nextColEl, startX: e.clientX,
+        tableW: tableEl.getBoundingClientRect().width,
+        startW: rtnGridColWidths[col], startNextW: rtnGridColWidths[nextCol],
+        liveW: null, liveNextW: null,
+      };
       try { handle.setPointerCapture(e.pointerId); } catch (err) {}
       document.body.classList.add("dragging-col");
     });
     host.addEventListener("pointermove", e => {
       if (!cdrag) return;
       e.preventDefault();
-      const w = Math.max(RTG_COL_MIN, Math.round(cdrag.startW + (e.clientX - cdrag.startX)));
-      cdrag.colEl.style.width = `${w}px`;
-      cdrag.liveW = w;
+      const pairTotal = cdrag.startW + cdrag.startNextW;
+      const deltaPct = (e.clientX - cdrag.startX) / cdrag.tableW * 100;
+      const w = Math.min(Math.max(RTG_COL_MIN, cdrag.startW + deltaPct), pairTotal - RTG_COL_MIN);
+      const nextW = pairTotal - w;
+      cdrag.colEl.style.width = `${w}%`;
+      cdrag.nextColEl.style.width = `${nextW}%`;
+      cdrag.liveW = w; cdrag.liveNextW = nextW;
     }, { passive: false });
     function endColDrag() {
       if (!cdrag) return;
@@ -22611,6 +22727,7 @@
       document.body.classList.remove("dragging-col");
       if (d.liveW != null) {
         rtnGridColWidths[d.col] = d.liveW;
+        rtnGridColWidths[d.nextCol] = d.liveNextW;
         saveRtgColWidths();
       }
     }
@@ -25696,6 +25813,8 @@
   // redock the (reused, never duplicated) #rtnAddForm rather than losing it.
   let rtnInlineId = null;
   let rtnInlineView = null;
+  const RTN_NEW = "__new__";   // sentinel rtnInlineId for the Table view's "+ Add routine" inline row (see rtnInlineRedock/openRtnFormInlineNew)
+  let rtnAutoCalendar = false;   // mirrors task.autoCalendar -- same rtnTrack/rtnFreq pattern (see openRtnForm/the submit handler)
 
   // 2026-08-06 (Linh's "New routine" mockup): single bold initial, no planet icon --
   // this form's own compact style, see the #rtnWeekdayPicker CSS above for why.
@@ -25850,11 +25969,26 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  // mirrors the Auto column's own pill switch in the Routine Library table -- both
+  // read/write the same task.autoCalendar (see the submit handler and the table's
+  // own data-rtg-auto click handler).
+  function syncRtnAutoToggle() {
+    const btn = document.getElementById("rtnAutoToggle");
+    const hint = document.getElementById("rtnAutoHint");
+    if (!btn) return;
+    btn.classList.toggle("on", rtnAutoCalendar);
+    btn.setAttribute("aria-checked", String(rtnAutoCalendar));
+    if (hint) hint.textContent = rtnAutoCalendar ? " — on, fills the calendar on its schedule" : " — off";
+  }
+  document.getElementById("rtnAutoToggle").addEventListener("click", () => {
+    rtnAutoCalendar = !rtnAutoCalendar;
+    syncRtnAutoToggle();
+  });
   // 2026-08-06 (Linh: "fold rarely-used fields into a collapsed More options"): same
   // pattern as #addForm's setMoreOptionsOpen() -- closed on every fresh open, but
   // openRtnForm() below re-opens it automatically when the routine being edited already
   // has data tucked inside, so editing never hides something already filled in.
-  const RTN_MORE_OPTS_LABEL = "More options — part of life · repeat pattern · sub-category · sub-tasks · dates · tracker · note";
+  const RTN_MORE_OPTS_LABEL = "More options — sub-category · sub-tasks · additional schedule · dates · tracker · note";
   function setRtnMoreOptionsOpen(open) {
     const wrap = document.getElementById("rtnAddFormMore");
     const btn = document.getElementById("rtnMoreOptsToggle");
@@ -25910,6 +26044,30 @@
     // no longer shows in this view (filtered out, deleted, view switched), closes
     // cleanly instead of leaving the form stranded in its neutral parent.
     if (rtnInlineId == null || rtnInlineView !== view) return;
+    // 2026-08-07 (Routines page rebuild spec, "remove the floating drawer entirely"):
+    // "+ Add routine" while in Table view used to skip this whole inline system and
+    // fall through to placeRtnForm's >=1024px side rail instead (rtnInlineId stayed
+    // null the whole time -- openRtnFormInline is never called with a null task) --
+    // that 400px rail is exactly what squeezed the table into the truncation/scroll
+    // Linh reported. RTN_NEW is a sentinel id (never a real routine's uid()) so Add
+    // can reuse this exact same inline-row machinery instead of a second code path:
+    // dock as the FIRST row of the table body rather than after some existing row,
+    // since there isn't one yet.
+    if (view === "table" && rtnInlineId === RTN_NEW) {
+      const headTr = document.querySelector("#rtnGrid table thead tr");
+      const tbody = document.querySelector("#rtnGrid table tbody");
+      let dock = null;
+      if (headTr && tbody) {
+        const tr = document.createElement("tr");
+        tr.className = "rtn-inline-row";
+        tr.innerHTML = `<td colspan="${headTr.children.length}"><div class="rtn-inline-dock"></div></td>`;
+        tbody.insertBefore(tr, tbody.firstChild);
+        dock = tr.querySelector(".rtn-inline-dock");
+      }
+      if (!dock) { closeRtnForm(); return; }
+      dock.appendChild(rtnForm);
+      return;
+    }
     let anchor = null, dock = null;
     const idSel = CSS.escape(rtnInlineId);
     if (view === "table") {
@@ -25957,9 +26115,22 @@
     openRtnForm(task);
     rtnInlineRedock(view);
   }
+  // Table view's "+ Add routine" (rebuild spec, "remove the floating drawer
+  // entirely") -- same shape as openRtnFormInline above but with the RTN_NEW
+  // sentinel standing in for a real task id, since there's no existing row to dock
+  // under yet (see rtnInlineRedock's RTN_NEW branch).
+  function openRtnFormInlineNew() {
+    if (rtnInlineId === RTN_NEW) { closeRtnForm(); return; }
+    if (rtnInlineId != null) closeRtnForm();
+    rtnInlineId = RTN_NEW; rtnInlineView = "table";
+    rtnForm.classList.add("rtn-inline-mode");
+    openRtnForm(null);
+    rtnInlineRedock("table");
+  }
   function closeRtnForm() {
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
+    rtnAutoCalendar = false; syncRtnAutoToggle();
     document.getElementById("rtnFitLink").value = "";
     document.getElementById("rtnSubmitBtn").textContent = "Add routine";
     syncRtnFreqFields(); syncRtnTrackButtons(); renderRtnCatList();
@@ -26016,6 +26187,7 @@
         task.start && task.end && toMin(task.end) > toMin(task.start) ? String(toMin(task.end) - toMin(task.start)) : "";
       (task.subtasks || []).forEach(s => addRtnSubRow(s.text, s.min));
       rtnTrack = task.track; syncRtnTrackButtons();
+      rtnAutoCalendar = !!task.autoCalendar; syncRtnAutoToggle();
       rtnFreq = task.freq;
       if (task.freq === "once") document.getElementById("rtnOnceDate").value = task.date || "";
       else if (task.freq === "yearly") {
@@ -26102,7 +26274,13 @@
     qaRenderPreview();
     document.getElementById("qaPreview")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
-  document.getElementById("rtnAddBtn").addEventListener("click", () => openRtnForm(null));
+  document.getElementById("rtnAddBtn").addEventListener("click", () => {
+    // Table view: keep the same full-width inline row the ✎ edit already uses,
+    // never the >=1024px side rail (see openRtnFormInlineNew) -- List/Board's own
+    // Add flow is untouched, out of the rebuild spec's scope.
+    if (rtnListMode === "table") { openRtnFormInlineNew(); return; }
+    openRtnForm(null);
+  });
   document.getElementById("rtnCancelBtn").addEventListener("click", closeRtnForm);
   document.getElementById("rtnTrackPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-track]"); if (!b) return;
@@ -26186,7 +26364,7 @@
     const fitLink = document.getElementById("rtnFitLink").value;
     const start = document.getElementById("rtnStart").value;
     const subtasks = readRtnSubs();
-    const task = { id: rtnEditId || uid(), title, track: rtnTrack, category, freq: rtnFreq, note };
+    const task = { id: rtnEditId || uid(), title, track: rtnTrack, category, freq: rtnFreq, note, autoCalendar: rtnAutoCalendar };
     if (fitLink) task.fitLink = fitLink;
     if (start) task.start = start;
     if (subtasks.length) task.subtasks = subtasks;
