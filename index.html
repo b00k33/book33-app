@@ -30522,11 +30522,19 @@
     // fields that can hold focus), nothing ever fires and it waits forever. A later
     // reconcile() can't rescue it either -- once apply() has already written the
     // incoming data into localStorage, that SAME data now reads as "no visible
-    // change" and short-circuits before ever reaching reloadWhenIdle() again. Cap the
-    // wait so fresh data is never withheld indefinitely -- long enough not to
-    // interrupt a real edit, short enough that "stuck" can't be the real-world result.
-    clearTimeout(pendingReloadTimer);
-    pendingReloadTimer = setTimeout(function () { if (pendingReload) location.reload(); }, 60000);
+    // change" and short-circuits before ever reaching reloadWhenIdle() again.
+    // Polls instead of a single long wait -- a one-shot timer needs the tab to stay
+    // foregrounded the whole time to have any chance of firing, and a quick "just
+    // checking the app" visit is exactly the case this needs to cover. Reloads the
+    // moment the guard clears, or after 20s regardless -- long enough not to yank a
+    // real edit, short enough that a brief glance is never left stuck on stale data.
+    clearInterval(pendingReloadTimer);
+    var idleChecks = 0;
+    pendingReloadTimer = setInterval(function () {
+      idleChecks++;
+      if (!pendingReload) { clearInterval(pendingReloadTimer); return; }
+      if (!isEditing() || idleChecks >= 10) { clearInterval(pendingReloadTimer); location.reload(); }
+    }, 2000);
   }
   // focusout alone can leave a pending reload stranded when the guard was the chain
   // builder (button taps don't always shuffle focus) — any later click re-checks too
