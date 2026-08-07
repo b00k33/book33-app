@@ -30368,8 +30368,25 @@
   // data. lastPushed now only advances on a CONFIRMED successful upsert, so a failed
   // attempt stays retryable — the online listener below (and any later edit) will
   // try again with the same snapshot until it actually lands.
+  // 2026-08-07 (Linh: "i deleted most of these and now it's back" — 8 of 12 routines
+  // she'd deleted reappeared): traced live via the actual cloud row's updated_at. The
+  // 'online' handler and the visibilitychange-hidden handler both called pushNow()
+  // unconditionally as a defensive "flush anything pending" measure, BEFORE ever
+  // checking the cloud. pushNow()'s only guard was `json === lastPushed`, and
+  // lastPushed is an in-memory var reset to the CURRENT local snapshot on every boot
+  // (see go()) — so a second tab/device that had been open since before the deletes,
+  // with nothing of its own edited, still had a lastPushed that matched its own
+  // stale 12-routine copy. The instant that stale tab reconnected or was backgrounded,
+  // it re-uploaded its full stale snapshot (it differs from nothing — DIRTY was never
+  // involved), clobbering the cloud row her deletes had already reached, and the
+  // deleting device's realtime subscription pulled that stale copy straight back in.
+  // DIRTY is the only durable, cross-reload signal of "there's a real unsent local
+  // edit" — gating the push here on it (rather than trusting each call site to reason
+  // about staleness) closes this for every current and future opportunistic call site
+  // at once. schedulePush()'s legitimate edit-driven path still works (the setItem
+  // override sets DIRTY before ever scheduling a push).
   function pushNow() {
-    if (!sb || !ready) return;
+    if (!sb || !ready || !localStorage.getItem(DIRTY)) return;
     var snap = gather(), json = JSON.stringify(snap);
     if (json === lastPushed) return;                       // nothing new since last CONFIRMED push
     sb.from(TABLE).upsert({ data: snap }, { onConflict: "owner" }).select("updated_at").then(function (r) {
