@@ -3991,12 +3991,34 @@
   .rtg-tbl { background: var(--note-bg); border-radius: var(--radius-md); overflow-x: auto; }
   .rtg-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 700px; }
   .rtg-tbl thead th {
-    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
+    position: relative; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint);
     font-weight: 700; padding: 11px 12px; cursor: pointer; white-space: nowrap; user-select: none;
   }
   .rtg-tbl thead th .c { opacity: 0.55; font-size: 9px; margin-left: 3px; }
   .rtg-tbl thead th.sorted { color: var(--accent-seed); }
   .rtg-tbl thead th:hover { color: var(--ink); }
+  /* 2026-08-07 (Linh, "allow for adjusting table width"): per-column drag-resize on
+     #rtnGrid's table only (Birthdays shares .rtg-tbl but not this handle) -- same
+     invisible-wide-hit-zone-plus-thin-visible-mark language as .tl-resize-handle
+     (the Day timeline's block duration handles), just rotated for a vertical col
+     edge. table-layout:fixed + an explicit <colgroup> (widths from rtnGridColWidths,
+     JS below) replaces the browser's own content-based auto-sizing so a drag on one
+     column doesn't also silently renudge its neighbours. Mouse/trackpad only, same
+     "too fiddly on touch" call already made for the timeline handles -- the column
+     header itself is still fully usable for sorting on mobile, just not resizable. */
+  #rtnGrid .rtg-tbl table { table-layout: fixed; }
+  .rtg-col-resize { position: absolute; top: 0; bottom: 0; right: -6px; width: 12px; cursor: col-resize; opacity: 0; z-index: 2; }
+  .rtg-col-resize::after {
+    content: ""; position: absolute; left: 50%; top: 20%; bottom: 20%; transform: translateX(-50%);
+    width: 3px; border-radius: 2px; background: var(--accent-seed); opacity: 0.6;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    #rtnGrid th:hover .rtg-col-resize { opacity: 1; }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .rtg-col-resize { display: none; }
+  }
+  body.dragging-col, body.dragging-col * { cursor: col-resize !important; user-select: none !important; }
   .rtg-tbl tbody td { padding: 10px 12px; border-top: 1px solid var(--note-line); vertical-align: middle; }
   .rtg-tbl tbody tr[data-rtg-row]:hover { background: color-mix(in oklab, var(--accent-seed) 5%, transparent); }
   .rtg-tbl tbody td[data-rtg-cell] { cursor: pointer; }
@@ -22034,6 +22056,24 @@
   let rtnGridSort = { col: "title", dir: 1 };
   let rtnGridGroupBy = "none";
   let rtnGridSearch = "";
+  // 2026-08-07 (Linh, "allow for adjusting table width"): per-device display
+  // preference, not app data -- deliberately NOT "daybook"-prefixed (see bakExport/
+  // bakImport's own startsWith("daybook") filter) so it never enters backups or the
+  // cloud-sync DIRTY tracking; a column-width tweak on the desktop shouldn't fight
+  // a different one made on the phone.
+  const RTG_COLS = ["title", "track", "phase", "freq", "time", "acts"];
+  const RTG_COL_MIN = 60;
+  const RTG_COL_DEFAULTS = { title: 260, track: 130, phase: 100, freq: 300, time: 100, acts: 150 };
+  let rtnGridColWidths = (() => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths") || "{}"); } catch (e) {}
+    const w = { ...RTG_COL_DEFAULTS };
+    RTG_COLS.forEach(c => { if (typeof saved[c] === "number" && saved[c] >= RTG_COL_MIN) w[c] = saved[c]; });
+    return w;
+  })();
+  function saveRtgColWidths() {
+    try { localStorage.setItem("b33-rtg-col-widths", JSON.stringify(rtnGridColWidths)); } catch (e) {}
+  }
   // Phase has no home on the edit form -- it's set by dragging on the Board, or
   // by a real chain link, so its inline editor (rtgEditCell's "rtnPhase" case)
   // mirrors the Board's own drag-drop semantics (rtbEndDrag) rather than adding a
@@ -22120,16 +22160,19 @@
     }
     const th = (col, label) => {
       const arrow = rtnGridSort.col === col ? (rtnGridSort.dir === 1 ? "▲" : "▼") : "↕";
-      return `<th data-rtg-sort="${col}" class="${rtnGridSort.col === col ? "sorted" : ""}">${label} <span class="c">${arrow}</span></th>`;
+      return `<th data-rtg-sort="${col}" class="${rtnGridSort.col === col ? "sorted" : ""}">${label} <span class="c">${arrow}</span><span class="rtg-col-resize" data-rtg-resize="${col}" aria-hidden="true"></span></th>`;
     };
+    const colgroupHtml = `<colgroup>${RTG_COLS.map(c => `<col style="width:${rtnGridColWidths[c]}px">`).join("")}</colgroup>`;
     host.innerHTML = `
       <div class="rtg-tbl"><table>
+        ${colgroupHtml}
         <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
     rtnInlineRedock("table");
   }
   document.getElementById("rtnGrid").addEventListener("click", e => {
+    if (e.target.closest(".rtg-col-resize")) return;   // drag handle, not a sort click
     const sortTh = e.target.closest("[data-rtg-sort]");
     if (sortTh) {
       const col = sortTh.dataset.rtgSort;
@@ -22193,6 +22236,46 @@
     const t = ROUTINE_TASKS.find(x => x.id === row.dataset.rtgRow);
     if (t) openRtnFormInline(t, "table");
   });
+  // Column-width drag (2026-08-07, Linh: "allow for adjusting table width") -- same
+  // pointerdown/move/up-with-capture shape as the Day timeline's block-resize handles
+  // (search .tl-resize-handle), just dragging a <col>'s width instead of a block's
+  // top/bottom. Only the dragged column changes width; the table (min-width:700px,
+  // horizontal-scrolling .rtg-tbl) simply grows wider rather than stealing space from
+  // a neighbour, since that's a much easier mental model while dragging.
+  (function () {
+    const host = document.getElementById("rtnGrid");
+    let cdrag = null;
+    host.addEventListener("pointerdown", e => {
+      const handle = e.target.closest(".rtg-col-resize");
+      if (!handle || e.pointerType !== "mouse") return;
+      const col = handle.dataset.rtgResize;
+      const idx = RTG_COLS.indexOf(col);
+      const colEl = host.querySelector(`table > colgroup > col:nth-child(${idx + 1})`);
+      if (!colEl) return;
+      e.stopPropagation(); e.preventDefault();
+      cdrag = { col, colEl, startX: e.clientX, startW: rtnGridColWidths[col], liveW: null };
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      document.body.classList.add("dragging-col");
+    });
+    host.addEventListener("pointermove", e => {
+      if (!cdrag) return;
+      e.preventDefault();
+      const w = Math.max(RTG_COL_MIN, Math.round(cdrag.startW + (e.clientX - cdrag.startX)));
+      cdrag.colEl.style.width = `${w}px`;
+      cdrag.liveW = w;
+    }, { passive: false });
+    function endColDrag() {
+      if (!cdrag) return;
+      const d = cdrag; cdrag = null;
+      document.body.classList.remove("dragging-col");
+      if (d.liveW != null) {
+        rtnGridColWidths[d.col] = d.liveW;
+        saveRtgColWidths();
+      }
+    }
+    host.addEventListener("pointerup", endColDrag);
+    host.addEventListener("pointercancel", endColDrag);
+  })();
   // Inline cell editing: swap the clicked cell's content for a real input, save on
   // blur/Enter, discard on Escape. Repeats gets its own multi-field editor (rtgEditFreq
   // below) instead, since a recurrence pattern is several fields, not one scalar --
