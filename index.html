@@ -4381,13 +4381,17 @@
   .rtn-g6 { grid-column: span 6; }
   .rtn-g4 { grid-column: span 4; }
   .rtn-g3 { grid-column: span 3; }
-  /* Start+Mins ride together in ONE span-4 slot as a plain flex pair -- Mins has no
-     span of its own in the tessellate spec's field list (it's the rarely-shown "no
-     sub-tasks, just a plain duration" field, hidden whenever a sub-task exists -- see
-     updateRtnSubTotal's durField toggle), so nesting it here keeps it next to Start
-     without disrupting the specified 8/4 pairing everywhere else. */
-  .rtn-pair { display: flex; gap: 8px; min-width: 0; }
+  /* Start+End ride together in ONE span-4 slot as a plain flex pair, same reasoning
+     Start+Mins used to (neither has a span of its own in the tessellate spec's field
+     list) -- keeps them next to each other without disrupting the specified 8/4
+     pairing everywhere else. */
+  .rtn-pair { display: flex; gap: 8px; min-width: 0; align-items: end; }
   .rtn-pair > .field { flex: 1 1 auto; min-width: 0; }
+  /* 2026-08-08 (Start+End brief): derived duration, shown only once both times are
+     filled (updateRtnDurReadout) -- fitness green per spec, reusing the app's one
+     shared "Fitness" token rather than inventing a new colour (see .rtg-auto-switch.on
+     for the other place this same token is used for an "on/derived" state). */
+  .rtn-dur-readout { font-size: 12px; font-weight: 600; color: var(--fit-workout); white-space: nowrap; }
   /* the compact editor's read-only repeat line for non-weekly routines (code44 pass) —
      looks like a field, taps through to the real pickers inside More options */
   .rtn-repeat-sum {
@@ -4473,8 +4477,13 @@
   #rtnAddForm.rtn-inline-mode .rtn-g8,
   #rtnAddForm.rtn-inline-mode #rtnFreqGroup.rtn-g8 { flex: 1 1 62%; }
   #rtnAddForm.rtn-inline-mode .rtn-g6 { flex: 1 1 46%; }
-  #rtnAddForm.rtn-inline-mode .rtn-g4,
-  #rtnAddForm.rtn-inline-mode .rtn-pair.rtn-g4 { flex: 1 1 30%; min-width: 150px; }
+  #rtnAddForm.rtn-inline-mode .rtn-g4 { flex: 1 1 30%; min-width: 150px; }
+  /* 2026-08-08 (Start+End brief): the pair now holds two FIXED-width time fields
+     (below) plus the derived-duration readout, so it sizes to its own content
+     instead of claiming a fixed 30% share like a single free-sizing field would. */
+  #rtnAddForm.rtn-inline-mode .rtn-pair.rtn-g4 { flex: 0 1 auto; min-width: 0; }
+  #rtnAddForm.rtn-inline-mode #rtnStartField,
+  #rtnAddForm.rtn-inline-mode #rtnEndField { flex: 0 0 116px; }
   #rtnAddForm.rtn-inline-mode .rtn-g3 { flex: 1 1 21%; min-width: 100px; }
   /* the action bar (rebuild spec: "▾ More options · Save changes · Cancel · Delete")
      -- More options sits at the LEFT edge, the other three cluster at the right,
@@ -9881,18 +9890,27 @@
           <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
         </div>
       </div>
-      <!-- Mins rides inside Start's own cell rather than claiming a span of its own --
-           it's the rarely-shown "no sub-tasks, just a plain duration" field (hidden the
-           moment a sub-task exists, see updateRtnSubTotal's durField toggle). -->
-      <div class="rtn-pair rtn-g4">
-        <div class="field">
-          <label for="rtnStart">Start</label>
+      <!-- 2026-08-08 (Linh, "Start + End (both optional)" brief): SUPERSEDES the single
+           Start+Mins pair -- duration is now DERIVED from Start/End (rtnDurFromRange)
+           instead of typed directly. #rtnEnd is the rarely-hidden field here (hidden the
+           moment a sub-task exists, same as Mins was -- see updateRtnSubTotal's durField
+           toggle, retargeted to rtnEndField): with sub-tasks, THEIR minutes decide the
+           block length instead. #rtnDurReadout only shows once both fields are filled
+           (updateRtnDurReadout, called on input of either). Multi-schedule routines
+           ("+Add another schedule") still need one shared durationMin under the hood,
+           since their layers don't share a single end time -- the submit handler derives
+           that from this same End field for layer 1, same as Mins used to feed it
+           directly. -->
+      <div class="rtn-pair rtn-g4" id="rtnTimeRangeGroup">
+        <div class="field" id="rtnStartField">
+          <label for="rtnStart">Start <span class="field-hint">optional</span></label>
           <input type="time" id="rtnStart">
         </div>
-        <div class="field" id="rtnDurationField">
-          <label for="rtnDuration">Mins</label>
-          <input type="number" id="rtnDuration" min="5" step="5" placeholder="30">
+        <div class="field" id="rtnEndField">
+          <label for="rtnEnd">End <span class="field-hint">optional</span></label>
+          <input type="time" id="rtnEnd">
         </div>
+        <span class="rtn-dur-readout" id="rtnDurReadout" hidden></span>
       </div>
       <div class="field rtn-g8" id="rtnFreqGroup">
         <label>Repeats</label>
@@ -9976,7 +9994,7 @@
              stops the recurrence after this date -- hidden for One-off since a
              single date already IS its own end. Optional, so most routines (which
              run indefinitely) never see an extra field to skip past. -->
-        <div class="field full" id="rtnEndField">
+        <div class="field full" id="rtnEndDateField">
           <label for="rtnEndDate">Ends <span class="field-hint">optional — stops repeating after this date</span></label>
           <input type="date" id="rtnEndDate">
         </div>
@@ -22613,12 +22631,25 @@
       // like the edit "did nothing". Same reasoning Phase already uses to stay read-only.
       const chained = t.anchorTo && chainAnchorOf(t);
       const dot = `<span class="rtg-dot" style="background:var(--${t.track}-seed, var(--ink-faint))"></span>`;
+      // Time column (2026-08-08, Start+End brief): plain single-schedule routines with
+      // both a start and an end show the range; multi-schedule/chained routines just
+      // show the start -- their "end" (if any) is a shared durationMin applied per
+      // layer, not one clock time, so a range wouldn't mean the same thing there.
+      let timeLabel = "—";
+      if (timeMin != null) {
+        timeLabel = fmtTime(minToTime(timeMin));
+        if (!chained && !Array.isArray(t.schedules) && t.end) {
+          let endMin = timeToMin(t.end);
+          if (endMin < timeMin) endMin += 1440;   // end before start -> next day, never a negative range
+          timeLabel += ` – ${fmtTime(minToTime(endMin % 1440))}`;
+        }
+      }
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(t.title)}</span></span></td>
         <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(RTN_TRACK_LABEL[t.track] || "Other")}</span></span></td>
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted rtg-wrap" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
-        <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeMin != null ? fmtTime(minToTime(timeMin)) : "—"}</td>
+        <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeLabel}</td>
         <td class="rtg-auto-td"><button type="button" class="rtg-auto-switch${t.autoCalendar ? " on" : ""}" data-rtg-auto="${esc(t.id)}" role="switch" aria-checked="${t.autoCalendar ? "true" : "false"}" aria-label="Auto-add ${esc(t.title)} to the calendar"></button></td>
         <td class="rtg-acts-td"><div class="rtg-acts">
           <button type="button" class="rtg-ic rtg-acts-quick" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
@@ -25967,6 +25998,26 @@
   // ---- timed sub-task rows (each becomes a back-to-back mini-block on the Day timeline) ----
   const rtnSubList = document.getElementById("rtnSubList");
   const toMinLocal = s => { const p = String(s).split(":"); return (+p[0] || 0) * 60 + (+p[1] || 0); };
+  // 2026-08-08 (Start+End brief): the one place duration gets computed from a
+  // start/end pair -- shared by the live readout below and the submit handler's
+  // multi-schedule durationMin. End-before-start wraps to the next day instead of
+  // going negative (Linh: "treat as crossing midnight... never save a negative
+  // duration") -- same "clock time, not a duration" reasoning #rtnEnd itself stores
+  // for the plain single-schedule case (see the submit handler).
+  function rtnDurFromRange(start, end) {
+    if (!start || !end) return null;
+    let s = toMinLocal(start), e = toMinLocal(end);
+    if (e < s) e += 1440;
+    return e - s;
+  }
+  function updateRtnDurReadout() {
+    const readout = document.getElementById("rtnDurReadout");
+    const endField = document.getElementById("rtnEndField");
+    const dur = endField.hidden ? null
+      : rtnDurFromRange(document.getElementById("rtnStart").value, document.getElementById("rtnEnd").value);
+    readout.hidden = dur == null;
+    readout.textContent = dur == null ? "" : `= ${dur} min`;
+  }
   function readRtnSubs() {
     return [...rtnSubList.querySelectorAll(".rtn-sub-row")].map(r => ({
       text: r.querySelector(".rtn-sub-text").value.trim(),
@@ -25979,9 +26030,11 @@
     // the current back-to-back behaviour"): Duration only makes sense when there's no
     // sub-task list deciding the length instead -- hidden the moment a sub-task exists,
     // shown again the moment the list empties back out. Runs on every add/remove/edit
-    // of a sub-task row (same call sites this function already had).
-    const durField = document.getElementById("rtnDurationField");
+    // of a sub-task row (same call sites this function already had). Retargeted
+    // 2026-08-08 from the old single Mins field to the End field's own wrapper.
+    const durField = document.getElementById("rtnEndField");
     if (durField) durField.hidden = hasSubs;
+    updateRtnDurReadout();
     const tot = readRtnSubs().reduce((a, s) => a + s.min, 0);
     const el = document.getElementById("rtnSubTotal");
     if (!tot) { el.hidden = true; el.textContent = ""; return; }
@@ -26011,6 +26064,7 @@
   });
   rtnSubList.addEventListener("input", updateRtnSubTotal);
   document.getElementById("rtnStart").addEventListener("input", updateRtnSubTotal);
+  document.getElementById("rtnEnd").addEventListener("input", updateRtnDurReadout);
 
   // the compact surface's read-only line for any non-weekly pattern (code44 pass:
   // weekly gets its chips right there; everything else summarises and taps through
@@ -26034,14 +26088,14 @@
   }
   // appended to both the form's own live summary line above and the Table's
   // Repeats column (routineFreqLabel) so "Ends" is visible without opening the
-  // editor -- hidden for One-off (see rtnEndField's own comment for why).
+  // editor -- hidden for One-off (see rtnEndDateField's own comment for why).
   function rtnEndSuffix(endDate) {
     if (!endDate) return "";
     const d = parseKey(endDate);
     return ` · ends ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
   }
   function syncRtnFreqFields() {
-    document.getElementById("rtnEndField").hidden = rtnFreq === "once";
+    document.getElementById("rtnEndDateField").hidden = rtnFreq === "once";
     document.getElementById("rtnOnceField").hidden = rtnFreq !== "once";
     document.getElementById("rtnYearlyField").hidden = rtnFreq !== "yearly";
     document.getElementById("rtnMonthlyField").hidden = rtnFreq !== "monthly";
@@ -26289,10 +26343,12 @@
       document.getElementById("rtnFitLink").value = task.fitLink || "";
       document.getElementById("rtnEndDate").value = task.endDate || "";
       document.getElementById("rtnStart").value = task.start || "";
-      // 2026-08-06: only meaningful without sub-tasks (see updateRtnSubTotal, called at
-      // the end of this function, which hides the field again if subtasks got added below)
-      document.getElementById("rtnDuration").value =
-        task.start && task.end && toMin(task.end) > toMin(task.start) ? String(toMin(task.end) - toMin(task.start)) : "";
+      // 2026-08-08 (Start+End brief): task.end is stored directly now (see the submit
+      // handler), so this is a plain read -- no more start+duration derivation needed
+      // just to populate a field for display. Only meaningful without sub-tasks (see
+      // updateRtnSubTotal, called at the end of this function, which hides the field
+      // again if subtasks got added below).
+      document.getElementById("rtnEnd").value = task.end || "";
       (task.subtasks || []).forEach(s => addRtnSubRow(s.text, s.min));
       rtnTrack = task.track; syncRtnTrackButtons();
       rtnAutoCalendar = !!task.autoCalendar; syncRtnAutoToggle();
@@ -26312,8 +26368,12 @@
         document.getElementById("rtnStart").value = primary.start || "";
         if (layers) {
           // multi-layer routines carry a shared durationMin instead of the plain
-          // start/end pair a single-schedule routine stores (see the submit handler)
-          document.getElementById("rtnDuration").value = task.durationMin ? String(task.durationMin) : "";
+          // start/end pair a single-schedule routine stores (see the submit handler) --
+          // derive a display end for layer 1 from it so editing still shows/edits a
+          // normal-looking End field; saving re-derives durationMin from whatever
+          // start/end land here (rtnDurFromRange), same round-trip Mins used to do.
+          document.getElementById("rtnEnd").value =
+            primary.start && task.durationMin ? minToTime(Math.min(toMin(primary.start) + task.durationMin, 1439)) : "";
           rtnExtraSchedules = layers.slice(1).map(l => ({
             weekdays: Array.isArray(l.weekdays) ? l.weekdays.slice() : [], start: l.start || "",
             weekInterval: l.weekInterval || 1, weekAnchor: l.weekAnchor || "",
@@ -26471,6 +26531,7 @@
     const note = document.getElementById("rtnNote").value.trim();
     const fitLink = document.getElementById("rtnFitLink").value;
     const start = document.getElementById("rtnStart").value;
+    const end = document.getElementById("rtnEnd").value;
     const subtasks = readRtnSubs();
     const task = { id: rtnEditId || uid(), title, track: rtnTrack, category, freq: rtnFreq, note, autoCalendar: rtnAutoCalendar };
     if (fitLink) task.fitLink = fitLink;
@@ -26481,14 +26542,15 @@
     // branches below -- hidden (and therefore empty) for One-off, which is its own end.
     const endDate = document.getElementById("rtnEndDate").value;
     if (endDate) task.endDate = endDate;
-    // 2026-08-06 (Linh: "let me give a routine a start time AND a duration directly,
-    // WITHOUT adding a sub-task"): only applies with no sub-tasks -- their own minutes
-    // already decide the block length (generatedFor() sums them), same as before.
-    // Stored as a plain end time, same field generatedFor()'s no-subtask branch already
-    // reads (`end: (tOvr ? tOvr.end : t.end) || ""`) -- no changes needed on the
-    // calendar-rendering side, this was already wired, just never had a way to set it.
-    const durationMin = parseInt(document.getElementById("rtnDuration").value, 10) || 0;
-    if (!subtasks.length && start && durationMin > 0) task.end = minToTime(Math.min(toMin(start) + durationMin, 1439));
+    // 2026-08-08 (Start+End brief, SUPERSEDES "type a duration directly"): end is now
+    // a direct field rather than derived from a typed Mins value -- stored as-is, same
+    // plain clock-time field generatedFor()'s no-subtask branch already reads (`end:
+    // (tOvr ? tOvr.end : t.end) || ""`), no addition/rounding needed. Only applies
+    // with no sub-tasks -- their own minutes decide the block length instead, same as
+    // before. durationMin (below, rtnDurFromRange) is only needed for the multi-
+    // schedule branch, whose layers don't share one end time.
+    if (!subtasks.length && end) task.end = end;
+    const durationMin = rtnDurFromRange(start, end) || 0;
     if (rtnExtraDates.length) task.extraDates = rtnExtraDates.slice();
 
     if (rtnFreq === "once") {
