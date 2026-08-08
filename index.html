@@ -26889,15 +26889,35 @@
     document.getElementById("evlTo").value = keyOf(new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0));
     renderEventsPage();
   });
-  /* ---- .ics export: your real events (not generated routines), respecting the
-     filters above. Times are written as local wall-clock so Google Calendar
-     imports them exactly as they read here. ---- */
+  /* ---- .ics export: your real events, respecting the filters above, PLUS any
+     routine with its Auto-add toggle on (see the Routines table's Auto column
+     -- t.autoCalendar). Times are written as local wall-clock so Google
+     Calendar imports them exactly as they read here.
+     2026-08-07 (Linh: "i switched on the routines but they are not in my
+     calendar"): autoCalendar was built as a table toggle with nothing on the
+     read side -- turning it on saved the flag and nothing else ever looked at
+     it. This is that missing read side. Routines have no natural end date the
+     way EVENTS.filter's blank from/to can just mean "everything", so an
+     unset range here defaults to today..+90 days instead. generatedFor() is
+     reused rather than re-deriving occurrence times, since it's the one place
+     that already resolves schedules/chains/per-day overrides correctly. */
   const icsEscape = s => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
   const icsDate = k => k.replace(/-/g, "");
   document.getElementById("evlExport").addEventListener("click", () => {
     const from = document.getElementById("evlFrom").value, to = document.getElementById("evlTo").value;
     const tr = state.evlTrack;
     const evs = EVENTS.filter(e => (!from || e.date >= from) && (!to || e.date <= to) && (tr === "all" || e.track === tr));
+    const rtFrom = from || keyOf(TODAY);
+    const rtTo = to || keyOf(addDays(parseKey(rtFrom), 90));
+    for (let d = parseKey(rtFrom); keyOf(d) <= rtTo; d = addDays(d, 1)) {
+      generatedFor(d).forEach(item => {
+        if (!item.fromRoutine || item.preview || item.ghostSkip) return;
+        if (tr !== "all" && item.track !== tr) return;
+        const rt = ROUTINE_TASKS.find(x => x.id === item.rtTaskId);
+        if (!rt || !rt.autoCalendar) return;
+        evs.push(item);
+      });
+    }
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
     const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Book33//EN", "CALSCALE:GREGORIAN"];
     evs.forEach(e => {
