@@ -11992,9 +11992,21 @@
     }
     return s ? timeToMin(s) : null;
   }
-  function routineDurMin(t) {
+  // 2026-08-08 (Linh: "include ending time for the layers"): a multi-schedule layer
+  // can now carry its own end, not just the shared task.durationMin fallback below --
+  // date picks out which layer is live so its own start/end (if both set) wins.
+  // Crosses midnight the same way rtnDurFromRange does, rather than going negative.
+  function routineDurMin(t, date) {
     const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
     if (subs.length) return roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+    if (date && t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length) {
+      const layer = t.schedules.find(l => layerOccursOn(l, date)) || t.schedules[0];
+      if (layer.start && layer.end) {
+        let s = toMin(layer.start), e = toMin(layer.end);
+        if (e < s) e += 1440;
+        return e - s;
+      }
+    }
     if (t.durationMin) return t.durationMin;
     if (t.start && t.end && toMin(t.end) > toMin(t.start)) return toMin(t.end) - toMin(t.start);
     return 30;
@@ -12004,8 +12016,8 @@
   // end time, this backs out the start from it. Deliberately an alternative to
   // t.anchorTo, not a combination: the Chains builder only ever sets one or the
   // other, so there's no forward-chain-vs-deadline conflict to reconcile here.
-  function chainDeadlineStartMin(t) {
-    return t.deadline ? timeToMin(t.deadline) - routineDurMin(t) : null;
+  function chainDeadlineStartMin(t, date) {
+    return t.deadline ? timeToMin(t.deadline) - routineDurMin(t, date) : null;
   }
   // 2026-08-06 (Linh: "im struggling to connect chains of events"): the render-side
   // half of plain-event chaining. Called per stored EVENTS item in renderDay()'s
@@ -12015,7 +12027,7 @@
   // item untouched when it carries no chain, so the map is free for normal events.
   function chainedPlainEvent(e, date) {
     if (!e.anchorTo && !e.deadline) return e;
-    const dur = routineDurMin(e);
+    const dur = routineDurMin(e, date);
     if (e.anchorTo) {
       const cm = chainedStartMinOn(e, date);
       if (cm == null) return e;
@@ -12053,15 +12065,15 @@
     // same fallback chainDeadlineStartMin() gives generatedFor() for this item's own
     // occurrence, so a multi-link chain resolves the same way whether you're asking
     // "when does the anchor start" from here or asking the anchor directly.
-    if (aStart == null) aStart = chainDeadlineStartMin(anchor);
+    if (aStart == null) aStart = chainDeadlineStartMin(anchor, date);
     if (aStart == null) return null;
     if (t.anchorMode === "after") {
       const aDur = aOvr && aOvr.dur ? aOvr.dur
         : aOvr && aOvr.end ? Math.max(0, toMin(aOvr.end) - aStart)
-        : routineDurMin(anchor);
+        : routineDurMin(anchor, date);
       return Math.min(aStart + aDur, 1439);
     }
-    return Math.max(0, aStart - routineDurMin(t));
+    return Math.max(0, aStart - routineDurMin(t, date));
   }
   // 2026-08-06 (Linh's "routine phases" mockup, "give me a Before/During/After view of
   // a chain"): reads the SAME anchorTo/anchorMode data chainedStartMinOn already walks
@@ -13038,16 +13050,17 @@
     routinesOn(date).forEach(t => {
       const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
       // multi-layer weekly routine ("+ Add another schedule") -- pick whichever layer
-      // actually lands on THIS date for its start time; durationMin (shared across
-      // layers, set only when there are no subtasks) stands in for the single t.end a
-      // legacy one-pattern routine stores directly, since a fixed end can't be baked in
-      // ahead of time when different layers start at different times.
+      // actually lands on THIS date for its start time. 2026-08-08: each layer can now
+      // carry its own end directly (same plain clock-time field the single-pattern
+      // case uses) -- durationMin (shared across layers) is only the fallback for a
+      // layer that doesn't specify its own end (or for pre-existing saved data).
       let effStart = t.start, effEnd = t.end;
       if (Array.isArray(t.schedules) && t.schedules.length) {
         const layer = t.schedules.find(l => layerOccursOn(l, date)) || t.schedules[0];
         effStart = layer.start || "";
-        effEnd = (!subs.length && effStart && t.durationMin)
-          ? minToTime(Math.min(timeToMin(effStart) + t.durationMin, 1439)) : "";
+        effEnd = !subs.length && effStart
+          ? (layer.end || (t.durationMin ? minToTime(Math.min(timeToMin(effStart) + t.durationMin, 1439)) : ""))
+          : "";
       }
       // chained routine ("Chain to", Chains card on the Routines page) — its time on
       // this date comes from the anchor routine (ends as the anchor starts, or starts
@@ -13068,16 +13081,16 @@
       if (chainMin != null) {
         startMin = chainMin;
         effStart = minToTime(chainMin);
-        if (!subs.length) effEnd = minToTime(Math.min(chainMin + routineDurMin(t), 1439));
+        if (!subs.length) effEnd = minToTime(Math.min(chainMin + routineDurMin(t, date), 1439));
       } else if (startMin == null && t.deadline) {
         // deadline root (Linh: "assign anchor or deadline to") — nothing chains INTO
         // this occurrence, it just needs to be DONE by t.deadline; back its start out
         // from that instead of requiring a saved start time. deadlineMin carried
         // through so renderDay() can draw the dashed reference line at the real time.
-        const dsm = chainDeadlineStartMin(t);
+        const dsm = chainDeadlineStartMin(t, date);
         startMin = dsm;
         effStart = minToTime(dsm);
-        if (!subs.length) effEnd = minToTime(Math.min(dsm + routineDurMin(t), 1439));
+        if (!subs.length) effEnd = minToTime(Math.min(dsm + routineDurMin(t, date), 1439));
       } else if (t.anchorTo && chainAnchorOf(t) && !routineOwnPatternOn(t, date)) {
         // this day exists only because the chain granted it (routineOccursOn) — if the
         // chain can't resolve a time here (anchor skipped/moved/timeless), the granted
@@ -25429,9 +25442,9 @@
     const aStart = rawRoutineStartMin(anchor, previewDate);
     if (aStart == null) return { items, ai, noTime: true };
     const times = new Array(items.length);
-    times[ai] = { s: aStart, e: aStart + routineDurMin(anchor) };
-    for (let i = ai + 1; i < items.length; i++) times[i] = { s: times[i - 1].e, e: times[i - 1].e + routineDurMin(items[i]) };
-    for (let i = ai - 1; i >= 0; i--) times[i] = { e: times[i + 1].s, s: times[i + 1].s - routineDurMin(items[i]) };
+    times[ai] = { s: aStart, e: aStart + routineDurMin(anchor, previewDate) };
+    for (let i = ai + 1; i < items.length; i++) times[i] = { s: times[i - 1].e, e: times[i - 1].e + routineDurMin(items[i], previewDate) };
+    for (let i = ai - 1; i >= 0; i--) times[i] = { e: times[i + 1].s, s: times[i + 1].s - routineDurMin(items[i], previewDate) };
     return { items, ai, times, previewDate };
   }
   // one real-world chain = one block. Walked into TRUE running order (before-links
@@ -25715,7 +25728,7 @@
       if (!root || !dateVal || !timeVal) return;
       if (!Array.isArray(root.extraDates)) root.extraDates = [];
       if (!root.extraDates.includes(dateVal)) root.extraDates.push(dateVal);
-      const endVal = minToTime(Math.min(timeToMin(timeVal) + routineDurMin(root), 1439));
+      const endVal = minToTime(Math.min(timeToMin(timeVal) + routineDurMin(root, parseKey(dateVal)), 1439));
       if (isRecurEvent(root)) {
         EVENT_TIME_OVR[`ev-${root.id}-${dateVal}`] = { start: timeVal, end: endVal };
         saveRecurringEvents(); saveEvTimeOvr();
@@ -26367,15 +26380,14 @@
         document.getElementById("rtnWeekAnchorDate").value = primary.weekAnchor || keyOf(startOfWeek(TODAY));
         document.getElementById("rtnStart").value = primary.start || "";
         if (layers) {
-          // multi-layer routines carry a shared durationMin instead of the plain
-          // start/end pair a single-schedule routine stores (see the submit handler) --
-          // derive a display end for layer 1 from it so editing still shows/edits a
-          // normal-looking End field; saving re-derives durationMin from whatever
-          // start/end land here (rtnDurFromRange), same round-trip Mins used to do.
-          document.getElementById("rtnEnd").value =
-            primary.start && task.durationMin ? minToTime(Math.min(toMin(primary.start) + task.durationMin, 1439)) : "";
+          // 2026-08-08: each layer can carry its own end now (see the submit handler)
+          // -- prefer that directly; task.durationMin (shared across layers) is only
+          // the fallback for older saved data that predates per-layer ends.
+          document.getElementById("rtnEnd").value = primary.end ||
+            (primary.start && task.durationMin ? minToTime(Math.min(toMin(primary.start) + task.durationMin, 1439)) : "");
           rtnExtraSchedules = layers.slice(1).map(l => ({
             weekdays: Array.isArray(l.weekdays) ? l.weekdays.slice() : [], start: l.start || "",
+            end: l.end || (l.start && task.durationMin ? minToTime(Math.min(toMin(l.start) + task.durationMin, 1439)) : ""),
             weekInterval: l.weekInterval || 1, weekAnchor: l.weekAnchor || "",
           }));
         }
@@ -26486,6 +26498,8 @@
         </div>
         <div class="rtn-sched-extra-row2">
           <input type="time" class="rtn-sched-extra-start" value="${esc(l.start || "")}" aria-label="Start time">
+          <input type="time" class="rtn-sched-extra-end" value="${esc(l.end || "")}" aria-label="End time (optional)">
+          <span class="rtn-dur-readout rtn-sched-extra-dur" ${rtnDurFromRange(l.start, l.end) == null ? "hidden" : ""}>${rtnDurFromRange(l.start, l.end) != null ? `= ${rtnDurFromRange(l.start, l.end)} min` : ""}</span>
           <span class="rtn-sched-extra-label">every</span>
           <input type="number" class="rtn-sched-extra-interval" min="1" value="${l.weekInterval || 1}" aria-label="Repeat every N weeks">
           <span class="rtn-sched-extra-label">week(s)</span>
@@ -26495,7 +26509,7 @@
       </div>`).join("");
   }
   document.getElementById("rtnSchedAddBtn").addEventListener("click", () => {
-    rtnExtraSchedules.push({ weekdays: [], start: "", weekInterval: 1, weekAnchor: "" });
+    rtnExtraSchedules.push({ weekdays: [], start: "", end: "", weekInterval: 1, weekAnchor: "" });
     renderRtnSchedExtra();
   });
   document.getElementById("rtnSchedExtraList").addEventListener("click", e => {
@@ -26514,12 +26528,17 @@
     const row = e.target.closest(".rtn-sched-extra-row"); if (!row) return;
     const l = rtnExtraSchedules[+row.dataset.idx];
     if (e.target.classList.contains("rtn-sched-extra-start")) l.start = e.target.value;
+    else if (e.target.classList.contains("rtn-sched-extra-end")) l.end = e.target.value;
     else if (e.target.classList.contains("rtn-sched-extra-interval")) {
       l.weekInterval = parseInt(e.target.value, 10) || 1;
       const anchorInput = row.querySelector(".rtn-sched-extra-anchor");
       anchorInput.hidden = l.weekInterval <= 1;
       if (l.weekInterval > 1 && !anchorInput.value) { anchorInput.value = keyOf(startOfWeek(TODAY)); l.weekAnchor = anchorInput.value; }
     } else if (e.target.classList.contains("rtn-sched-extra-anchor")) l.weekAnchor = e.target.value;
+    const dur = row.querySelector(".rtn-sched-extra-dur");
+    const m = rtnDurFromRange(l.start, l.end);
+    dur.hidden = m == null;
+    dur.textContent = m == null ? "" : `= ${m} min`;
   });
   rtnForm.addEventListener("submit", e => {
     e.preventDefault();
@@ -26586,10 +26605,15 @@
         // the flat weekdays/start/end fields a single-schedule routine uses don't
         // make sense once there's more than one time, so this shape replaces them
         // entirely; generatedFor() picks whichever layer matches each occurrence.
+        // 2026-08-08 ("include ending time for the layers"): each layer now stores its
+        // own end when both its own start+end are filled, same plain clock-time field
+        // the single-pattern case uses -- task.durationMin (below) stays as the
+        // fallback for whichever layer doesn't specify one of its own.
         task.schedules = [
-          { weekdays: days, start, ...(wi > 1 ? { weekInterval: wi, weekAnchor: wa } : {}) },
+          { weekdays: days, start, ...(end ? { end } : {}), ...(wi > 1 ? { weekInterval: wi, weekAnchor: wa } : {}) },
           ...extra.map(l => ({
             weekdays: l.weekdays.slice().sort((a, b) => a - b), start: l.start || "",
+            ...(l.start && l.end ? { end: l.end } : {}),
             ...((l.weekInterval || 1) > 1 ? { weekInterval: l.weekInterval, weekAnchor: l.weekAnchor } : {}),
           })),
         ];
