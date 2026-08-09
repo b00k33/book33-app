@@ -3543,6 +3543,12 @@
   .cb-tl-day { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
   .cb-tl-head .cb-name-input { margin-bottom: 0; min-height: 40px; }
   .cb-tl-rename { padding: 4px 12px; }
+  /* 2026-08-09 (chains+startDate spec, "apply to calendar" toggle): reuses
+     .rtg-auto-switch verbatim (same on/off calendar-export language the Routines
+     Table/cards already use for the per-routine version of this same idea) --
+     just a small caption above it since there's no column header here to lean on. */
+  .cb-tl-auto { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
+  .cb-tl-auto-lbl { font-size: 9px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
   .cb-tl-edit {
     flex: none; min-height: 44px; padding: 4px 16px; border: 1px solid var(--note-line);
     background: transparent; color: var(--ink-soft); border-radius: 999px;
@@ -10059,6 +10065,13 @@
           <label for="rtnMonthlyDay">Day of month</label>
           <input type="number" id="rtnMonthlyDay" min="1" max="31" placeholder="1–31">
         </div>
+        <!-- 2026-08-09 (Linh, chains+startDate spec): the recurrence's own start
+             boundary -- no occurrences before it, for any repeat type OR a chain-
+             granted day (see chainGrantsOn). Hidden for One-off same as Ends below. -->
+        <div class="field full" id="rtnStartDateField">
+          <label for="rtnStartDate">Starts on <span class="field-hint">optional — no occurrences before this date</span></label>
+          <input type="date" id="rtnStartDate">
+        </div>
         <!-- 2026-08-07 (Linh: "give an option to indicate when the routine ends"):
              stops the recurrence after this date -- hidden for One-off since a
              single date already IS its own end. Optional, so most routines (which
@@ -11930,6 +11943,9 @@
     // the routine's own edit form so it stays a live reference: editing the routine's
     // title/time/steps still updates this occurrence, same as every patterned one
     if (Array.isArray(t.extraDates) && t.extraDates.includes(keyOf(date))) return true;
+    // 2026-08-09 (chains+startDate spec): the mirror of endDate below -- no
+    // occurrences before this date. Same extraDates-overrides-it precedent.
+    if (t.startDate && keyOf(date) < t.startDate) return false;
     // 2026-08-07 ("give an option to indicate when the routine ends"): checked before
     // the pattern below, not after, so it gates every freq type in one place -- an
     // extraDate past the end is still honoured above (an explicit manual placement,
@@ -11963,6 +11979,12 @@
   const _chainOccGuard = new Set();
   function chainGrantsOn(t, date) {
     if (!t.anchorTo || _chainOccGuard.has(t.id)) return false;
+    // 2026-08-09 (chains+startDate spec, "a chain step inherits its routine's
+    // startDate"): routineOwnPatternOn's own start/end gate above only ever ran for
+    // t's OWN pattern -- a chain-granted day skipped it entirely, so a chained
+    // follower kept appearing past its endDate (or before a startDate) forever.
+    if (t.startDate && keyOf(date) < t.startDate) return false;
+    if (t.endDate && keyOf(date) > t.endDate) return false;
     const a = chainAnchorOf(t);
     if (!a) return false;
     _chainOccGuard.add(t.id);
@@ -12211,9 +12233,9 @@
   function routineFreqLabel(t) {
     // 2026-08-07 ("give an option to indicate when the routine ends"): appended to
     // every freq except One-off, which is already its own single end date --
-    // rtnEndSuffix returns "" when t.endDate is unset, so this is a no-op for the
-    // overwhelming majority of routines that don't use it.
-    const endSuffix = t.freq === "once" ? "" : rtnEndSuffix(t.endDate);
+    // rtnDateRangeSuffix returns "" when neither startDate nor endDate is set, so
+    // this is a no-op for the overwhelming majority of routines that don't use it.
+    const endSuffix = t.freq === "once" ? "" : rtnDateRangeSuffix(t.startDate, t.endDate);
     if (t.freq === "interval") return `Every ${t.intervalDays} day${t.intervalDays === 1 ? "" : "s"}` + endSuffix;
     if (t.freq === "numMoney") return "Money days · 8 / 28 (wkdays)";
     if (t.freq === "count") return `${t.weeklyTarget || 5}×/week`;
@@ -25725,9 +25747,18 @@
             <button type="button" class="btn-cancel" data-cb-push-cancel>Cancel</button>
           </div>`
         : "";
+      // 2026-08-09 (chains+startDate spec, "apply to calendar" toggle): missing
+      // chainAutoCalendar reads as ON (spec: "Missing autoCalendar = treat as on for
+      // existing chains") -- see evlExport's own reading of this same flag.
+      const chainAutoOn = root.chainAutoCalendar !== false;
+      const chainName = esc(root.chainName || root.title);
       html += `<div class="cb-tl">
         <div class="cb-tl-head">
           <div class="cb-tl-titlebox">${nameHtml}</div>
+          <div class="cb-tl-auto">
+            <span class="cb-tl-auto-lbl">On calendar</span>
+            <button type="button" class="rtg-auto-switch${chainAutoOn ? " on" : ""}" data-cb-auto="${esc(root.id)}" role="switch" aria-checked="${chainAutoOn ? "true" : "false"}" aria-label="Apply ${chainName} to the calendar"></button>
+          </div>
           <button type="button" class="cb-tl-edit cb-tl-rename" data-cb-rename="${esc(root.id)}" aria-label="Rename chain" title="Rename this chain">✎</button>
           ${pushBtn}
           <button type="button" class="cb-tl-edit" data-cb-edit="${esc(root.id)}">Edit</button>
@@ -25888,6 +25919,21 @@
         cbName = root.chainName || "";
         renderChainsPage();
         document.getElementById("chainsPage").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+    // On calendar: pauses/resumes the WHOLE chain's calendar export in one tap
+    // without touching its links -- see evlExport, which reads this same flag off
+    // the chain's root. Explicit false when off; deleted (back to default-on) when
+    // turned back on, so a never-touched chain still reads as on via the ??.
+    const autoSw = e.target.closest("[data-cb-auto]");
+    if (autoSw) {
+      const root = chainNodeById(autoSw.dataset.cbAuto);
+      if (root) {
+        if (root.chainAutoCalendar === false) delete root.chainAutoCalendar;
+        else root.chainAutoCalendar = false;
+        saveChainNode(root);
+        renderChainsPage();
       }
       return;
     }
@@ -26287,7 +26333,7 @@
       const v = document.getElementById("rtnOnceDate").value;
       return v ? `One-off · ${parseKey(v).getDate()} ${MON_SHORT[parseKey(v).getMonth()]}` : "One-off";
     }
-    const endSuffix = rtnEndSuffix(document.getElementById("rtnEndDate").value);
+    const endSuffix = rtnDateRangeSuffix(document.getElementById("rtnStartDate").value, document.getElementById("rtnEndDate").value);
     if (rtnFreq === "daily") return "Daily" + endSuffix;
     if (rtnFreq === "monthly") { const d = document.getElementById("rtnMonthlyDay").value; return (d ? `Monthly · day ${d}` : "Monthly") + endSuffix; }
     if (rtnFreq === "yearly") {
@@ -26300,14 +26346,19 @@
     return "";
   }
   // appended to both the form's own live summary line above and the Table's
-  // Repeats column (routineFreqLabel) so "Ends" is visible without opening the
-  // editor -- hidden for One-off (see rtnEndDateField's own comment for why).
-  function rtnEndSuffix(endDate) {
-    if (!endDate) return "";
-    const d = parseKey(endDate);
-    return ` · ends ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+  // Repeats column (routineFreqLabel) so "Starts"/"Ends" is visible without opening
+  // the editor -- hidden for One-off (see rtnEndDateField's own comment for why).
+  // 2026-08-09 (chains+startDate spec): extended from end-only to a range -- both
+  // set reads as one "D – D" span rather than two separate clauses.
+  function rtnDateRangeSuffix(startDate, endDate) {
+    if (!startDate && !endDate) return "";
+    const lbl = k => { const d = parseKey(k); return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`; };
+    if (startDate && endDate) return ` · ${lbl(startDate)} – ${lbl(endDate)}`;
+    if (startDate) return ` · from ${lbl(startDate)}`;
+    return ` · ends ${lbl(endDate)}`;
   }
   function syncRtnFreqFields() {
+    document.getElementById("rtnStartDateField").hidden = rtnFreq === "once";
     document.getElementById("rtnEndDateField").hidden = rtnFreq === "once";
     document.getElementById("rtnOnceField").hidden = rtnFreq !== "once";
     document.getElementById("rtnYearlyField").hidden = rtnFreq !== "yearly";
@@ -26571,6 +26622,7 @@
       document.getElementById("rtnCategory").value = task.category || "";
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
+      document.getElementById("rtnStartDate").value = task.startDate || "";
       document.getElementById("rtnEndDate").value = task.endDate || "";
       document.getElementById("rtnStart").value = task.start || "";
       // 2026-08-08 (Start+End brief): task.end is stored directly now (see the submit
@@ -26776,6 +26828,8 @@
     // 2026-08-07 ("give an option to indicate when the routine ends"): general across
     // every freq type, so it's read here rather than nested in the freq-specific
     // branches below -- hidden (and therefore empty) for One-off, which is its own end.
+    const startDate = document.getElementById("rtnStartDate").value;
+    if (startDate) task.startDate = startDate;
     const endDate = document.getElementById("rtnEndDate").value;
     if (endDate) task.endDate = endDate;
     // 2026-08-08 (Start+End brief, SUPERSEDES "type a duration directly"): end is now
@@ -27238,7 +27292,14 @@
         if (!item.fromRoutine || item.preview || item.ghostSkip) return;
         if (tr !== "all" && item.track !== tr) return;
         const rt = ROUTINE_TASKS.find(x => x.id === item.rtTaskId);
-        if (!rt || !rt.autoCalendar) return;
+        if (!rt) return;
+        // 2026-08-09 (chains+startDate spec, "apply to calendar" toggle): a chained
+        // routine exports when EITHER its own Auto-add is on, OR it's linked into a
+        // chain whose root has the calendar toggle on (default -- see chainAutoOn's
+        // own comment on the card) -- so linking her into a chain is enough to get
+        // her on the calendar without also flipping her own Auto switch by hand.
+        const chainOn = rt.anchorTo && chainAnchorOf(rt) && chainRootOf(rt).chainAutoCalendar !== false;
+        if (!rt.autoCalendar && !chainOn) return;
         evs.push(item);
       });
     }
