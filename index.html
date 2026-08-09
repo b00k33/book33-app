@@ -6462,6 +6462,28 @@
     background: color-mix(in oklab, var(--cat-personal-fitness) 14%, transparent);
     border-radius: 999px; padding: 1px 7px; margin: 3px auto 0; width: fit-content; white-space: nowrap;
   }
+  /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): marks any
+     routine whose steps derive from another page (see linkInfo() near hairRoutineFor)
+     everywhere it renders -- Today's progress, Routines table/cards, the routine
+     editor. Colours given verbatim in the brief (a signal-green distinct from any
+     track/category token, same "system-managed" language .hx-badge already uses on
+     the Hair page itself) rather than a central var, since this marks a MECHANISM
+     (linked vs local), not a life/category colour. */
+  .badge-linked {
+    font-size: 8px; text-transform: uppercase; letter-spacing: .4px; font-weight: 700;
+    background: rgba(61,220,132,.16); color: #8fe6b3; border-radius: 5px; padding: 2px 6px;
+    display: inline-flex; align-items: center; gap: 3px; cursor: pointer; border: none; font-family: var(--font-body);
+  }
+  .badge-linked:hover { background: rgba(61,220,132,.26); }
+  .badge-linked:focus-visible { outline: 2px solid #8fe6b3; outline-offset: 1px; }
+  /* the explainer sheet's jump button carries the LINKED SOURCE's own accent (Hair =
+     beauty red, per the brief) via a custom property set inline per-item from
+     linkInfo().accentVar -- one rule, any future link kind's colour for free. */
+  .ev-scope-btn.link-jump-btn {
+    border-color: var(--link-accent); color: var(--link-accent); font-weight: 700;
+    background: color-mix(in oklab, var(--link-accent) 14%, transparent);
+  }
+  .ev-scope-btn.link-jump-btn:hover { border-color: var(--link-accent); }
   .hx-row td { border-top: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); }
   .hx-name { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
   .hx-min { font-size: 10px; color: var(--ink-faint); font-weight: 400; white-space: nowrap; }
@@ -9461,10 +9483,14 @@
        stack the remainder full-width; no override needed. */
     /* 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view"
        job, Linh: "command-bar/progress/add-button/fasting into the left column"):
-       these 4 pieces join #tilesDate/#railNum/#railCycle in the same 290px
-       #deskColLeft (see placeDeskGrid()'s STEP 5 additions) -- their existing
-       styling was tuned for the much wider .day-main column, so a few things need
-       a compact-column pass here same as #tilesDate/.page-head just above.
+       these 4 pieces join #tilesDate in the same 290px #deskColLeft (see
+       placeDeskGrid()'s STEP 5 additions) -- their existing styling was tuned for
+       the much wider .day-main column, so a few things need a compact-column pass
+       here same as #tilesDate/.page-head just above. (#railNum/#railCycle moved
+       OUT of colL the same day, Linh: "swap first column to second column above
+       the calendar" -- they need no compact pass of their own since .rail-card
+       was already tuned for a ~300px rail, same width as their new #deskColRight
+       home, see placeDeskGrid()'s comment header above.)
        #dayProgress's own margin reset moves here from its old #deskColMain
        location (dead selector now that it's never a deskColMain descendant). */
     #deskColLeft #dayProgress { margin: 0; }
@@ -9808,6 +9834,21 @@
       <div class="ev-scope-sub">You'll get a chance to undo after.</div>
       <div id="tlDelActions"></div>
       <button type="button" class="ev-scope-btn ev-scope-cancel" id="tlDelCancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): tapping a
+       ↻ linked badge anywhere (Today's progress, Routines row/card, a calendar block)
+       opens this same small sheet -- one explainer line naming the source + a jump
+       button in the source's own accent (see openLinkExplain/renderLinkExplainSheet).
+       Reuses the delete-confirm sheet's exact chrome (tl-detail-overlay/ev-scope-*) --
+       "reuse the same button/pill/card styles everywhere", not a one-off dialog. -->
+  <div class="tl-detail-overlay ev-scope-overlay" id="linkExplainOverlay" hidden>
+    <div class="tl-detail-sheet ev-scope-sheet" role="dialog" aria-label="Linked item">
+      <div class="ev-scope-title" id="linkExplainTitle">↻ Linked</div>
+      <div class="ev-scope-sub" id="linkExplainSub"></div>
+      <button type="button" class="ev-scope-btn link-jump-btn" id="linkExplainJump"></button>
+      <button type="button" class="ev-scope-btn ev-scope-cancel" id="linkExplainClose">Got it</button>
     </div>
   </div>
 
@@ -13786,6 +13827,47 @@
   // Routines page — falls back to the built-in HAIR.types definition otherwise
   const hairRoutineFor = t => ROUTINE_TASKS.find(x => x.id === "hair-" + t);
 
+  /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): a routine can
+     store a REFERENCE instead of its own steps -- today that's only hairLink, but the
+     shape here is deliberately generic (kind/ref/sourceLabel/jumpView/jumpTarget/
+     accentVar/explainer) so a future medical-checklist or chain-derived link is a new
+     branch here, not a new mechanism. linkInfo(rt) is the single place that decides
+     "is this routine linked, and if so where does it point" -- every render surface
+     (badge, explainer sheet, routine editor) reads through this, never `rt.hairLink`
+     directly, so a new link kind only needs one new branch to light up everywhere.
+     `ref` is a plain string a badge can round-trip via a data-attribute (see
+     linkedBadgeHtml/resolveLinkInfo below) without needing to re-find the routine. */
+  function linkInfo(rt) {
+    if (!rt) return null;
+    if (rt.hairLink) {
+      const tier = HAIRD.tiers.find(x => x.id === rt.hairLink.tier);
+      const tierLabel = tier ? tier.label : "";
+      return {
+        kind: "hair", ref: rt.hairLink.tier,
+        sourceLabel: "Beauty · Hair", sectionLabel: tierLabel,
+        jumpView: "hair", jumpTarget: rt.hairLink.tier,
+        jumpLabel: "🧴 Edit on Hair page →",
+        accentVar: "--cat-personal-beauty",
+        explainer: `Linked from Beauty · Hair. The steps for this ${tierLabel ? tierLabel.toLowerCase() + " " : ""}wash are set on the Hair page (${tierLabel} tier) — edit them there and this updates automatically. You can still tick it off here.`,
+      };
+    }
+    return null;
+  }
+  // the inverse of linkInfo() for the one field cheap enough to round-trip through a
+  // data-attribute ("kind:ref") rather than re-serializing the whole descriptor —
+  // used by the standalone badge, which may render far from the routine object itself
+  // (a generated calendar/Today's-progress item only carries a copy of linkInfo()'s
+  // output, not the live routine).
+  function resolveLinkInfo(kindRef) {
+    if (!kindRef) return null;
+    const [kind, ref] = kindRef.split(":");
+    if (kind === "hair") return linkInfo(hairRoutineFor(ref));
+    return null;
+  }
+  // one badge markup, every surface — kindRef is `${info.kind}:${info.ref}`
+  const linkedBadgeHtml = info => info
+    ? `<span class="badge-linked" data-link-badge="${info.kind}:${esc(info.ref)}" role="button" tabindex="0" aria-label="Linked — tap to see where to edit this">↻ linked</span>` : "";
+
   // reads the migrated ROUTINE_TASKS entry so a rename/step edit made on the
   // Routines page shows up here immediately — this card is a mirror, not a
   // second copy (Linh 2026-07-27: "they can be edited in the routine page")
@@ -14051,7 +14133,7 @@
       out.push({
         id: `hair-${k}`, generated: true, habit: t, date: k,
         track: HAIR.track, category: HAIR.category, title: rt ? rt.title : HAIR.types[t].name,
-        locPath: HAIR.locPath, steps: stepsOf(rt, t),
+        locPath: HAIR.locPath, steps: stepsOf(rt, t), linkInfo: linkInfo(rt),
         allDay: true, start: "", end: "",
       });
     } else if (!hasOverride) {
@@ -14066,7 +14148,7 @@
           id: `hair-${keyOf(next)}`, generated: true, habit: nt, date: k, preview: true,
           track: HAIR.track, category: HAIR.category,
           title: `Next wash — ${rtNext ? rtNext.title : HAIR.types[nt].name}`, note: `${next.getDate()} ${MON_SHORT[next.getMonth()]}`,
-          locPath: HAIR.locPath, steps: stepsOf(rtNext, nt),
+          locPath: HAIR.locPath, steps: stepsOf(rtNext, nt), linkInfo: linkInfo(rtNext),
           allDay: true, start: "", end: "",
         });
       }
@@ -14161,7 +14243,7 @@
           note: occNote != null ? occNote : t.note, freq: t.freq, kind: "routine", allDay: false, fromRoutine: true,
           start: minToTime(sMin),
           end: ovr && ovr.end && !ovr.dur ? ovr.end : minToTime(Math.min(sMin + total, 1439)),
-          steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null,
+          steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null, linkInfo: linkInfo(t),
           fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
           deadlineMin, deadlineLabel: deadlineMin != null ? (t.deadlineLabel || t.title) : undefined,
         });
@@ -14183,7 +14265,7 @@
           rtTaskId: t.id,
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
-          allDay: !start, start, end: (ovrEnd || effEnd) || "", fitLink: t.fitLink || null,
+          allDay: !start, start, end: (ovrEnd || effEnd) || "", fitLink: t.fitLink || null, linkInfo: linkInfo(t),
           fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
           deadlineMin, deadlineLabel: deadlineMin != null ? (t.deadlineLabel || t.title) : undefined,
         });
@@ -17287,6 +17369,67 @@
   });
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && !document.getElementById("tlDetailOverlay").hidden) closeTlDetail();
+  });
+
+  /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): the shared
+     explainer sheet every ↻ linked badge opens (see linkInfo()/linkedBadgeHtml() near
+     hairRoutineFor for the data side). Every render surface that draws a badge calls
+     handleLinkBadgeClick(e) FIRST in its own click delegate -- a document-level-only
+     delegate would fire too late, since a badge always sits inside some OTHER
+     element's own click delegate (the Today's-progress tick row, a Routines row, a
+     calendar block) that would already have acted on the bubbling click by the time
+     it reached document. Checking first and returning true lets every call site stay
+     a one-line guard instead of duplicating the open logic. */
+  function openLinkExplain(info) {
+    if (!info) return;
+    document.getElementById("linkExplainSub").textContent = info.explainer;
+    const jump = document.getElementById("linkExplainJump");
+    jump.textContent = info.jumpLabel;
+    jump.style.setProperty("--link-accent", `var(${info.accentVar})`);
+    jump.dataset.linkJumpView = info.jumpView;
+    jump.dataset.linkJumpTarget = info.jumpTarget;
+    document.getElementById("linkExplainOverlay").hidden = false;
+  }
+  function closeLinkExplain() { document.getElementById("linkExplainOverlay").hidden = true; }
+  function handleLinkBadgeClick(e) {
+    const badge = e.target.closest("[data-link-badge]");
+    if (!badge) return false;
+    e.preventDefault();
+    openLinkExplain(resolveLinkInfo(badge.dataset.linkBadge));
+    return true;
+  }
+  // navigate to the linked item's SOURCE page and land on the exact section it points
+  // to -- today only "hair" (a tier column on the wash matrix); a future medical/chain
+  // jumpView is a new branch here, same shape as jumpToLinkedSource's one caller.
+  function jumpToLinkedSource(view, target) {
+    state.view = view; render();
+    if (view === "hair") {
+      const el = document.querySelector(`#hairMatrix [data-hx-tier="${target}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("hx-jump-flash");
+        setTimeout(() => el.classList.remove("hx-jump-flash"), 1600);
+      }
+    }
+  }
+  document.getElementById("linkExplainJump").addEventListener("click", e => {
+    const { linkJumpView, linkJumpTarget } = e.currentTarget.dataset;
+    closeLinkExplain();
+    jumpToLinkedSource(linkJumpView, linkJumpTarget);
+  });
+  document.getElementById("linkExplainClose").addEventListener("click", closeLinkExplain);
+  document.getElementById("linkExplainOverlay").addEventListener("click", e => {
+    if (!e.target.closest(".ev-scope-sheet")) closeLinkExplain();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !document.getElementById("linkExplainOverlay").hidden) closeLinkExplain();
+    // keyboard activation for the badge's span[role=button] (can't be a real <button>
+    // -- it nests inside OTHER buttons, e.g. the Today's-progress tick row, and
+    // button-in-button is invalid HTML / unreliable across browsers)
+    if ((e.key === "Enter" || e.key === " ") && e.target.closest && e.target.closest("[data-link-badge]")) {
+      e.preventDefault();
+      openLinkExplain(resolveLinkInfo(e.target.closest("[data-link-badge]").dataset.linkBadge));
+    }
   });
 
   /* ---------- Body widget: sits in the Day header beside the fasting ring.
@@ -25759,22 +25902,28 @@
      #deskGrid scaffold; below it every element returns to its phone-layout home
      via the anchor markers, so mobile is byte-identical. This is a re-layout of
      the same components — no logic is duplicated anywhere.
-       left  ← #tilesDate (numerology strip) + #railNum + #railCycle (the "where
-               am I today" info, under the once-only date card #deskDateCard,
-               with the existing ‹ Today › .date-drop-nav moved in under it),
-               THEN the command bar + #dayProgress + Add-to-this-day + fasting
-               bar — 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle
-               fix + day view" job, Linh: "command-bar/progress/add-button/
-               fasting into the left column"): these 4 used to live at the top
-               of the centre column; now they join the info group in the left
-               column instead, via qaSlotDayHome/dayProgressHome/addRowHome/
-               fastStatusHome (their true/default homes, inside .day-main —
-               see the markup there). Below 1024px they're already in that
-               order in .day-main by default, no JS needed for tablet/mobile.
+       left  ← #tilesDate (numerology strip, under the once-only date card
+               #deskDateCard, with the existing ‹ Today › .date-drop-nav moved
+               in under it), THEN the command bar + #dayProgress + Add-to-this-
+               day + fasting bar — 2026-08-10 (STEP 5, "Book33 -- Add box,
+               toggle, undo, cycle fix + day view" job, Linh: "command-bar/
+               progress/add-button/fasting into the left column"): these 4 used
+               to live at the top of the centre column; now they join the info
+               group in the left column instead, via qaSlotDayHome/
+               dayProgressHome/addRowHome/fastStatusHome (their true/default
+               homes, inside .day-main — see the markup there). Below 1024px
+               they're already in that order in .day-main by default, no JS
+               needed for tablet/mobile.
        centre← .day-main (chain chips, outcome prompts, the timeline itself —
                now genuinely just the calendar, once the 4 pieces above leave it)
-       right ← .day-side (mini calendar first, patients right after, then the
-               rest of the rail: herb alerts, also-today, shopping…)
+       right ← #railNum + #railCycle, THEN .day-side (mini calendar, patients,
+               rest of the rail) — 2026-08-10 (Linh, screenshot: "swap first
+               column to second column above the calendar"): SUPERSEDES
+               Numerology/Cycle living in the left column above — they join the
+               right column instead, ahead of .day-side so they render above
+               the calendar (which is always .day-side's own first child, see
+               placeMiniCalDesk). Left keeps just the day's own context (date,
+               astro strip) plus the command-bar/progress/fasting group.
        top   ← the B33 logo + icon toolbar join .nav-tiers; #deskHead hides
      ============================================================ */
   const deskGridMq = window.matchMedia("(min-width: 1024px)");
@@ -25817,8 +25966,23 @@
       if (tools && topRight && tools.parentElement !== topRight) topRight.insertBefore(tools, topRight.firstChild);
       if (dropNav && dateCard && dropNav.parentElement !== dateCard) dateCard.appendChild(dropNav);
       if (tiles && tiles.parentElement !== colL) colL.appendChild(tiles);
-      if (rNum && rNum.parentElement !== colL) colL.appendChild(rNum);
-      if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
+      // 2026-08-10 (Linh, screenshot of this exact layout: "swap first column to
+      // second column above the calendar" + "fasting progress bar and text bar can
+      // go in first column"): SUPERSEDES the two lines below this comment (were:
+      // colL.appendChild(rNum/rCyc), joining tiles above) — Numerology/Cycle now
+      // join colR INSTEAD, appended before daySide is appended below so they land
+      // ahead of it in DOM order; daySide's own calendar always renders as ITS
+      // first child (placeMiniCalDesk's rail.insertBefore(wrap, rail.firstElementChild)),
+      // so "colR: [rNum, rCyc, daySide(calendar first, ...)]" reads as Numerology
+      // then Cycle then the calendar, i.e. both cards sit directly above it —
+      // without this ordering, placeMiniCalDesk would keep re-asserting the
+      // calendar as day-side's own first child and undo an in-day-side placement
+      // on every render. colL keeps the date card + tiles' astro-icon strip, plus
+      // the command-bar/progress/add-button/fasting group below (STEP 5, unchanged) —
+      // "fasting progress bar and text bar" (fastBarRow + fastBarSub, #fastStatus'
+      // own two pieces) already lands there via fastEl just below. The "off" branch
+      // (railHome.after(rNum, rCyc, rPat)) is unchanged — it returns all three to
+      // day-side's own static order regardless of which colX they came from.
       if (dayMain && dayMain.parentElement !== colM) colM.appendChild(dayMain);
       // STEP 5: command-bar/progress/add-button/fasting join the info group in
       // colL, in that literal order — pulled out of .day-main (which has
@@ -25828,6 +25992,8 @@
       if (prog && prog.parentElement !== colL) colL.appendChild(prog);
       if (addRowEl && addRowEl.parentElement !== colL) colL.appendChild(addRowEl);
       if (fastEl && fastEl.parentElement !== colL) colL.appendChild(fastEl);
+      if (rNum && rNum.parentElement !== colR) colR.appendChild(rNum);
+      if (rCyc && rCyc.parentElement !== colR) colR.appendChild(rCyc);
       if (daySide && daySide.parentElement !== colR) colR.appendChild(daySide);
       const wrap = document.getElementById("miniCalWrap");
       if (wrap && rPat && wrap.parentElement === daySide && rPat.previousElementSibling !== wrap)
