@@ -26962,11 +26962,24 @@
     updateRtnDurReadout();
     const tot = readRtnSubs().reduce((a, s) => a + s.min, 0);
     const el = document.getElementById("rtnSubTotal");
-    if (!tot) { el.hidden = true; el.textContent = ""; return; }
+    // 2026-08-09 (sub-tasks robust-logic brief): a row that exists but has no minutes
+    // yet used to just hide this line entirely -- no feedback that anything's needed.
+    // Now it prompts instead, same spirit as the brief's "add minutes to see the
+    // finish time" -- only skip the line completely once there are no rows at all.
+    if (!hasSubs) { el.hidden = true; el.textContent = ""; return; }
     el.hidden = false;
+    if (!tot) { el.textContent = "Add minutes to see the finish time"; return; }
     const startV = document.getElementById("rtnStart").value;
-    let txt = `Total: ${tot} min`;
-    if (startV) { const s = toMinLocal(startV); txt += ` · ${fmtTime(minToTime(s))}–${fmtTime(minToTime(s + tot))}`; }
+    let txt = `Total ${tot} min`;
+    if (startV) {
+      const s = toMinLocal(startV), rawEnd = s + tot, spill = Math.floor(rawEnd / 1440);
+      // 2026-08-09: minToTime wraps a >=1440 minute-of-day back into a 0-23h clock
+      // with no marker of its own (it's a plain formatter, used all over the app for
+      // same-day values) -- a sub-task list that runs past midnight needs its OWN
+      // "+Nd" suffix here so a legitimately later finish never reads as an earlier
+      // one with nothing to explain it (the exact trap the reported bug fell into).
+      txt += ` · ${fmtTime(minToTime(s))}–${fmtTime(minToTime(rawEnd))}${spill ? ` +${spill}d` : ""}`;
+    }
     el.textContent = txt;
   }
   function addRtnSubRow(text = "", min = "") {
@@ -27289,7 +27302,11 @@
       // updateRtnSubTotal, called at the end of this function, which hides the field
       // again if subtasks got added below).
       document.getElementById("rtnEnd").value = task.end || "";
-      (task.subtasks || []).forEach(s => addRtnSubRow(s.text, s.min));
+      // 2026-08-09 (sub-tasks robust-logic brief): heal any pre-existing malformed
+      // `min` on load (blank/NaN/junk from before readRtnSubs()'s own save-time
+      // guard existed) -- same Math.max(0, parseInt(...)||0) that guards every read,
+      // so a stray old value can't display as anything but a clean integer.
+      (task.subtasks || []).forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0)));
       rtnTrack = task.track; syncRtnTrackButtons();
       rtnCalOn = task.calOn !== false; syncRtnAutoToggle();
       rtnFreq = task.freq;
