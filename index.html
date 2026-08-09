@@ -811,8 +811,19 @@
        in .day-hero-more (moved into #numGroupStrip, see the DAY page markup), so it now
        follows num-group-strip's own collapsed-by-default / tap-to-expand rule below
        instead of having its own always-visible carve-out. */
-    .day-hero-more .num-group-strip { display: none; }
-    #tilesDate.expanded .day-hero-more .num-group-strip { display: flex; }
+    /* 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view"
+       job, Linh: keep the compact text-strip style, but always show it instead
+       of hiding it behind a tap): SUPERSEDES the tap-to-reveal pair this
+       replaced (display:none by default, display:flex only with #tilesDate
+       .expanded) -- now unconditionally display:flex, same as desktop already
+       does (.day-hero-more stays display:contents on both, so this was always
+       just a mobile-only gate on top of that). The base .num-group-strip rule
+       above already renders it as one compact flat row (flex-wrap, small type,
+       gold-tinted card) — same look mobile already had, just always on instead
+       of tap-gated. The old floating-overlay-only-while-expanded treatment
+       further down is gone too (see its own note) since there's no longer an
+       open/closed state to overlay in the first place. */
+    .day-hero-more .num-group-strip { display: flex; }
     /* 2026-08-04 (Step 2 re-do, Linh: "far too tall... put the date and day on ONE
        compact line, e.g. 'Mon 3 Aug · UD 3'... remove the orphaned moon emoji floating
        alone... keep the cosmic panels but make them compact"): SUPERSEDES the whole
@@ -848,11 +859,13 @@
        at top:100%, so it now overlays whatever is below instead of pushing it down.
        #tilesDate never grows; the schedule underneath never moves. Tap-outside-to-close
        is a small document click listener near the toggle handler (now on #udBadge). */
-    #tilesDate.expanded .day-hero-more .num-group-strip {
-      display: flex; position: absolute; top: 100%; left: 0; right: 0; margin-top: 8px;
-      z-index: 220; width: auto;
-      box-shadow: 0 16px 40px -12px rgba(0,0,0,0.55);
-    }
+    /* 2026-08-10 (STEP 5): the old expanded-only floating-overlay rule that used to
+       live here (position:absolute, anchored to .day-row2's top:100%) is gone --
+       the strip is unconditionally display:flex now (see above), so it's a plain
+       in-flow child of .day-row2's own flex-wrap: it simply wraps onto its own row
+       when the line is full, picking up .day-row2's existing `gap: 4px 10px` for
+       spacing, same as any other wrapped item in that row. Nothing floats over the
+       timeline any more since there's no open/closed state left to float open. */
     /* mascot now lives INSIDE numGroupStrip (mobile, via JS) -- flex-basis:100% drops it
        to its own line under the PM/sign/animal/birthday/imprint row (that row keeps its
        normal flex-wrap), and its own border/background come off since the panel's own
@@ -876,16 +889,20 @@
        animal, birthday and imprint (all inside .num-group-strip) were 3 different sizes
        before this; 12px value text + a matching .dab-name label now reads as one
        consistent set. */
-    #tilesDate.expanded .num-group-strip .date-pm,
-    #tilesDate.expanded .day-astro-bits {
+    /* 2026-08-10 (STEP 5): unconditional now -- was gated behind #tilesDate.expanded
+       back when this row only ever existed in its tapped-open state; now that the
+       strip is always visible (see above) that gate is dead weight, so these are
+       just plain .num-group-strip child rules like the rest of this block. */
+    .num-group-strip .date-pm,
+    .day-astro-bits {
       font-size: 12px;
     }
     /* 2026-08-06 (Linh: "make the emoji icons slightly larger"): birthday/imprint no
        longer carry a text label (icon-only, see renderImprint/renderBirthdayWidget) so
        .date-mini-badge's font-size IS the emoji's rendered size -- kept out of the 12px
-       reset above so the base bump (.date-mini-badge, ~line 970) isn't cancelled here,
-       since this expanded state is the only way this row is ever seen on her phone. */
-    #tilesDate.expanded .date-mini-badge {
+       reset above so the base bump (.date-mini-badge, ~line 970) isn't cancelled here.
+       2026-08-10 (STEP 5): unconditional now, same reasoning as the pair above. */
+    .date-mini-badge {
       font-size: 16px;
     }
   }
@@ -4473,6 +4490,14 @@
   /* --- add form --- */
   .add-row { display: flex; justify-content: center; margin-top: 26px; }
   .add-btn { border: 1px dashed var(--note-line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 8px 20px; font-size: 13px; cursor: pointer; font-family: var(--font-body); }
+  /* 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view" job):
+     #addRow's own button only measures ~26px tall at this padding/font-size --
+     under CLAUDE.md's 44px tap-target minimum, newly relevant now that "Add to this
+     day" shows on mobile (a touch device) for the first time. Same invisible ::before
+     hit-area expansion already used for .addform-head-close/-save -- widens the
+     TAPPABLE area only, .add-btn's own visual size (used elsewhere too) is untouched. */
+  #addRow .add-btn { position: relative; }
+  #addRow .add-btn::before { content: ""; position: absolute; inset: -9px; }
   .add-btn:hover { color: var(--margin-rule); border-color: var(--margin-rule); }
   .add-btn:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
   .add-form { margin-top: 26px; background: var(--note-bg); border: 1px solid var(--note-line); border-radius: 4px; padding: 18px 20px; box-shadow: var(--shadow); display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
@@ -7937,20 +7962,14 @@
       width: 30px; height: 30px; font-size: 13px;
       border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
     }
-    /* 2026-08-06 (Linh: "the chevron is too small, give the panel an icon of a star next
-       to the search magnifying button"): shares .jump-btn's 30px circle (class is on the
-       element, see the DAY page markup) so it reads as part of the same icon set as
-       search/theme-toggle, not a one-off. Only un-hidden on the Day page -- the panel it
-       toggles (#tilesDate.expanded) doesn't exist anywhere else. Gold highlight while open
-       mirrors the chevron's own rotate-when-open cue, so either affordance tells you the
-       panel's current state. */
-    body[data-view="day"] .num-star-btn { display: inline-flex; align-items: center; justify-content: center; }
-    /* 2026-08-06 (Linh: "star icon make it firey coloured"): a warm ember tone for the
-       glyph itself, distinct from the gold it switches to once the panel is actually
-       open (that gold-on-open cue is unchanged -- still the same "you're viewing this"
-       signal every other toggle in the header uses). */
-    .num-star-btn { color: #E8703A; border-color: color-mix(in oklab, #E8703A 55%, var(--note-line)); }
-    .num-star-btn[aria-pressed="true"] { color: var(--cosmic-gold); border-color: var(--cosmic-gold); }
+    /* 2026-08-10 (STEP 5): the Day-page un-hide rule that used to live here
+       (body[data-view="day"] .num-star-btn { display: inline-flex... }) is gone --
+       the panel this button opened doesn't exist any more (see the STEP 5 note
+       near the old toggleNumPanel()), so it stays under the base .num-star-btn
+       { display: none; } rule (and its own `hidden` attribute) everywhere now,
+       same as its retired sibling #expandModeBtn. Its colour rules below are
+       harmless leftovers (never apply to a display:none element) -- left as-is
+       rather than deleted, per the reversible-disable convention. */
     /* legacy sub-tabs row: retired on mobile (categories live in the BK33 drawer
        instead), never populated here -- keep an empty box from eating space in the row. */
     .nav-tiers #subTabs:empty { display: none; }
@@ -8036,6 +8055,17 @@
     .patients-nudge:hover {
       background: var(--note-bg); color: var(--ink); box-shadow: none;
     }
+    /* 2026-08-10 (STEP 5): #addBtn ("Add to this day") wasn't picking up the flat
+       GCal-style override two rules above despite .patients-above-day .add-btn
+       matching and out-specificity-ing the GG33 gold-on-black pass -- newly
+       relevant now that this button shows on mobile at all (was display:none
+       here before). An ID selector settles it outright regardless of whatever
+       else is contending for the class-based one. */
+    #addBtn {
+      background: var(--field-bg); color: var(--ink); border: 1px solid var(--note-line);
+      font-weight: 600; box-shadow: none;
+    }
+    #addBtn:hover { background: var(--note-bg); color: var(--ink); box-shadow: none; }
     /* 2026-08-02 (header cleanup, "give the pill buttons the same height, corner radius
        and spacing"): Today/Earlier/Later/Today's-Patients were four different button
        styles before this pass (patients-nudge was a small uppercase work-blue badge with
@@ -8196,13 +8226,19 @@
   }
   /* 2026-08-06 (Linh: "move the arrows to Today when opened from tapping day date" +
      "remove later hours button completely"): .toprow is gone (see the DAY page markup),
-     so there's no third row to merge here any more -- .patients-above-day and
-     .section-head stay collapsed on mobile (Today's Patients lives in the date dropdown,
-     "The day" heading/Add-to-this-day trigger were already hidden here before this pass),
-     and the timeline (#qaSlotDay's sibling) just follows directly after the date/
-     numerology header. */
+     so there's no third row to merge here any more -- .section-head stays collapsed on
+     mobile ("The day" heading/date restate/expand-hours control are all redundant once
+     the real date is already visible up top on a single-column phone layout; see its
+     own markup comment), and the timeline (#qaSlotDay's sibling) just follows directly
+     after the date/numerology header and the action group below it.
+     2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view" job,
+     Linh: show "Add to this day" on mobile too): SUPERSEDES .patients-above-day's own
+     entry in this hide rule -- it used to be collapsed here same as .section-head
+     (Add-to-this-day had no visible trigger on phone at all); now visible everywhere,
+     joining the command-bar/progress/fasting action group (see .day-main's markup and
+     placeDeskGrid()'s STEP 5 additions for ≥1024px). */
   @media (max-width: 640px) {
-    .day-main > .patients-above-day, .day-main > .section-head { display: none; }
+    .day-main > .section-head { display: none; }
     #qaSlotDay { order: -200; }
   }
   /* 2026-08-02 (Linh code44: "cant read" -> "colour contrast poor"): .mini-cal-wrap
@@ -9414,14 +9450,29 @@
     /* the emptied old containers take no space */
     .day-row2 { display: none; }
     .day-layout { display: block; margin: 0; }
-    /* centre: the day is the hero — its pieces stack tight under the command bar.
-       2026-08-05 (Linh: "calendar looks horrible"): the old flex-direction:column
-       override here inherited align-items:flex-start from the base .day-main rule,
-       so every child shrank to content width — the timeline collapsed to the 78px
-       gutter (event blocks crushed into a ~2px strip, invisible) and the fasting
-       bar clipped its own text. The base wrap-row + flex-basis:100% children
-       already stack every piece full-width; no override needed. */
-    #deskColMain #dayProgress { margin: 0; }
+    /* centre: the day is the hero — the timeline itself is the only thing left here
+       once the command bar/progress/add-button/fasting move into the left column
+       (STEP 5, right below) -- the base wrap-row + flex-basis:100% children already
+       stack the remainder full-width; no override needed. */
+    /* 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view"
+       job, Linh: "command-bar/progress/add-button/fasting into the left column"):
+       these 4 pieces join #tilesDate/#railNum/#railCycle in the same 290px
+       #deskColLeft (see placeDeskGrid()'s STEP 5 additions) -- their existing
+       styling was tuned for the much wider .day-main column, so a few things need
+       a compact-column pass here same as #tilesDate/.page-head just above.
+       #dayProgress's own margin reset moves here from its old #deskColMain
+       location (dead selector now that it's never a deskColMain descendant). */
+    #deskColLeft #dayProgress { margin: 0; }
+    /* the quick-add bar's 3 buttons (Add / 🔍 Search / 🔮 Best day) plus its text
+       input don't fit in one row at 290px (they're tuned for .day-main's full
+       width) -- wrap the buttons onto their own row under the input instead of
+       letting the last one overflow the column. */
+    #deskColLeft .quick-add { flex-wrap: wrap; }
+    #deskColLeft .qa-field { flex: 1 1 100%; }
+    /* the fasting bar's amount text ("14h 22m elapsed") also doesn't fit beside
+       the label+track at 290px -- same wrap treatment, its own row sits fine
+       since .fast-bar-row is already flex with wrap-friendly children. */
+    #deskColLeft .fast-bar-row { flex-wrap: wrap; }
   }
 
   /* ============================================================
@@ -9685,13 +9736,14 @@
     <div class="topbar-right">
       <!-- 2026-08-06 (Linh: "the chevron is too small, give the panel an icon of a star
            next to the search magnifying button" then "move star icon to the left of the
-           search bar"): a second, bigger way to open the same #tilesDate.expanded
-           numerology/astrology panel #udBadge already toggles -- see the shared
-           toggleNumPanel() near that listener. Day-page-only and mobile-only (base
-           .num-star-btn rule hides it; the mobile media query un-hides it, gated on
-           body[data-view="day"] since the panel it opens only exists in the Day page's
-           own markup -- showing it elsewhere would be a dead button). -->
-      <button type="button" class="jump-btn num-star-btn" id="numStarBtn" title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
+           search bar"): a second, bigger way to open the numerology/astrology panel
+           #udBadge used to toggle. 2026-08-10 (STEP 5, "keep the compact text-strip
+           style but always show it"): the panel it opened is gone -- #numGroupStrip is
+           unconditionally visible now, nothing left to toggle. Hidden rather than
+           deleted, per the reversible-disable convention (see #expandModeBtn for the
+           same pattern) -- its click listener is gone too, see the STEP 5 note near
+           the old toggleNumPanel(). -->
+      <button type="button" class="jump-btn num-star-btn" id="numStarBtn" hidden title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
       <!-- 2026-08-04 (Linh: "move the magnifier out of top-right, into the chapter
            dropdown as the last item"): the ⌕ button that used to live here is gone --
            search now lives at the bottom of #categoryTabs' own drawer (see
@@ -11250,6 +11302,16 @@
              picker, listeners and all) into whichever calendar view is active; Week and
              Month have matching qa-slot divs (Linh 2026-07-23: "include the quick add
              bar to week and month page") -->
+        <!-- 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day
+             view" job, Linh: "command-bar/progress/add-button/fasting into the
+             left column"): qaSlotDayHome/dayProgressHome/addRowHome/fastStatusHome
+             mark each piece's true/default position here in .day-main -- at
+             ≥1024px placeDeskGrid() pulls all 4 into #deskColLeft (joining the
+             date/cosmic/numerology/cycle info already there); below 1024px
+             (tablet AND mobile share this single stacked column, so no separate
+             per-breakpoint logic is needed there) they simply render in this
+             order already, no JS involved. -->
+        <div id="qaSlotDayHome" hidden></div>
         <div class="qa-slot" id="qaSlotDay"><div id="qaZone">
         <form class="quick-add" id="quickAdd">
           <div class="qa-field">
@@ -11280,6 +11342,8 @@
           <div id="dpResults"></div>
         </div>
         </div></div>
+        <div id="dayProgressHome" hidden></div>
+        <div id="dayProgress"></div>
         <!-- 2026-08-02 (Linh: "move this above the day calendar view") — mandarinCard
              and birthdayWidget used to sit between the quick-add bar and the timeline,
              putting visible daylight between "Today ‹›" / Add-Search-Best-day and the
@@ -11308,6 +11372,7 @@
              live dot moved to a fixed bottom-right position (see badge()) --
              nothing left to occupy this row, so the row itself is deleted rather than left
              standing empty. -->
+        <div id="addRowHome" hidden></div>
         <div class="patients-above-day">
           <div class="add-row" id="addRow">
             <button class="add-btn" id="addBtn">✎ Add to this day</button>
@@ -11358,6 +11423,7 @@
              briefly lived here -- accidental taps while scrolling were ending her fast.
              Display-only now; start/stop stays on the Fasting page, and a small Resume
              chip appears in the sub-line when a fast ended in the last few hours. -->
+        <div id="fastStatusHome" hidden></div>
         <div class="fast-status" id="fastStatus" role="button" tabindex="0" aria-label="Open the Fasting page">
           <div class="spend-bar-row fast-bar-row" id="fastBarRow">
             <span class="sb-label"><span class="fast-dot"></span>Fasting</span>
@@ -11456,8 +11522,6 @@
           <div class="pileup-sub">Slipped past their day — do it, move it, or let it go.</div>
           <div id="pileupList"></div>
         </div>
-        <div id="dayProgressHome" hidden></div>
-        <div id="dayProgress"></div>
         <div id="alsoToday"></div>
 
         <!-- #addRow (the "Add to this day" trigger) moved above "The day" section-head,
@@ -25621,38 +25685,14 @@
     localStorage.setItem(THEME_KEY, next);
     syncThemeToggleIcon();
   });
-  // 2026-08-02 (mobile hero collapse): #tilesDate persists across day navigation
-  // (renderDay only repopulates the ID'd children inside it, never recreates the
-  // node), so this class toggle naturally stays put as she moves between days —
-  // no extra state to track.
-  // 2026-08-06 (Linh: "remove the numerology dropdown button, make UD3 the dropdown"):
-  // SUPERSEDES the old #dayHeroToggle button listener -- #udBadge is the tap target now.
-  // Mobile-only: on desktop num-group-strip is always shown (no toggle exists there), and
-  // #udBadge already has its own .num-hover-trigger popover (Universal Day + task chips,
-  // see the renderDay() populate call) that still works via hover/click same as before --
-  // this listener only intercepts the click (stopPropagation, before it reaches the
-  // generic .num-hover-trigger delegate below) when isMobile(), so the two behaviours
-  // don't collide: desktop keeps the little popover, mobile gets the panel toggle.
-  // 2026-08-06 (Linh: "give the panel an icon of a star next to the search button"):
-  // #udBadge and #numStarBtn now both open/close the SAME panel -- shared toggle so
-  // #numStarBtn's aria-pressed (its gold-highlight "open" cue, see the mobile CSS) always
-  // matches the panel's real state no matter which trigger (or the outside-click closer
-  // below) last changed it.
-  function toggleNumPanel() {
-    const el = document.getElementById("tilesDate");
-    if (!el) return;
-    const open = el.classList.toggle("expanded");
-    document.getElementById("numStarBtn")?.setAttribute("aria-pressed", String(open));
-  }
-  document.getElementById("udBadge").addEventListener("click", (e) => {
-    if (!isMobile()) return;
-    e.stopPropagation();
-    toggleNumPanel();
-  });
-  document.getElementById("numStarBtn")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleNumPanel();
-  });
+  // 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view"
+  // job, Linh: keep the compact text-strip style but always show it): SUPERSEDES
+  // the #udBadge/#numStarBtn tap-to-toggle pair that used to live here --
+  // #numGroupStrip is unconditionally visible now (see the mobile CSS), so
+  // there's no panel left to open/close. #udBadge's mobile-only click intercept
+  // is gone, so it falls back to its normal .num-hover-trigger popover on every
+  // width, same as desktop always had. #numStarBtn (the ★ button that existed
+  // solely to open this panel) is hidden in the markup -- see its own note.
 
   /* ============================================================
      DESKTOP HEADER + RIGHT RAIL — 2026-08-04 (desktop styling spec). All ≥641px
@@ -25708,11 +25748,20 @@
      #deskGrid scaffold; below it every element returns to its phone-layout home
      via the anchor markers, so mobile is byte-identical. This is a re-layout of
      the same components — no logic is duplicated anywhere.
-       left  ← #tilesDate (numerology strip) + #railNum + #railCycle, under the
-               once-only date card (#deskDateCard, filled by renderDeskHead) with
-               the existing ‹ Today › .date-drop-nav moved in under it
-       centre← .day-main (command bar, fasting, timeline) with #dayProgress
-               slotted in after the command bar
+       left  ← #tilesDate (numerology strip) + #railNum + #railCycle (the "where
+               am I today" info, under the once-only date card #deskDateCard,
+               with the existing ‹ Today › .date-drop-nav moved in under it),
+               THEN the command bar + #dayProgress + Add-to-this-day + fasting
+               bar — 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle
+               fix + day view" job, Linh: "command-bar/progress/add-button/
+               fasting into the left column"): these 4 used to live at the top
+               of the centre column; now they join the info group in the left
+               column instead, via qaSlotDayHome/dayProgressHome/addRowHome/
+               fastStatusHome (their true/default homes, inside .day-main —
+               see the markup there). Below 1024px they're already in that
+               order in .day-main by default, no JS needed for tablet/mobile.
+       centre← .day-main (chain chips, outcome prompts, the timeline itself —
+               now genuinely just the calendar, once the 4 pieces above leave it)
        right ← .day-side (mini calendar first, patients right after, then the
                rest of the rail: herb alerts, also-today, shopping…)
        top   ← the B33 logo + icon toolbar join .nav-tiers; #deskHead hides
@@ -25741,6 +25790,11 @@
     const progHome = document.getElementById("dayProgressHome");
     const railHome = document.getElementById("railHome");
     const qa = document.getElementById("qaSlotDay");
+    const qaHome = document.getElementById("qaSlotDayHome");
+    const addRowEl = document.querySelector("#dayPage .patients-above-day");
+    const addRowHome = document.getElementById("addRowHome");
+    const fastEl = document.getElementById("fastStatus");
+    const fastHome = document.getElementById("fastStatusHome");
     const logo = document.querySelector(".desk-logo");
     const tools = document.querySelector(".desk-tools");
     const navTiers = document.querySelector(".nav-tiers");
@@ -25755,7 +25809,14 @@
       if (rNum && rNum.parentElement !== colL) colL.appendChild(rNum);
       if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
       if (dayMain && dayMain.parentElement !== colM) colM.appendChild(dayMain);
-      if (prog && qa && prog.previousElementSibling !== qa) qa.insertAdjacentElement("afterend", prog);
+      // STEP 5: command-bar/progress/add-button/fasting join the info group in
+      // colL, in that literal order — pulled out of .day-main (which has
+      // already been moved into colM above; DOM position of the parent doesn't
+      // matter, these are independent moves).
+      if (qa && qa.parentElement !== colL) colL.appendChild(qa);
+      if (prog && prog.parentElement !== colL) colL.appendChild(prog);
+      if (addRowEl && addRowEl.parentElement !== colL) colL.appendChild(addRowEl);
+      if (fastEl && fastEl.parentElement !== colL) colL.appendChild(fastEl);
       if (daySide && daySide.parentElement !== colR) colR.appendChild(daySide);
       const wrap = document.getElementById("miniCalWrap");
       if (wrap && rPat && wrap.parentElement === daySide && rPat.previousElementSibling !== wrap)
@@ -25768,7 +25829,12 @@
       if (dropNav && dropPop && dropNav.parentElement !== dropPop) dropPop.insertBefore(dropNav, dropPop.firstChild);
       if (tiles && row2 && tiles.parentElement !== row2) row2.insertBefore(tiles, calHome);
       if (railHome && rNum && rCyc && rPat && railHome.nextElementSibling !== rNum) railHome.after(rNum, rCyc, rPat);
+      // STEP 5: return each piece to its own home anchor inside .day-main —
+      // independent of dayMain's own move below, same as every other anchor pair here.
+      if (qaHome && qa && qaHome.nextElementSibling !== qa) qaHome.after(qa);
       if (progHome && prog && progHome.nextElementSibling !== prog) progHome.after(prog);
+      if (addRowHome && addRowEl && addRowHome.nextElementSibling !== addRowEl) addRowHome.after(addRowEl);
+      if (fastHome && fastEl && fastHome.nextElementSibling !== fastEl) fastHome.after(fastEl);
       if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
       if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
     }
@@ -25940,18 +26006,9 @@
     t.click();
     e.currentTarget.setAttribute("aria-pressed", String(t.classList.contains("pop-open")));
   });
-  // 2026-08-05 (Part 1 header redo, "tap outside to close"): the cosmic panel now floats
-  // over the schedule (see the #numGroupStrip position:absolute rule) instead of pushing
-  // it down, so it needs its own dismiss -- a tap anywhere outside #tilesDate closes it.
-  // stopPropagation() on the toggle listeners above keeps their own open/close click from
-  // reaching this listener and immediately re-closing what it just opened.
-  document.addEventListener("click", (e) => {
-    const el = document.getElementById("tilesDate");
-    if (!el || !el.classList.contains("expanded")) return;
-    if (el.contains(e.target)) return;
-    el.classList.remove("expanded");
-    document.getElementById("numStarBtn")?.setAttribute("aria-pressed", "false");
-  });
+  // 2026-08-10 (STEP 5): the "tap outside to close" dismiss that used to live here
+  // (for the #numGroupStrip floating panel) is gone along with the panel itself --
+  // see the toggle-removal note above.
 
 
   document.getElementById("toHealthTab")?.addEventListener("click", () => { state.view = "health"; render(); });
