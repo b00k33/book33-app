@@ -22890,27 +22890,17 @@
      showRtnDeleteUndo()/the undo toast are unchanged, just triggered from
      there instead of a row's × icon.
      ============================================================ */
-  // one-step undo for an accidental routine delete (Linh 2026-07-27) — holds only
-  // the single most recent delete; a second delete replaces it, matching the
-  // quick-add undo's one-shot pattern elsewhere in the app
-  let lastDeletedRoutine = null;
+  // 2026-08-09 (STEP 3, "Book33 — Add box, toggle, undo, cycle fix + day view"
+  // job): was its own inline 12s note (Linh 2026-07-27) -- now a thin wrapper
+  // over the shared 6s undo snackbar every other delete in the app uses (see
+  // showUndoSnackbar above tryTlDelete). Same name, same two call sites
+  // (rtnActDelete, rtnDeleteBtn), just one consistent undo UI everywhere.
   function showRtnDeleteUndo(routine) {
-    lastDeletedRoutine = routine;
-    const el = document.getElementById("rtnDeleteNote");
-    if (!el) return;
-    el.hidden = false;
-    el.innerHTML = `Deleted "${esc(routine.title)}". <button type="button" class="tab-link" id="rtnUndoDelBtn">Undo</button>`;
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.hidden = true; lastDeletedRoutine = null; }, 12000);
+    showUndoSnackbar(`Deleted "${routine.title}"`, () => {
+      ROUTINE_TASKS.push(routine);
+      saveRoutines(); renderRoutines(); renderDay();
+    });
   }
-  document.addEventListener("click", e => {
-    if (!e.target.closest("#rtnUndoDelBtn") || !lastDeletedRoutine) return;
-    ROUTINE_TASKS.push(lastDeletedRoutine);
-    lastDeletedRoutine = null;
-    saveRoutines(); renderRoutines(); renderDay();
-    const el = document.getElementById("rtnDeleteNote");
-    if (el) { el.hidden = true; clearTimeout(el._t); }
-  });
   // a leading pictographic emoji (optionally ZWJ-joined, optional variation
   // selector) plus its trailing space — used to pull the tile glyph off the
   // front of a title and show the rest without repeating it.
@@ -32055,9 +32045,10 @@
 
   /* ---- config ---------------------------------------------------------- */
   // Connection baked in (the anon/publishable key is public by design — safe to
-  // embed; row-level security is what actually protects the data). Same project
-  // as the pharmacy, different table. No device ever sees a "Connect" screen.
-  var BAKED = { url: "https://jkpfhqaxhsiwtijxxzql.supabase.co", key: "sb_publishable_td_6_5ACewMZq8fVEB3Gww_KB-EDlYY" };
+  // embed; row-level security is what actually protects the data). 2026-08-09:
+  // own project now, split off from LCM (the pharmacy's project) so the two
+  // apps don't share infra. No device ever sees a "Connect" screen.
+  var BAKED = { url: "https://mqaswzpuqqlujfhooplm.supabase.co", key: "sb_publishable_gFBGAJ2dEPN78SEufKtWCw_D1IiDAuJ" };
   function loadCfg() {
     if (BAKED.url && BAKED.key) return BAKED;
     try { var c = JSON.parse(localStorage.getItem(CFG_KEY)); if (c && c.url && c.key) return c; } catch (e) {}
