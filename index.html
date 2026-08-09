@@ -4150,6 +4150,75 @@
     color: var(--ink-faint); font-weight: 700; border-top: none;
   }
   .rtg-group-row:first-child td { padding-top: 6px; }
+  /* 2026-08-09 (Linh, "Routines page mobile layout — table -> cards": names cut to
+     "CB…", the EVENT tag overlapping the schedule, Repeats wrapping into tall
+     vertical text, Time reading "1.."/"7.."): below 640px the 7-column table simply
+     doesn't have the width for any of its columns, so #rtnCards renders the exact
+     same rtnGridRows() order as flat stacked cards instead — #rtnGrid/#rtnCards
+     visibility is a pure CSS breakpoint (see the two media queries below), both
+     stay in the DOM so nothing needs to re-render on resize. Reuses .rtg-dot/
+     .rtg-phase/.rtg-auto-switch/.rtg-ic verbatim rather than inventing parallel
+     styles for the same things. */
+  #rtnCards { display: flex; flex-direction: column; gap: 10px; }
+  .rtn-card {
+    background: var(--raised); border-radius: 13px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 7px; cursor: pointer;
+  }
+  .rtn-card-line1, .rtn-card-line2, .rtn-card-line3 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  /* Line 1 (Linh: "no truncated names"): a single nowrap+ellipsis line cut off
+     names as short as "D — No work, no Pilates" once the dot + Auto switch + ⋯
+     shared the row -- clamped to 2 lines instead so only a genuinely long name
+     ever ellipses (line-clamp's own overflow rule), and top-aligned so the
+     switch/menu sit beside the FIRST line rather than centred against the whole
+     wrapped block. */
+  .rtn-card-line1 { align-items: flex-start; }
+  .rtn-card-line1 .rtg-dot { margin-top: 4px; }
+  .rtn-card-name {
+    font-weight: 700; font-size: 14.5px; line-height: 1.25; color: var(--ink); flex: 1 1 auto; min-width: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .rtn-card-line1-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex: none; }
+  .rtn-card-line2 { font-size: 12px; color: var(--ink-soft); flex-wrap: wrap; row-gap: 4px; }
+  .rtn-card-track { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .rtn-card-time { margin-left: auto; flex: none; font-weight: 600; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .rtn-card-days { display: flex; gap: 4px; flex: none; }
+  .rtn-card-day {
+    width: 18px; height: 18px; border-radius: 5px; background: var(--field-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: var(--ink-faint);
+  }
+  .rtn-card-day.on { background: var(--accent-seed); color: var(--ink-bright); }
+  .rtn-card-note {
+    margin-left: auto; font-size: 11px; color: var(--ink-faint); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
+  .rtn-card-note-solo { margin-left: 0; }
+  .rtn-card-group-head {
+    padding: 12px 2px 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-faint); font-weight: 700;
+  }
+  .rtn-card-group-head:first-child { padding-top: 0; }
+  .rtn-card-add {
+    height: 44px; box-sizing: border-box; border: 1px dashed var(--margin-rule); border-radius: 13px;
+    background: none; color: var(--margin-rule); font-size: 13.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .rtn-card-add:hover { background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
+  /* the inline editor's own dock, same .rtn-inline-dock/.rtn-inline-anchor pair the
+     Table/List/Board views already use (see rtnInlineRedock) -- .rtn-inline-anchor
+     just needs to read as "this is the one being edited" on a card too. */
+  #rtnCards .rtn-inline-anchor { box-shadow: inset 0 0 0 1.5px var(--accent-seed); }
+  @media (min-width: 640px) {
+    #rtnCards { display: none; }
+  }
+  @media (max-width: 639px) {
+    #rtnGrid { display: none; }
+    /* toolbar compaction (brief: "full-width search + a single Group control, List/
+       Table toggle can hide on phone since cards are the mobile view") */
+    #routinesPage .rtg-toolbar .rtg-search { flex: 1 1 100%; }
+    #routinesPage .rtg-toolbar .rtg-grp { flex: 1 1 100%; }
+    #routinesPage .rtg-toolbar #rtnViewPicker { display: none; }
+  }
   /* Routines page compaction (2026-08-06, Linh + desktop screenshot: "make content
      more compact"): page-scoped (#routinesPage prefix, her preferred pattern) — the
      page was one sparse full-width column on desktop. Chains flow as a multi-column
@@ -10092,6 +10161,10 @@
     <div id="rtnManage" hidden></div>
     <div id="rtnTable" hidden></div>
     <div id="rtnGrid"></div>
+    <!-- 2026-08-09 ("table -> cards on mobile"): the Table view's own responsive
+         rendering below 640px -- same rtnGridRows() order as #rtnGrid, just a
+         different template; the CSS breakpoint below decides which one shows. -->
+    <div id="rtnCards"></div>
     <!-- docked side editor (>=1024px): placeRtnForm() moves #rtnAddForm into the body
          here whenever an edit/add opens on desktop — same page, no popup, no scroll-away -->
     <aside class="rtn-side" id="rtnSide" hidden>
@@ -22267,6 +22340,10 @@
     document.getElementById("rtnManage").hidden = rtnListMode !== "list";
     document.getElementById("rtnTable").hidden = rtnListMode !== "board";
     document.getElementById("rtnGrid").hidden = rtnListMode !== "table";
+    // #rtnCards shares rtnGrid's own hidden condition -- which of the two actually
+    // shows at that point is a CSS breakpoint call, not a JS one (see the media
+    // queries next to .rtn-card).
+    document.getElementById("rtnCards").hidden = rtnListMode !== "table";
     renderRtnTable();
     renderRtnGrid();
     // shared Routine Library toolbar (rtgSearch/rtgGroupBy live in static markup
@@ -22609,15 +22686,16 @@
     if (t.freq === "monthly") return "Every month";
     return "Ongoing";
   }
-  function renderRtnGrid() {
-    const host = document.getElementById("rtnGrid");
-    if (!host || rtnListMode !== "table") return;
-    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
-    closeRtnMoreMenu();  // its anchor button is about to be destroyed too
-    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
+  // shared by the Table and Card renderers below (2026-08-09, "table -> cards on
+  // mobile"): same search/sort/group state, same resulting order, just two
+  // different templates over it -- factored out so neither can drift from the
+  // other's filtering. Returns null when the search has no matches (both
+  // renderers show the same "no routines match" message in that case); otherwise
+  // an array of {label, items} segments -- one unlabeled segment when ungrouped.
+  function rtnGridRows() {
     const q = rtnGridSearch.trim().toLowerCase();
     const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
-    if (!rows.length) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; return; }
+    if (!rows.length) return null;
     const PHASE_ORDER = { before: 0, during: 1, after: 2 };
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
@@ -22634,6 +22712,37 @@
     };
     rows.sort(sorters[rtnGridSort.col] || sorters.title);
     if (rtnGridSort.dir === -1) rows.reverse();
+    if (rtnGridGroupBy === "none") return [{ label: null, items: rows }];
+    const groupKeyOf = t => rtnGridGroupBy === "track" ? (RTN_TRACK_LABEL[t.track] || "Other")
+      : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
+      : rtnGridMonthGroup(t);   // "month"
+    const groups = new Map();
+    rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+    return [...groups.entries()].map(([label, items]) => ({ label, items }));
+  }
+  // a routine's own active weekdays for the card's day-letter strip -- null when
+  // its freq isn't a day-of-week pattern at all (same cases the List view's own
+  // dowFor already carves out: monthly/yearly/once/interval/numMoney/hair
+  // rotation), in which case the card falls back to routineFreqLabel's text
+  // instead of drawing an empty/meaningless strip.
+  function rtnCardDaysOf(t) {
+    if (HAIR_TYPE_IDS.has(t.id)) return null;
+    if (t.freq === "daily") return [0, 1, 2, 3, 4, 5, 6];
+    if (t.freq === "weekly") { const s = new Set(); schedulesOf(t).forEach(l => (l.weekdays || []).forEach(d => s.add(d))); return [...s]; }
+    return null;
+  }
+  function renderRtnGrid() {
+    renderRtnGridTable();
+    renderRtnCards();
+  }
+  function renderRtnGridTable() {
+    const host = document.getElementById("rtnGrid");
+    if (!host || rtnListMode !== "table") return;
+    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
+    closeRtnMoreMenu();  // its anchor button is about to be destroyed too
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
+    const segments = rtnGridRows();
+    if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; return; }
     const row = t => {
       const phase = rtnGridPhaseOf(t);
       const phaseLbl = phase === "during" ? "event" : phase;
@@ -22671,19 +22780,11 @@
         </div></td>
       </tr>`;
     };
-    let bodyHtml;
-    if (rtnGridGroupBy === "none") {
-      bodyHtml = rows.map(row).join("");
-    } else {
-      const groupKeyOf = t => rtnGridGroupBy === "track" ? (RTN_TRACK_LABEL[t.track] || "Other")
-        : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
-        : rtnGridMonthGroup(t);   // "month"
-      const groups = new Map();
-      rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
-      bodyHtml = [...groups.entries()].map(([k, list]) =>
-        `<tr class="rtg-group-row"><td colspan="${RTG_COLS.length}">${esc(k)}</td></tr>${list.map(row).join("")}`
-      ).join("");
-    }
+    const bodyHtml = segments.length === 1 && segments[0].label == null
+      ? segments[0].items.map(row).join("")
+      : segments.map(({ label, items }) =>
+          `<tr class="rtg-group-row"><td colspan="${RTG_COLS.length}">${esc(label)}</td></tr>${items.map(row).join("")}`
+        ).join("");
     const th = (col, label) => {
       const arrow = rtnGridSort.col === col ? (rtnGridSort.dir === 1 ? "▲" : "▼") : "↕";
       return `<th data-rtg-sort="${col}" class="${rtnGridSort.col === col ? "sorted" : ""}">${label} <span class="c">${arrow}</span><span class="rtg-col-resize" data-rtg-resize="${col}" aria-hidden="true"></span></th>`;
@@ -22802,12 +22903,7 @@
     const autoSw = e.target.closest("[data-rtg-auto]");
     if (autoSw) {
       const t = ROUTINE_TASKS.find(x => x.id === autoSw.dataset.rtgAuto);
-      if (t) {
-        t.autoCalendar = !t.autoCalendar;
-        saveRoutines();
-        autoSw.classList.toggle("on", t.autoCalendar);
-        autoSw.setAttribute("aria-checked", String(t.autoCalendar));
-      }
+      if (t) { t.autoCalendar = !t.autoCalendar; saveRoutines(); rtnSyncAutoSwitches(t.id, t.autoCalendar); }
       return;
     }
     const moreBtn = e.target.closest("[data-rtg-more]");
@@ -22829,6 +22925,110 @@
     if (!row) return;
     const t = ROUTINE_TASKS.find(x => x.id === row.dataset.rtgRow);
     if (t) openRtnFormInline(t, "table");
+  });
+  // one Auto switch can exist in both the Table row AND the Card for the same
+  // routine at once (only one is ever VISIBLE at a time below/above 640px, but
+  // both stay in the DOM -- see the CSS breakpoint) -- toggling either must keep
+  // both in sync without a full re-render, same "instant, no editor round-trip"
+  // reasoning the Table's own handler already documents.
+  function rtnSyncAutoSwitches(id, on) {
+    document.querySelectorAll(`[data-rtg-auto="${CSS.escape(id)}"]`).forEach(sw => {
+      sw.classList.toggle("on", on);
+      sw.setAttribute("aria-checked", String(on));
+    });
+  }
+  // ---- Routine cards (2026-08-09, "table -> cards on mobile"): below 640px the
+  // 7-column table is crushed (truncated names, wrapped Repeats text, overlapping
+  // Auto/Time) -- this renders the SAME rtnGridRows() order as stacked cards
+  // instead. Both #rtnGrid and #rtnCards stay in the DOM at all times; the CSS
+  // breakpoint (not JS) decides which one is visible, so nothing needs to
+  // re-render on resize (see the .rtn-card/#rtnGrid media queries).
+  function rtnCardAddHtml() {
+    return `<button type="button" class="rtn-card-add" data-rtn-card-add>＋ Add routine</button>`;
+  }
+  // Line 3: a fixed square carries a day, not a time, so it can only speak for a
+  // routine with ONE time. A single-layer weekly/daily routine's time is already
+  // on Line 2, so the strip alone is enough; a multi-layer routine calls out each
+  // extra layer's own day+time next to it instead ("+ Wed 2pm") since the square
+  // can't. Non-day-based freqs (monthly/yearly/once/interval/hair rotation) have
+  // no strip to draw at all -- routineFreqLabel's own text carries the cadence
+  // instead, same text the Table's Repeats column already shows for them.
+  function rtnCardLine3Html(t) {
+    const days = rtnCardDaysOf(t);
+    if (days === null) {
+      const label = HAIR_TYPE_IDS.has(t.id) ? `Every ${HAIR.intervalDays} days, rotating` : routineFreqLabel(t);
+      return `<div class="rtn-card-line3"><span class="rtn-card-note rtn-card-note-solo">${esc(label)}</span></div>`;
+    }
+    const stripHtml = `<span class="rtn-card-days">${WD_MIN.map((l, i) => `<span class="rtn-card-day${days.includes(i) ? " on" : ""}">${l}</span>`).join("")}</span>`;
+    const layers = t.freq === "weekly" ? schedulesOf(t).filter(l => l.weekdays.length) : [];
+    const noteText = layers.length > 1
+      ? layers.slice(1).map(l => {
+          const dayStr = l.weekdays.slice().sort((a, b) => a - b).map(i => WD_FULL[i].slice(0, 3)).join("/");
+          const time = l.start ? fmtTime(minToTime(timeToMin(l.start))) : "";
+          return `+ ${dayStr}${time ? " " + time : ""}`;
+        }).join(", ")
+      : (days.length === 0 ? "No days set" : "");
+    return `<div class="rtn-card-line3">${stripHtml}${noteText ? `<span class="rtn-card-note">${esc(noteText)}</span>` : ""}</div>`;
+  }
+  function renderRtnCards() {
+    const host = document.getElementById("rtnCards");
+    if (!host || rtnListMode !== "table") return;
+    rtnInlineDetach();
+    closeRtnMoreMenu();
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>${rtnCardAddHtml()}`; return; }
+    const segments = rtnGridRows();
+    if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>${rtnCardAddHtml()}`; return; }
+    const card = t => {
+      const phase = rtnGridPhaseOf(t);
+      const phaseLbl = phase === "during" ? "event" : phase;
+      const timeMin = rtnGridTimeMin(t);
+      const chained = t.anchorTo && chainAnchorOf(t);
+      let timeLabel = "—";
+      if (timeMin != null) {
+        timeLabel = fmtTime(minToTime(timeMin));
+        if (!chained && !Array.isArray(t.schedules) && t.end) {
+          let endMin = timeToMin(t.end);
+          if (endMin < timeMin) endMin += 1440;
+          timeLabel += ` – ${fmtTime(minToTime(endMin % 1440))}`;
+        }
+      }
+      const dot = `<span class="rtg-dot" style="background:var(--${t.track}-seed, var(--ink-faint))"></span>`;
+      return `<div class="rtn-card" data-rtn-card="${esc(t.id)}">
+        <div class="rtn-card-line1">
+          ${dot}<span class="rtn-card-name">${esc(t.title)}</span>
+          <span class="rtn-card-line1-right">
+            <button type="button" class="rtg-auto-switch${t.autoCalendar ? " on" : ""}" data-rtg-auto="${esc(t.id)}" role="switch" aria-checked="${t.autoCalendar ? "true" : "false"}" aria-label="Auto-add ${esc(t.title)} to the calendar"></button>
+            <button type="button" class="rtg-ic" data-rtg-more="${esc(t.id)}" title="More actions" aria-label="More actions for ${esc(t.title)}" aria-haspopup="true">⋯</button>
+          </span>
+        </div>
+        <div class="rtn-card-line2">
+          <span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span>
+          <span class="rtn-card-track">${dot}<span>${esc(RTN_TRACK_LABEL[t.track] || "Other")}</span></span>
+          <span class="rtn-card-time">${timeLabel}</span>
+        </div>
+        ${rtnCardLine3Html(t)}
+      </div>`;
+    };
+    const bodyHtml = segments.length === 1 && segments[0].label == null
+      ? segments[0].items.map(card).join("")
+      : segments.map(({ label, items }) => `<div class="rtn-card-group-head">${esc(label)}</div>${items.map(card).join("")}`).join("");
+    host.innerHTML = bodyHtml + rtnCardAddHtml();
+    rtnInlineRedock("cards");
+  }
+  document.getElementById("rtnCards").addEventListener("click", e => {
+    const autoSw = e.target.closest("[data-rtg-auto]");
+    if (autoSw) {
+      const t = ROUTINE_TASKS.find(x => x.id === autoSw.dataset.rtgAuto);
+      if (t) { t.autoCalendar = !t.autoCalendar; saveRoutines(); rtnSyncAutoSwitches(t.id, t.autoCalendar); }
+      return;
+    }
+    const moreBtn = e.target.closest("[data-rtg-more]");
+    if (moreBtn) { openRtnMoreMenu(moreBtn.dataset.rtgMore, moreBtn); return; }
+    if (e.target.closest("[data-rtn-card-add]")) { openRtnFormInlineNew("cards"); return; }
+    const cardEl = e.target.closest("[data-rtn-card]");
+    if (!cardEl) return;
+    const t = ROUTINE_TASKS.find(x => x.id === cardEl.dataset.rtnCard);
+    if (t) openRtnFormInline(t, "cards");
   });
   // Column-width drag (2026-08-07, Linh: "allow for adjusting table width") -- same
   // pointerdown/move/up-with-capture shape as the Day timeline's block-resize handles
@@ -26243,6 +26443,18 @@
       dock.appendChild(rtnForm);
       return;
     }
+    // Cards' own "+ Add routine" (2026-08-09) sits at the BOTTOM of the list (see
+    // rtnCardAddHtml) rather than the top a fresh table row gets above -- docks
+    // right before that same dashed button instead of prepending, so the editor
+    // opens exactly where she tapped it.
+    if (view === "cards" && rtnInlineId === RTN_NEW) {
+      const addBtn = document.querySelector("#rtnCards [data-rtn-card-add]");
+      let dock = null;
+      if (addBtn) { dock = document.createElement("div"); dock.className = "rtn-inline-dock"; addBtn.before(dock); }
+      if (!dock) { closeRtnForm(); return; }
+      dock.appendChild(rtnForm);
+      return;
+    }
     let anchor = null, dock = null;
     const idSel = CSS.escape(rtnInlineId);
     if (view === "table") {
@@ -26254,6 +26466,9 @@
         anchor.after(tr);
         dock = tr.querySelector(".rtn-inline-dock");
       }
+    } else if (view === "cards") {
+      anchor = document.querySelector(`#rtnCards [data-rtn-card="${idSel}"]`);
+      if (anchor) { dock = document.createElement("div"); dock.className = "rtn-inline-dock"; anchor.after(dock); }
     } else if (view === "list") {
       anchor = document.querySelector(`#rtnManage .rtn-row[data-rtn-edit="${idSel}"]`);
       if (anchor) { dock = document.createElement("div"); dock.className = "rtn-inline-dock"; anchor.after(dock); }
@@ -26290,17 +26505,19 @@
     openRtnForm(task);
     rtnInlineRedock(view);
   }
-  // Table view's "+ Add routine" (rebuild spec, "remove the floating drawer
-  // entirely") -- same shape as openRtnFormInline above but with the RTN_NEW
-  // sentinel standing in for a real task id, since there's no existing row to dock
-  // under yet (see rtnInlineRedock's RTN_NEW branch).
-  function openRtnFormInlineNew() {
+  // "+ Add routine" (rebuild spec, "remove the floating drawer entirely") -- same
+  // shape as openRtnFormInline above but with the RTN_NEW sentinel standing in for
+  // a real task id, since there's no existing row/card to dock under yet (see
+  // rtnInlineRedock's RTN_NEW branches). view defaults to "table" for the page's
+  // top #rtnAddBtn; the cards list's own dashed add row (2026-08-09) passes
+  // "cards" so the editor docks at the bottom of the card list instead.
+  function openRtnFormInlineNew(view = "table") {
     if (rtnInlineId === RTN_NEW) { closeRtnForm(); return; }
     if (rtnInlineId != null) closeRtnForm();
-    rtnInlineId = RTN_NEW; rtnInlineView = "table";
+    rtnInlineId = RTN_NEW; rtnInlineView = view;
     rtnForm.classList.add("rtn-inline-mode");
     openRtnForm(null);
-    rtnInlineRedock("table");
+    rtnInlineRedock(view);
   }
   function closeRtnForm() {
     rtnForm.hidden = true; rtnAddRow.hidden = false;
