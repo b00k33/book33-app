@@ -4578,6 +4578,27 @@
      pairing everywhere else. */
   .rtn-pair { display: flex; gap: 8px; min-width: 0; align-items: end; }
   .rtn-pair > .field { flex: 1 1 auto; min-width: 0; }
+  /* 2026-08-09 (compact tessellated "More options" editor brief): re-sequence the
+     More-options fields so Sub-category pairs with the fitness-tracker link, and
+     Sub-tasks pairs with Also-runs-on, instead of each sitting alone with empty
+     width beside it. `order` (works the same in the default 12-col grid and in
+     .rtn-inline-mode's flex-wrap) moves them visually without touching DOM order --
+     nothing else in this form reads sibling position, so this is layout-only, same
+     as every other change in this brief. Additional-schedule and Note aren't in the
+     brief's row list (both predate it / are explicitly full-width by spec) -- they
+     get the trailing order slots so they still land after the paired rows. */
+  #rtnCategoryField { order: 1; }
+  #rtnFitLinkField { order: 2; }
+  #rtnSubTasksField { order: 3; }
+  #rtnAlsoRunsField { order: 4; }
+  #rtnSchedExtraField { order: 5; }
+  #rtnNoteField { order: 6; }
+  /* the sub-tasks tile grid is normally 2-up at the form's full ~640px width; halved
+     to ~300px in its new paired slot, 2-up would squeeze each tile to ~140px --
+     force 1-up here specifically rather than fight the shared .rtn-sub-grid rule
+     (still 2-up everywhere else it's used, e.g. the Add-routine drawer at full width). */
+  #rtnSubTasksField .rtn-sub-grid { grid-template-columns: 1fr; }
+  #rtnAddForm.rtn-inline-mode .rtn-g6 { min-width: 140px; }
   /* 2026-08-08 (Start+End brief): derived duration, shown only once both times are
      filled (updateRtnDurReadout) -- fitness green per spec, reusing the app's one
      shared "Fitness" token rather than inventing a new colour (see .rtg-auto-switch.on
@@ -4664,9 +4685,19 @@
   /* Part of life would otherwise pack onto the same row as Start/Mins below it (they
      fit width-wise) instead of staying grouped under Name -- forcing it to its own
      full row keeps "Name + track chips" as row 1 regardless of viewport width. */
-  #rtnAddForm.rtn-inline-mode #rtnTrackField { flex: 1 1 100%; }
-  #rtnAddForm.rtn-inline-mode .rtn-g8,
-  #rtnAddForm.rtn-inline-mode #rtnFreqGroup.rtn-g8 { flex: 1 1 62%; }
+  /* 2026-08-09 (compact tessellated editor brief): SUPERSEDES the forced-100% rule
+     above -- Name is now sized rtn-g8 (not .full) specifically so it grows to fill
+     the row instead of Track sitting alone on its own line, and Track takes the
+     plain .rtn-g4 sizing below (no special-case needed) so the two pair up. */
+  #rtnAddForm.rtn-inline-mode .rtn-g8 { flex: 1 1 62%; }
+  /* 2026-08-09 (compact tessellated editor brief): SUPERSEDES the 62% share above --
+     Freq shares its row with the Start/End pair (fixed ~240px), not a full-width
+     partner, so 62% (~380px) overflowed the remaining space and wrapped Freq onto
+     its own line, where flex-grow:1 then stretched it back out to 100% anyway
+     (the exact "stray empty width" this brief is fixing, just via a different
+     mechanism). A smaller fixed-ish basis leaves it enough room to sit beside the
+     pair on one line. */
+  #rtnAddForm.rtn-inline-mode #rtnFreqGroup.rtn-g8 { flex: 1 1 320px; }
   #rtnAddForm.rtn-inline-mode .rtn-g6 { flex: 1 1 46%; }
   #rtnAddForm.rtn-inline-mode .rtn-g4 { flex: 1 1 30%; min-width: 150px; }
   /* 2026-08-08 (Start+End brief): the pair now holds two FIXED-width time fields
@@ -10172,7 +10203,11 @@
            this input is just a convenience for that same leading character, split out
            and recombined on open/save (see openRtnForm/the submit handler). Her own
            device emoji keyboard is the picker -- no in-app emoji browser to build. -->
-      <div class="field full">
+      <!-- 2026-08-09 (compact tessellated editor brief): Name+Track now pair on one
+           row (rtn-g8/rtn-g4) instead of each claiming its own full-width line --
+           see #rtnTrackField below, and the removed rtn-inline-mode forced-100% rule
+           that used to keep them stacked. -->
+      <div class="field rtn-g8">
         <label for="rtnTitle">Name</label>
         <div class="rtn-name-row">
           <input type="text" id="rtnIcon" class="rtn-icon-input" placeholder="＋" maxlength="8" autocomplete="off" aria-label="Icon (optional, tap to type an emoji)">
@@ -10189,7 +10224,7 @@
            freq-group hide) still finds every field exactly where it always did --
            only which PARENT each field sits in, and #rtnAddForm.rtn-inline-mode's CSS
            (flex-wrap instead of the 12-col grid), changed. -->
-      <div class="field rtn-g8" id="rtnTrackField">
+      <div class="field rtn-g4" id="rtnTrackField">
         <label>Part of life</label>
         <div class="track-picker" id="rtnTrackPicker" role="group" aria-label="Part of life">
           <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
@@ -10238,22 +10273,34 @@
         <label>Repeats on</label>
         <button type="button" class="rtn-repeat-sum" id="rtnRepeatSummary" aria-label="Change the repeat pattern (opens More options)"></button>
       </div>
-      <div class="field rtn-g3" id="rtnWeekIntervalField">
-        <label for="rtnWeekInterval">Every</label>
-        <div style="display:flex;align-items:center;gap:6px">
-          <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:44px">
-          <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+      <!-- 2026-08-09 (compact tessellated editor brief): Every+Auto-add wrapped in
+           their own .rtn-pair (same device Start/End already use) instead of relying
+           on the row's general auto-flow -- Days above them is a variable-width
+           mutually-exclusive field (Days or Repeats-on-summary, never both), so
+           plain rtn-g4/rtn-g8 siblings paired unpredictably depending on which one
+           was visible (sometimes Every ended up paired with Days instead, leaving
+           Auto-add alone and flex-grow-stretched to full width -- the "stray empty
+           width" bug this brief is fixing). A dedicated pair is deterministic
+           regardless of what's above it. rtn-g6 on the wrapper keeps it to one of
+           the row's two 46%-ish slots rather than growing to fill on its own. -->
+      <div class="rtn-pair rtn-g6" id="rtnWeekIntervalAutoGroup">
+        <div class="field" id="rtnWeekIntervalField">
+          <label for="rtnWeekInterval">Every</label>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" id="rtnWeekInterval" min="1" value="1" style="width:44px">
+            <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
+          </div>
         </div>
-      </div>
-      <!-- Auto-add (rebuild spec, item 5): fills the calendar on this routine's own
-           schedule when on; off leaves it as a template she adds one-off (📅) whenever
-           she actually wants it that week. Exactly mirrors the Auto column's own pill
-           switch in the Routine Library table -- both read/write the same
-           task.autoCalendar, kept in sync by syncRtnAutoToggle (see openRtnForm and
-           this button's own click handler). -->
-      <div class="field rtn-g3" id="rtnAutoField">
-        <label for="rtnAutoToggle">Auto-add<span class="field-hint" id="rtnAutoHint"> — off</span></label>
-        <button type="button" class="rtg-auto-switch" id="rtnAutoToggle" role="switch" aria-checked="false" aria-label="Auto-add to calendar — on fills the calendar on this routine's schedule"></button>
+        <!-- Auto-add (rebuild spec, item 5): fills the calendar on this routine's own
+             schedule when on; off leaves it as a template she adds one-off (📅) whenever
+             she actually wants it that week. Exactly mirrors the Auto column's own pill
+             switch in the Routine Library table -- both read/write the same
+             task.autoCalendar, kept in sync by syncRtnAutoToggle (see openRtnForm and
+             this button's own click handler). -->
+        <div class="field" id="rtnAutoField">
+          <label for="rtnAutoToggle">Auto-add<span class="field-hint" id="rtnAutoHint"> — off</span></label>
+          <button type="button" class="rtg-auto-switch" id="rtnAutoToggle" role="switch" aria-checked="false" aria-label="Auto-add to calendar — on fills the calendar on this routine's schedule"></button>
+        </div>
       </div>
       <div class="field full note-inline" id="rtnHairNote" hidden>
         This wash type's day is decided by the every-2-days rotation, not a repeat pattern here — use the calendar switch on its row to show or hide it, or the date list below for an extra one-off wash.
@@ -10300,7 +10347,9 @@
         <!-- 2026-08-09 (Linh, chains+startDate spec): the recurrence's own start
              boundary -- no occurrences before it, for any repeat type OR a chain-
              granted day (see chainGrantsOn). Hidden for One-off same as Ends below. -->
-        <div class="field full" id="rtnStartDateField">
+        <!-- 2026-08-09 (compact tessellated editor brief): Starts/Ends dates now pair
+             on one row (g6/g6) instead of each stacking as its own full-width line. -->
+        <div class="field rtn-g6" id="rtnStartDateField">
           <label for="rtnStartDate">Starts on <span class="field-hint">optional — no occurrences before this date</span></label>
           <input type="date" id="rtnStartDate">
         </div>
@@ -10308,16 +10357,20 @@
              stops the recurrence after this date -- hidden for One-off since a
              single date already IS its own end. Optional, so most routines (which
              run indefinitely) never see an extra field to skip past. -->
-        <div class="field full" id="rtnEndDateField">
+        <div class="field rtn-g6" id="rtnEndDateField">
           <label for="rtnEndDate">Ends <span class="field-hint">optional — stops repeating after this date</span></label>
           <input type="date" id="rtnEndDate">
         </div>
-        <div class="field rtn-g8">
+        <!-- 2026-08-09 (compact tessellated editor brief): Sub-category now pairs
+             with the fitness-tracker field (moved up via CSS `order`, see
+             .rtn-more-order below) instead of leaving Sub-category's other 4/12
+             columns empty -- the "stray empty width" the brief calls out. -->
+        <div class="field rtn-g8" id="rtnCategoryField">
           <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
           <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
           <datalist id="rtnCatList"></datalist>
         </div>
-        <div class="field full">
+        <div class="field rtn-g6" id="rtnSubTasksField">
           <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
           <!-- 2026-08-06 (tessellate spec, "narrow, TWO PER ROW"): #rtnSubList becomes
                display:contents so its .rtn-sub-row tiles lay out as direct children of
@@ -10335,12 +10388,14 @@
           </div>
           <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
         </div>
+        <!-- not in the compact-editor brief's row list (it predates that spec) --
+             stays its own full-width row, same treatment as Note below. -->
         <div class="field full" id="rtnSchedExtraField">
           <label>Additional schedule <span class="field-hint">optional — a second day/time pattern</span></label>
           <div id="rtnSchedExtraList" class="rtn-sched-extra-list"></div>
           <button type="button" class="add-btn" id="rtnSchedAddBtn">+ Add another schedule</button>
         </div>
-        <div class="field full">
+        <div class="field rtn-g6" id="rtnAlsoRunsField">
           <label>Also runs on <span class="field-hint">extra one-off dates</span></label>
           <div id="rtnExtraList" class="rtn-date-list"></div>
           <div style="display:flex;align-items:center;gap:8px">
@@ -10348,13 +10403,13 @@
             <button type="button" class="add-btn" id="rtnExtraAdd">+ Add date</button>
           </div>
         </div>
-        <div class="field full">
+        <div class="field rtn-g4" id="rtnFitLinkField">
           <label for="rtnFitLink">Fitness tracker link <span class="field-hint">optional</span></label>
           <select id="rtnFitLink">
             <option value="">None</option>
           </select>
         </div>
-        <div class="field full">
+        <div class="field full" id="rtnNoteField">
           <label for="rtnNote">Note <span class="field-hint">optional</span></label>
           <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
         </div>
