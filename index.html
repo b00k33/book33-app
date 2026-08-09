@@ -4066,22 +4066,23 @@
     .rtb-cell { border-left: none; border-top: 1px solid var(--note-line); }
     .rtb-cell-first { border-top: none; }
   }
-  /* chain cards (routines page layout brief): one card per chain, stacked on
-     phone/tablet, two-up once there's room — same 901px break #rtnManage already
-     uses on this page, so the whole page settles into 2-col at one consistent width. */
-  .rtn-chain-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 10px; }
-  .rtn-chain-grid .rtb-tbl { margin-top: 0; }
-  @media (min-width: 901px) {
-    .rtn-chain-grid { grid-template-columns: 1fr 1fr; }
-  }
+  /* 2026-08-09 pt 4 (Linh, code44: "the horizontal table of chains on routines
+     page is not right" -> "One shared table, chains as rows"): REVERTS the
+     2026-08-07 one-card-per-chain layout (.rtn-chain-grid, 1-up phone/2-up
+     desktop) back to the original 2026-08-06 shape she praised on the Routine
+     Library table -- every chain is a BAND (title row) + its own Before/Event/
+     After cell strip, and all chains stack as rows inside ONE shared .rtb-tbl
+     (see chainTableHtml() below). No more per-card grid needed: a plain .rtb-tbl
+     already stacks multiple .rtb-band groups top-to-bottom (border-top between
+     them, same as the Board view's own single-.rtb-tbl pattern). */
   /* 2026-08-09 (Linh: "i want the chains view to be horizontal in the routines
-     page"): SUPERSEDES the bare .rtb-grid stack-to-1fr rule above for chain cards
-     specifically -- #rtnChains scoping leaves the Board view's own shared .rtb-grid
-     (renderRtnTable(), same classes) stacking as before, since that's a different
-     feature nobody asked to change. Before/Event/After stay three side-by-side
-     columns at every width; .rtb-gridwrap (new, wraps just the grid -- .rtb-band's
-     title row is a sibling, so it never scrolls away) is the same scroll-fallback
-     pattern already shipped for the Chains page and the Routine Library table. */
+     page"): Before/Event/After stay three side-by-side columns at every width,
+     never stack -- #rtnChains scoping leaves the Board view's own shared
+     .rtb-grid (renderRtnTable(), same classes) stacking as before, since that's
+     a different feature nobody asked to change. .rtb-gridwrap wraps just each
+     row's own 3-col grid -- .rtb-band's title row is a sibling, so it never
+     scrolls away -- same scroll-fallback pattern already shipped for the Chains
+     page and the Routine Library table. */
   #rtnChains .rtb-gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   #rtnChains .rtb-grid { grid-template-columns: repeat(3, 1fr); }
   /* 2026-08-09 (Linh: "compact ... portrait mode, allow expansion in landscape"):
@@ -4090,7 +4091,7 @@
      a landscape phone would fall back to stacking) -- only the min-width floor and
      cell padding/border squeeze are portrait-only, same reasoning as the Chains
      page's own pass. No min-width at all outside portrait: the grid just fills
-     whatever width its container (the card, capped by .rtn-chain-grid) actually
+     whatever width its container (the shared table, full page width) actually
      has, which is always plenty on a landscape phone or desktop. */
   @media (max-width: 640px) and (orientation: portrait) {
     /* 2026-08-09 pt 3 (Linh, screenshot: "the chains table needs to fit the
@@ -22671,13 +22672,14 @@
           <span class="rtb-cell-lab rtb-cell-lab-${cls}">${label}</span>
           ${rows.length ? rows.join("") : `<span class="rtb-empty">—</span>`}
         </div>`;
-      // 2026-08-07 (routines page layout brief, "Each saved chain as a compact
-      // card... Two per row on desktop, stack on phone"): each chain used to be one
-      // band inside a single shared .rtb-tbl — now every chain gets its OWN
-      // .rtb-tbl card (title+schedule band, then its Before/Event/After cells still
-      // reading left to right exactly as before), and the cards themselves lay out
-      // in .rtn-chain-grid. Internal band/cell markup is untouched.
-      const cards = [];
+      // 2026-08-09 pt 4 (Linh, code44: "One shared table, chains as rows"):
+      // REVERTS the 2026-08-07 one-card-per-chain grid — back to a single shared
+      // .rtb-tbl, each chain its own band (title+schedule) + Before/Event/After
+      // row underneath, stacked like the Routine Library table she praised.
+      // .rtb-gridwrap keeps each row's own 3-col strip horizontal (never stacks)
+      // even on phone, scrolling independently if it doesn't fit — band stays
+      // put since it's a sibling, not inside the scrolling grid.
+      let bandsHtml = "";
       roots.forEach(root => {
         let previewDate = TODAY;
         if (isPlainEvent(root) && root.date) previewDate = parseKey(root.date);
@@ -22685,21 +22687,17 @@
         const seq = cbChainSeq(root);
         const ri = Math.max(0, seq.findIndex(n => n.id === root.id));
         const dayLbl = `${WD_FULL[dowIndex(previewDate)]} ${previewDate.getDate()} ${MON_SHORT[previewDate.getMonth()]}`;
-        cards.push(`<div class="rtb-tbl rtn-chain-card">
-          <div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⛓ ${esc(root.chainName || root.title)}</span><span class="rtb-ct">${esc(dayLbl)}</span></div>
-          <div class="rtb-gridwrap"><div class="rtb-grid">${cellH(seq.slice(0, ri).map(n => chip(n, false, previewDate)), "before", "Before")}${cellH([chip(root, true, previewDate)], "during", "Event")}${cellH(seq.slice(ri + 1).map(n => chip(n, false, previewDate)), "after", "After")}</div></div>
-        </div>`);
+        bandsHtml += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⛓ ${esc(root.chainName || root.title)}</span><span class="rtb-ct">${esc(dayLbl)}</span></div>
+          <div class="rtb-gridwrap"><div class="rtb-grid">${cellH(seq.slice(0, ri).map(n => chip(n, false, previewDate)), "before", "Before")}${cellH([chip(root, true, previewDate)], "during", "Event")}${cellH(seq.slice(ri + 1).map(n => chip(n, false, previewDate)), "after", "After")}</div></div>`;
       });
       deadlineRoots.forEach(t => {
-        cards.push(`<div class="rtb-tbl rtn-chain-card">
-          <div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⏰ ${esc(t.chainName || t.title)}</span><span class="rtb-ct"></span></div>
+        bandsHtml += `<div class="rtb-band"><span class="rtb-dot" style="background:var(--accent-seed)"></span><span class="rtb-lab">⏰ ${esc(t.chainName || t.title)}</span><span class="rtb-ct"></span></div>
           <div class="rtb-gridwrap"><div class="rtb-grid">${cellH([], "before", "Before")}${cellH([`<div class="rtb-task chain-h-item" data-chain-edit="${esc(t.id)}" role="button" tabindex="0" aria-label="Edit deadline — ${esc(t.title)}">
               <span class="rtb-nm">${esc(t.title)} <span class="chain-h-time">by ${fmtTime(t.deadline)}${t.deadlineLabel ? ` · ${esc(t.deadlineLabel)}` : ""}</span></span>
               <button type="button" class="chain-unlink" data-chain-unlink="${esc(t.id)}" aria-label="Remove deadline" title="Remove the deadline">×</button>
-            </div>`], "during", "Event")}${cellH([], "after", "After")}</div></div>
-        </div>`);
+            </div>`], "during", "Event")}${cellH([], "after", "After")}</div></div>`;
       });
-      return `<div class="rtn-chain-grid">${cards.join("")}</div>`;
+      return `<div class="rtb-tbl">${bandsHtml}</div>`;
     };
     // 2026-08-06 (Linh, on this exact dropdown-based single-pair form: "allow to
     // make a chain with a table 3 column template"): SUPERSEDES the old inline
