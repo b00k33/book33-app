@@ -16196,6 +16196,11 @@
   // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
   // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
   document.getElementById("tlDetailBody").addEventListener("click", e => {
+    // 2026-08-08 (Linh, "Delete" action): the new action-row trigger (delRowHtml) and
+    // the desktop row's own Delete button both live in here — tryTlDelete (defined
+    // near #tlDetailHeadActions' own listener, which the header 🗑 icons use) opens
+    // the shared confirm sheet for whichever one was tapped.
+    if (tryTlDelete(e.target)) return;
     // 2026-08-04 (Linh: "tapping a star closes the popup — fix it so it only sets the
     // rating"): root cause was never the click TARGET, it was renderDay() below calling
     // refreshOpenTlDetail() -> renderTlDetailBody() SYNCHRONOUSLY, mid-click, which
@@ -16397,89 +16402,104 @@
     const editToggle = e.target.closest("[data-tl-toggle-edit]");
     if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
     if (e.target.closest("[data-edit]")) closeTlDetail();
-    const fcDel = e.target.closest("[data-fitcal-del]");
+    if (tryTlDelete(e.target)) return;
+  });
+  /* --- delete confirm (2026-08-08, Linh: "Add a Delete action ... follow design44")
+     --- one small sheet backs every delete in this popup: header 🗑 icons, the new
+     muted-red action-row button (delRowHtml in renderTlDetailBody), and the desktop
+     row's own Delete all call tryTlDelete(e.target), which recognises whichever
+     data-*-del attribute is on the tapped element. A plain item/fitness session gets
+     one "Delete"; a recurring routine/event occurrence gets "Just this one"
+     (default-highlighted, same ROUTINE_SKIPS/EVENT_SKIPS mechanics the old flows
+     used) + "Whole series" (removes the template). SUPERSEDES the old flat confirm()s
+     and the 3-way this/following/all scope chooser — her new spec is simpler by
+     design, so "this and following" is gone; say the word if you want it back. */
+  let tlDelTarget = null;   // { kind: "plain"|"fitcal"|"routine"|"recur-event", id, title, rtTaskId?, recurId? }
+  function tryTlDelete(target) {
+    const fcDel = target.closest("[data-fitcal-del]");
     if (fcDel) {
       const sessId = fcDel.dataset.fitcalDel;
       const victim = fitSessionsOn(state.anchor).find(s => s.id === sessId);
-      // 2026-08-04 (Linh: "Delete removes the item, asking me to confirm first"):
-      // confirm() already used elsewhere in this file for a destructive one-click
-      // delete (the routine-task delete, added after an accidental delete) -- same
-      // pattern here. This app deploys straight to GitHub Pages, not a sandboxed
-      // artifact iframe, so the native dialog works.
-      if (victim && !confirm(`Delete this ${victim.type} session?`)) return;
-      removeFitSession(state.anchor, sessId);
-      delete DONE[`fitcal-${sessId}`];
-      saveDone(DONE);
-      renderDay();
-      return;
+      if (victim) openTlDeleteConfirm({ kind: "fitcal", id: sessId, title: `${victim.type} session` });
+      return true;
     }
-    // 2026-08-03 (Linh: "I can't ... delete [Pilates]"): cancel just THIS occurrence —
-    // same confirm pattern as fitcal-del above, template (ROUTINE_TASKS) untouched.
-    const rtOccDel = e.target.closest("[data-rt-occ-del]");
+    const rtOccDel = target.closest("[data-rt-occ-del]");
     if (rtOccDel) {
       const occId = rtOccDel.dataset.rtOccDel;
       const item = TL_ITEMS_BY_ID[occId];
-      if (!confirm(`Skip this occurrence of ${item ? item.title : "this routine"}? The rest of the routine keeps repeating as usual — a faint ghost stays on the day so you can restore it.`)) return;
-      const p = parseOccId(occId);
-      if (p && item && item.rtTaskId) setRtnOvr(item.rtTaskId, p.date, { skipped: true });
-      closeTlDetail();
-      renderDay();
-      return;
+      if (item) openTlDeleteConfirm({ kind: "routine", id: occId, rtTaskId: item.rtTaskId, title: item.title });
+      return true;
     }
-    // recurring EVENT delete — GCal-style scope chooser instead of a flat confirm()
-    const evOccDel = e.target.closest("[data-ev-occ-del]");
+    const evOccDel = target.closest("[data-ev-occ-del]");
     if (evOccDel) {
       const occId = evOccDel.dataset.evOccDel;
       const item = TL_ITEMS_BY_ID[occId];
-      openEvScopeChooser(occId, item);
-      return;
+      if (item && item.recurId) openTlDeleteConfirm({ kind: "recur-event", id: occId, recurId: item.recurId, title: item.title });
+      return true;
     }
-  });
-  /* --- recurring-event delete scope chooser (this / following / all) --- */
-  let evScopeTarget = null;   // { occId, recurId, occDate, title }
-  function openEvScopeChooser(occId, item) {
-    if (!item || !item.recurId) return;
-    evScopeTarget = { occId, recurId: item.recurId, occDate: item.date, title: item.title };
-    document.getElementById("evScopeTitle").textContent = `Delete “${item.title}”`;
-    document.getElementById("evScopeOverlay").hidden = false;
+    // plain hand-written event — shared with the compact block's inline × icon
+    // (both carry the same data-del attribute; #wrap's own delegate also routes here)
+    const del = target.closest("[data-del]");
+    if (del) {
+      const victim = EVENTS.find(ev => ev.id === del.dataset.del);
+      if (victim) openTlDeleteConfirm({ kind: "plain", id: del.dataset.del, title: victim.title });
+      return true;
+    }
+    return false;
   }
-  function closeEvScopeChooser() {
-    document.getElementById("evScopeOverlay").hidden = true;
-    evScopeTarget = null;
+  function openTlDeleteConfirm(target) {
+    tlDelTarget = target;
+    document.getElementById("tlDelTitle").textContent = `Delete “${target.title}”?`;
+    const isRecurring = target.kind === "routine" || target.kind === "recur-event";
+    document.getElementById("tlDelActions").innerHTML = isRecurring
+      ? `<button type="button" class="ev-scope-btn ev-scope-danger ev-scope-primary" data-tl-del-scope="one">Just this one</button>
+         <button type="button" class="ev-scope-btn ev-scope-danger" data-tl-del-scope="series">Whole series</button>`
+      : `<button type="button" class="ev-scope-btn ev-scope-danger ev-scope-primary" data-tl-del-scope="one">Delete</button>`;
+    document.getElementById("tlDelOverlay").hidden = false;
   }
-  function evScopeDone() {
-    closeEvScopeChooser();
+  function closeTlDeleteConfirm() {
+    document.getElementById("tlDelOverlay").hidden = true;
+    tlDelTarget = null;
+  }
+  function tlDeleteDone() {
+    closeTlDeleteConfirm();
     closeTlDetail();
     render();
   }
-  document.getElementById("evScopeThis").addEventListener("click", () => {
-    if (!evScopeTarget) return;
-    EVENT_SKIPS[evScopeTarget.occId] = true;
-    saveEvSkips();
-    evScopeDone();
-  });
-  document.getElementById("evScopeFollowing").addEventListener("click", () => {
-    if (!evScopeTarget) return;
-    const t = RECURRING_EVENTS.find(x => x.id === evScopeTarget.recurId);
-    if (t) {
-      // occDate is where the occurrence currently RENDERS; the pattern boundary must
-      // come from its true pattern date, so a moved occurrence still cuts correctly
-      const ovr = EVENT_TIME_OVR[evScopeTarget.occId];
-      const patternDate = ovr && ovr.fromDate ? ovr.fromDate : evScopeTarget.occDate;
-      t.recurUntil = keyOf(addDays(parseKey(patternDate), -1));
-      saveRecurringEvents();
+  document.getElementById("tlDelActions").addEventListener("click", e => {
+    const btn = e.target.closest("[data-tl-del-scope]");
+    if (!btn || !tlDelTarget) return;
+    const { kind, id } = tlDelTarget;
+    const wholeSeries = btn.dataset.tlDelScope === "series";
+    if (kind === "plain") {
+      EVENTS = EVENTS.filter(ev => ev.id !== id);
+      delete DONE[id];
+      saveEvents(EVENTS); saveDone(DONE);
+    } else if (kind === "fitcal") {
+      removeFitSession(state.anchor, id);
+      delete DONE[`fitcal-${id}`];
+      saveDone(DONE);
+    } else if (kind === "routine") {
+      if (wholeSeries) {
+        if (tlDelTarget.rtTaskId) { ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== tlDelTarget.rtTaskId); saveRoutines(); }
+      } else {
+        const p = parseOccId(id);
+        if (p && tlDelTarget.rtTaskId) setRtnOvr(tlDelTarget.rtTaskId, p.date, { skipped: true });
+      }
+    } else if (kind === "recur-event") {
+      if (wholeSeries) {
+        RECURRING_EVENTS = RECURRING_EVENTS.filter(t => t.id !== tlDelTarget.recurId);
+        saveRecurringEvents();
+      } else {
+        EVENT_SKIPS[id] = true;
+        saveEvSkips();
+      }
     }
-    evScopeDone();
+    tlDeleteDone();
   });
-  document.getElementById("evScopeAll").addEventListener("click", () => {
-    if (!evScopeTarget) return;
-    RECURRING_EVENTS = RECURRING_EVENTS.filter(t => t.id !== evScopeTarget.recurId);
-    saveRecurringEvents();
-    evScopeDone();
-  });
-  document.getElementById("evScopeCancel").addEventListener("click", closeEvScopeChooser);
-  document.getElementById("evScopeOverlay").addEventListener("click", e => {
-    if (!e.target.closest(".ev-scope-sheet")) closeEvScopeChooser();
+  document.getElementById("tlDelCancel").addEventListener("click", closeTlDeleteConfirm);
+  document.getElementById("tlDelOverlay").addEventListener("click", e => {
+    if (!e.target.closest(".ev-scope-sheet")) closeTlDeleteConfirm();
   });
   document.getElementById("tlDetailOverlay").addEventListener("click", e => {
     if (!e.target.closest(".tl-detail-sheet")) closeTlDetail();
@@ -28073,20 +28093,12 @@
       if (rt) openFormForRecurEdit(rt);
       return;
     }
-    // delete a hand-written event
-    const del = e.target.closest("[data-del]");
-    if (del) {
-      // 2026-08-04 (Linh, Step 7: "Delete removes the item, asking me to confirm
-      // first" -- applies to every item that opens the tl-detail popup): this path
-      // is shared by the popup's own Delete button and the compact block's inline
-      // × icon, so both get the same confirm now. Matches the existing routine-task
-      // delete confirm() elsewhere in this file.
-      const victim = EVENTS.find(ev => ev.id === del.dataset.del);
-      if (victim && !confirm(`Delete "${victim.title}"?`)) return;
-      EVENTS = EVENTS.filter(ev => ev.id !== del.dataset.del);
-      delete DONE[del.dataset.del];
-      saveEvents(EVENTS); saveDone(DONE); renderDay(); return;
-    }
+    // delete a hand-written event — shared by the popup's own Delete and the compact
+    // block's inline × icon, both carry the same data-del attribute. 2026-08-08:
+    // routes through tryTlDelete/openTlDeleteConfirm now (the popup's shared confirm
+    // sheet) instead of a flat confirm() — see its definition near
+    // #tlDetailHeadActions' own listener.
+    if (tryTlDelete(e.target)) return;
     // remove from shopping list
     const sdel = e.target.closest("[data-shopdel]");
     if (sdel) { SHOP = SHOP.filter(s => s.id !== sdel.dataset.shopdel); saveShop(SHOP); renderDay(); return; }
