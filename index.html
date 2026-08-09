@@ -30953,6 +30953,13 @@
   // cloud. While it's set, boot pushes local UP instead of pulling cloud DOWN.
   // (deliberately "book33-" not "daybook-": gather()/the save hook skip it by prefix)
   var DIRTY = "book33-unsynced";
+  // 2026-08-09 (manual "Sync to cloud now" button): which keys changed since the last
+  // CONFIRMED push -- a de-duped set, not a running tally (editing the same key 5
+  // times before it syncs is still one changed thing, not five). Purely additive
+  // bookkeeping for the sync card's own "N changes not yet synced" sub-line; never
+  // read by the actual push/pull/reconcile decisions above, only display.
+  var DIRTY_KEYS = "book33-unsynced-keys";
+  var LAST_SYNC = "book33-last-synced";   // ms epoch of the last CONFIRMED push, for the card's "Last synced …" line
   // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store
   var EXCLUDE = { "daybook-pharmacy": 1, "daybook-prescriptions": 1 };
   // 2026-08-07 (Linh: "edits not consistently maintained... this cannot happen
@@ -30979,6 +30986,12 @@
   }
 
   var sb = null, ready = false, suppress = false, pushTimer = null, lastPushed = "", pendingReload = false, pendingReloadTimer = null;
+  // 2026-08-09 (manual push button): display-only state for the sync card below --
+  // pushInFlight drives the "Syncing…" spinner, lastPushFailed distinguishes "the
+  // last attempt actually failed while online" from plain offline (syncState()
+  // checks navigator.onLine FIRST, so this only ever surfaces as the real Error
+  // state, never double-counted with Offline).
+  var pushInFlight = false, lastPushFailed = false;
 
   // never let a hung connection wedge a network call forever -- every Supabase call
   // this file makes during boot/sign-in goes through this.
@@ -31031,11 +31044,20 @@
       // NOISY keys (see above) still push, but must never mark DIRTY -- that flag
       // means "a real edit is waiting, don't let a cloud pull overwrite it", and a
       // recomputed notification queue is never that.
-      if (!NOISY[k]) { try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {} }
+      if (!NOISY[k]) { try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {} markDirtyKey(k); }
       if (ready) schedulePush();
     }
   };
-  function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 1400); }
+  // sync card bookkeeping only (see DIRTY_KEYS above) -- uses the raw setItem, same
+  // as DIRTY itself, so recording a dirty key never re-enters this override.
+  function markDirtyKey(k) {
+    try {
+      var arr = JSON.parse(localStorage.getItem(DIRTY_KEYS) || "[]");
+      if (arr.indexOf(k) === -1) { arr.push(k); _setItem.call(window.localStorage, DIRTY_KEYS, JSON.stringify(arr)); }
+    } catch (e) {}
+    updateSyncCard();
+  }
+  function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(function () { pushNow(); }, 1400); }
   // 2026-08-02 ("make the app function offline, sync when reconnected"): SUPERSEDES
   // the previous version, which set lastPushed BEFORE attempting the upsert — so a
   // push made while offline (or during any dropped connection) silently marked
@@ -31061,18 +31083,33 @@
   // about staleness) closes this for every current and future opportunistic call site
   // at once. schedulePush()'s legitimate edit-driven path still works (the setItem
   // override sets DIRTY before ever scheduling a push).
-  function pushNow() {
-    if (!sb || !ready || !localStorage.getItem(DIRTY)) return;
+  // 2026-08-09 (manual "Sync to cloud now" button): force=true is the ONLY thing
+  // that button adds -- it skips the "nothing marked DIRTY" guard so tapping it
+  // while already synced still re-pushes (brief: "button stays tappable to
+  // re-push"), but the json===lastPushed dedup right below still applies, so an
+  // already-confirmed identical snapshot doesn't spam the network. Every existing
+  // caller (schedulePush, 'online', visibilitychange) calls pushNow() with no
+  // argument and behaves exactly as before.
+  function pushNow(force) {
+    if (!sb || !ready || (!force && !localStorage.getItem(DIRTY))) return;
     var snap = gather(), json = JSON.stringify(snap);
     if (json === lastPushed) return;                       // nothing new since last CONFIRMED push
+    pushInFlight = true; updateSyncCard();
     sb.from(TABLE).upsert({ data: snap }, { onConflict: "owner" }).select("updated_at").then(function (r) {
       lastPushed = json;                                    // only mark confirmed once it actually lands
+      lastPushFailed = false;
       // clear the unsynced flag only if nothing changed while the push was in flight —
       // a mid-flight edit keeps its own dirty mark and re-pushes on its own timer
-      if (JSON.stringify(gather()) === json) { try { localStorage.removeItem(DIRTY); } catch (e) {} }
+      if (JSON.stringify(gather()) === json) { try { localStorage.removeItem(DIRTY); localStorage.removeItem(DIRTY_KEYS); } catch (e) {} }
       if (r && r.data && r.data[0]) sessionStorage.setItem(APPLIED, r.data[0].updated_at);
+      try { localStorage.setItem(LAST_SYNC, String(Date.now())); } catch (e) {}
       setLive(true);
-    }, function () { setLive(false); });                    // failed — lastPushed unchanged, stays retryable
+      pushInFlight = false; updateSyncCard();
+    }, function () {
+      setLive(false);
+      lastPushFailed = true;
+      pushInFlight = false; updateSyncCard();
+    });                                                      // failed — lastPushed unchanged, stays retryable
   }
 
   /* ---- pull (cloud changed → app) ------------------------------------- */
@@ -31089,7 +31126,8 @@
     // over. incoming itself stays full below so apply() still adopts everything.
     if (JSON.stringify(stripNoisy(incoming)) === JSON.stringify(stripNoisy(gather()))) {  // no visible change
       if (row.updated_at) sessionStorage.setItem(APPLIED, row.updated_at);
-      try { localStorage.removeItem(DIRTY); } catch (e) {}                               // cloud == local, nothing unsynced
+      try { localStorage.removeItem(DIRTY); localStorage.removeItem(DIRTY_KEYS); localStorage.setItem(LAST_SYNC, String(Date.now())); } catch (e) {}  // cloud == local, nothing unsynced
+      updateSyncCard();
       return;
     }
     // unpushed local edits (DIRTY) must never be silently overwritten by another
@@ -31114,11 +31152,12 @@
   // the gap where a since-fixed push (see pushNow above) would otherwise sit
   // unsynced until something else happened to trigger it.
   window.addEventListener("online", function () {
+    updateSyncCard();
     if (!ready) return;
     pushNow();
     fetchCloud().then(reconcile, function () {});
   });
-  window.addEventListener("offline", function () { setLive(false); });
+  window.addEventListener("offline", function () { setLive(false); updateSyncCard(); });
   // 2026-08-06 (Linh: "my mobile keeps glitching and doesnt update from desktop
   // changes"): mobile OSes aggressively suspend a backgrounded tab's network/JS —
   // locking the phone or switching apps silently drops the realtime websocket, and
@@ -31377,6 +31416,124 @@
       pop.textContent = label + extra;
     }
   }
+  // 2026-08-09 (manual "Sync to cloud now" button, settings-screen sync card):
+  // priority order matters -- a failed push while offline must read as Offline
+  // (the true, actionable cause), not Error, so navigator.onLine is checked
+  // BEFORE lastPushFailed. Pure read of existing state; never mutates anything.
+  function syncState() {
+    if (pushInFlight) return "syncing";
+    if (!navigator.onLine) return "offline";
+    if (lastPushFailed) return "error";
+    if (localStorage.getItem(DIRTY)) return "pending";
+    return "synced";
+  }
+  // Self-contained relative-time formatter -- this IIFE doesn't share scope with
+  // the main app's fmtTime/MON_SHORT helpers, and pulling those in would mean
+  // reaching across the module boundary for a one-line label.
+  function fmtLastSynced(ms) {
+    if (!ms) return "";
+    var d = new Date(ms), now = new Date();
+    if (Date.now() - ms < 45000) return "just now";
+    var h = d.getHours(), m = d.getMinutes(), ap = h >= 12 ? "pm" : "am", h12 = h % 12 || 12;
+    var time = h12 + ":" + (m < 10 ? "0" : "") + m + ap;
+    if (d.toDateString() === now.toDateString()) return "today, " + time;
+    var y = new Date(now); y.setDate(y.getDate() - 1);
+    if (d.toDateString() === y.toDateString()) return "yesterday, " + time;
+    var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return MON[d.getMonth()] + " " + d.getDate() + ", " + time;
+  }
+  // Card lives just above "Sign out of Book33" (built once here; forceResyncBtn()
+  // below relocates the existing pull link to sit inside it, as its last child).
+  // Central Ink & Brass vars throughout, per CLAUDE.md -- this is new UI, unlike
+  // the legacy hardcoded-hex buttons elsewhere in this module.
+  function syncCardEl() {
+    if (document.getElementById("b33SyncCard")) return;
+    if (!document.getElementById("b33ScSpinKeyframes")) {
+      var css = document.createElement("style");
+      css.id = "b33ScSpinKeyframes";
+      css.textContent = "@keyframes b33scspin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(css);
+    }
+    var card = document.createElement("div");
+    card.id = "b33SyncCard";
+    card.style.cssText = "max-width:430px;margin:28px auto 0;padding:14px 16px;border:1px solid var(--note-line);border-radius:12px;background:var(--raised);box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+
+    var row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px";
+    var dot = document.createElement("span");
+    dot.id = "b33ScDot";
+    dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none";
+    var label = document.createElement("span");
+    label.id = "b33ScLabel";
+    label.style.cssText = "font-size:13px;font-weight:700";
+    row.appendChild(dot); row.appendChild(label);
+
+    var sub = document.createElement("div");
+    sub.id = "b33ScSub";
+    sub.style.cssText = "font-size:11.5px;color:var(--ink-faint);margin:3px 0 12px 16px";
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "b33ScBtn";
+    btn.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;border:1px solid var(--margin-rule);background:var(--margin-rule);color:var(--accent-on);font:700 13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:10px;border-radius:9px;cursor:pointer;box-sizing:border-box";
+    // manual trigger of the SAME code path auto-sync uses -- force=true only skips
+    // the "nothing marked DIRTY" guard, see pushNow() above.
+    btn.onclick = function () { pushNow(true); };
+
+    card.appendChild(row);
+    card.appendChild(sub);
+    card.appendChild(btn);
+    var out = document.getElementById("b33Signout");
+    (out ? out.parentElement : (document.querySelector(".wrap") || document.body)).insertBefore(card, out);
+    updateSyncCard();
+  }
+  // Refreshes the card's text/colors/disabled-state from current syncState() --
+  // called after every push attempt, after auto-sync (reconcile's no-change
+  // branch), and on online/offline -- so the manual button and auto-sync always
+  // agree, per the brief's "shared source of truth" requirement. Safe no-op
+  // before the card exists (go() hasn't run / not signed in yet).
+  function updateSyncCard() {
+    var card = document.getElementById("b33SyncCard");
+    if (!card) return;
+    var dot = document.getElementById("b33ScDot"), label = document.getElementById("b33ScLabel"),
+        sub = document.getElementById("b33ScSub"), btn = document.getElementById("b33ScBtn");
+    var st = syncState();
+    var n = 0;
+    try { n = JSON.parse(localStorage.getItem(DIRTY_KEYS) || "[]").length; } catch (e) {}
+    var GOLD = "var(--margin-rule)", GREEN = "var(--fit-workout)", RED = "var(--warn)";
+    var color = st === "synced" ? GREEN : (st === "offline" || st === "error") ? RED : GOLD;
+    dot.style.background = color;
+    label.style.color = color;
+    btn.disabled = st === "syncing" || st === "offline";
+    btn.style.opacity = btn.disabled ? "0.55" : "1";
+    btn.style.cursor = btn.disabled ? "default" : "pointer";
+    btn.innerHTML = "";
+    if (st === "syncing") {
+      label.textContent = "Syncing…";
+      sub.textContent = "Pushing your changes to the cloud";
+      var sp = document.createElement("span");
+      sp.style.cssText = "display:inline-block;width:12px;height:12px;border:2px solid rgba(0,0,0,.3);border-top-color:currentColor;border-radius:50%;margin-right:7px;animation:b33scspin .7s linear infinite";
+      btn.appendChild(sp);
+      btn.appendChild(document.createTextNode("Syncing…"));
+    } else if (st === "offline") {
+      label.textContent = "Offline";
+      sub.textContent = "Will sync automatically when you're back online";
+      btn.textContent = "☁︎ Sync to cloud now";
+    } else if (st === "error") {
+      label.textContent = "Sync failed";
+      sub.textContent = "Tap to retry";
+      btn.textContent = "☁︎ Sync to cloud now";
+    } else if (st === "pending") {
+      label.textContent = "Unsynced changes";
+      sub.textContent = n ? (n + " change" + (n === 1 ? "" : "s") + " not yet synced") : "Changes not yet synced";
+      btn.textContent = "☁︎ Sync to cloud now";
+    } else {
+      var ms = 0; try { ms = parseInt(localStorage.getItem(LAST_SYNC), 10) || 0; } catch (e) {}
+      label.textContent = "Synced ✓";
+      sub.textContent = ms ? ("Last synced " + fmtLastSynced(ms)) : "Up to date";
+      btn.textContent = "☁︎ Sync to cloud now";
+    }
+  }
   // 2026-08-02 (Linh: "what does the top left green light mean" -- asked twice; a
   // title="" tooltip never shows on a touchscreen, so the only real answer she had
   // was asking Claude). It's a real status light (green = synced, brown = reconnecting
@@ -31449,29 +31606,33 @@
   // Deliberately NOT gated on isEditing() -- she's reaching for this specifically
   // because normal sync isn't working, so waiting for "idle" could wait forever too;
   // a confirm() dialog is the safety net instead of a silent guard.
+  // 2026-08-09: relocated inside the new sync card (secondary link below the push
+  // button, per the brief) instead of standing alone above Sign out -- same pull
+  // behavior, unchanged, just re-parented.
   function forceResyncBtn() {
     if (document.getElementById("b33Resync")) return;
     var b = document.createElement("a");
     b.id = "b33Resync";
     b.href = "#";
-    b.textContent = "Force resync from cloud";
-    b.style.cssText = "display:block;text-align:center;margin:0 auto 8px;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#6a5a7c;text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    b.textContent = "↻ Force resync from cloud";
+    b.style.cssText = "display:block;text-align:center;margin:10px auto 0;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--ink-faint);text-decoration:underline;text-underline-offset:2px;cursor:pointer";
     b.onclick = function (e) {
       e.preventDefault();
       if (!confirm("Replace everything on this device with what's currently saved in the cloud? Any edit made only here that hasn't synced yet will be lost.")) return;
       b.textContent = "Resyncing…";
       withTimeout(fetchCloud(), 6000).then(function (row) {
-        try { localStorage.removeItem(DIRTY); } catch (e) {}
+        try { localStorage.removeItem(DIRTY); localStorage.removeItem(DIRTY_KEYS); } catch (e) {}
         var incoming = {};
         if (row && row.data) Object.keys(row.data).forEach(function (k) { if (!EXCLUDE[k]) incoming[k] = row.data[k]; });
         applyAndReload(incoming, row && row.updated_at);
       }, function () {
-        b.textContent = "Force resync from cloud";
+        b.textContent = "↻ Force resync from cloud";
         alert("Couldn't reach the database — check the connection and try again.");
       });
     };
-    var out = document.getElementById("b33Signout");
-    (out ? out.parentElement : (document.querySelector(".wrap") || document.body)).insertBefore(b, out);
+    var card = document.getElementById("b33SyncCard");
+    if (card) card.appendChild(b);
+    else (document.querySelector(".wrap") || document.body).insertBefore(b, document.getElementById("b33Signout"));
   }
 
   /* ---- overlay (sign-in) ------------------------------------------------
@@ -31585,7 +31746,7 @@
   }
   function go() {
     ready = true; lastPushed = JSON.stringify(gather());
-    hideOverlay(); badge(); signoutBtn(); forceResyncBtn(); subscribe(); setLive(true);
+    hideOverlay(); badge(); signoutBtn(); syncCardEl(); forceResyncBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
     placeThemeToggle();
