@@ -4581,19 +4581,22 @@
   .rtn-pair > .field { flex: 1 1 auto; min-width: 0; }
   /* 2026-08-09 (compact tessellated "More options" editor brief): re-sequence the
      More-options fields so Sub-category pairs with the fitness-tracker link, and
-     Sub-tasks pairs with Also-runs-on, instead of each sitting alone with empty
-     width beside it. `order` (works the same in the default 12-col grid and in
-     .rtn-inline-mode's flex-wrap) moves them visually without touching DOM order --
-     nothing else in this form reads sibling position, so this is layout-only, same
-     as every other change in this brief. Additional-schedule and Note aren't in the
-     brief's row list (both predate it / are explicitly full-width by spec) -- they
-     get the trailing order slots so they still land after the paired rows. */
+     Sub-tasks pairs with Note, instead of each sitting alone with empty width
+     beside it (2026-08-09 pt 2, readable + tessellated mobile editor brief:
+     Sub-tasks was originally paired with Also-runs-on -- re-paired with Note per
+     this brief's explicit "Sub-tasks · Note paired" spec, Also-runs-on demoted to
+     its own full-width trailing row instead). `order` (works the same in the
+     default 12-col grid and in .rtn-inline-mode's flex-wrap) moves them visually
+     without touching DOM order -- nothing else in this form reads sibling
+     position, so this is layout-only. Additional-schedule and Also-runs-on aren't
+     in either brief's row list -- they get the trailing order slots so they still
+     land after the paired rows. */
   #rtnCategoryField { order: 1; }
   #rtnFitLinkField { order: 2; }
   #rtnSubTasksField { order: 3; }
-  #rtnAlsoRunsField { order: 4; }
-  #rtnSchedExtraField { order: 5; }
-  #rtnNoteField { order: 6; }
+  #rtnNoteField { order: 4; }
+  #rtnAlsoRunsField { order: 5; }
+  #rtnSchedExtraField { order: 6; }
   /* the sub-tasks tile grid is normally 2-up at the form's full ~640px width; halved
      to ~300px in its new paired slot, 2-up would squeeze each tile to ~140px --
      force 1-up here specifically rather than fight the shared .rtn-sub-grid rule
@@ -4979,6 +4982,23 @@
   .ghost-row .field-hint { margin: 0; }
   #fStagesBody[hidden] { display: none; }
   #fStagesBody { margin-top: 4px; }
+  /* STEP 3 (2026-08-09): permanent Archived/Recently-deleted routines list --
+     same ghost-row-toggle-into-body language as Follow-ups above, one flat row
+     per archived routine (title+meta / Restore), no card or border. */
+  .rtn-archive-section { margin-top: 16px; }
+  #rtnArchiveBody[hidden] { display: none; }
+  #rtnArchiveBody { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+  .rtn-archive-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 44px; padding: 6px 2px; border-radius: var(--field-radius-sm);
+  }
+  .rtn-archive-info { display: flex; flex-direction: column; min-width: 0; }
+  .rtn-archive-title { font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rtn-archive-restore {
+    flex: none; min-height: 44px; padding: 4px 8px; border: none; background: none;
+    color: var(--gold-bright); font-weight: 700; font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
+  }
+  .rtn-archive-restore:hover, .rtn-archive-restore:focus-visible { color: var(--ink); }
   /* More options: collapsed by default so the essentials (What / Part of life / Type /
      Day / Starts) are the whole form most of the time. display:contents when open lets
      the tucked fields lay out as direct children of #addForm's own 2-col grid -- no
@@ -10340,6 +10360,11 @@
            since their layers don't share a single end time -- the submit handler derives
            that from this same End field for layer 1, same as Mins used to feed it
            directly. -->
+      <!-- 2026-08-09 (readable + tessellated mobile editor brief): Auto-add now
+           rides in THIS pair (Start·End·Auto one row) instead of pairing with
+           Every -- see #rtnWeekIntervalAutoGroup below, repurposed for Days+Every
+           now that Auto has moved out. Same field, same id/handlers, just a
+           different parent -- rtnSyncAutoToggle etc. don't care where it lives. -->
       <div class="rtn-pair rtn-g4" id="rtnTimeRangeGroup">
         <div class="field" id="rtnStartField">
           <label for="rtnStart">Start <span class="field-hint">optional</span></label>
@@ -10348,6 +10373,17 @@
         <div class="field" id="rtnEndField">
           <label for="rtnEnd">End <span class="field-hint">optional</span></label>
           <input type="time" id="rtnEnd">
+        </div>
+        <!-- 2026-08-09 (STEP 2 fix): mirrors task.calOn now (was autoCalendar, which
+             only ever gated .ics export) -- fills the calendar on this routine's own
+             schedule when on; off leaves it as a template she adds one-off (📅)
+             whenever she actually wants it that week. Exactly mirrors the Cal
+             column's own pill switch in the Routine Library table -- both
+             read/write the same task.calOn, kept in sync by syncRtnAutoToggle
+             (see openRtnForm and this button's own click handler). -->
+        <div class="field" id="rtnAutoField">
+          <label for="rtnAutoToggle">On calendar<span class="field-hint" id="rtnAutoHint"> — on</span></label>
+          <button type="button" class="rtg-auto-switch" id="rtnAutoToggle" role="switch" aria-checked="true" aria-label="On the calendar — fills the calendar on this routine's schedule"></button>
         </div>
         <span class="rtn-dur-readout" id="rtnDurReadout" hidden></span>
       </div>
@@ -10398,25 +10434,18 @@
           <button type="button" class="track-opt" data-freq="once" aria-pressed="false">One-off</button>
         </div>
       </div>
-      <div class="field rtn-g6" id="rtnWeeklyField">
-        <label>Days <span class="field-hint">tap to toggle</span></label>
-        <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week"></div>
-      </div>
-      <div class="field rtn-g6" id="rtnRepeatSummaryField" hidden>
-        <label>Repeats on</label>
-        <button type="button" class="rtn-repeat-sum" id="rtnRepeatSummary" aria-label="Change the repeat pattern (opens More options)"></button>
-      </div>
-      <!-- 2026-08-09 (compact tessellated editor brief): Every+Auto-add wrapped in
-           their own .rtn-pair (same device Start/End already use) instead of relying
-           on the row's general auto-flow -- Days above them is a variable-width
-           mutually-exclusive field (Days or Repeats-on-summary, never both), so
-           plain rtn-g4/rtn-g8 siblings paired unpredictably depending on which one
-           was visible (sometimes Every ended up paired with Days instead, leaving
-           Auto-add alone and flex-grow-stretched to full width -- the "stray empty
-           width" bug this brief is fixing). A dedicated pair is deterministic
-           regardless of what's above it. rtn-g6 on the wrapper keeps it to one of
-           the row's two 46%-ish slots rather than growing to fill on its own. -->
-      <div class="rtn-pair rtn-g6" id="rtnWeekIntervalAutoGroup">
+      <!-- 2026-08-09 (readable + tessellated mobile editor brief): Auto-add moved
+           up to the Start/End row (see #rtnTimeRangeGroup above) -- this wrapper now
+           pairs Days+Every instead, which is a strictly better fit anyway: both are
+           weekly-only (rtnFreq!=="weekly" hides both -- syncRtnFreqFields), so the
+           whole row collapses cleanly together rather than one of a mismatched pair
+           going empty. Repeats-on (mutually exclusive with Days) moved into its OWN
+           new pair below with Starts/Ends -- see #rtnRepeatWindowGroup. -->
+      <div class="rtn-pair" id="rtnWeekIntervalAutoGroup">
+        <div class="field" id="rtnWeeklyField">
+          <label>Days <span class="field-hint">tap to toggle</span></label>
+          <div class="track-picker" id="rtnWeekdayPicker" role="group" aria-label="Days of week"></div>
+        </div>
         <div class="field" id="rtnWeekIntervalField">
           <label for="rtnWeekInterval">Every</label>
           <div style="display:flex;align-items:center;gap:6px">
@@ -10424,19 +10453,29 @@
             <span style="font-size:12px;color:var(--ink-soft)">week(s)</span>
           </div>
         </div>
-        <!-- 2026-08-09 (STEP 2 fix): mirrors task.calOn now (was autoCalendar, which
-             only ever gated .ics export) -- fills the calendar on this routine's own
-             schedule when on; off leaves it as a template she adds one-off (📅)
-             whenever she actually wants it that week. Exactly mirrors the Cal column's
-             own pill switch in the Routine Library table -- both read/write the same
-             task.calOn, kept in sync by syncRtnAutoToggle (see openRtnForm and this
-             button's own click handler). Wrapped in the Every/Auto-add .rtn-pair
-             above (compact tessellated editor brief) same as every other field here --
-             this merge only reconciled the label/default with the calOn rename,
-             nothing about the pairing itself changed. -->
-        <div class="field" id="rtnAutoField">
-          <label for="rtnAutoToggle">On calendar<span class="field-hint" id="rtnAutoHint"> — on</span></label>
-          <button type="button" class="rtg-auto-switch" id="rtnAutoToggle" role="switch" aria-checked="true" aria-label="On the calendar — fills the calendar on this routine's schedule"></button>
+      </div>
+      <!-- 2026-08-09 (readable + tessellated mobile editor brief, "Repeats-on ·
+           Starts · Ends on ONE line"): Repeats-on is the read-only summary shown for
+           every non-weekly frequency (syncRtnFreqFields); Starts/Ends are the
+           recurrence's own optional start/stop boundary, previously tucked inside
+           the collapsed More-options -- pulled up here since the brief lists them
+           as part of the always-visible "When" section. All three keep their
+           existing ids/hide-logic untouched (rtnStartDate/rtnEndDate still read by
+           the exact same submit handler + syncRtnFreqFields "once" hide) -- only
+           which row they render in changed. Repeats-on gets double the flex-basis
+           of the two dates (its text is the longest of the three). */-->
+      <div class="rtn-pair" id="rtnRepeatWindowGroup">
+        <div class="field rtn-g6" id="rtnRepeatSummaryField" hidden>
+          <label>Repeats on</label>
+          <button type="button" class="rtn-repeat-sum" id="rtnRepeatSummary" aria-label="Change the repeat pattern (opens More options)"></button>
+        </div>
+        <div class="field" id="rtnStartDateField">
+          <label for="rtnStartDate">Starts <span class="field-hint">optional</span></label>
+          <input type="date" id="rtnStartDate">
+        </div>
+        <div class="field" id="rtnEndDateField">
+          <label for="rtnEndDate">Ends <span class="field-hint">optional</span></label>
+          <input type="date" id="rtnEndDate">
         </div>
       </div>
       <div class="field full note-inline" id="rtnHairNote" hidden>
@@ -10483,21 +10522,12 @@
         </div>
         <!-- 2026-08-09 (Linh, chains+startDate spec): the recurrence's own start
              boundary -- no occurrences before it, for any repeat type OR a chain-
-             granted day (see chainGrantsOn). Hidden for One-off same as Ends below. -->
-        <!-- 2026-08-09 (compact tessellated editor brief): Starts/Ends dates now pair
-             on one row (g6/g6) instead of each stacking as its own full-width line. -->
-        <div class="field rtn-g6" id="rtnStartDateField">
-          <label for="rtnStartDate">Starts on <span class="field-hint">optional — no occurrences before this date</span></label>
-          <input type="date" id="rtnStartDate">
-        </div>
-        <!-- 2026-08-07 (Linh: "give an option to indicate when the routine ends"):
-             stops the recurrence after this date -- hidden for One-off since a
-             single date already IS its own end. Optional, so most routines (which
-             run indefinitely) never see an extra field to skip past. -->
-        <div class="field rtn-g6" id="rtnEndDateField">
-          <label for="rtnEndDate">Ends <span class="field-hint">optional — stops repeating after this date</span></label>
-          <input type="date" id="rtnEndDate">
-        </div>
+             granted day (see chainGrantsOn). Hidden for One-off same as Ends.
+             2026-08-09 pt 2 (readable + tessellated mobile editor brief): the
+             actual #rtnStartDateField/#rtnEndDateField fields moved OUT of this
+             collapsed section, up into the always-visible "When" area paired with
+             Repeats-on -- see #rtnRepeatWindowGroup above. Nothing here reads
+             their DOM position, so the move is layout-only. -->
         <!-- 2026-08-09 (compact tessellated editor brief): Sub-category now pairs
              with the fitness-tracker field (moved up via CSS `order`, see
              .rtn-more-order below) instead of leaving Sub-category's other 4/12
@@ -10594,10 +10624,18 @@
         <button type="button" class="track-opt" data-rtnview="table" aria-pressed="true">Table</button>
       </div>
     </div>
-    <div id="rtnDeleteNote" class="note-inline" hidden></div>
     <div id="rtnManage" hidden></div>
     <div id="rtnTable" hidden></div>
     <div id="rtnGrid"></div>
+    <!-- 2026-08-09 (STEP 3 undo/archive job): permanent restore point for deleted
+         routines/habits -- collapsed and hidden entirely while empty so it never
+         adds clutter; renderRtnArchive() shows/fills it. -->
+    <div class="rtn-archive-section" id="rtnArchiveSection" hidden>
+      <button type="button" class="ghost-row" id="rtnArchiveToggle" aria-expanded="false" aria-controls="rtnArchiveBody">
+        <span>🗄 Archived / Recently deleted</span><span class="field-hint" id="rtnArchiveCount"></span>
+      </button>
+      <div id="rtnArchiveBody" hidden></div>
+    </div>
     <!-- docked side editor (>=1024px): placeRtnForm() moves #rtnAddForm into the body
          here whenever an edit/add opens on desktop — same page, no popup, no scroll-away -->
     <aside class="rtn-side" id="rtnSide" hidden>
@@ -12486,6 +12524,37 @@
   }
   function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} }
   let ROUTINE_TASKS = loadRoutines();
+  // 2026-08-09 (STEP 3, "Book33 -- Add box, toggle, undo, cycle fix + day view" job,
+  // Linh: "keep deleted routines in an Archived/Recently deleted list where I can
+  // restore any of them at any time"): the permanent home for a deleted routine --
+  // separate from the 6s undo snackbar (showRtnDeleteUndo), which is just a fast
+  // path into the same restore. A routine sits here until manually restored; nothing
+  // ever sweeps it automatically.
+  const ROUTINE_ARCHIVE_KEY = "book33-routines-archive";
+  function loadRoutineArchive() {
+    try {
+      const v = JSON.parse(localStorage.getItem(ROUTINE_ARCHIVE_KEY));
+      if (Array.isArray(v)) return v;
+    } catch (e) {}
+    return [];
+  }
+  function saveRoutineArchive() { try { localStorage.setItem(ROUTINE_ARCHIVE_KEY, JSON.stringify(ROUTINE_ARCHIVE)); } catch (e) {} }
+  let ROUTINE_ARCHIVE = loadRoutineArchive();
+  function archiveRoutine(routine) {
+    ROUTINE_ARCHIVE = ROUTINE_ARCHIVE.filter(r => r.id !== routine.id);
+    ROUTINE_ARCHIVE.unshift({ ...routine, deletedAt: Date.now() });
+    saveRoutineArchive();
+  }
+  function restoreRoutineFromArchive(id) {
+    const idx = ROUTINE_ARCHIVE.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    const { deletedAt, ...routine } = ROUTINE_ARCHIVE[idx];
+    ROUTINE_ARCHIVE.splice(idx, 1);
+    saveRoutineArchive();
+    ROUTINE_TASKS.push(routine);
+    saveRoutines(); renderRoutines(); renderDay(); renderHabits();
+    return routine;
+  }
   /* seed function stripped from the public sync build */
   // the wedding date moved to PEOPLE (as a milestone) so it gets Birthdays-tab visibility +
   // event/gift sub-tasks like every other date in that list — remove the old routine-only version
@@ -18815,9 +18884,12 @@
   }
   function deleteHbHabit() {
     if (!hbEditingId) return;
+    const victim = ROUTINE_TASKS.find(x => x.id === hbEditingId);
+    if (!victim) return;
     if (!confirm("Delete this habit? It removes the routine entirely, including its calendar occurrences.")) return;
     ROUTINE_TASKS = ROUTINE_TASKS.filter(x => x.id !== hbEditingId);
     saveRoutines(); closeHbEditor(); renderHabits();
+    showRtnDeleteUndo(victim);
   }
 
   /* ============================================================
@@ -22955,10 +23027,28 @@
   // showUndoSnackbar above tryTlDelete). Same name, same two call sites
   // (rtnActDelete, rtnDeleteBtn), just one consistent undo UI everywhere.
   function showRtnDeleteUndo(routine) {
-    showUndoSnackbar(`Deleted "${routine.title}"`, () => {
-      ROUTINE_TASKS.push(routine);
-      saveRoutines(); renderRoutines(); renderDay();
-    });
+    // permanent home first (STEP 3 archive) -- the 6s snackbar below is just a
+    // fast path into the same restoreRoutineFromArchive, not a separate copy
+    archiveRoutine(routine);
+    renderRtnArchive();
+    showUndoSnackbar(`Deleted "${routine.title}"`, () => restoreRoutineFromArchive(routine.id));
+  }
+  function renderRtnArchive() {
+    const section = document.getElementById("rtnArchiveSection");
+    const body = document.getElementById("rtnArchiveBody");
+    const countEl = document.getElementById("rtnArchiveCount");
+    if (!section || !body || !countEl) return;
+    section.hidden = !ROUTINE_ARCHIVE.length;
+    if (!ROUTINE_ARCHIVE.length) { body.innerHTML = ""; return; }
+    countEl.textContent = `${ROUTINE_ARCHIVE.length}`;
+    body.innerHTML = ROUTINE_ARCHIVE.map(r => {
+      const d = new Date(r.deletedAt);
+      const when = `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+      return `<div class="rtn-archive-row">
+        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(trackLabel(r.track))} · deleted ${when}</span></div>
+        <button type="button" class="rtn-archive-restore" data-rtn-archive-restore="${esc(r.id)}">Restore</button>
+      </div>`;
+    }).join("");
   }
   // a leading pictographic emoji (optionally ZWJ-joined, optional variation
   // selector) plus its trailing space — used to pull the tile glyph off the
@@ -23063,6 +23153,7 @@
 
   let rtnListMode = "table";
   function renderRoutines() {
+    renderRtnArchive();
     renderChains();
     document.getElementById("rtnManage").hidden = rtnListMode !== "list";
     document.getElementById("rtnTable").hidden = rtnListMode !== "board";
@@ -28506,6 +28597,18 @@
     if (rtnCal) {
       const t = ROUTINE_TASKS.find(x => x.id === rtnCal.dataset.rtnCal);
       if (t) { t.calOn = t.calOn === false ? true : false; saveRoutines(); renderRoutines(); renderDay(); }
+      return;
+    }
+    // STEP 3 archive: restore straight from the permanent list (no undo-snackbar
+    // time limit -- this is the "at any time" path the snackbar's Undo shortcuts)
+    const rtnArchRestore = e.target.closest("[data-rtn-archive-restore]");
+    if (rtnArchRestore) { restoreRoutineFromArchive(rtnArchRestore.dataset.rtnArchiveRestore); return; }
+    const rtnArchToggle = e.target.closest("#rtnArchiveToggle");
+    if (rtnArchToggle) {
+      const body = document.getElementById("rtnArchiveBody");
+      const open = body.hidden;
+      body.hidden = !open;
+      rtnArchToggle.setAttribute("aria-expanded", String(open));
       return;
     }
     // 2026-08-06 (routines redesign, "tapping a routine opens its editor"): the
