@@ -4597,6 +4597,18 @@
   #rtnNoteField { order: 4; }
   #rtnAlsoRunsField { order: 5; }
   #rtnSchedExtraField { order: 6; }
+  /* 2026-08-09 (readable + tessellated mobile editor brief follow-up): measured
+     live -- Category's generic .rtn-g8 (62%) plus FitLink's generic .rtn-g4
+     (30%, but floored at min-width:140px by the .rtn-g6 rule two lines below --
+     no, by its OWN .rtn-g4 rule's min-width:150px, further up) summed past the
+     331px row width, so FitLink wrapped alone onto Sub-tasks' row instead,
+     bumping Sub-tasks off ITS intended Note pairing and leaving Note stranded
+     alone a row later -- one broken pair cascaded into breaking both. Explicit
+     basis values sized to actually fit this row (58%+32%+16px gap ≈ 296 of
+     315px usable) fixes Category+FitLink, which stops the cascade and lets
+     Sub-tasks+Note fall back into their intended pairing on the next row. */
+  #rtnAddForm.rtn-inline-mode #rtnCategoryField { flex: 1 1 58%; min-width: 0; }
+  #rtnAddForm.rtn-inline-mode #rtnFitLinkField { flex: 1 1 32%; min-width: 0; }
   /* the sub-tasks tile grid is normally 2-up at the form's full ~640px width; halved
      to ~300px in its new paired slot, 2-up would squeeze each tile to ~140px --
      force 1-up here specifically rather than fight the shared .rtn-sub-grid rule
@@ -4713,7 +4725,15 @@
   #rtnAddForm.rtn-inline-mode #rtnDurPickerField { flex: 1 1 100%; }
   #rtnAddForm.rtn-inline-mode #rtnStartField,
   #rtnAddForm.rtn-inline-mode #rtnEndField { flex: 1 1 0; min-width: 0; }
-  #rtnAddForm.rtn-inline-mode #rtnAutoField { flex: 0 0 auto; }
+  /* measured live: #rtnAutoHint gets filled at runtime by syncRtnAutoToggle with a
+     full sentence ("-- on, fills the calendar on its schedule"), much longer than
+     the short static placeholder in markup -- with flex-shrink:0 that ballooned
+     Auto to 164px and squeezed each time input down to 46px (unreadable). The
+     switch's own thumb position already shows on/off, so the sentence is hidden
+     here (compact row only -- desktop's spare room keeps it) and Auto is capped
+     so "On calendar" wrapping to 2 lines can't re-inflate it either. */
+  #rtnAddForm.rtn-inline-mode #rtnAutoHint { display: none; }
+  #rtnAddForm.rtn-inline-mode #rtnAutoField { flex: 0 0 auto; max-width: 104px; }
   #rtnAddForm.rtn-inline-mode .rtn-g3 { flex: 1 1 21%; min-width: 100px; }
   /* 2026-08-09 (readable + tessellated mobile editor brief): #rtnWeekIntervalAutoGroup
      (Days+Every) and #rtnRepeatWindowGroup (Repeats-on+Starts+Ends) are plain .rtn-pair
@@ -4725,22 +4745,52 @@
      its text (a full repeat-pattern sentence) is the longest of the three. */
   #rtnAddForm.rtn-inline-mode #rtnWeekIntervalAutoGroup,
   #rtnAddForm.rtn-inline-mode #rtnRepeatWindowGroup { flex: 1 1 100%; flex-wrap: wrap; }
-  #rtnAddForm.rtn-inline-mode #rtnRepeatSummaryField { flex: 2 1 150px; }
+  /* measured live: flex-wrap's line-break decision is made from BASIS sizes
+     before any grow/shrink runs -- min-width:0 alone doesn't help, since by the
+     time the browser is choosing which line an item goes on, shrinking hasn't
+     happened yet. The brief's literal 150/92/92 basis values sum past 331px
+     even before gaps, so Ends always lost the wrap decision and rendered alone,
+     full-width, on its own line (confirmed live) instead of joining the other
+     two. Rescaled to the same 2:1:1 ratio the brief's numbers imply, sized so
+     the SUM already fits (156+78+78+16px of gaps = 328, just under 331) --
+     confirmed live: no internal clipping on the resulting date inputs, all
+     three land on one line as the brief asks. */
+  #rtnAddForm.rtn-inline-mode #rtnRepeatSummaryField { flex: 2 1 156px; min-width: 0; }
   #rtnAddForm.rtn-inline-mode #rtnStartDateField,
-  #rtnAddForm.rtn-inline-mode #rtnEndDateField { flex: 1 1 92px; }
+  #rtnAddForm.rtn-inline-mode #rtnEndDateField { flex: 1 1 78px; min-width: 0; }
   /* the action bar (rebuild spec: "▾ More options · Save changes · Cancel · Delete")
      -- More options sits at the LEFT edge, the other three cluster at the right,
      same one-row-two-clusters shape as most save bars. Scoped to THIS form only --
      .form-actions/.more-opts-toggle are shared classes other forms on the page use
      with their own (unrelated) layouts. */
+  /* 2026-08-09 (readable + tessellated mobile editor brief, "one action row, top
+     hairline"): the row itself gets the hairline (matches every other section
+     divider's hairline colour, --note-line) instead of relying on whatever
+     happened to sit above it. */
   #rtnAddForm.rtn-inline-mode .form-actions {
-    flex: 1 1 100%; flex-wrap: wrap; justify-content: space-between; align-items: center;
-    row-gap: 8px; margin-top: 4px;
+    flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; align-items: center;
+    row-gap: 8px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--note-line);
   }
+  /* flex:1 1 auto makes the toggle eat all the row's leftover width, which pins it
+     to the left edge and pushes Cancel/Save/Delete into a clustered group at the
+     right -- the brief's "Fewer options (left, flex) · Cancel · Save · Delete"
+     shape -- without needing separate left/right wrapper divs. */
   #rtnAddForm.rtn-inline-mode .form-actions .more-opts-toggle {
     grid-column: auto; border-top: none; margin-top: 0; padding: 0; justify-content: flex-start;
-    font-size: 12px;
+    font-size: 12px; flex: 1 1 auto;
   }
+  /* Delete collapses to an icon-only square (brief: "🗑 icon (~36px square, red
+     tint)") -- font-size:0 hides the existing "Delete routine" text VISUALLY only,
+     it's still there for screen readers (arguably better a11y than swapping the
+     text out), and the 🗑 comes in as a pseudo-element so no JS/label change is
+     needed. Desktop's .rtn-del-full keeps its full text label, untouched. */
+  #rtnAddForm.rtn-inline-mode #rtnDeleteBtn {
+    flex: 0 0 auto; width: 36px; height: 36px; padding: 0; margin: 0;
+    border-radius: 8px; background: color-mix(in oklab, var(--warn) 16%, transparent);
+    font-size: 0; display: flex; align-items: center; justify-content: center;
+  }
+  #rtnAddForm.rtn-inline-mode #rtnDeleteBtn::before { content: "🗑"; font-size: 15px; }
+  #rtnAddForm.rtn-inline-mode #rtnDeleteBtn:hover { background: color-mix(in oklab, var(--warn) 26%, transparent); }
   /* flat + compact per spec: unselected chips get a subtle tone fill instead of a
      border so they still read against the panel; selected keeps the existing solid
      gold fill. No borders anywhere in this mode. */
