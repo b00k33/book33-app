@@ -1,6 +1,11 @@
 -- Book33 cloud push — one-time database setup (2026-08-05).
 -- Run in the Supabase SQL editor (or via the Management API) AFTER deploying
 -- the b33-push Edge Function and setting its secrets. Idempotent.
+-- 2026-08-09: moved to Book33's own project (mqaswzpuqqlujfhooplm), split off
+-- from LCM (the pharmacy's project, jkpfhqaxhsiwtijxxzql) so the two apps no
+-- longer share infra. The book33 table itself (owner/data/updated_at, RLS
+-- scoped to auth.uid()=owner) isn't created here -- it predates this script
+-- and was set up by hand; see the migration notes for its exact definition.
 
 -- 1) Sent-marker table: a reminder fires ONCE even though the every-minute cron
 --    re-reads the same queue. PK = (owner, tag, fire_at); the function's insert
