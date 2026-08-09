@@ -4744,6 +4744,32 @@
   #rtnAddForm.rtn-inline-mode .field .rtn-sched-extra-row .rtn-sched-extra-anchor {
     background: var(--raised) !important; border: none !important;
   }
+  /* 2026-08-09 (Linh, screenshot: an inline edit opened inside the Routine Library
+     table on a real phone had its Repeats-row cut off mid-word, only ~2/3 of the
+     form visible before a swipe): root cause isn't this form's OWN internal sizing
+     -- measured live, its rows already wrap and fit cleanly inside whatever box
+     they're given. The bug is the BOX itself: .rtn-inline-dock docks inside a
+     colspan'd <td>, and #rtnGrid .rtg-tbl table carries its own min-width (472px,
+     set for the CLOSED table's dense columns -- see the "compact ... portrait mode"
+     pass above) that a colspan cell can't opt out of. So the open editor was
+     silently trapped inside a box wider than the true viewport, requiring a swipe
+     to reach anything past it -- .rtg-tbl's own overflow-x:auto (needed for the
+     table) hid the same overflow the editor never actually needed.
+     Fix: pull the open editor OUT of that coordinate space with position:sticky
+     (containing block = .rtg-tbl, the nearest scroll ancestor) + an explicit
+     100vw-derived width, so it renders at the real screen width and stays fully
+     in view regardless of the table's own scroll position -- verified by scrolling
+     the closed table to its max offset first, then opening a row's editor: still
+     fully on-screen, 0 clipped fields. left/right insets both 8px (spacing scale,
+     CLAUDE.md "equal left/right padding"). Scoped to .rtn-inline-mode only -- the
+     standalone Add-routine drawer isn't inside a scrolling table and already fits
+     via its own grid-column:span-12 stacking rule above. */
+  @media (max-width: 640px) {
+    #rtnAddForm.rtn-inline-mode {
+      position: sticky; left: 8px;
+      width: calc(100vw - 16px); max-width: calc(100vw - 16px);
+    }
+  }
   /* 2026-08-06 (Linh's "New routine" mockup): icon box beside the Name input --
      stays side-by-side even at phone width, unlike .rtn-fieldrow above, since a
      single-character icon box never needs its own full-width line. */
@@ -4814,16 +4840,35 @@
      stretching to fill the row, wrapping into tidy rows; a filled high-contrast
      "selected" state (gold fill, dark text) replaces the thin inset ring. */
   #addForm #trackPicker.track-picker, #addForm #whoPicker.track-picker,
-  #addForm #fWeekdayPicker.track-picker, #addForm .rtn-sched-extra-days.track-picker { flex-wrap: wrap; gap: 6px; }
+  #addForm #fWeekdayPicker.track-picker, #addForm .rtn-sched-extra-days.track-picker,
+  #addForm #durChips.track-picker { flex-wrap: wrap; gap: 6px; }
   #addForm #trackPicker .track-opt, #addForm #whoPicker .track-opt,
-  #addForm #fWeekdayPicker .track-opt, #addForm .rtn-sched-extra-days .track-opt {
+  #addForm #fWeekdayPicker .track-opt, #addForm .rtn-sched-extra-days .track-opt,
+  #addForm #durChips .track-opt {
     flex: 0 0 auto; border: 1px solid var(--note-line); background: none;
     border-radius: 999px; padding: 4px 12px; font-size: 12px;
   }
   #addForm #trackPicker .track-opt[aria-pressed="true"], #addForm #whoPicker .track-opt[aria-pressed="true"],
-  #addForm #fWeekdayPicker .track-opt[aria-pressed="true"], #addForm .rtn-sched-extra-days .track-opt[aria-pressed="true"] {
+  #addForm #fWeekdayPicker .track-opt[aria-pressed="true"], #addForm .rtn-sched-extra-days .track-opt[aria-pressed="true"],
+  #addForm #durChips .track-opt[aria-pressed="true"] {
     background: var(--margin-rule); border-color: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
   }
+  /* 2026-08-09 (design44, How long picker): the hours/minutes pair reuses the
+     same borderless field-bg pill every other #addForm number/time input uses
+     (see #addForm .field-bare above) — just two of them side by side in one row,
+     with the unit letter riding inside the same pill instead of a separate label. */
+  #addForm .dur-picker { display: flex; flex-direction: column; gap: 8px; }
+  #addForm .dur-boxes { display: flex; gap: 8px; }
+  #addForm .dur-box-wrap {
+    flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    background: var(--field-bg); border-radius: var(--field-radius-sm); padding: 7px 10px;
+    cursor: text;
+  }
+  #addForm .dur-box-wrap:focus-within { box-shadow: inset 0 0 0 1.5px var(--margin-rule); }
+  #addForm .dur-input { border: none; background: none; padding: 0; width: 100%; min-width: 0; text-align: right; }
+  #addForm .dur-input:focus-visible { outline: none; }
+  #addForm .dur-unit { flex: none; font-size: 12px; color: var(--ink-faint); }
+  #addForm #durChips .track-opt:disabled { opacity: .4; cursor: not-allowed; }
   /* Type: a true joined segmented control (Task / Event / Routine), one-line labels
      with a leading icon standing in for the old round/square dot -- the dot doesn't
      read as "joined" the way a shared track shape does. */
@@ -11063,6 +11108,35 @@
           </div>
           <div class="field" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" class="field-bare"></div>
           <div class="field" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart" class="field-bare"></div>
+          <!-- 2026-08-09 (design44, "add a How long duration picker... replace the
+               confusing 'Honestly, how long?' and 'Or duration' fields"): the ONE
+               place to set how long something runs — hours+minutes boxes plus quick
+               chips, all a front-end over the existing #fDur/#fEst hidden inputs
+               below (see syncDurFromBoxes()/syncDurBoxesFromFDur()) so save/edit
+               code reading those two ids is unchanged. "Ends" in More options stays
+               as the exact-override escape hatch for the rare case duration can't express. -->
+          <div class="field full" id="fDurPickerField">
+            <label>How long</label>
+            <div class="dur-picker" id="durPicker">
+              <div class="dur-boxes">
+                <label class="dur-box-wrap">
+                  <input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours">
+                  <span class="dur-unit">h</span>
+                </label>
+                <label class="dur-box-wrap">
+                  <input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes">
+                  <span class="dur-unit">m</span>
+                </label>
+              </div>
+              <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
+                <button type="button" class="track-opt" data-dur="15">15m</button>
+                <button type="button" class="track-opt" data-dur="30">30m</button>
+                <button type="button" class="track-opt" data-dur="45">45m</button>
+                <button type="button" class="track-opt" data-dur="60">1h</button>
+                <button type="button" class="track-opt" data-dur="90">1h 30</button>
+              </div>
+            </div>
+          </div>
           <!-- recurring events (2026-08-04, "add that to routines and events"): weekly
                layers exactly like the Routines form's. Only offered on kind=event, and
                never while editing an existing one-off (no conversion in v1). -->
@@ -11120,12 +11194,14 @@
               <label for="fStages">Follow-ups <span class="field-hint">one per line, add "~15m" to time it</span></label>
               <textarea id="fStages" class="field-bare" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
             </div>
-            <div class="field full" id="fEstField">
-              <label for="fEst">Honestly, how long? <span class="field-hint">minutes</span></label>
-              <input type="number" id="fEst" class="field-bare" min="5" step="5" placeholder="e.g. 30" style="max-width:140px">
-            </div>
-            <div class="field" id="fEndField"><label for="fEnd">Ends</label><input type="time" id="fEnd" class="field-bare"></div>
-            <div class="field" id="fDurField"><label for="fDur">Or duration <span class="field-hint">fills in Ends</span></label><input type="number" id="fDur" class="field-bare" min="5" step="5" placeholder="e.g. 45"></div>
+            <!-- 2026-08-09 (design44): "Honestly, how long?" and "Or duration" are
+                 retired as visible fields — the How long picker on the main form
+                 above is the one control now. Kept as hidden inputs, same ids, so
+                 every bit of save/edit/recurring-series code that reads #fDur/#fEst
+                 keeps working untouched — see syncDurFromBoxes(). -->
+            <input type="hidden" id="fEst">
+            <input type="hidden" id="fDur">
+            <div class="field full" id="fEndField"><label for="fEnd">Ends <span class="field-hint">overrides How long above</span></label><input type="time" id="fEnd" class="field-bare" style="max-width:140px"></div>
             <div class="allday-row" id="fAllDayRow">
               <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
             </div>
@@ -28226,6 +28302,10 @@
   const fStart = document.getElementById("fStart");
   const fEnd = document.getElementById("fEnd");
   const fDur = document.getElementById("fDur");
+  const fEst = document.getElementById("fEst");
+  const durHours = document.getElementById("durHours");
+  const durMinutes = document.getElementById("durMinutes");
+  const durChips = document.getElementById("durChips");
   const fAllDay = document.getElementById("fAllDay");
   const fLoc = document.getElementById("fLoc");
   const fCat = document.getElementById("fCat");
@@ -28269,15 +28349,13 @@
   function syncKind() {
     document.querySelectorAll("#kindPicker .kind-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === formKind)));
     const isRoutine = formKind === "routine";
-    // follow-up stages + honest estimates only make sense on tickable tasks
+    // follow-up stages only make sense on tickable tasks
     const sf = document.getElementById("fStagesField");
     if (sf) sf.hidden = formKind !== "task";
-    const ef = document.getElementById("fEstField");
-    if (ef) ef.hidden = formKind !== "task";
     // an attached routine carries its own title/track/time/place already —
     // this form only has to say WHICH routine and WHICH day
     document.getElementById("fRoutineField").hidden = !isRoutine;
-    ["fTitleField", "fTrackField", "fWhoField", "fStartField", "fEndField", "fDurField", "fAllDayRow", "fCatField", "fLocField"]
+    ["fTitleField", "fTrackField", "fWhoField", "fStartField", "fDurPickerField", "fEndField", "fAllDayRow", "fCatField", "fLocField"]
       .forEach(id => { const el = document.getElementById(id); if (el) el.hidden = isRoutine; });
     fTitle.required = !isRoutine;
     if (isRoutine) populateFRoutine();
@@ -28369,7 +28447,7 @@
       document.getElementById("fEndField").hidden = on;
       document.getElementById("fAllDayRow").hidden = on;
     }
-    if (on) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; }
+    if (on) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; setDurDisabled(false); }
     // an existing series stays a series — deleting it is the 🗑's job, not an unticked box
     document.getElementById("fRepeat").disabled = !!editingRecurTemplateId;
   }
@@ -28432,6 +28510,7 @@
     formKind = "task"; syncKind();
     formWho = "me"; syncWho();
     fStart.disabled = false; fEnd.disabled = false; fDur.disabled = false;
+    setDurDisabled(false); syncDurBoxesFromFDur();
     formDirty = false;
     setMoreOptionsOpen(false);
     document.getElementById("eventSubmitBtn").textContent = "Write it in";
@@ -28448,7 +28527,7 @@
     document.getElementById("fStages").value = "";
     syncKind();
     formWho = prefWho || "me"; syncWho();
-    if (prefStart) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; fStart.value = prefStart; }
+    if (prefStart) { fAllDay.checked = false; fStart.disabled = fEnd.disabled = fDur.disabled = false; setDurDisabled(false); fStart.value = prefStart; }
     if (prefLoc && prefLoc.length) fLoc.value = prefLoc.join(" > ");
     setMoreOptionsOpen(false);
     fTitle.focus();
@@ -28472,14 +28551,20 @@
     fLoc.value = (ev.locPath || []).join(" > ");
     fAllDay.checked = !!ev.allDay;
     fStart.disabled = fEnd.disabled = fDur.disabled = !!ev.allDay;
+    setDurDisabled(!!ev.allDay);
     fStart.value = ev.allDay ? "" : (ev.start || "");
     fEnd.value = ev.allDay ? "" : (ev.end || "");
     fDur.value = !ev.allDay && ev.start && ev.end ? String(toMin(ev.end) - toMin(ev.start)) : "";
-    document.getElementById("fEst").value = ev.estMin || "";
+    // fEst is just a hidden mirror of fDur now (design44 How long picker) — derive
+    // it from the duration just computed above rather than the old stored estMin,
+    // which the picker retires as its own separate field.
+    fEst.value = fDur.value;
+    syncDurBoxesFromFDur();
     // auto-open More options if the event being edited already has data tucked in
-    // there — editing should never hide something she'd already filled in.
-    const hasExtra = whoOf(ev) !== "me" || (ev.stages && ev.stages.length) || ev.estMin
-      || (!ev.allDay && ev.end) || ev.allDay || ev.category || (ev.locPath && ev.locPath.length);
+    // there (Who/Follow-ups/All day/Category/Where) — Ends and duration live on
+    // the main form now, so a set end time is no longer a reason to auto-open.
+    const hasExtra = whoOf(ev) !== "me" || (ev.stages && ev.stages.length)
+      || ev.allDay || ev.category || (ev.locPath && ev.locPath.length);
     setMoreOptionsOpen(!!hasExtra);
     fTitle.focus();
   }
@@ -28501,10 +28586,12 @@
     document.getElementById("fStages").value = "";
     fAllDay.checked = false;
     fStart.disabled = fEnd.disabled = fDur.disabled = false;
+    setDurDisabled(false);
     const layers = schedulesOf(t);
     fStart.value = layers[0] && layers[0].start || "";
     fEnd.value = "";
     fDur.value = t.durationMin ? String(t.durationMin) : "";
+    syncDurBoxesFromFDur();
     document.getElementById("fRepeat").checked = true;
     document.getElementById("fWeekInterval").value = String(layers[0] && layers[0].weekInterval || 1);
     document.getElementById("fWeekAnchorDate").value = layers[0] && layers[0].weekAnchor || "";
@@ -28515,7 +28602,9 @@
     }));
     renderFSchedExtra(); syncFWeekdayButtons();
     formKind = "event"; syncKind();
-    const hasExtra = (t.who && t.who !== "me") || t.durationMin || t.category || (t.locPath && t.locPath.length);
+    // duration lives on the main form now (always visible for an event/series),
+    // so it's no longer a signal that something "extra" needs surfacing
+    const hasExtra = (t.who && t.who !== "me") || t.category || (t.locPath && t.locPath.length);
     setMoreOptionsOpen(!!hasExtra);
     fTitle.focus();
   }
@@ -29547,6 +29636,7 @@
     fDate.value = keyOf(state.anchor);
     fAllDay.checked = true;
     fStart.disabled = fEnd.disabled = fDur.disabled = true;
+    setDurDisabled(true); syncDurBoxesFromFDur();
     fCat.value = "Focus";
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     fTitle.focus();
@@ -29564,7 +29654,10 @@
     fDate.value = keyOf(state.anchor);
     fAllDay.checked = false;
     fStart.disabled = fEnd.disabled = fDur.disabled = false;
+    setDurDisabled(false);
     fDur.value = minutes;
+    fEst.value = minutes;
+    syncDurBoxesFromFDur();
     fCat.value = "";
     form.scrollIntoView({ behavior: "smooth", block: "center" });
     fStart.focus();
@@ -30343,7 +30436,8 @@
   });
   fAllDay.addEventListener("change", () => {
     fStart.disabled = fEnd.disabled = fDur.disabled = fAllDay.checked;
-    if (fAllDay.checked) { fStart.value = ""; fEnd.value = ""; fDur.value = ""; }
+    setDurDisabled(fAllDay.checked);
+    if (fAllDay.checked) { fStart.value = ""; fEnd.value = ""; fDur.value = ""; syncDurBoxesFromFDur(); }
   });
   // duration and end stay in lockstep: typing a duration rewrites Ends immediately
   // (also when Start moves), and editing Ends by hand clears the duration so it wins
@@ -30354,7 +30448,48 @@
   }
   fDur.addEventListener("input", syncEndFromDur);
   fStart.addEventListener("input", () => { if (fDur.value) syncEndFromDur(); });
-  fEnd.addEventListener("input", () => { fDur.value = ""; });
+  // manually typing an exact Ends overrides the picker -- clear the duration (it
+  // would otherwise win back on the next Start edit) and un-pick the boxes/chips
+  // so the form doesn't show a duration that's no longer what's actually saved
+  fEnd.addEventListener("input", () => { fDur.value = ""; syncDurBoxesFromFDur(); });
+  // 2026-08-09 (design44, How long picker): hours+minutes boxes and the quick
+  // chips are both just a front-end over #fDur -- every path (typing a box,
+  // tapping a chip) funnels through syncDurFromBoxes(), which writes #fDur,
+  // calls the syncEndFromDur() above to fill #fEnd exactly as the old "Or
+  // duration" field did, and mirrors into #fEst for tasks (the only kind whose
+  // save path actually reads it, as estMin).
+  function setDurDisabled(dis) {
+    durHours.disabled = durMinutes.disabled = dis;
+    durChips.querySelectorAll(".track-opt").forEach(b => b.disabled = dis);
+  }
+  function syncDurChipState(totalMin) {
+    durChips.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.dur === totalMin)));
+  }
+  // repaints the boxes/chips from whatever #fDur already holds -- edit
+  // population, All-day clearing it, or a manual Ends edit clearing it too
+  function syncDurBoxesFromFDur() {
+    const total = parseInt(fDur.value, 10) || 0;
+    durHours.value = total > 0 ? String(Math.floor(total / 60)) : "";
+    durMinutes.value = total > 0 ? String(total % 60) : "";
+    syncDurChipState(total);
+  }
+  function syncDurFromBoxes() {
+    const total = (parseInt(durHours.value, 10) || 0) * 60 + (parseInt(durMinutes.value, 10) || 0);
+    fDur.value = total > 0 ? String(total) : "";
+    syncEndFromDur();
+    if (formKind === "task") fEst.value = fDur.value;
+    syncDurChipState(total);
+  }
+  durHours.addEventListener("input", syncDurFromBoxes);
+  durMinutes.addEventListener("input", syncDurFromBoxes);
+  durChips.addEventListener("click", e => {
+    const b = e.target.closest(".track-opt");
+    if (!b) return;
+    const total = +b.dataset.dur;
+    durHours.value = total > 0 ? String(Math.floor(total / 60)) : "";
+    durMinutes.value = total > 0 ? String(total % 60) : "";
+    syncDurFromBoxes();
+  });
   form.addEventListener("submit", e => {
     e.preventDefault();
     // attaching an existing routine to this day — no EVENTS entry at all, just
