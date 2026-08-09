@@ -3655,7 +3655,13 @@
     cursor: pointer;
   }
   .cb-tl-gremove:hover { color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent); }
-  @media (max-width: 640px) {
+  /* 2026-08-09 (Linh: "compact ... to fit mobile portrait mode, allow for table
+     expansion in landscape"): the tightened sizing below is a PORTRAIT-phone thing
+     specifically, not a "narrow viewport" thing -- gating on orientation (not just
+     max-width) means a phone rotated to landscape falls through to the roomier
+     base rules above even if its landscape width is still under 640px, instead of
+     staying stuck in the same cramped sizing a tall narrow screen needs. */
+  @media (max-width: 640px) and (orientation: portrait) {
     .cb-tl { padding: 10px 12px; }
     .cb-tl-gcol { padding: 2px 9px; min-height: 50px; gap: 6px; }
     .cb-tl-gcol-head { font-size: 9.5px; }
@@ -4077,9 +4083,13 @@
      title row is a sibling, so it never scrolls away) is the same scroll-fallback
      pattern already shipped for the Chains page and the Routine Library table. */
   #rtnChains .rtb-gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  #rtnChains .rtb-grid { min-width: 480px; }
-  @media (max-width: 640px) {
-    #rtnChains .rtb-grid { grid-template-columns: repeat(3, 1fr); }
+  #rtnChains .rtb-grid { min-width: 480px; grid-template-columns: repeat(3, 1fr); }
+  /* 2026-08-09 (Linh: "compact ... portrait mode, allow expansion in landscape"):
+     the 3-column override right above stays UNCONDITIONAL (it has to keep beating
+     the bare .rtb-grid stack-to-1fr rule above at any orientation under 640px, or
+     a landscape phone would fall back to stacking) -- only the cell padding/border
+     squeeze is portrait-only, same reasoning as the Chains page's own pass. */
+  @media (max-width: 640px) and (orientation: portrait) {
     #rtnChains .rtb-cell { border-left: 1px solid var(--note-line); border-top: none; padding: 6px 10px 10px; }
     #rtnChains .rtb-cell-first { border-left: none; }
   }
@@ -4204,8 +4214,10 @@
   /* the ⋯ menu covers every action at any width, so the two quick-tap shortcuts
      are the only thing that needs to give ground on a phone -- below the app's
      usual 640px mobile cutoff (see .rtn-g8/g6/g3's own mobile stack rule) there
-     just isn't room for 3 icons next to Auto + a real Repeats column. */
-  @media (max-width: 640px) {
+     just isn't room for 3 icons next to Auto + a real Repeats column. Portrait-
+     gated (2026-08-09, "allow expansion in landscape") so a landscape phone under
+     640px still gets the full quick-tap row, not just the kebab. */
+  @media (max-width: 640px) and (orientation: portrait) {
     #rtnGrid .rtg-acts-quick { display: none; }
   }
   .rtg-more-menu {
@@ -4271,23 +4283,37 @@
      any width" comment above) overflow-x:auto -- a table min-width gives every
      column real pixel room instead of being squeezed toward zero, and Linh
      explicitly signed off on horizontal scroll as the fallback for whatever
-     still doesn't fit at 360px. */
-  @media (max-width: 640px) {
-    #rtnGrid .rtg-tbl table { min-width: 600px; font-size: 12px; }
-    #rtnGrid .rtg-tbl thead th { padding: 8px 8px; font-size: 9.5px; }
-    #rtnGrid .rtg-tbl tbody td { padding: 8px 8px; }
+     still doesn't fit at 360px.
+     2026-08-09 pt 2 (Linh: "compact ... portrait mode, allow expansion in
+     landscape"): orientation-gated, same reasoning as the other two horizontal
+     views' passes just above -- a landscape phone under 640px falls through to
+     the base (unscoped) table rules, i.e. the full desktop font/padding/min-width
+     -- and min-width dropped further (600->440px) plus one more type/padding step
+     so true portrait widths (~375-430px) need less scroll to begin with. */
+  @media (max-width: 640px) and (orientation: portrait) {
+    #rtnGrid .rtg-tbl table { min-width: 472px; font-size: 11.5px; }
+    #rtnGrid .rtg-tbl thead th { padding: 6px 6px; font-size: 9px; }
+    #rtnGrid .rtg-tbl tbody td { padding: 6px 6px; }
     #rtnGrid .rtg-txt {
       white-space: normal; overflow: visible; text-overflow: clip;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
-    /* Time (col 5, only 8% of RTG_COL_DEFAULTS -- ~30px of content room at 600px,
-       not enough for "6:55am") and Actions (col 7, sized at 18% for its widest
-       desktop state of 3 icons, but only the ⋯ kebab shows below 640px -- see
-       .rtg-acts-quick's own display:none above) both get a real fixed px floor
-       instead of their percentage share -- table-layout:fixed honours px and %
-       <col> widths side by side, so the other five columns are unaffected. */
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(5) { width: 64px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(7) { width: 44px !important; }
+    /* RTG_COL_DEFAULTS' percentage shares (title 21/track 10/phase 9/freq 19/
+       time 8/auto 15/acts 18) were tuned for a wide desktop table -- at 446px
+       several come out too narrow for single-word content that CAN'T wrap
+       (Track e.g. "Personal"/"Marriage", the Phase pill "before"/"event"/
+       "after"), so every column gets an explicit px floor here sized to real
+       content instead of its %: Title and Freq keep the most room since they're
+       the only cells with wrap-friendly multi-word text (see .rtg-txt above).
+       table-layout:fixed honours these directly, and they sum to the min-width
+       above so nothing is left fighting the browser for slack. */
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(1) { width: 122px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(2) { width: 74px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(3) { width: 54px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(4) { width: 86px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(5) { width: 58px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(6) { width: 44px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(7) { width: 34px !important; }
     #routinesPage .rtg-toolbar .rtg-search { flex: 1 1 100%; }
     #routinesPage .rtg-toolbar .rtg-grp { flex: 1 1 100%; }
   }
@@ -16247,6 +16273,15 @@
     // near #tlDetailHeadActions' own listener, which the header 🗑 icons use) opens
     // the shared confirm sheet for whichever one was tapped.
     if (tryTlDelete(e.target)) return;
+    // 2026-08-09 (Linh, screenshot: editing a plain event on desktop left the OLD detail
+    // sheet floating on top of the edit form that opened behind it): the desktop row's
+    // own ✎ Edit button (deskEditAttr, plain-event case) lives here in #tlDetailBody, not
+    // in #tlDetailHeadActions — so it never hit that listener's own `data-edit` ->
+    // closeTlDetail() (line ~16476), it just bubbled straight to #wrap's data-edit
+    // handler, which opens the form but was never responsible for closing this sheet.
+    // Same fix as the header icon: close this sheet, then let the click keep bubbling
+    // to #wrap so the form itself still opens.
+    if (e.target.closest("[data-edit]")) closeTlDetail();
     // 2026-08-04 (Linh: "tapping a star closes the popup — fix it so it only sets the
     // rating"): root cause was never the click TARGET, it was renderDay() below calling
     // refreshOpenTlDetail() -> renderTlDetailBody() SYNCHRONOUSLY, mid-click, which
