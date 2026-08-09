@@ -5,8 +5,10 @@ Everything client-side already ships with the app (subscription in
 handler). This folder is the server half. Nothing here re-implements reminder
 logic — the function only delivers what the app computed.
 
-Project: `jkpfhqaxhsiwtijxxzql` (same one the app + pharmacy already use).
-Secrets live in `supabase/.env.local` (gitignored — VAPID keys + cron key).
+Project: `mqaswzpuqqlujfhooplm` ("Book33" — its own project as of 2026-08-09,
+split off from LCM/pharmacy's `jkpfhqaxhsiwtijxxzql` so the two apps don't
+share infra). Secrets live in `supabase/.env.local` (gitignored — VAPID keys +
+cron key; reused as-is from the old project, no rotation needed for the move).
 
 ## Route A — access token (Claude runs everything via Management API / curl)
 
