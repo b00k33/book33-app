@@ -4083,14 +4083,30 @@
      title row is a sibling, so it never scrolls away) is the same scroll-fallback
      pattern already shipped for the Chains page and the Routine Library table. */
   #rtnChains .rtb-gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  #rtnChains .rtb-grid { min-width: 480px; grid-template-columns: repeat(3, 1fr); }
+  #rtnChains .rtb-grid { grid-template-columns: repeat(3, 1fr); }
   /* 2026-08-09 (Linh: "compact ... portrait mode, allow expansion in landscape"):
      the 3-column override right above stays UNCONDITIONAL (it has to keep beating
      the bare .rtb-grid stack-to-1fr rule above at any orientation under 640px, or
-     a landscape phone would fall back to stacking) -- only the cell padding/border
-     squeeze is portrait-only, same reasoning as the Chains page's own pass. */
+     a landscape phone would fall back to stacking) -- only the min-width floor and
+     cell padding/border squeeze are portrait-only, same reasoning as the Chains
+     page's own pass. No min-width at all outside portrait: the grid just fills
+     whatever width its container (the card, capped by .rtn-chain-grid) actually
+     has, which is always plenty on a landscape phone or desktop. */
   @media (max-width: 640px) and (orientation: portrait) {
-    #rtnChains .rtb-cell { border-left: 1px solid var(--note-line); border-top: none; padding: 6px 10px 10px; }
+    /* 2026-08-09 pt 3 (Linh, screenshot: "the chains table needs to fit the
+       mobile" -- the 480px floor above left ~2.2 of 3 columns visible on a real
+       360-390px phone, same problem the Routine Library table had). Unlike that
+       table's Track/Phase columns, every field here (.rtb-nm the task name,
+       .chain-h-time the time) is plain text that already wraps -- no single
+       badge/word needs an explicit px floor -- so a straight min-width cut is
+       enough. chain-h-root (new, see the chip() closure in renderChains()):
+       the root/Event chip never gets an unlink button, but .chain-h-item's
+       padding-right:40px button reserve was still eating a third of that
+       column's width for nothing -- zeroed here since portrait is exactly
+       where every pixel counts. */
+    #rtnChains .rtb-grid { min-width: 330px; }
+    #rtnChains .chain-h-root { padding-right: 0; }
+    #rtnChains .rtb-cell { border-left: 1px solid var(--note-line); border-top: none; padding: 5px 6px 8px; }
     #rtnChains .rtb-cell-first { border-left: none; }
   }
   /* ============ ROUTINE TABLE (grid view) ============
@@ -22639,7 +22655,7 @@
         const time = m != null ? fmtTime(minToTime(Math.max(0, Math.min(1439, m)))) : "";
         const kindChip = isPlainEvent(n) ? ` <span class="chain-kind">${parseKey(n.date).getDate()} ${MON_SHORT[parseKey(n.date).getMonth()]}</span>` : "";
         const dl = isRoot && n.deadline ? ` · by ${fmtTime(n.deadline)}` : "";
-        return `<div class="rtb-task chain-h-item"${isRoot ? "" : ` data-chain-edit="${esc(n.id)}" role="button" tabindex="0" aria-label="Edit chain — ${esc(n.title)}"`}>
+        return `<div class="rtb-task chain-h-item${isRoot ? " chain-h-root" : ""}"${isRoot ? "" : ` data-chain-edit="${esc(n.id)}" role="button" tabindex="0" aria-label="Edit chain — ${esc(n.title)}"`}>
           <span class="rtb-nm">${isRoot ? "⚓ " : ""}${esc(n.title)}${kindChip}${dl ? esc(dl) : ""}${time ? ` <span class="chain-h-time">${time}</span>` : ""}</span>
           ${isRoot ? "" : `<button type="button" class="chain-unlink" data-chain-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
         </div>`;
