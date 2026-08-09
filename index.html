@@ -71,7 +71,7 @@
        Clinic is now just an uncoloured subcategory under Work like Admin/Marketing/CPD. */
     /* 2026-08-09 (Categories & colours table): these 5 -seed/--cat-* values are now
        just the CSS-authored FALLBACK for first paint before JS runs -- the real,
-       editable source of truth is daybook-categories (see DEFAULT_CATS + applyCategoryVars()
+       editable source of truth is book33-categories (see DEFAULT_CATS + applyCategoryVars()
        in the script below), which overrides these via inline custom properties on
        :root the instant it loads. Keep these five in sync with DEFAULT_CATS so a
        fresh/offline load never flashes a stale colour before the override lands. */
@@ -1575,7 +1575,7 @@
   }
   /* 2026-08-06 (Linh's "routine phases" mockup, "give option to see it collapsed on
      the calendar"): one flow chip per live chain root visible today, replacing the
-     dead daybook-chains chip renderChainChips() used to draw here (see
+     dead book33-chains chip renderChainChips() used to draw here (see
      renderPhaseFlowChips) — same #chainChips slot/.chain-chips container, new inner
      row. A full-width button (whole row tappable, min 44px) opens that root's own
      detail sheet, where the full banded breakdown (.phase-band below) lives.
@@ -8055,7 +8055,7 @@
 
   /* 2026-07-31 ("no. redo the whole thing as the mockup"): the white mochi-card look
      above was supposed to have been retired when Ink & Brass replaced it as the card
-     identity system (2026-07-30 decision, see [[feedback_daybook_design_direction]]) —
+     identity system (2026-07-30 decision, see [[feedback_book33_design_direction]]) —
      but .w-card's own background never actually changed, so every Day-page widget still
      using it (the four "doing" white tiles AND wellness/biomech/us/shop/mandarin) was
      quietly still on the old white system underneath the rest of the dark rework. Scoped
@@ -9677,7 +9677,7 @@
     <div class="section-head"><h2>The wash rhythm</h2><span class="rule"></span><button class="tab-link" id="hairToHabits" type="button">Tracking lives in Habits →</button></div>
     <!-- 2026-08-07 (wash-rhythm rebuild): ONE step×tier matrix replaces the old three
          cumulative-tier cards (every product used to repeat across three columns).
-         Rendered by renderHairMatrix() from daybook-hair — the product shelf section
+         Rendered by renderHairMatrix() from book33-hair — the product shelf section
          is gone too, since the matrix rows ARE the shelf now (one source, no repeats). -->
     <div class="beauty-note" id="hairLede"></div>
     <div id="hairMatrix"></div>
@@ -10490,7 +10490,7 @@
        The phone-notification settings panel — reachable from the CH22 chapter menu
        (the app has no separate Settings page; the chapter drawer IS settings' home).
        Everything inside #ntBody is rendered by renderNotifyPage() from the
-       daybook-notifications model, so the panel always mirrors saved state. -->
+       book33-notifications model, so the panel always mirrors saved state. -->
   <div class="page" id="notifyPage" hidden>
     <div class="bd-head">
       <div class="eyebrow">Nudges that find your phone</div>
@@ -11220,9 +11220,40 @@
 
 <script>
 (function () {
+  // 2026-08-09 (build brief: "rename all daybook-* keys -> book33-*, with safe
+  // migration"): the very first thing this file does, before anything else reads
+  // storage (including the theme read two lines down) or the sync layer (a later,
+  // separate <script> block) ever pushes/pulls -- so a synced cloud copy also
+  // lands under the new names. Two-pass (collect every daybook-* key first, THEN
+  // mutate) because removing/adding localStorage keys while iterating it by index
+  // can skip or double-visit entries. Existing book33-* data always wins (an
+  // interrupted migration, or a newer device that's already through this once,
+  // must never be clobbered by a stale daybook-* value) -- but the old key is
+  // still deleted either way, so a stray leftover never lingers. Cheap even
+  // unconditionally: one pass over localStorage.length, only actually writing for
+  // keys that still exist with the old prefix. "daybook-" is spelled out plainly
+  // here (and in the backup-import bridge further down) -- the two places in the
+  // whole app this old name still needs to appear, since neither can find what
+  // it's not literally looking for.
+  (function migrateLegacyKeyPrefix() {
+    var stale = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf("daybook-") === 0) stale.push(k);
+    }
+    stale.forEach(function (k) {
+      var newKey = "book33-" + k.slice("daybook-".length);
+      try {
+        if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, localStorage.getItem(k));
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+    try { localStorage.setItem("book33-migrated", "1"); } catch (e) {}
+  })();
+
   // 2026-08-03 (Linh: "yes i want light mode back"): restored -- dark, high-contrast
   // by default, a manually saved preference (the toggle button) wins over that default.
-  const THEME_KEY = "daybook-theme";
+  const THEME_KEY = "book33-theme";
   const savedTheme = localStorage.getItem(THEME_KEY);
   document.documentElement.dataset.theme = savedTheme || document.documentElement.dataset.theme || "dark";
 
@@ -11245,14 +11276,14 @@
     }
   };
 
-  /* ---- Categories & colours (2026-08-09 build brief): daybook-categories is now the
+  /* ---- Categories & colours (2026-08-09 build brief): book33-categories is now the
      single source of truth for every track/sub-category colour + label in the app.
      "life" rows = parts of life (work/marriage/personal today, extensible); "sub" rows
      = sub-categories that get their own fill (parent = the life id, null for life rows).
      Everything below (TRACK_INK/TRACK_LABEL, CSS --*-seed vars, the dynamic style block
      built in regenerateCategoryStyles()) is DERIVED from this array, never hand-edited
      in parallel — that duplication is exactly what let colours drift before. */
-  const CATS_KEY = "daybook-categories";
+  const CATS_KEY = "book33-categories";
   const DEFAULT_CATS = [
     { id: "personal", name: "Personal",      type: "life", parent: null,       color: "#B98D36" },
     { id: "work",     name: "Work / Clinic", type: "life", parent: null,       color: "#37844D" },
@@ -11360,7 +11391,7 @@
   /* ---- two-person system (2026-07-27, Linh: "a section where I want to designate or
      allocate tasks for my husband … develop this calendar to a 2 people system").
      Every item carries who: "me" (default, unmarked) · "partner" · "both". ---- */
-  const PARTNER_KEY = "daybook-partner-name";
+  const PARTNER_KEY = "book33-partner-name";
   function partnerName() {
     try { const s = localStorage.getItem(PARTNER_KEY); if (s) return s; } catch (e) {}
     // fall back to whoever is recorded as the spouse, else his name
@@ -11490,7 +11521,7 @@
   // reloads — applied before first render so the timeline never flashes at the default
   (function loadSavedHourH() {
     try {
-      const v = parseFloat(localStorage.getItem("daybook-hour-h"));
+      const v = parseFloat(localStorage.getItem("book33-hour-h"));
       if (v && v >= 24 && v <= 160) document.documentElement.style.setProperty("--hour-h", `${v}px`);
     } catch (e) {}
   })();
@@ -12067,7 +12098,7 @@
 
   /* --- Family Dinh Admin: user-managed, checkable, optionally recurring tasks ---
      freq: "once" (a single date, or none = an undated to-do) | "yearly" | "monthly" | "weekly" */
-  const FAMILY_KEY = "daybook-family-tasks";
+  const FAMILY_KEY = "book33-family-tasks";
   const FREQ_LABEL = { once: "One-off", yearly: "Yearly", monthly: "Monthly", weekly: "Weekly" };
 
   function loadFamilyTasks() {
@@ -12112,7 +12143,7 @@
 
   /* --- Routines: general recurring tasks, any life track ---
      freq: "once" | "daily" | "weekly" | "monthly" | "yearly" */
-  const ROUTINE_KEY = "daybook-routines";
+  const ROUTINE_KEY = "book33-routines";
   const ROUTINE_FREQ_LABEL = { once: "One-off", daily: "Daily", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly", asNeeded: "As needed" };
 
   function loadRoutines() {
@@ -12265,21 +12296,21 @@
      routines. Reuses schedulesOf()/layerOccursOn() unchanged (templates carry
      freq:"weekly"). recurUntil (template-level, inclusive) is the "delete this and
      following" boundary — it stops every layer at once, matching Google Calendar. */
-  const RECUR_EV_KEY = "daybook-recurring-events";
+  const RECUR_EV_KEY = "book33-recurring-events";
   function loadRecurringEvents() {
     try { const v = JSON.parse(localStorage.getItem(RECUR_EV_KEY)); return Array.isArray(v) ? v : []; }
     catch (e) { return []; }
   }
   function saveRecurringEvents() { try { localStorage.setItem(RECUR_EV_KEY, JSON.stringify(RECURRING_EVENTS)); } catch (e) {} }
   let RECURRING_EVENTS = loadRecurringEvents();
-  const EV_TIME_OVR_KEY = "daybook-event-time-overrides";
+  const EV_TIME_OVR_KEY = "book33-event-time-overrides";
   function loadEvTimeOvr() {
     try { const v = JSON.parse(localStorage.getItem(EV_TIME_OVR_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
   }
   function saveEvTimeOvr() { try { localStorage.setItem(EV_TIME_OVR_KEY, JSON.stringify(EVENT_TIME_OVR)); } catch (e) {} }
   let EVENT_TIME_OVR = loadEvTimeOvr();
-  const EV_SKIP_KEY = "daybook-event-skips";
+  const EV_SKIP_KEY = "book33-event-skips";
   function loadEvSkips() {
     try { const v = JSON.parse(localStorage.getItem(EV_SKIP_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12551,7 +12582,7 @@
      a plain running to-do). Ticks reuse the shared DONE store, keyed by item + the
      current period, so a "daily" item re-opens fresh each day without deleting history.
      No starter content — these are Linh's own procedures, not ours to invent. */
-  const WORK_MANUAL_KEY = "daybook-work-manual";
+  const WORK_MANUAL_KEY = "book33-work-manual";
   const WM_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly", reference: "Reference" };
   function loadWorkManual() {
     try {
@@ -12576,7 +12607,7 @@
      Target and year boundary are hers to set (defaults: 20 hrs, year starting
      1 Dec — the AHPRA Chinese Medicine registration year — both editable
      in-page, so a different board period is a two-click fix, not a rebuild). */
-  const CPD_KEY = "daybook-cpd";
+  const CPD_KEY = "book33-cpd";
   function loadCpd() {
     const empty = { target: 20, startMonth: 12, startDay: 1, entries: [] };
     try {
@@ -12627,7 +12658,7 @@
 
   const PEOPLE_SEED = [];
 
-  const PEOPLE_KEY = "daybook-people";
+  const PEOPLE_KEY = "book33-people";
   function loadPeople() {
     try {
       const v = JSON.parse(localStorage.getItem(PEOPLE_KEY));
@@ -12640,7 +12671,7 @@
   // one-time: fold the 2026 friends/TCM/bouldering/GG33 birthday batch into saved data
   // (new seeds don't otherwise reach a PEOPLE list already stored in localStorage)
   (function addBirthdays2026() {
-    const FLAG = "daybook-people-friends-2026";
+    const FLAG = "book33-people-friends-2026";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     const have = new Set(PEOPLE.map(p => p.id));
     let added = 0;
@@ -12687,7 +12718,7 @@
      nudges she's already acted on (done) — weeks/trimester/standard milestones all
      derive live from the due date, so nothing drifts. private:true mutes every
      nudge ("keeping it private for now") but keeps the card. ---- */
-  const PREG_KEY = "daybook-pregnancies";
+  const PREG_KEY = "book33-pregnancies";
   function loadPreg() { try { const v = JSON.parse(localStorage.getItem(PREG_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   function savePreg() { try { localStorage.setItem(PREG_KEY, JSON.stringify(PREGNANCIES)); } catch (e) {} }
   let PREGNANCIES = loadPreg();
@@ -12730,7 +12761,7 @@
 
   /* --- Birthday planning: event + gift sub-tasks per occurrence, keyed by the
      same id the birthday's calendar entry uses, so a new year gets a clean slate --- */
-  const BDAY_PLAN_KEY = "daybook-bday-plans";
+  const BDAY_PLAN_KEY = "book33-bday-plans";
   function loadBdayPlans() {
     try { const v = JSON.parse(localStorage.getItem(BDAY_PLAN_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12745,7 +12776,7 @@
      record notes individual to the day and doesn't affect the whole routine") — same
      shape as BDAY_PLANS above: keyed by the occurrence id (rt-<taskId>-<date>, or that
      plus ::step::<i> for a sub-task), never touches ROUTINE_TASKS itself. */
-  const RTN_NOTES_KEY = "daybook-routine-notes";
+  const RTN_NOTES_KEY = "book33-routine-notes";
   function loadRtnNotes() {
     try { const v = JSON.parse(localStorage.getItem(RTN_NOTES_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12761,7 +12792,7 @@
      pattern date (where it would render with no override); date is where it now
      actually renders (equal to fromDate for a same-day time-only nudge, different for a
      day-to-day reschedule). See generatedFor()'s routine loop for how this is read. */
-  const RTN_TIME_OVR_KEY = "daybook-routine-time-overrides";
+  const RTN_TIME_OVR_KEY = "book33-routine-time-overrides";
   function loadRtnTimeOvr() {
     try { const v = JSON.parse(localStorage.getItem(RTN_TIME_OVR_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12776,7 +12807,7 @@
      ROUTINE_NOTES/ROUTINE_TIME_OVR above — checked in generatedFor()'s routine loop
      (both the normal pass and the cross-day-reschedule injected pass, so a moved-then-
      deleted occurrence doesn't reappear on its new date either). */
-  const RTN_SKIP_KEY = "daybook-routine-skips";
+  const RTN_SKIP_KEY = "book33-routine-skips";
   function loadRtnSkips() {
     try { const v = JSON.parse(localStorage.getItem(RTN_SKIP_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12786,11 +12817,11 @@
 
   /* ============================================================
      ROUTINE OCCURRENCE OVERRIDES — 2026-08-04 (Linh, "edit this day vs the routine"):
-     the CANONICAL per-day override store. A routine in daybook-routines is a TEMPLATE;
+     the CANONICAL per-day override store. A routine in book33-routines is a TEMPLATE;
      each calendar appearance is a generated OCCURRENCE. Editing an occurrence defaults
      to changing ONLY that day — recorded here, never on the template's own fields.
 
-     Shape, on each routine object itself (so it saves/syncs with daybook-routines):
+     Shape, on each routine object itself (so it saves/syncs with book33-routines):
        t.overrides = { "2026-08-04": { start, dur, end, title, note,
                                        skipped:true, movedTo:"YYYY-MM-DD" } }
      Keyed by the occurrence's PATTERN date (where the recurrence would place it).
@@ -12877,7 +12908,7 @@
      so un-ticking removes exactly that session and nothing she logged by hand
      (Linh 2026-08-02: "register events like pilates linked to the fitness tracking
      system so when i click them as done, the habits tracker also register"). --- */
-  const LINKED_FIT_KEY = "daybook-linked-fit";
+  const LINKED_FIT_KEY = "book33-linked-fit";
   function loadLinkedFit() {
     try { const v = JSON.parse(localStorage.getItem(LINKED_FIT_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12933,7 +12964,7 @@
 
   // manual override so a wash type can be placed on any date, independent of the
   // automatic every-2-days cycle — absent = follow the automatic schedule, "none" = explicitly skip
-  const HAIR_OVERRIDE_KEY = "daybook-hair-overrides";
+  const HAIR_OVERRIDE_KEY = "book33-hair-overrides";
   function loadHairOverrides() {
     try { const v = JSON.parse(localStorage.getItem(HAIR_OVERRIDE_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -12944,7 +12975,7 @@
   /* ============ BEAUTY pages — wash rhythm matrix, written routines ============ */
   // her actual shelf (2026-07-22): every product is a 5-minute step
   const HAIR_STEP_MIN = 5;
-  /* 2026-08-07 (Linh's "wash rhythm rebuild" spec): daybook-hair is THE single source
+  /* 2026-08-07 (Linh's "wash rhythm rebuild" spec): book33-hair is THE single source
      of truth for the wash tiers. The three washes are cumulative tiers (Regular ⊂
      Treatment ⊂ Everything), so the old three-card layout repeated every product across
      three columns — this replaces that with one step list whose `in` array says which
@@ -12953,7 +12984,7 @@
      for a hair-* routine that's never been linked, and for the rotation's type keys).
      A linked routine ({ hairLink: { tier } }, see hairLinkSteps below) derives its
      sub-tasks from here LIVE — edit a product once, everything follows. */
-  const HAIR_DATA_KEY = "daybook-hair";
+  const HAIR_DATA_KEY = "book33-hair";
   const HAIR_DATA_DEFAULTS = {
     cadenceDays: 2, minPerStep: 5,
     tiers: [
@@ -13030,13 +13061,13 @@
   const roundUp5 = mins => mins > 0 ? Math.ceil(mins / 5) * 5 : 0;
   const washTotalMin = t => {
     const rt = hairRoutineFor(t);
-    if (rt && rt.hairLink) return hairTierMin(rt.hairLink.tier);   // linked = live from daybook-hair
+    if (rt && rt.hairLink) return hairTierMin(rt.hairLink.tier);   // linked = live from book33-hair
     const steps = rt && Array.isArray(rt.subtasks) ? rt.subtasks : HAIR.types[t].steps.map(() => ({ min: HAIR_STEP_MIN }));
     return roundUp5(steps.reduce((a, s) => a + (s.min || HAIR_STEP_MIN), 0));
   };
   const routineTotalMin = r => roundUp5(r.steps.reduce((a, s) => a + s.min, 0));
   // her custom names for the beauty routines — no entry means the built-in name
-  const BEAUTY_NAME_KEY = "daybook-beauty-names";
+  const BEAUTY_NAME_KEY = "book33-beauty-names";
   let BEAUTY_NAMES = (() => {
     try { const v = JSON.parse(localStorage.getItem(BEAUTY_NAME_KEY)); if (v && typeof v === "object") return v; } catch (e) {}
     return {};
@@ -13051,7 +13082,7 @@
   // every other routine, rather than being a separate read-only mirror. Any name
   // she'd already customised comes along so nothing looks like it reverted.
   (function migrateBeautyRoutines() {
-    const FLAG = "daybook-rtn-beauty-migrated";
+    const FLAG = "book33-rtn-beauty-migrated";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     let changed = false;
     BEAUTY_ROUTINES.forEach(r => {
@@ -13078,7 +13109,7 @@
   // from this entry when one exists. id is fixed ("hair-regular" etc.) because the
   // rotation logic depends on exactly these three keys existing — never delete one.
   (function migrateHairRoutines() {
-    const FLAG = "daybook-rtn-hair-migrated";
+    const FLAG = "book33-rtn-hair-migrated";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     let changed = false;
     Object.keys(HAIR.types).forEach(k => {
@@ -13100,7 +13131,7 @@
   // manual one-off extraDate), so they've never once shown up as a real occurrence
   // anywhere. Manicure stays asNeeded — that one really is occasional.
   (function migrateSkincareDaily() {
-    const FLAG = "daybook-rtn-skincare-daily-migrated";
+    const FLAG = "book33-rtn-skincare-daily-migrated";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     let changed = false;
     ["beauty-skincareAM", "beauty-skincarePM"].forEach(id => {
@@ -13270,7 +13301,7 @@
     }
     // ↻ Make routine — LINK, not copy: the tier's existing hair-* routine (the one the
     // every-2-days rotation already schedules) gains hairLink and sheds its baked
-    // subtasks, so from here on its steps derive live from daybook-hair (hairLinkSteps).
+    // subtasks, so from here on its steps derive live from book33-hair (hairLinkSteps).
     // No 4th routine is created — that would put the same wash on the calendar twice.
     const mk = e.target.closest("[data-hx-mk-rtn]");
     if (mk) {
@@ -13291,7 +13322,7 @@
       return;
     }
     // 📅 task — a one-off SNAPSHOT: title + minutes are baked at this moment and the
-    // task never looks at daybook-hair again, so later hair edits don't touch it.
+    // task never looks at book33-hair again, so later hair edits don't touch it.
     const tk = e.target.closest("[data-hx-task]");
     if (tk) {
       const tier = HAIRD.tiers.find(t => t.id === tk.dataset.hxTask);
@@ -13364,7 +13395,7 @@
     // built-in HAIR.types definition only if it's somehow missing.
     // 2026-08-07 (wash-rhythm rebuild): a LINKED routine (hairLink, made from the
     // Hair page's ↻ Make routine) outranks both — its steps derive fresh from
-    // daybook-hair on every render, so a product/step edit there can never drift.
+    // book33-hair on every render, so a product/step edit there can never drift.
     const stepsOf = (rt, t) => rt && rt.hairLink ? hairLinkSteps(rt.hairLink.tier)
       : rt && Array.isArray(rt.subtasks) ? rt.subtasks : HAIR.types[t].steps.map(s => ({ text: s, min: HAIR_STEP_MIN }));
     let t = washTypeWithOverride(date);
@@ -13656,7 +13687,7 @@
   /* ============================================================
      Storage
      ============================================================ */
-  const STORE_KEY = "daybook-events", DONE_KEY = "daybook-done", SHOP_KEY = "daybook-shopping";
+  const STORE_KEY = "book33-events", DONE_KEY = "book33-done", SHOP_KEY = "book33-shopping";
   function loadEvents() {
     try {
       return JSON.parse(localStorage.getItem(STORE_KEY) || "[]").map(e => ({
@@ -13673,8 +13704,8 @@
   // { s: "rescheduled"|"cancelled", note, to (ms timestamp), reason } — all optional;
   // "done" is NOT stored here (DONE stays the single source of truth for done, so
   // streaks/rewards/Growth keep reading the map they always have), and a bare { note }
-  // entry is just a note on an otherwise-open item. daybook-* key = cloud-synced free.
-  const OUTCOME_KEY = "daybook-outcomes";
+  // entry is just a note on an otherwise-open item. book33-* key = cloud-synced free.
+  const OUTCOME_KEY = "book33-outcomes";
   function loadOutcomes() { try { return JSON.parse(localStorage.getItem(OUTCOME_KEY) || "{}"); } catch (e) { return {}; } }
   function saveOutcomes() { try { localStorage.setItem(OUTCOME_KEY, JSON.stringify(OUTCOMES)); } catch (e) {} }
   function loadShop() { try { return JSON.parse(localStorage.getItem(SHOP_KEY) || "[]"); } catch (e) { return []; } }
@@ -13692,7 +13723,7 @@
   let SHOP = loadShop();
   // one-time: add Linh's L'Oreal scalp serum to the shopping list (2026-07-26)
   (function addScalpSerum2026() {
-    const FLAG = "daybook-shop-scalp-serum-2026";
+    const FLAG = "book33-shop-scalp-serum-2026";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
     const nm = "L'Oreal Paris Elvive Growth Booster Anti-Fall Scalp Serum";
     if (!SHOP.some(s => s.name === nm)) { SHOP.push({ id: uid(), name: nm, size: "102mL", step: "Root treatment", bought: false }); saveShop(SHOP); }
@@ -13706,8 +13737,8 @@
      Computed blocks are NEVER saved as events — times are recomputed live each render,
      so there is nothing to drift or duplicate. Steps reference existing routines/events
      by id (their duration comes from the referenced item) or define an inline step with
-     its own dur. daybook-chains has no builder UI yet — data-level for now. */
-  const CHAINS_KEY = "daybook-chains";
+     its own dur. book33-chains has no builder UI yet — data-level for now. */
+  const CHAINS_KEY = "book33-chains";
   function loadChains() {
     try { const v = JSON.parse(localStorage.getItem(CHAINS_KEY) || "[]"); return Array.isArray(v) ? v : []; }
     catch (e) { return []; }
@@ -13841,7 +13872,7 @@
   // 2026-08-06 (Linh's "routine phases" mockup, "collapsed on the calendar... tap to
   // expand"): one flow chip per live chain root visible today, in the SAME #chainChips
   // slot renderChainChips() above draws into (that one's chainData.chips is always
-  // empty now — dead daybook-chains data, see its call site's own comment — so the two
+  // empty now — dead book33-chains data, see its call site's own comment — so the two
   // never actually paint into the box at the same time). rootIds is renderDay()'s own
   // liveChainIds (occurrence ids of every chain root rendered today); a root with no
   // before/after siblings (a lone deadline-only item, say) draws no chip — the single-
@@ -13878,7 +13909,7 @@
   // above the last block's visual bottom and drift nodes off-centre. Must run after
   // renderTimeline(). 2026-08-06: chainIds is a flat array of fromChain ids (one per
   // live anchorTo pair, see renderDay()'s liveChainIds) — no deadline concept in this
-  // model (that was Stage 2's daybook-chains-only feature; dropped along with it).
+  // model (that was Stage 2's book33-chains-only feature; dropped along with it).
   function renderChainLayer(chainIds, deadlineMarks) {
     const layer = document.getElementById("chainLayer");
     if (!layer) return;
@@ -13947,7 +13978,7 @@
       dateNight = ROUTINE_TASKS.find(t => t.track === "marriage" && /date night/i.test(t.title));
       if (dateNight) { dateNight.role = "date-night"; saveRoutines(); }
     }
-    const FLAG = "daybook-seed-pre-datenight";
+    const FLAG = "book33-seed-pre-datenight";
     if (localStorage.getItem(FLAG)) return;
     if (ROUTINE_TASKS.some(t => t.id === "pre-datenight")) { try { localStorage.setItem(FLAG, "1"); } catch (e) {} return; }
     const steps = [
@@ -13979,7 +14010,7 @@
   // A+B run on Pilates→work days; C/E are a library (no fixed day) she places when
   // they apply; D covers free days; Pack + Fridge round out the system.
   (function seedMorningSystem() {
-    const FLAG = "daybook-seed-morning-system-v1";
+    const FLAG = "book33-seed-morning-system-v1";
     if (localStorage.getItem(FLAG)) return;
     // retire the earlier single daily morning routine, now split into the system
     ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== "morning-routine");
@@ -14011,7 +14042,7 @@
       ROUTINE_TASKS.push({ id: d.id, title: d.title, track: "personal", category: d.category, note: d.note, freq: "weekly", weekdays: d.weekdays, start: d.start, subtasks: d.subtasks });
     });
     saveRoutines();
-    try { localStorage.setItem(FLAG, "1"); localStorage.setItem("daybook-seed-morning-routine", "1"); } catch (e) {}
+    try { localStorage.setItem(FLAG, "1"); localStorage.setItem("book33-seed-morning-routine", "1"); } catch (e) {}
   })();
 
   // 2026-08-06 (Linh: "an event saved at 7:30am (Pilates) renders at 8:45am, AND its
@@ -14179,7 +14210,7 @@
     const box = document.getElementById("herbAlertBox");
     if (!box) return;
     let ph = null;
-    try { ph = JSON.parse(localStorage.getItem("daybook-pharmacy")); } catch (e) {}
+    try { ph = JSON.parse(localStorage.getItem("book33-pharmacy")); } catch (e) {}
     const herbs = ph && Array.isArray(ph.herbs) ? ph.herbs : [];
     let zero = 0, low = 0, toOrder = 0;
     for (const h of herbs) {
@@ -14204,7 +14235,7 @@
   /* ---- the unstick corner: a soft place to land when she's procrastinating.
      Writing the block down + naming a two-minute move is the whole intervention;
      the book answers gently and can write the small move straight onto today. ---- */
-  const UNSTICK_KEY = "daybook-unstick";
+  const UNSTICK_KEY = "book33-unstick";
   let UNSTICK = (() => { try { const v = JSON.parse(localStorage.getItem(UNSTICK_KEY)); return Array.isArray(v) ? v : []; } catch (e) { return []; } })();
   const saveUnstick = () => { try { localStorage.setItem(UNSTICK_KEY, JSON.stringify(UNSTICK)); } catch (e) {} };
   let unstickOpen = false, unstickJustSaved = null;
@@ -14388,7 +14419,7 @@
   // of soft sine notes with a quick decay) so there's no audio asset to bundle;
   // AudioContext is created lazily on first real use, always inside a user
   // gesture (a tick), so autoplay restrictions never bite.
-  const REWARD_SOUND_KEY = "daybook-reward-sound";
+  const REWARD_SOUND_KEY = "book33-reward-sound";
   let rewardSoundOn = localStorage.getItem(REWARD_SOUND_KEY) === "1";
   function setRewardSound(on) {
     rewardSoundOn = !!on;
@@ -14495,7 +14526,7 @@
   // Two groups, same visual language as the habit tracker — done rows get a green ●
   // (fitness token) + soft strike, still-to-do rows a faint ○ and are tappable.
   // Rows carry data-tick-ev, so the app-wide tick delegate handles the toggle through
-  // the ONE existing completion mechanism (daybook-done via tickTask/toggleDone —
+  // the ONE existing completion mechanism (book33-done via tickTask/toggleDone —
   // rewards, fit-links and renderDay's live ring/count refresh all come for free,
   // and nothing new is ever created). What counts = dayTickables(), the single
   // easy-to-change source (its filter is the ONLY place to narrow later).
@@ -16830,12 +16861,12 @@
     { th: "training & recovery", t: "Walk the day after a hard session — gentle cyclical motion is how joints flush and tissue remodels." },
   ];
   // ratings: { tipId: 1 (♥ more like this) | -1 (✕ less like this) } — rides the
-  // daybook-* prefix so it travels with the whole-book backup automatically
-  const BIO_RATE_KEY = "daybook-biomech-ratings";
+  // book33-* prefix so it travels with the whole-book backup automatically
+  const BIO_RATE_KEY = "book33-biomech-ratings";
   let BIO_RATES = (() => { try { return JSON.parse(localStorage.getItem(BIO_RATE_KEY)) || {}; } catch (e) { return {}; } })();
   function saveBioRatings() { try { localStorage.setItem(BIO_RATE_KEY, JSON.stringify(BIO_RATES)); } catch (e) {} }
   const bioTipId = t => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return "b" + h.toString(36); };
-  const BIO_SHOWN_KEY = "daybook-biomech-shown";   // keeps today's tip steady after a ♥
+  const BIO_SHOWN_KEY = "book33-biomech-shown";   // keeps today's tip steady after a ♥
   function biomechTipFor(d) {
     const pool = BIOMECH_TIPS.map(x => ({ text: x.t, theme: x.th, src: "" }));
     // her own observations join the rotation — any session note long enough to teach
@@ -17060,7 +17091,7 @@
      keyed by "deck:hanzi". Useful cards get 3x weight in the rotation so they resurface
      more; Not-important cards drop out of rotation entirely (reversible via the ⟲ reset
      link, since there's no way to page back to an excluded card otherwise). ---- */
-  const MAND_PREFS_KEY = "daybook-mand-prefs";
+  const MAND_PREFS_KEY = "book33-mand-prefs";
   function loadMandPrefs() {
     try {
       const v = JSON.parse(localStorage.getItem(MAND_PREFS_KEY));
@@ -17198,7 +17229,7 @@
      (2026-07-27, Linh: "the day page is very busy … make the tiles collapsible or …
      postpone them to after the calendar"). Nothing is removed: every tile gains a slim
      strip — fold it to a one-line pill, or park it on a shelf BELOW the calendar.
-     Prefs live in daybook-day-tiles, so they sync across her phone + desktop. */
+     Prefs live in book33-day-tiles, so they sync across her phone + desktop. */
   // a tile may carry sum() — what its folded pill says instead of just its name, so
   // collapsing hides the detail without hiding the answer (Linh 2026-07-27)
   const TILE_DEFS = [
@@ -17260,7 +17291,7 @@
     if (TILE_GROUP_IDS.includes(p.grp)) return p.grp;
     return TILE_GROUP_SEED[id] || "other";
   };
-  const TILE_KEY = "daybook-day-tiles";
+  const TILE_KEY = "book33-day-tiles";
   let TILE_PREFS = (() => { try { return JSON.parse(localStorage.getItem(TILE_KEY)) || {}; } catch (e) { return {}; } })();
   const saveTilePrefs = () => { try { localStorage.setItem(TILE_KEY, JSON.stringify(TILE_PREFS)); } catch (e) {} };
   const TILE_HOME = {};   // id -> hidden marker holding the tile's home spot in the DOM
@@ -17289,7 +17320,7 @@
      individually collapsible") — tap a card's heading and its action chips tuck away,
      leaving the number and the name. Keyed by position because the six are a fixed set
      in a fixed order, while their labels change with the date. ---- */
-  const DF_KEY = "daybook-focus-cards";
+  const DF_KEY = "book33-focus-cards";
   let DF_OFF = (() => { try { return new Set(JSON.parse(localStorage.getItem(DF_KEY)) || []); } catch (e) { return new Set(); } })();
   const saveDfOff = () => { try { localStorage.setItem(DF_KEY, JSON.stringify([...DF_OFF])); } catch (e) {} };
   function applyFocusCards() {
@@ -18021,9 +18052,9 @@
     renderTimeline(timed);
     // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
     // renderTimeline so compact-hour heights are settled and topForMin() is final.
-    // 2026-08-06 (Linh's "routine phases" mockup): renderChainChips's own daybook-chains
+    // 2026-08-06 (Linh's "routine phases" mockup): renderChainChips's own book33-chains
     // chip data is always empty now (real chains live as anchorTo pairs, not
-    // daybook-chains steps) so it never actually painted anything into #chainChips —
+    // book33-chains steps) so it never actually painted anything into #chainChips —
     // renderPhaseFlowChips takes over that slot with the live flow-chip summary.
     // renderChainLayer already reads liveChainIds for the same reason.
     renderPhaseFlowChips(liveChainIds, d);
@@ -18377,7 +18408,7 @@
          wherever she makes it. Deliberately EVENTS-only: generated routines would bury
          the real list under teeth-brushing.
      ---- */
-  const WTODO_KEY = "daybook-week-todo";
+  const WTODO_KEY = "book33-week-todo";
   let WTODO = (() => { try { return JSON.parse(localStorage.getItem(WTODO_KEY)) || {}; } catch (e) { return {}; } })();
   const saveWTodo = () => { try { localStorage.setItem(WTODO_KEY, JSON.stringify(WTODO)); } catch (e) {} };
   const wkScopeOf = d => "w:" + keyOf(startOfWeek(d));
@@ -18738,7 +18769,7 @@
   /* --- Week & Month goals — small per-period aims, ticked off in place.
      Keyed "w:<monday key>" for weeks and "m:<yyyy-mm>" for months, so each
      week/month keeps its own list as she pages through time. --- */
-  const PGOAL_KEY = "daybook-period-goals";
+  const PGOAL_KEY = "book33-period-goals";
   function loadPeriodGoals() {
     try { const v = JSON.parse(localStorage.getItem(PGOAL_KEY)); return v && typeof v === "object" ? v : {}; }
     catch (e) { return {}; }
@@ -18863,7 +18894,7 @@
      WEEKLY REVIEW — the Sunday-night ritual: read the week that
      was, write a few honest lines, aim the week that's coming.
      ============================================================ */
-  const REVIEW_KEY = "daybook-reviews";
+  const REVIEW_KEY = "book33-reviews";
   function loadReviews() { try { return JSON.parse(localStorage.getItem(REVIEW_KEY) || "{}"); } catch (e) { return {}; } }
   function saveReviews() { try { localStorage.setItem(REVIEW_KEY, JSON.stringify(REVIEWS)); } catch (e) {} }
   let REVIEWS = loadReviews();
@@ -19124,7 +19155,7 @@
     { f: 2/3, label: "⅔" }, { f: 3/4, label: "¾" }, { f: 1,   label: "All" },
   ];
 
-  const FOOD_KEY = "daybook-food";
+  const FOOD_KEY = "book33-food";
   function loadFood() {
     try { return JSON.parse(localStorage.getItem(FOOD_KEY) || "{}"); } catch (e) { return {}; }
   }
@@ -19138,7 +19169,7 @@
   /* --- Recipes she actually likes + a fridge-matched suggestion, so dinner can be
      planned from the car instead of standing in front of the fridge (Linh's own framing).
      No starter recipes — this is her list, built up as she adds what she cooks. --- */
-  const RECIPES_KEY = "daybook-recipes";
+  const RECIPES_KEY = "book33-recipes";
   function loadRecipes() {
     try {
       const v = JSON.parse(localStorage.getItem(RECIPES_KEY));
@@ -19151,7 +19182,7 @@
 
   // one-time seed (2026-07-24, her ask): the chunky beef & red wine meat pie
   (function seedMeatPie() {
-    const FLAG = "daybook-seed-meatpie1";
+    const FLAG = "book33-seed-meatpie1";
     if (localStorage.getItem(FLAG)) return;
     if (!RECIPES.some(r => /meat pie/i.test(r.name))) {
       RECIPES.push({
@@ -19189,12 +19220,12 @@
   }
 
   /* ---- the week's dinner plan → shopping list generator ---- */
-  const MEAL_KEY = "daybook-mealplan";
+  const MEAL_KEY = "book33-mealplan";
   function loadMealPlan() { try { return JSON.parse(localStorage.getItem(MEAL_KEY) || "{}"); } catch (e) { return {}; } }
   function saveMealPlan() { try { localStorage.setItem(MEAL_KEY, JSON.stringify(MEALPLAN)); } catch (e) {} }
   let MEALPLAN = loadMealPlan();
   // lunches live in their own store with the exact same value shapes as MEALPLAN
-  const LUNCH_KEY = "daybook-lunchplan";
+  const LUNCH_KEY = "book33-lunchplan";
   function loadLunchPlan() {
     try { const v = JSON.parse(localStorage.getItem(LUNCH_KEY)); if (v && typeof v === "object") return v; } catch (e) {}
     return {};
@@ -19208,7 +19239,7 @@
   // husband's work nights — always the 8pm–11pm shift, only the venue varies.
   // Mon & Wed are his usual nights, so they default to working (venue unset until tapped);
   // HUBWORK[dateKey] = "Alexandria" | "Waterloo" | "off"; absence = the weekday default.
-  const HUBWORK_KEY = "daybook-husband-work";
+  const HUBWORK_KEY = "book33-husband-work";
   const HUB_LOCATIONS = ["Alexandria", "Waterloo"];
   const HUB_DEFAULT_DOW = [1, 3];
   const HUB_START_MIN = 20 * 60, HUB_END_MIN = 23 * 60;
@@ -19470,7 +19501,7 @@
   /* ============================================================
      NUTRITION — daily goals + logging
      ============================================================ */
-  const NUT_KEY = "daybook-nutrition";
+  const NUT_KEY = "book33-nutrition";
   // her stated priorities — daily iron, protein, choline, vitamin C, and calories —
   // lead the list; water stays as a lower-priority extra she can still log.
   const NUT_METRICS = [
@@ -19560,7 +19591,7 @@
   /* ============================================================
      HEALTH — fasting, weight, body fat, period
      ============================================================ */
-  const HEALTH_KEY = "daybook-health";
+  const HEALTH_KEY = "book33-health";
   function loadHealth() {
     try { return JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}"); } catch (e) { return {}; }
   }
@@ -20591,7 +20622,7 @@
   const FIT_TYPE_ABBR = { Pilates: "PI", F45: "F45", Bouldering: "BO", Stretching: "ST" };
   const FIT_TYPE_VAR = { Pilates: "--work-ink", F45: "--marriage-ink", Bouldering: "--personal-ink", Stretching: "--personal-ink" };
 
-  const FIT_LOG_KEY = "daybook-fitness-log";
+  const FIT_LOG_KEY = "book33-fitness-log";
   // one date can hold several sessions (e.g. Pilates + Stretching same day) — migrates the
   // older single-session-per-day shape ({type,rating,notes}) into a one-item array on load
   function loadFitLog() {
@@ -20964,7 +20995,7 @@
      SUPPLEMENTS & HERBS — daily-checkable list, also written onto
      the Day page's Personal tile via generatedFor().
      ============================================================ */
-  const SUPP_KEY = "daybook-supplements";
+  const SUPP_KEY = "book33-supplements";
   const SUPP_FREQ_LABEL = { daily: "Daily", weekly: "Weekly", asNeeded: "As needed" };
   function loadSupplements() {
     try {
@@ -21053,7 +21084,7 @@
      now). Per-cycle ticks live in cycles[lastDone || "first"], never on the
      before/after templates, so every fresh cycle starts unticked.
      ============================================================ */
-  const MED_KEY = "daybook-medical";
+  const MED_KEY = "book33-medical";
   function loadMedical() {
     try { const v = JSON.parse(localStorage.getItem(MED_KEY)); if (v && Array.isArray(v.checks)) return v; } catch (e) {}
     return { checks: [
@@ -21812,7 +21843,7 @@
      PERSONAL PROFILE — Linh's own birthday, used for numerology
      and astrology calculations (life path, sun sign, zodiac year).
      ============================================================ */
-  const PROFILE_KEY = "daybook-profile";
+  const PROFILE_KEY = "book33-profile";
   function loadProfile() { try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(PROFILE)); } catch (e) {} }
   // Linh's profile ships as the default so all numerology (Life Path, PY/PM/PD, the
@@ -21944,7 +21975,7 @@
   ];
   const goalAreaMeta = id => GOAL_AREAS.find(a => a.id === id) || GOAL_AREAS[0];
 
-  const GOALS_KEY = "daybook-goals";
+  const GOALS_KEY = "book33-goals";
   function loadGoals() {
     try { const v = JSON.parse(localStorage.getItem(GOALS_KEY)); if (Array.isArray(v)) return v; } catch (e) {}
     return [];
@@ -22016,7 +22047,7 @@
      parser: it understands a set of plain phrasings for the family data and applies them at
      once. Anything it can't read is saved as a request for Claude to action next session —
      nothing typed is ever lost. */
-  const FAM_REQ_KEY = "daybook-family-requests";
+  const FAM_REQ_KEY = "book33-family-requests";
   let FAM_REQS = (() => { try { return JSON.parse(localStorage.getItem(FAM_REQ_KEY)) || []; } catch (e) { return []; } })();
   const saveFamReqs = () => { try { localStorage.setItem(FAM_REQ_KEY, JSON.stringify(FAM_REQS)); } catch (e) {} };
 
@@ -22957,8 +22988,8 @@
   let rtnGridGroupBy = "none";
   let rtnGridSearch = "";
   // 2026-08-07 (Linh, "allow for adjusting table width"): per-device display
-  // preference, not app data -- deliberately NOT "daybook"-prefixed (see bakExport/
-  // bakImport's own startsWith("daybook") filter) so it never enters backups or the
+  // preference, not app data -- deliberately NOT "book33-"-prefixed (see bakExport/
+  // bakImport's own startsWith("book33-") filter) so it never enters backups or the
   // cloud-sync DIRTY tracking; a column-width tweak on the desktop shouldn't fight
   // a different one made on the phone.
   // 2026-08-07 (Routines page rebuild spec, "no horizontal scroll at any width"):
@@ -27505,7 +27536,7 @@
     const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
     const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Book33//EN", "CALSCALE:GREGORIAN"];
     evs.forEach(e => {
-      lines.push("BEGIN:VEVENT", `UID:${e.id}@daybook`, `DTSTAMP:${stamp}`);
+      lines.push("BEGIN:VEVENT", `UID:${e.id}@book33`, `DTSTAMP:${stamp}`);
       if (e.allDay || !e.start) {
         lines.push(`DTSTART;VALUE=DATE:${icsDate(e.date)}`);
         lines.push(`DTEND;VALUE=DATE:${icsDate(keyOf(addDays(parseKey(e.date), 1)))}`);
@@ -27523,24 +27554,30 @@
     const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `day-book${from ? "-" + from : ""}.ics`;
+    a.download = `book33${from ? "-" + from : ""}.ics`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
 
-  /* ---- whole-book backup & restore: every daybook-* localStorage key in one
+  /* ---- whole-book backup & restore: every book33-* localStorage key in one
      .json file. All her logs live in this browser only, so the backup file is the
      insurance policy. Restore overwrites matching keys then reloads — keys added
      by features newer than the backup are left alone. The confirm step is inline
      UI, not confirm(): the artifact iframe may block browser dialogs. ---- */
+  // 2026-08-09 (daybook->book33 rename brief): sync's own local-only bookkeeping
+  // (sync config, DIRTY flags, the migration marker) already happens to live under
+  // "book33-" too, now that real app data does -- exclude it explicitly so backups
+  // keep exporting exactly what they always did (never included these, since they
+  // never matched the old "daybook" filter either).
+  const BAK_LOCAL_ONLY = ["book33-sync-config", "book33-unsynced", "book33-unsynced-keys", "book33-last-synced", "book33-migrated"];
   document.getElementById("bakExport").addEventListener("click", () => {
     const data = {};
-    Object.keys(localStorage).filter(k => k.startsWith("daybook")).sort()
+    Object.keys(localStorage).filter(k => k.startsWith("book33-") && !BAK_LOCAL_ONLY.includes(k)).sort()
       .forEach(k => { data[k] = localStorage.getItem(k); });
     const payload = { app: "Book33", exported: new Date().toISOString(), data };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 1)], { type: "application/json" }));
-    a.download = `day-book-backup-${keyOf(new Date())}.json`;
+    a.download = `book33-backup-${keyOf(new Date())}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
@@ -27556,7 +27593,9 @@
     let payload = null;
     try { payload = JSON.parse(await file.text()); } catch (err) {}
     const data = payload && payload.data && typeof payload.data === "object" ? payload.data : null;
-    const keys = data ? Object.keys(data).filter(k => k.startsWith("daybook")) : [];
+    // accept a backup exported before the daybook->book33 rename too -- its keys
+    // still start with the old prefix, mapped to the new one at restore time below.
+    const keys = data ? Object.keys(data).filter(k => k.startsWith("book33-") || k.startsWith("daybook-")) : [];
     bakConfirm.hidden = false;
     if (!keys.length) { bakConfirm.textContent = "That file isn't a Book33 backup."; return; }
     pendingRestore = { data, keys };
@@ -27570,7 +27609,10 @@
   bakConfirm.addEventListener("click", e => {
     if (e.target.id === "bakNo") { bakConfirm.hidden = true; pendingRestore = null; }
     if (e.target.id === "bakYes" && pendingRestore) {
-      pendingRestore.keys.forEach(k => { try { localStorage.setItem(k, String(pendingRestore.data[k])); } catch (err) {} });
+      pendingRestore.keys.forEach(k => {
+        const newKey = k.startsWith("daybook-") ? "book33-" + k.slice("daybook-".length) : k;
+        try { localStorage.setItem(newKey, String(pendingRestore.data[k])); } catch (err) {}
+      });
       location.reload();
     }
   });
@@ -28448,7 +28490,7 @@
     fTitle.focus();
   }
   /* ============ MONEY — spending log feeding the Financial management page ============ */
-  const SPEND_KEY = "daybook-spend";
+  const SPEND_KEY = "book33-spend";
   const SPEND_CATS = [
     { id: "groceries", label: "Groceries & food", icon: "🛒", re: /\b(grocer\w*|woolworths|woolies|coles|aldi|market|butcher|fruit|veg\w*)\b/i },
     { id: "eatingOut", label: "Eating out",       icon: "🍽", re: /\b(lunch|dinner|breakfast|brunch|cafe|coffee|restaurant|sushi|takeaway|take-away|uber\s*eats|doordash|menulog)\b/i },
@@ -29595,7 +29637,7 @@
      drifting) — event/sky/power-hour blocks stay visually frozen mid-gesture and only
      snap to their correct new positions via the real renderDay() on release. */
   (function () {
-    const HOUR_H_KEY = "daybook-hour-h", MIN_H = 24, MAX_H = 160;
+    const HOUR_H_KEY = "book33-hour-h", MIN_H = 24, MAX_H = 160;
     const scroller = document.getElementById("timelineScroll");
     let startDist = 0, startH = 0, anchorMin = 0, pinching = false;
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -30133,7 +30175,7 @@
     const chip = e.target.closest("[data-drag-title]");
     if (!chip) return;
     e.dataTransfer.setData("text/plain", chip.dataset.dragTitle);
-    e.dataTransfer.setData("application/x-daybook-track", chip.dataset.dragTrack || "personal");
+    e.dataTransfer.setData("application/x-book33-track", chip.dataset.dragTrack || "personal");
     e.dataTransfer.effectAllowed = "copy";
   });
   // 2026-08-06 (Linh, on her phone: "it works for events but for regular wash - hair it
@@ -30208,12 +30250,12 @@
     return [];
   }
   const eventsLayerEl = document.getElementById("eventsLayer");
-  // 2026-08-05 (Part D): SUPERSEDES the "application/x-daybook-move" branch that used to
+  // 2026-08-05 (Part D): SUPERSEDES the "application/x-book33-move" branch that used to
   // live in both this check and the drop handler below — an existing block's reschedule
   // now goes through the press-and-hold pointer-drag handler instead of native HTML5
   // drag, so this only ever needs to recognise the sidebar-chip "schedule a new item"
   // drag any more.
-  const dndTypeOk = dt => dt.types.includes("application/x-daybook-track");
+  const dndTypeOk = dt => dt.types.includes("application/x-book33-track");
   eventsLayerEl.addEventListener("dragover", e => {
     if (!dndTypeOk(e.dataTransfer)) return;
     e.preventDefault();
@@ -30233,7 +30275,7 @@
     let minutes = Math.round(minForTop(e.clientY - rect.top) / 15) * 15;
     minutes = Math.max(START_MIN, Math.min(END_MIN - 30, minutes));
     const title = e.dataTransfer.getData("text/plain");
-    const track = e.dataTransfer.getData("application/x-daybook-track") || "personal";
+    const track = e.dataTransfer.getData("application/x-book33-track") || "personal";
     if (!title) return;
     const start = minToTime(minutes), end = minToTime(minutes + 30);
     EVENTS.push({ id: uid(), date: keyOf(state.anchor), track, title, category: "", locPath: locForMinute(minutes), allDay: false, start, end });
@@ -30403,12 +30445,12 @@
      the service worker. Where the Notification Triggers API exists they fire
      with the app closed; everywhere else they fire while it's open (setTimeout)
      and re-arm on every open/save/hour. Settings live in ONE localStorage key,
-     daybook-notifications, which the Supabase layer already syncs cross-device
-     (any daybook-* key does). Everything in here is fail-soft: no permission,
+     book33-notifications, which the Supabase layer already syncs cross-device
+     (any book33-* key does). Everything in here is fail-soft: no permission,
      no SW, no API — the panel still works and reminders fall back to an
      in-app toast while the app is open. Never throws.
      ============================================================ */
-  const NOTIF_KEY = "daybook-notifications";
+  const NOTIF_KEY = "book33-notifications";
   const NOTIF_DEFAULTS = {
     enabled: true,
     events: { on: true, reminders: [1440, 30],
@@ -30482,14 +30524,14 @@
 
     /* ---- Web Push (closed-app reminders, 2026-08-05 pt 2) ----
        The phone holds ONE PushManager subscription against Book33's own VAPID
-       key; it's mirrored into daybook-push-sub, and reschedule() mirrors every
-       computed reminder into daybook-push-queue — both ride the existing
+       key; it's mirrored into book33-push-sub, and reschedule() mirrors every
+       computed reminder into book33-push-queue — both ride the existing
        Supabase snapshot sync for free. A Supabase Edge Function (supabase/
        functions/b33-push, cron each minute) reads the snapshot and web-pushes
        anything due, so reminders ring with the app fully closed. All settings
        maths stays HERE — the server only delivers what the app precomputed. */
     const PUSH_PUBKEY = "BMB4N8M9ocDcqGXBSuoVxNydUDbOxRp1oibdzG34qeSMDrlCG7mIPfmNbRcxkxFbT4-2qGpi00VwSigo2cnsckM";
-    const PUSH_SUB_KEY = "daybook-push-sub", PUSH_QUEUE_KEY = "daybook-push-queue";
+    const PUSH_SUB_KEY = "book33-push-sub", PUSH_QUEUE_KEY = "book33-push-queue";
     function pushKeyBytes(s) {
       const raw = atob(String(s).replace(/-/g, "+").replace(/_/g, "/"));
       const out = new Uint8Array(raw.length);
@@ -31046,7 +31088,7 @@
       <div class="nt-test-row">
         <button type="button" class="btn-save" data-nt="test">Send a test notification</button>
         <span class="nt-footnote">Works best with Book33 added to your home screen.
-          ${localStorage.getItem("daybook-push-sub")
+          ${localStorage.getItem("book33-push-sub")
             ? "This phone is registered for cloud push — reminders can ring even with Book33 closed."
             : Book33Notify.supportsTriggers
             ? "This phone can fire reminders even while Book33 is closed."
@@ -31432,7 +31474,6 @@
   // data was newer and clobbered it. This localStorage flag survives restarts: set by
   // the save hook on every real local edit, cleared only when a push is CONFIRMED in the
   // cloud. While it's set, boot pushes local UP instead of pulling cloud DOWN.
-  // (deliberately "book33-" not "daybook-": gather()/the save hook skip it by prefix)
   var DIRTY = "book33-unsynced";
   // 2026-08-09 (manual "Sync to cloud now" button): which keys changed since the last
   // CONFIRMED push -- a de-duped set, not a running tally (editing the same key 5
@@ -31441,11 +31482,18 @@
   // read by the actual push/pull/reconcile decisions above, only display.
   var DIRTY_KEYS = "book33-unsynced-keys";
   var LAST_SYNC = "book33-last-synced";   // ms epoch of the last CONFIRMED push, for the card's "Last synced …" line
-  // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store
-  var EXCLUDE = { "daybook-pharmacy": 1, "daybook-prescriptions": 1 };
+  // pharmacy/patient keys never leave the pharmacy app — keep them out of Book33's store.
+  // 2026-08-09 (daybook->book33 rename): real app data now shares this file's own
+  // "book33-" prefix, so CFG_KEY/DIRTY/DIRTY_KEYS/LAST_SYNC/the migration marker
+  // (sync bookkeeping, not data — before the rename they stayed out of gather()
+  // for free just by NOT being "daybook-" prefixed) need to be named here instead,
+  // or gather()/the save hook below would sweep them up as if she'd edited them.
+  var EXCLUDE = {};
+  ["book33-pharmacy", "book33-prescriptions", CFG_KEY, DIRTY, DIRTY_KEYS, LAST_SYNC, "book33-migrated"]
+    .forEach(function (k) { EXCLUDE[k] = 1; });
   // 2026-08-07 (Linh: "edits not consistently maintained... this cannot happen
   // again" -- comprehensive audit, root cause of the day's sync reports): Book33Notify
-  // recomputes and rewrites daybook-push-queue on every boot (~1.2s in), every hour
+  // recomputes and rewrites book33-push-queue on every boot (~1.2s in), every hour
   // while open, and every time the tab regains focus -- it embeds a fresh Date.now()
   // stamp each time, so its content is NEVER identical between two boots even when
   // nothing she actually did has changed. That write still needs to reach the cloud
@@ -31459,7 +31507,7 @@
   // having been opened recently. NOISY keys still get pushed (so the queue itself
   // stays current in the cloud) but never set DIRTY and never count toward "is this
   // meaningfully different from the cloud" -- only an edit she actually made does.
-  var NOISY = { "daybook-push-queue": 1 };
+  var NOISY = { "book33-push-queue": 1 };
   function stripNoisy(obj) {
     var o = {};
     Object.keys(obj).forEach(function (k) { if (!NOISY[k]) o[k] = obj[k]; });
@@ -31499,7 +31547,7 @@
     var o = {};
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && k.indexOf("daybook") === 0 && !EXCLUDE[k]) o[k] = localStorage.getItem(k);
+      if (k && k.indexOf("book33-") === 0 && !EXCLUDE[k]) o[k] = localStorage.getItem(k);
     }
     return o;
   }
@@ -31519,7 +31567,7 @@
   Storage.prototype.setItem = function (k, v) {
     _setItem.call(this, k, v);
     if (!suppress && this === window.localStorage &&
-        String(k).indexOf("daybook") === 0 && !EXCLUDE[k]) {
+        String(k).indexOf("book33-") === 0 && !EXCLUDE[k]) {
       // mark BEFORE the ready-gate: an edit made while offline/signed-out (sync never
       // booted) must still survive the next online boot's pull — see DIRTY above.
       // NOISY keys (see above) still push, but must never mark DIRTY -- that flag
@@ -32189,7 +32237,7 @@
   }
   function finishAuth(auto) {
     withTimeout(fetchCloud(), 6000).then(function (row) {
-      var hasCloud = row && row.data && Object.keys(row.data).some(function (k) { return k.indexOf("daybook") === 0 && !EXCLUDE[k]; });
+      var hasCloud = row && row.data && Object.keys(row.data).some(function (k) { return k.indexOf("book33-") === 0 && !EXCLUDE[k]; });
       if (hasCloud) {
         var localSnap = gather();
         var localHas = Object.keys(localSnap).length > 0;

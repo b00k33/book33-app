@@ -2,7 +2,7 @@
 // Runs every minute via pg_cron (see ../../setup.sql). Reads the book33 snapshot
 // row(s) the app already syncs, and web-pushes any reminder that has come due.
 // ALL reminder logic (leads, quiet hours, per-event overrides, fasting, commute)
-// lives in the app — the daybook-push-queue key IS the decision, this function
+// lives in the app — the book33-push-queue key IS the decision, this function
 // only delivers it. Dedup via the b33_push_sent table so a reminder fires once
 // even though the cron re-reads the same queue every minute.
 //
@@ -37,11 +37,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
   for (const row of rows ?? []) {
-    // snapshot values are localStorage strings — parse the two we care about
+    // snapshot values are localStorage strings — parse the two we care about.
+    // 2026-08-09 (daybook->book33 key rename): a device that hasn't reopened the
+    // app since the rename shipped can still have an old-format cloud snapshot —
+    // check the new key first, fall back to the old one, so this keeps working
+    // through the transition without needing every device to sync at once.
     const snap = (row.data ?? {}) as Record<string, string>;
     let sub: unknown, queue: { reminders?: Array<Record<string, unknown>> } | null = null;
-    try { sub = JSON.parse(snap["daybook-push-sub"] ?? "null"); } catch { sub = null; }
-    try { queue = JSON.parse(snap["daybook-push-queue"] ?? "null"); } catch { queue = null; }
+    try { sub = JSON.parse(snap["book33-push-sub"] ?? snap["daybook-push-sub"] ?? "null"); } catch { sub = null; }
+    try { queue = JSON.parse(snap["book33-push-queue"] ?? snap["daybook-push-queue"] ?? "null"); } catch { queue = null; }
     if (!sub || typeof sub !== "object" || !("endpoint" in sub)) continue;
     if (!queue || !Array.isArray(queue.reminders)) continue;
 

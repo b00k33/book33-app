@@ -1,7 +1,7 @@
 # Book33 cloud push — deploy checklist
 
 Everything client-side already ships with the app (subscription in
-`daybook-push-sub`, precomputed queue in `daybook-push-queue`, sw.js `push`
+`book33-push-sub`, precomputed queue in `book33-push-queue`, sw.js `push`
 handler). This folder is the server half. Nothing here re-implements reminder
 logic — the function only delivers what the app computed.
 
