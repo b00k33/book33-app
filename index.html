@@ -6481,7 +6481,12 @@
   .hx-edit-row td { border-top: none; padding: 0 16px 10px; text-align: left; }
   .hx-foot { padding: 10px 8px 12px; vertical-align: top; }
   .hx-foot .hx-mk { display: block; width: 100%; font-size: 11px; padding: 8px 6px; white-space: nowrap; }
-  .hx-foot .hx-task { display: block; margin: 6px auto 0; font-size: 10.5px; white-space: nowrap; }
+  /* 2026-08-09 (hair "Make routine" copy-not-link fix): once a routine exists, the
+     footer stacks 3 things now (Open routine / Refresh steps / 📅 task) instead of 2
+     -- Refresh steps reuses the same small-link treatment .hx-task already has
+     rather than the full-width .hx-mk button treatment, so it doesn't read as an
+     equally-weighted primary action next to Open routine. */
+  .hx-foot .hx-task, .hx-foot .hx-mk-refresh { display: block; margin: 6px auto 0; font-size: 10.5px; white-space: nowrap; }
   #hairMatrix .add-row { margin-top: 12px; }
   @media (max-width: 640px) {
     .hx-step-h, .hx-step { padding-left: 12px; }
@@ -13839,13 +13844,13 @@
     const heads = HAIRD.tiers.map((tier, i) => {
       const n = hairTierSteps(tier.id).length;
       const rt = hairRoutineFor(tier.id);
-      const linked = rt && rt.hairLink;
+      const made = !!rt;   // a routine exists for this tier (copy-model, 2026-08-09)
       return `<th class="hx-tier-h hx-c-${i}${dueTier === tier.id ? " is-due" : ""}">
         <span class="hx-t-ic">${tier.icon}</span>
         <span class="hx-t-lb">${esc(tier.label)}</span>
         <span class="hx-t-n">${n} steps · ${hairTierMin(tier.id)} min</span>
         ${dueTier === tier.id ? `<span class="hx-due">${esc(dueLbl)}</span>` : ""}
-        ${linked ? `<span class="hx-badge">↻ linked routine</span>` : ""}
+        ${made ? `<span class="hx-badge">↻ routine</span>` : ""}
       </th>`;
     }).join("");
     const rows = HAIRD.steps.map(s => `<tr class="hx-row" data-hx-row="${esc(s.id)}">
@@ -13862,10 +13867,11 @@
       </tr>${hxEditId === s.id ? hxEditorRowHtml(s) : ""}`).join("");
     const feet = HAIRD.tiers.map((tier, i) => {
       const rt = hairRoutineFor(tier.id);
-      const linked = rt && rt.hairLink;
+      const made = !!rt;   // copy-model: existence, not a live link, marks it "made"
       return `<td class="hx-foot hx-c-${i}">
-        ${linked
-          ? `<button type="button" class="btn-save hx-mk" data-hx-open-rtn="${tier.id}">Open routine</button>`
+        ${made
+          ? `<button type="button" class="btn-save hx-mk" data-hx-open-rtn="${tier.id}">Open routine</button>
+             <button type="button" class="tab-link hx-mk-refresh" data-hx-mk-rtn="${tier.id}" title="Re-copy the current steps into the routine">↻ Refresh steps</button>`
           : `<button type="button" class="btn-save hx-mk" data-hx-mk-rtn="${tier.id}">↻ Make routine</button>`}
         <button type="button" class="tab-link hx-task" data-hx-task="${tier.id}">📅 task · ${hairTierMin(tier.id)} min</button>
       </td>`;
@@ -13934,19 +13940,24 @@
       if (inp) { inp.focus(); inp.select(); }
       return;
     }
-    // ↻ Make routine — LINK, not copy: the tier's existing hair-* routine (the one the
-    // every-2-days rotation already schedules) gains hairLink and sheds its baked
-    // subtasks, so from here on its steps derive live from book33-hair (hairLinkSteps).
-    // No 4th routine is created — that would put the same wash on the calendar twice.
+    // 2026-08-09 (Linh, "Make routine created a routine with no steps," chose "copy,
+    // not link"): SUPERSEDES the old LINK behaviour below this comment (was: gains
+    // hairLink, sheds subtasks, steps derive live from book33-hair) — that left the
+    // routine with no baked subtasks at all, so it showed no steps. Now it bakes the
+    // tier's CURRENT steps in as editable sub-tasks (a snapshot, hairLinkSteps) —
+    // she can tweak them per-routine, and later Hair-page edits don't touch this copy
+    // until she taps ↻ Refresh steps. No 4th routine is created — that would put the
+    // same wash on the calendar twice.
     const mk = e.target.closest("[data-hx-mk-rtn]");
     if (mk) {
       const tid = mk.dataset.hxMkRtn;
+      const steps = hairLinkSteps(tid);
+      const tier = HAIRD.tiers.find(t => t.id === tid);
       let rt = hairRoutineFor(tid);
-      if (rt) { rt.hairLink = { tier: tid }; delete rt.subtasks; }
+      if (rt) { rt.subtasks = steps; delete rt.hairLink; }
       else {
-        const tier = HAIRD.tiers.find(t => t.id === tid);
         ROUTINE_TASKS.push({ id: "hair-" + tid, title: `${tier.icon} ${tier.label} wash`, track: "personal",
-          category: "Hair", freq: "asNeeded", note: "", hairLink: { tier: tid } });
+          category: "Hair", freq: "asNeeded", note: "", subtasks: steps });
       }
       saveRoutines(); renderHairMatrix(); return;
     }
