@@ -69,9 +69,15 @@
        new. Family is folded into Personal (data reassigned by migrateFamilyTrackToPersonal()
        below, not deleted) and Clinic folded into Work — there is no separate Clinic track,
        Clinic is now just an uncoloured subcategory under Work like Admin/Marketing/CPD. */
-    --work-seed: #2E6B45;       /* dark green — Work/Clinic, one part-of-life */
-    --marriage-seed: #2FA898;   /* teal */
-    --personal-seed: #D4AF37;   /* gold — same hue as --accent-seed by design */
+    /* 2026-08-09 (Categories & colours table): these 5 -seed/--cat-* values are now
+       just the CSS-authored FALLBACK for first paint before JS runs -- the real,
+       editable source of truth is daybook-categories (see DEFAULT_CATS + applyCategoryVars()
+       in the script below), which overrides these via inline custom properties on
+       :root the instant it loads. Keep these five in sync with DEFAULT_CATS so a
+       fresh/offline load never flashes a stale colour before the override lands. */
+    --work-seed: #37844D;       /* Work / Clinic, one part-of-life */
+    --marriage-seed: #1E8FB8;   /* Marriage */
+    --personal-seed: #B98D36;   /* Personal — same hue family as --accent-seed by design */
     --accent-seed: #D4AF37;     /* metallic gold — fixed (2026-07-31: no longer recomputed per Chinese year element) */
     --habit-done: #5f9e3f;      /* Habits Week grid only -- a done circle fills this plain
       green everywhere regardless of category (Month's grid colours by category instead;
@@ -87,8 +93,8 @@
     --track-personal: var(--personal-seed);
     --track-fallback: #6B6152;
     --track-text: #ffffff;
-    --cat-personal-fitness: #3DDC84;   /* Fitness subcategory — bright green, distinct from Work's dark green */
-    --cat-personal-beauty: #DB4B4B;    /* Beauty subcategory — red */
+    --cat-personal-fitness: #37AF65;   /* Fitness subcategory — bright green, distinct from Work's dark green */
+    --cat-personal-beauty: #CD495B;    /* Beauty subcategory — red */
     --fast: var(--cat-personal-fitness);   /* 2026-08-06 (Linh: "fasting always tracks fitness"):
       points at the Fitness token rather than its own hex, so the two can never drift apart. */
     /* 2026-08-06 (chains feature): every chain colour derives from an existing central
@@ -3535,12 +3541,18 @@
   /* 2026-08-06 (code44, timeless "template" chains): informational, not an error --
      a chain with no time yet is valid and save-able, just not on the calendar yet. */
   .cb-warn.cb-note { color: var(--ink-faint); }
-  /* existing chains: one block per chain, a mini timeline in true running order */
+  /* existing chains: one block per chain -- header identity strip, then the
+     Before/Event/After grid below (2026-08-09, "keep the horizontal chain view on
+     mobile": see .cb-tl-grid). The lone-deadline-root case at the bottom of
+     cbExistingHtml() still uses the older single-row .cb-tl-row/.cb-tl-rail shape
+     (kept below, unchanged) -- it never has Before/After members to grid up. */
   .cb-tl { background: var(--note-bg); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; }
   .cb-tl-head { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-  .cb-tl-titlebox { flex: 1; min-width: 0; }
-  .cb-tl-name { display: block; font-size: 13.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cb-tl-day { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .cb-tl-titlebox { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+  .cb-tl-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-seed); }
+  .cb-tl-link { flex: none; font-size: 12px; color: var(--ink-faint); }
+  .cb-tl-name { display: block; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cb-tl-daylbl { flex: none; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-left: 2px; }
   .cb-tl-head .cb-name-input { margin-bottom: 0; min-height: 40px; }
   .cb-tl-rename { padding: 4px 12px; }
   /* 2026-08-09 (chains+startDate spec, "apply to calendar" toggle): reuses
@@ -3581,6 +3593,46 @@
   .cb-tl-anchor .cb-tl-title { color: var(--ink); font-weight: 700; font-size: 13px; }
   .cb-tl-time { flex: none; font-size: 11.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .cb-tl-anchor .cb-tl-time { color: var(--accent-seed); font-weight: 700; }
+  /* 2026-08-09 (Linh, "keep the horizontal chain view on mobile"): Before/Event/After
+     stay three side-by-side columns at every width -- only sizing shrinks under 640px
+     (see the media query below), never a stack. Reuses .phase-dot/.phase-dot-before/
+     during/after verbatim (the same tokens the Routines Table's own phase column
+     already uses) rather than hardcoding new colours. A card too narrow for its own
+     content scrolls horizontally (.cb-tl-gridwrap) instead of squeezing further. */
+  .cb-tl-gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+  .cb-tl-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; min-width: 300px; }
+  .cb-tl-gcol { padding: 4px 14px; border-left: 1px solid rgba(216, 185, 121, .14); min-height: 58px; display: flex; flex-direction: column; gap: 8px; }
+  .cb-tl-gcol:first-child { border-left: none; padding-left: 2px; }
+  .cb-tl-gcol:last-child { padding-right: 2px; }
+  .cb-tl-gcol-head { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); }
+  .cb-tl-gitem { position: relative; padding-right: 16px; }
+  .cb-tl-gname {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    font-size: 14.5px; font-weight: 700; color: var(--ink); line-height: 1.22;
+  }
+  .cb-tl-gtime { display: block; font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .cb-tl-gcol:nth-child(2) .cb-tl-gtime { color: var(--accent-seed); font-weight: 700; }
+  .cb-tl-gempty { font-size: 12px; color: var(--ink-faint); opacity: .6; }
+  .cb-tl-gremove {
+    position: absolute; top: 0; right: -2px; width: 20px; height: 20px; padding: 0; border: none;
+    border-radius: 50%; background: transparent; color: var(--ink-faint); font-size: 15px; line-height: 20px;
+    cursor: pointer;
+  }
+  .cb-tl-gremove:hover { color: var(--warn); background: color-mix(in oklab, var(--warn) 16%, transparent); }
+  @media (max-width: 640px) {
+    .cb-tl { padding: 10px 12px; }
+    .cb-tl-gcol { padding: 2px 9px; min-height: 50px; gap: 6px; }
+    .cb-tl-gcol-head { font-size: 9.5px; }
+    .cb-tl-gname { font-size: 13.5px; }
+    .cb-tl-gtime { font-size: 11.5px; }
+    /* the name + date + 4 controls (auto-toggle, rename, push, edit) don't all fit
+       one row under ~400px -- titlebox claiming the full first line (rather than
+       shrinking to fit, which was squeezing the chain NAME itself to 0 width) wraps
+       everything else onto a second row instead, so nothing gets clipped. */
+    .cb-tl-head { flex-wrap: wrap; row-gap: 6px; min-height: 0; }
+    .cb-tl-titlebox { flex-basis: 100%; }
+    .cb-tl-daylbl { margin-left: 0; }
+  }
 
   .rtn-date-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .rtn-date-list:empty { display: none; }
@@ -11094,10 +11146,77 @@
     }
   };
 
-  const TRACK_INK = { work: "var(--work-ink)",
-                      marriage: "var(--marriage-ink)", personal: "var(--personal-ink)" };
-  const TRACK_LABEL = { work: "Work", marriage: "Marriage", personal: "Personal" };
+  /* ---- Categories & colours (2026-08-09 build brief): daybook-categories is now the
+     single source of truth for every track/sub-category colour + label in the app.
+     "life" rows = parts of life (work/marriage/personal today, extensible); "sub" rows
+     = sub-categories that get their own fill (parent = the life id, null for life rows).
+     Everything below (TRACK_INK/TRACK_LABEL, CSS --*-seed vars, the dynamic style block
+     built in regenerateCategoryStyles()) is DERIVED from this array, never hand-edited
+     in parallel — that duplication is exactly what let colours drift before. */
+  const CATS_KEY = "daybook-categories";
+  const DEFAULT_CATS = [
+    { id: "personal", name: "Personal",      type: "life", parent: null,       color: "#B98D36" },
+    { id: "work",     name: "Work / Clinic", type: "life", parent: null,       color: "#37844D" },
+    { id: "marriage", name: "Marriage",      type: "life", parent: null,       color: "#1E8FB8" },
+    { id: "fitness",  name: "Fitness",       type: "sub",  parent: "personal", color: "#37AF65" },
+    { id: "beauty",   name: "Beauty",        type: "sub",  parent: "personal", color: "#CD495B" },
+  ];
+  let CATS = [];
+  let CAT_BY_ID = {};
+  let TRACK_INK = {};
+  let TRACK_LABEL = {};
+  function loadCategories() {
+    try {
+      const raw = localStorage.getItem(CATS_KEY);
+      if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
+    } catch (e) {}
+    return DEFAULT_CATS.slice();
+  }
+  function saveCategories(arr) {
+    CATS = arr;
+    try { localStorage.setItem(CATS_KEY, JSON.stringify(arr)); } catch (e) {}
+    rebuildCatIndex();
+    if (typeof regenerateCategoryStyles === "function") regenerateCategoryStyles();
+  }
+  // rebuilds every derived lookup from CATS — call after load AND after any save so
+  // colour/label changes are visible everywhere on the very next render.
+  function rebuildCatIndex() {
+    CAT_BY_ID = {};
+    CATS.forEach(c => { CAT_BY_ID[c.id] = c; });
+    TRACK_INK = {}; TRACK_LABEL = {};
+    CATS.filter(c => c.type === "life").forEach(c => {
+      TRACK_INK[c.id] = `var(--${c.id}-ink)`;
+      TRACK_LABEL[c.id] = c.name;
+    });
+  }
   const trackLabel = tk => TRACK_LABEL[tk] || (tk ? tk[0].toUpperCase() + tk.slice(1) : "");
+  function lifeCats() { return CATS.filter(c => c.type === "life"); }
+  function subCatsOf(parentId) { return CATS.filter(c => c.type === "sub" && c.parent === parentId); }
+  // legacy items store their sub-category as a free-typed display NAME (e.category),
+  // not this table's stable id — exact match first, then a case-insensitive substring
+  // fallback so renaming a sub here (or a name that predates this table, e.g. the old
+  // "Beauty / Self Grooming" wording) still resolves instead of silently losing colour.
+  function catSubFor(trackId, categoryStr) {
+    if (!categoryStr) return null;
+    const subs = subCatsOf(trackId);
+    const exact = subs.find(s => s.name === categoryStr);
+    if (exact) return exact;
+    const low = categoryStr.toLowerCase();
+    return subs.find(s => s.name && (low.includes(s.name.toLowerCase()) || s.name.toLowerCase().includes(low))) || null;
+  }
+  // block fill = its sub-category colour if it has one, else the part-of-life colour
+  function catBlockColor(item) {
+    if (!item || !item.track) return "var(--ink-faint)";
+    const sub = catSubFor(item.track, item.category);
+    if (sub) return `var(--cat-${item.track}-${sub.id})`;
+    return CAT_BY_ID[item.track] ? `var(--${item.track}-ink)` : "var(--ink-faint)";
+  }
+  // the small part-of-life dot always uses the PARENT'S own colour (its table seed),
+  // never the sub's — that's what keeps a green Fitness block reading as Personal
+  function catDotColor(item) {
+    if (!item || !item.track || !CAT_BY_ID[item.track]) return "var(--ink-faint)";
+    return `var(--${item.track}-seed)`;
+  }
   /* ---- two-person system (2026-07-27, Linh: "a section where I want to designate or
      allocate tasks for my husband … develop this calendar to a 2 people system").
      Every item carries who: "me" (default, unmarked) · "partner" · "both". ---- */
@@ -25708,23 +25827,38 @@
       if (isPlainEvent(root) && root.date) previewDate = parseKey(root.date);
       else for (let i = 0; i < 8; i++) { const d = addDays(TODAY, i); if (chainNodeOccursOn(root, d)) { previewDate = d; break; } }
       const dayLbl = `${WD_FULL[dowIndex(previewDate)]} ${previewDate.getDate()} ${MON_SHORT[previewDate.getMonth()]}`;
-      const rows = cbChainSeq(root).map(n => {
+      // 2026-08-09 (Linh, "keep the horizontal chain view on mobile"): the mini-
+      // timeline above got replaced with a 3-column Before/Event/After grid, same
+      // shape at every width (see .cb-tl-grid) -- split cbChainSeq's already-ordered
+      // sequence around the root's own position, same split the Chains builder's own
+      // cbColumnRows() does for its live editing table.
+      const seq = cbChainSeq(root);
+      const ai = seq.findIndex(n => n.id === root.id);
+      const gItem = n => {
         const isRoot = n.id === root.id;
         const m = isRoot
           ? (rawRoutineStartMin(n, previewDate) ?? chainDeadlineStartMin(n))
           : chainedStartMinOn(n, previewDate);
         const time = m != null ? fmtTime(minToTime(Math.max(0, Math.min(1439, m)))) : "—";
         const sub = isRoot && n.deadline ? ` · by ${fmtTime(n.deadline)}` : "";
-        return `<div class="cb-tl-row${isRoot ? " cb-tl-anchor" : ""}">
-          <span class="cb-tl-rail" aria-hidden="true"></span>
-          <span class="cb-tl-title">${isRoot ? "🔒 " : ""}${esc(n.title)}${sub}</span>
-          <span class="cb-tl-time">${time}</span>
-          ${isRoot ? "" : `<button type="button" class="chain-unlink" data-cb-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
+        return `<div class="cb-tl-gitem">
+          <span class="cb-tl-gname">${isRoot ? "⚓ " : ""}${esc(n.title)}${sub}</span>
+          <span class="cb-tl-gtime">${time}</span>
+          ${isRoot ? "" : `<button type="button" class="cb-tl-gremove" data-cb-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
         </div>`;
-      }).join("");
+      };
+      const gCol = (nodes, phase, label) => `<div class="cb-tl-gcol">
+        <div class="cb-tl-gcol-head"><span class="phase-dot phase-dot-${phase}"></span>${label}</div>
+        ${nodes.length ? nodes.map(gItem).join("") : `<div class="cb-tl-gempty">—</div>`}
+      </div>`;
+      const rows = `<div class="cb-tl-gridwrap"><div class="cb-tl-grid">
+        ${gCol(seq.slice(0, ai), "before", "Before")}
+        ${gCol(seq[ai] ? [seq[ai]] : [], "during", "Event")}
+        ${gCol(seq.slice(ai + 1), "after", "After")}
+      </div></div>`;
       const nameHtml = cbNameEdit === root.id
         ? `<input type="text" class="cb-name-input" id="cbTlNameInput" maxlength="40" value="${esc(root.chainName || "")}" placeholder="${esc(root.title)}" data-cb-name-root="${esc(root.id)}" aria-label="Chain name">`
-        : `<span class="cb-tl-name">${esc(root.chainName || root.title)}</span><div class="cb-tl-day">${esc(dayLbl)}</div>`;
+        : `<span class="cb-tl-dot" aria-hidden="true"></span><span class="cb-tl-link" aria-hidden="true">⛓</span><span class="cb-tl-name">${esc(root.chainName || root.title)}</span>`;
       // a plain-event root already lives at one fixed date -- "push to calendar"
       // has nothing to grant it that it doesn't already have, so the button only
       // shows for routine/recurring-event roots (the two kinds extraDates works on).
@@ -25755,6 +25889,7 @@
       html += `<div class="cb-tl">
         <div class="cb-tl-head">
           <div class="cb-tl-titlebox">${nameHtml}</div>
+          ${cbNameEdit === root.id ? "" : `<span class="cb-tl-daylbl">${esc(dayLbl)}</span>`}
           <div class="cb-tl-auto">
             <span class="cb-tl-auto-lbl">On calendar</span>
             <button type="button" class="rtg-auto-switch${chainAutoOn ? " on" : ""}" data-cb-auto="${esc(root.id)}" role="switch" aria-checked="${chainAutoOn ? "true" : "false"}" aria-label="Apply ${chainName} to the calendar"></button>
