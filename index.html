@@ -33404,6 +33404,23 @@
       '<p style="' + F.note + '">Same login you use for the pharmacy. Everything here already works offline — this just keeps it in sync with your other devices.</p>');
     document.getElementById("b33Signin").onclick = function () {
       var btn = document.getElementById("b33Signin"); btn.disabled = true; btn.textContent = "Signing in…";
+      // 2026-08-10 (Linh: "my login doesn't work to sync"): boot() already anticipates
+      // supabase-js failing to load (slow/dropped connection, common on mobile) and
+      // leaves `sb` null rather than throwing — but nothing here ever re-checked, so
+      // tapping Sign in in that state called `sb.auth...` on null, threw a SYNCHRONOUS,
+      // uncaught TypeError, and left the button stuck on "Signing in…" forever with no
+      // message at all. Retry the same init boot() does (the CDN script has often
+      // finished loading by now even if it hadn't at boot) before giving up with a
+      // message instead of crashing silently.
+      if (!sb) {
+        var cfg = loadCfg();
+        try { if (cfg && window.supabase) sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true } }); } catch (e) {}
+      }
+      if (!sb) {
+        btn.disabled = false; btn.textContent = "Sign in";
+        screenAuth("Couldn't load the sync service — check your connection and try again.");
+        return;
+      }
       withTimeout(sb.auth.signInWithPassword({ email: val("b33Email"), password: val("b33Pass") }), 10000).then(function (r) {
         btn.disabled = false; btn.textContent = "Sign in";
         if (r.error) screenAuth(/Invalid/.test(r.error.message) ? "Email or password not recognised." :
