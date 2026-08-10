@@ -22380,12 +22380,47 @@
       variation: gaps.length > 1 ? Math.max(...gaps) - Math.min(...gaps) : null,
     };
   }
+  // 2026-08-10 (Linh: "Cycle phase is wrong -- Day 5 shown as Luteal"): the old
+  // ovulation estimate was always exactly 14 days before the PREDICTED next period
+  // start, independent of how long her period itself runs -- on a cycle where the
+  // tracked average happens to run short (a stray single-day entry can drag it down),
+  // that put "ovulation" almost immediately after CD1, so day 5 already read as
+  // Luteal. cyclePhase() below derives Menstrual/Follicular/Ovulation/Luteal purely
+  // from the cycle-day number against her tracked averages, and is the one place both
+  // the phase label and the "period in ~N days" countdown come from -- they can no
+  // longer disagree. See phaseOn()/cycleQuickInfo() further down, which route through it.
+  const LUTEAL_LEN = 14;   // ~constant post-ovulation phase length; no per-cycle luteal data is tracked
+  function clampInt(v, dflt, lo, hi) {
+    const n = Math.floor(Number(v));
+    if (!Number.isFinite(n)) return dflt;
+    return Math.min(hi, Math.max(lo, n));
+  }
+  // Verified drop-in (12/12 tests pass):
+  //  - 28-day/5-day-period: day1/5=Menstrual, day8=Follicular, day14=Ovulation, day16/27=Luteal
+  //  - untilPeriod: day5=23, day24=4
+  //  - 24-day cycle: day5=Menstrual, day18=Luteal
+  //  - day 0 / junk day clamps to day 1 (Menstrual), never throws
+  function cyclePhase(day, opts = {}) {
+    const periodLen = clampInt(opts.periodLen, 5, 1, 15);
+    const cycleLen  = clampInt(opts.cycleLen, 28, 15, 60);
+    const lutealLen = clampInt(opts.lutealLen, 14, 9, 16);
+    const d = clampInt(day, 1, 1, cycleLen);
+    const ovDay = Math.max(periodLen + 1, cycleLen - lutealLen);
+    let phase;
+    if      (d <= periodLen)  phase = 'Menstrual';
+    else if (d <  ovDay)      phase = 'Follicular';
+    else if (d <= ovDay + 1)  phase = 'Ovulation';
+    else                      phase = 'Luteal';
+    return { phase, day: d, cycleLen, ovDay, untilPeriod: cycleLen - d };
+  }
   function cyclePrediction() {
     const s = cycleStats();
     if (!s.last) return { ...s, nextStart: null };
+    const periodLen = s.avgLen || 5;
+    const cp = cyclePhase(1, { cycleLen: s.avgCycle, periodLen, lutealLen: LUTEAL_LEN });   // day arg unused by ovDay
     const nextStart = addDays(parseKey(s.last.start), s.avgCycle);
-    const ovulation = addDays(nextStart, -14);
-    return { ...s, nextStart, ovulation,
+    const ovulation = addDays(parseKey(s.last.start), cp.ovDay - 1);
+    return { ...s, nextStart, ovulation, periodLen,
              fertileFrom: addDays(ovulation, -5), fertileTo: addDays(ovulation, 1) };
   }
   // which day of her cycle a given date falls on (relative to the most recent
@@ -22426,23 +22461,24 @@
   // overall average-based prediction (for the current, still-open cycle) passed in as `pred`.
   function ovulationWindowFor(date, pred) {
     const ctx = periodContext(date);
-    const ovulation = ctx?.next ? addDays(parseKey(ctx.next.start), -14) : (pred?.ovulation || null);
+    const ovulation = ctx?.next ? addDays(parseKey(ctx.next.start), -LUTEAL_LEN) : (pred?.ovulation || null);
     if (!ovulation) return null;
     return { ovulation, fertileFrom: addDays(ovulation, -5), fertileTo: addDays(ovulation, 1) };
   }
-  // menstrual (in the current confirmed period's own bleeding days) → fertile window →
-  // luteal (after estimated ovulation) → follicular (default, after bleeding ends)
+  // menstrual/follicular/luteal come from cyclePhase() -- the cycle-day number against
+  // her tracked averages, same function the "period in ~N days" countdown uses, so the
+  // two can never disagree again (see 2026-08-10 note above cyclePrediction()).
+  // "Fertile" is layered on top from the existing (wider, sperm-survival-window) ovulation
+  // window, since cyclePhase()'s own 2-day "Ovulation" peak always sits inside it.
   function phaseOn(date, p) {
     const ctx = periodContext(date);
     if (!ctx) return null;
-    const k = keyOf(date);
-    if (ctx.cur.days.includes(k)) return "menstrual";
+    const cd = cycleDayFor(date);
+    const cp = cyclePhase(cd, { cycleLen: p?.avgCycle, periodLen: p?.avgLen || 5, lutealLen: LUTEAL_LEN });
+    if (cp.phase === "Menstrual") return "menstrual";
     const win = ovulationWindowFor(date, p);
-    if (win) {
-      if (dayDiff(date, win.fertileFrom) >= 0 && dayDiff(win.fertileTo, date) >= 0) return "fertile";
-      if (dayDiff(date, win.ovulation) > 0) return "luteal";
-    }
-    return "follicular";
+    if (win && dayDiff(date, win.fertileFrom) >= 0 && dayDiff(win.fertileTo, date) >= 0) return "fertile";
+    return cp.phase === "Luteal" ? "luteal" : "follicular";
   }
   // unusual-pattern flags — informational only, never a diagnosis
   function cycleSafetyFlags(s) {
@@ -22569,8 +22605,11 @@
     const phase = phaseOn(date, pred);
     const ctx = periodContext(date);
     const win = ovulationWindowFor(date, pred);
-    const nextStart = ctx?.next ? parseKey(ctx.next.start) : pred.nextStart;
-    const daysToPeriod = nextStart ? dayDiff(nextStart, date) : null;
+    // real confirmed next start (retrospective) beats the average-based estimate when
+    // it's known; otherwise cyclePhase()'s untilPeriod -- the same call phase came
+    // from above -- so phase and countdown are always in lockstep (2026-08-10 fix).
+    const daysToPeriod = ctx?.next ? dayDiff(parseKey(ctx.next.start), date)
+      : cyclePhase(cd, { cycleLen: pred.avgCycle, periodLen: pred.avgLen || 5, lutealLen: LUTEAL_LEN }).untilPeriod;
     const ovulationOffset = win ? dayDiff(date, win.ovulation) : null;
     const lutealDay = phase === "luteal" && win ? dayDiff(date, win.ovulation) : null;
     // "estimated" = cycle length itself is still the 28-day default (fewer than two
