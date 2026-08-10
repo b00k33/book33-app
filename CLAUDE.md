@@ -20,6 +20,9 @@ symmetrical, aligned and organized. Follow every rule, then re-check your work.
   Track colours come only from --*-seed.
 ## Components
 - Reuse the same button/pill/card/row styles everywhere; no one-offs.
+- Every editor for an event, task or routine (the add/edit popup or panel) MUST have a
+  Save button in its TOP-RIGHT corner (reuse .addform-head-save), so it can be saved
+  without scrolling to the bottom. Keep the bottom Save/Cancel bar too.
 ## Before finishing
 - Confirm every rule is met; check dark AND light; check nothing is cut off or
   overlapping at 360px.
