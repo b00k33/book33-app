@@ -15517,6 +15517,13 @@
     <div class="dp-recap"${dpRecapOpen ? "" : " hidden"}>${dayRecapHTML(items)}</div>`;
   }
   document.getElementById("dayProgress").addEventListener("click", e => {
+    // ↻ linked badge (2026-08-10 build brief) sits INSIDE a recap row's own
+    // data-tick-ev button, so it must be checked before the tick-ev bailout
+    // below -- this was the missing wire-up (see handleLinkBadgeClick's own
+    // comment): every render surface that draws a badge is supposed to check
+    // it first, but this one never did, so tapping the badge just ticked the
+    // row instead of opening the "edit at source" sheet.
+    if (handleLinkBadgeClick(e)) return;
     // recap rows carry data-tick-ev — the app-wide tick delegate (on #wrap) handles
     // those, so they must fall through here untouched
     if (e.target.closest("[data-tick-ev]")) return;
@@ -17614,6 +17621,12 @@
     const badge = e.target.closest("[data-link-badge]");
     if (!badge) return false;
     e.preventDefault();
+    // the badge always sits inside a bigger tappable row (dp-t-row's own
+    // data-tick-ev) -- without this, the same click would ALSO bubble up to
+    // that row's own delegate and tick the task at the same time it opens
+    // the sheet (2026-08-10, Linh: "i cant edit this treatment wash" -- she
+    // was tapping the badge and it just ticked the row, sheet never opened).
+    e.stopPropagation();
     openLinkExplain(resolveLinkInfo(badge.dataset.linkBadge));
     return true;
   }
