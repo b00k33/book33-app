@@ -4447,29 +4447,32 @@
      -- and min-width dropped further (600->440px) plus one more type/padding step
      so true portrait widths (~375-430px) need less scroll to begin with. */
   @media (max-width: 640px) and (orientation: portrait) {
-    #rtnGrid .rtg-tbl table { min-width: 472px; font-size: 11.5px; }
+    #rtnGrid .rtg-tbl table { min-width: 530px; font-size: 11.5px; }
     #rtnGrid .rtg-tbl thead th { padding: 6px 6px; font-size: 9px; }
     #rtnGrid .rtg-tbl tbody td { padding: 6px 6px; }
     #rtnGrid .rtg-txt {
       white-space: normal; overflow: visible; text-overflow: clip;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
-    /* RTG_COL_DEFAULTS' percentage shares (title 21/track 10/phase 9/freq 19/
-       time 8/auto 15/acts 18) were tuned for a wide desktop table -- at 446px
-       several come out too narrow for single-word content that CAN'T wrap
+    /* RTG_COL_DEFAULTS' percentage shares (title 16/track 10/subcat 9/phase 9/
+       freq 15/time 8/auto 15/acts 18) were tuned for a wide desktop table -- at
+       446px several come out too narrow for single-word content that CAN'T wrap
        (Track e.g. "Personal"/"Marriage", the Phase pill "before"/"event"/
        "after"), so every column gets an explicit px floor here sized to real
        content instead of its %: Title and Freq keep the most room since they're
        the only cells with wrap-friendly multi-word text (see .rtg-txt above).
        table-layout:fixed honours these directly, and they sum to the min-width
-       above so nothing is left fighting the browser for slack. */
+       above so nothing is left fighting the browser for slack. 2026-08-10 added
+       Category (nth-child(3), pushing Phase/Freq/Time/Auto/Acts down one) at the
+       same 58px floor as Time -- short single-word content, same idea. */
     #rtnGrid .rtg-tbl table colgroup col:nth-child(1) { width: 122px !important; }
     #rtnGrid .rtg-tbl table colgroup col:nth-child(2) { width: 74px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(3) { width: 54px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(4) { width: 86px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(5) { width: 58px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(6) { width: 44px !important; }
-    #rtnGrid .rtg-tbl table colgroup col:nth-child(7) { width: 34px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(3) { width: 58px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(4) { width: 54px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(5) { width: 86px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(6) { width: 58px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(7) { width: 44px !important; }
+    #rtnGrid .rtg-tbl table colgroup col:nth-child(8) { width: 34px !important; }
     #routinesPage .rtg-toolbar .rtg-search { flex: 1 1 100%; }
     #routinesPage .rtg-toolbar .rtg-grp { flex: 1 1 100%; }
   }
@@ -13327,13 +13330,25 @@
     }
     return s ? timeToMin(s) : null;
   }
+  // 2026-08-10 (How-long duration-source toggle): the one place that decides whether
+  // a routine's sub-tasks get to drive its length at all -- "set" means the person
+  // typed an explicit length, so steps are along for the ride but don't control
+  // anything; anything else (including the common case of no durationMode ever
+  // saved) keeps the original behaviour of steps deciding whenever any are saved.
+  // Returns null rather than 0 so every call site can tell "steps aren't driving
+  // this" apart from "steps sum to zero" and fall through to its own fallback.
+  function subtaskDurMin(t) {
+    if (t.durationMode === "set") return null;
+    const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
+    return subs.length ? roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0)) : null;
+  }
   // 2026-08-08 (Linh: "include ending time for the layers"): a multi-schedule layer
   // can now carry its own end, not just the shared task.durationMin fallback below --
   // date picks out which layer is live so its own start/end (if both set) wins.
   // Crosses midnight the same way rtnDurFromRange does, rather than going negative.
   function routineDurMin(t, date) {
-    const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
-    if (subs.length) return roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+    const stepsSum = subtaskDurMin(t);
+    if (stepsSum != null) return stepsSum;
     if (date && t.freq === "weekly" && Array.isArray(t.schedules) && t.schedules.length) {
       const layer = t.schedules.find(l => layerOccursOn(l, date)) || t.schedules[0];
       if (layer.start && layer.end) {
@@ -14550,8 +14565,10 @@
       if (startMin != null && subs.length) {
         // the routine is ONE block spanning its real length, with its sub-tasks carried
         // inside as tickable steps (Linh 2026-07-26) — no longer exploded into mini-blocks;
-        // that "real length" always rounds up to the nearest 5 (Linh 2026-07-30)
-        const total = ovr && ovr.dur ? ovr.dur : roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+        // that "real length" always rounds up to the nearest 5 (Linh 2026-07-30). Steps
+        // stay visible/tickable here either way (2026-08-10 toggle) -- routineDurMin is
+        // what actually decides whether they also drive the block's length.
+        const total = ovr && ovr.dur ? ovr.dur : routineDurMin(t, date);
         const sMin = ovr && ovr.start ? timeToMin(ovr.start) : startMin;
         out.push({
           id: occId, generated: true, date: keyOf(date), hasOvr,
@@ -14803,8 +14820,8 @@
     }
     if (s.kind === "routine") {
       const t = ROUTINE_TASKS.find(x => x.id === s.ref);
-      const subs = t && Array.isArray(t.subtasks) ? t.subtasks.filter(x => x && x.text) : [];
-      if (subs.length) return roundUp5(subs.reduce((a, x) => a + Math.max(1, x.min || 0), 0));
+      const stepsSum = t ? subtaskDurMin(t) : null;
+      if (stepsSum != null) return stepsSum;
       return (t && t.durationMin) || s.dur || 30;
     }
     return s.dur || 15;
@@ -24025,7 +24042,7 @@
           metaHtml = `${dotsHtml}<span class="rtn-meta-time no-days">No days set</span>`;
         } else {
           const layers = schedulesOf(t).filter(l => l.weekdays.length);
-          const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
+          const stepsSum = subtaskDurMin(t);
           if (layers.length > 1) {
             // one routine, several day/time layers -- list each layer's time (with its
             // own /Nwk suffix if it cycles) instead of a single ambiguous time chip
@@ -24033,11 +24050,11 @@
               const time = l.start ? fmtTime(minToTime(timeToMin(l.start))) : "";
               return time + (l.weekInterval > 1 ? ` /${l.weekInterval}wk` : "");
             }).filter(Boolean).join(", ");
-            const durMin = subs.length ? roundUp5(subs.reduce((a, s) => a + (s.min || 0), 0)) : (t.durationMin || 0);
+            const durMin = stepsSum != null ? stepsSum : (t.durationMin || 0);
             metaHtml = `${dotsHtml}${timePart ? `<span class="rtn-meta-time">${esc(timePart)}</span>` : ""}${durMin ? `<span class="rtn-dur-pill">${durMin}m</span>` : ""}`;
           } else {
             const timePart = t.start ? fmtTime(minToTime(timeToMin(t.start))) : "";
-            const durMin = subs.length ? roundUp5(subs.reduce((a, s) => a + (s.min || 0), 0))
+            const durMin = stepsSum != null ? stepsSum
               : (t.start && t.end && toMin(t.end) > toMin(t.start) ? toMin(t.end) - toMin(t.start) : 0);
             metaHtml = `${dotsHtml}${timePart ? `<span class="rtn-meta-time">${esc(timePart)}</span>` : ""}${t.weekInterval > 1 ? `<span class="rtn-dur-pill">/${t.weekInterval}wk</span>` : ""}${durMin ? `<span class="rtn-dur-pill">${durMin}m</span>` : ""}`;
           }
@@ -24269,7 +24286,7 @@
   // its immediate neighbour (see the drag handler below) instead of growing the
   // table. New localStorage key: the old one held px values that would otherwise be
   // silently misread as percentages (a saved "100" meant 100px, not 100%).
-  const RTG_COLS = ["title", "track", "phase", "freq", "time", "auto", "acts"];
+  const RTG_COLS = ["title", "track", "subcat", "phase", "freq", "time", "auto", "acts"];
   const RTG_COL_MIN = 5;   // percent
   // 2026-08-07 (actions-column rebuild, Linh's "option b": Edit+Delete visible,
   // one-off/chain behind a ⋯ menu): acts/auto both went up from their original
@@ -24277,7 +24294,10 @@
   // it's never tight, auto for the pill switch's own 34px -- freq/title/track/
   // phase gave back the difference; time held at 8 since it was already the
   // tightest text column. See the .rtg-acts CSS comment for the full story.
-  const RTG_COL_DEFAULTS = { title: 21, track: 10, phase: 9, freq: 19, time: 8, auto: 15, acts: 18 };
+  // 2026-08-10 (Linh: "add subcategory column"): title and freq gave up 5/4 points
+  // to make room for it -- both still the widest columns since they're the only
+  // wrap-friendly multi-word text (see .rtg-txt/.rtg-wrap).
+  const RTG_COL_DEFAULTS = { title: 16, track: 10, subcat: 9, phase: 9, freq: 15, time: 8, auto: 15, acts: 18 };
   let rtnGridColWidths = (() => {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths-pct") || "{}"); } catch (e) {}
@@ -24324,6 +24344,7 @@
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
       track: (a, b) => (trackLabel(a.track) || "Other").localeCompare(trackLabel(b.track) || "Other") || a.title.localeCompare(b.title),
+      subcat: (a, b) => (a.category || "").localeCompare(b.category || "") || a.title.localeCompare(b.title),
       phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
       freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
       time: (a, b) => {
@@ -24365,6 +24386,17 @@
       // like the edit "did nothing". Same reasoning Phase already uses to stay read-only.
       const chained = t.anchorTo && chainAnchorOf(t);
       const dot = `<span class="rtg-dot" style="background:var(--${t.track}-seed, var(--ink-faint))"></span>`;
+      // Category column (2026-08-10, Linh: "add subcategory column"): t.category is
+      // always the source of truth (same free-typed field the editor's Sub-category
+      // input + this table's own rtnCategory inline editor already write) -- shown as
+      // typed even when it doesn't match a row in the Categories table (a legacy or
+      // not-yet-catalogued name must never just vanish). catSubFor() only adds the
+      // colour dot when it DOES resolve a match; unresolved text still gets the same
+      // track-coloured dot Track/Title use as a neutral fallback, not a fainter one --
+      // it's just as real a value, only its dedicated colour isn't known yet.
+      const subCat = catSubFor(t.track, t.category);
+      const catLabel = t.category || "";
+      const catDot = `<span class="rtg-dot" style="background:${subCat ? `var(--cat-${subCat.parent}-${subCat.id})` : `var(--${t.track}-seed, var(--ink-faint))`}"></span>`;
       // Time column (2026-08-08, Start+End brief): plain single-schedule routines with
       // both a start and an end show the range; multi-schedule/chained routines just
       // show the start -- their "end" (if any) is a shared durationMin applied per
@@ -24391,6 +24423,7 @@
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(t.title)}</span></span></td>
         <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(trackLabel(t.track) || "Other")}</span></span></td>
+        <td data-rtg-cell="rtnCategory">${catLabel ? `<span class="rtg-trk">${catDot}<span class="rtg-txt">${esc(catLabel)}</span></span>` : `<span class="rtg-muted">—</span>`}</td>
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted rtg-wrap" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeLabel}</td>
@@ -24415,7 +24448,7 @@
     host.innerHTML = `
       <div class="rtg-tbl"><table>
         ${colgroupHtml}
-        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Cal</th><th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("subcat", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Cal</th><th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
     rtnInlineRedock("table");
