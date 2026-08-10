@@ -3402,6 +3402,16 @@
   .evl-row .t { font-size: 11px; font-variant-numeric: tabular-nums; width: 62px; flex: none; opacity: 0.8; }
   .evl-row .nm { font-family: var(--font-body); flex: 1; }
   .evl-row .cat { font-size: 10.5px; color: var(--ink-faint); font-style: italic; }
+  /* 2026-08-10 (Linh brief: "obvious edit path from this view too, rows look
+     static"): same hover-tint affordance .bday-row already uses elsewhere, plus a
+     faint-by-default ✎ (so touch users see it's tappable without a hover state,
+     brightening on hover/press for mouse users) -- min-height keeps the 44px tap
+     target even though the row's own padding is tighter than that. */
+  .evl-row.evl-clickable { cursor: pointer; min-height: 44px; border-radius: 8px; padding: 6px 8px; margin: 0 -8px; }
+  .evl-row.evl-clickable:hover { background: color-mix(in oklab, var(--ink) 7%, transparent); }
+  .evl-row.evl-clickable:active { background: color-mix(in oklab, var(--ink) 12%, transparent); }
+  .evl-row .evl-editicon { font-size: 12px; color: var(--ink-faint); opacity: 0.35; flex: none; }
+  .evl-row.evl-clickable:hover .evl-editicon, .evl-row.evl-clickable:active .evl-editicon { opacity: 0.9; }
   .shop-del:hover { color: var(--margin-rule); }
   .shop-empty { font-family: var(--font-body); font-style: italic; color: var(--ink-faint); font-size: 13.5px; }
 
@@ -14102,6 +14112,25 @@
     if (changed) saveRoutines();
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
   })();
+  // safety net for routines still holding the OLD "link, not copy" hairLink
+  // reference -- 2026-08-09 reversed that model to copy-on-create for NEW
+  // routines (the ↻ Make routine/Refresh steps handler below), but left any
+  // ALREADY-linked routine derived-and-read-only forever (Linh: "Treatment wash"
+  // -- created before that date -- "cant be edited"). Guarded per routine
+  // (hairLink present AND no subtasks yet) instead of the usual one-shot FLAG
+  // short-circuit the other migrations above use, so it's safe to just run this
+  // every load -- once nothing's left to convert, every check below is a no-op.
+  (function migrateLinkedToEditable() {
+    let changed = false;
+    ROUTINE_TASKS.forEach(rt => {
+      if (!rt.hairLink || (Array.isArray(rt.subtasks) && rt.subtasks.length)) return;
+      rt.subtasks = hairLinkSteps(rt.hairLink.tier);
+      delete rt.hairLink;
+      changed = true;
+    });
+    if (changed) saveRoutines();
+    try { localStorage.setItem("book33-linkedMigrated", "1"); } catch (e) {}
+  })();
   const HAIR_TYPE_IDS = new Set(Object.keys(HAIR.types).map(k => "hair-" + k));
   // the wash type's live title/steps/calendar-switch, if she's edited it on the
   // Routines page — falls back to the built-in HAIR.types definition otherwise
@@ -14444,6 +14473,7 @@
         id: `fam-${t.id}-${keyOf(date)}`, generated: true, date: keyOf(date),
         track: "personal", category: "Family Dinh Admin", title: t.title,
         who: t.who, note: t.note, freq: t.freq, allDay: true, start: "", end: "",
+        famTaskId: t.id,
       });
     });
     routinesOn(date).forEach(t => {
@@ -14662,6 +14692,7 @@
         track: b.track, category: "Birthdays", icon: "🎂",
         title: `${b.name}${age !== null ? (b.milestone ? ` — ${age} year${age === 1 ? "" : "s"}` : ` turns ${age}`) : `'s birthday`}`,
         note: b.relation, allDay: true, start: "", end: "",
+        personId: b.id,
       });
     });
     // belled person-dates (2026-08-05, person profile sheet): anniversaries, first-met
@@ -14676,6 +14707,7 @@
         track: p.track || "personal", category: "Birthdays", icon: PP_DATE_ICON(dt.label),
         title: `${p.name.split(/\s+/)[0]} — ${dt.label}${yrs ? ` (${yrs} yr${yrs === 1 ? "" : "s"})` : ""}`,
         note: p.relation, allDay: true, start: "", end: "",
+        personId: p.id,
       });
     }));
     // Medical Tracking → calendar (2026-08-06, Linh: "if i input that my dentist
@@ -28233,7 +28265,17 @@
       // `min` on load (blank/NaN/junk from before readRtnSubs()'s own save-time
       // guard existed) -- same Math.max(0, parseInt(...)||0) that guards every read,
       // so a stray old value can't display as anything but a clean integer.
-      (task.subtasks || []).forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0)));
+      // 2026-08-10 ("must never dead-end" brief): migrateLinkedToEditable() above
+      // already converts every hairLink'd routine at load, so task.subtasks should
+      // always be real by the time this runs -- this hairLink fallback is only a
+      // belt-and-suspenders for the case something still slips through with no
+      // subtasks yet; it shows the tier's CURRENT steps as normal editable rows
+      // (not a locked note) so there's always something here to edit. Saving drops
+      // hairLink for good either way -- the submit handler below builds a fresh
+      // task object that never carries it forward.
+      const subs = Array.isArray(task.subtasks) && task.subtasks.length ? task.subtasks
+        : task.hairLink ? hairLinkSteps(task.hairLink.tier) : [];
+      subs.forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0)));
       rtnTrack = task.track; syncRtnTrackButtons();
       rtnCalOn = task.calOn !== false; syncRtnAutoToggle();
       rtnFreq = task.freq;
@@ -28842,6 +28884,21 @@
   });
 
   /* ---- all events (master list) ---- */
+  // 2026-08-10 (Linh brief: "All Events list rows are editable"): resolves a
+  // generatedFor()/EVENTS occurrence back to the template it edits + which kind of
+  // editor opens it. Mirrors the dispatch already scattered across the app's own
+  // click delegates (data-rt-open, data-edit, data-fam-edit, #pplTable's
+  // data-ppl-edit) rather than inventing new logic -- returns null for kinds with
+  // no known edit path (supplements, medical, fitness) so those rows stay static.
+  function evlDispatchFor(e) {
+    if (e.rtTaskId) return { kind: "routine", id: e.rtTaskId };
+    if (typeof e.id === "string" && e.id.indexOf("hair-") === 0 && e.habit) return { kind: "routine", id: "hair-" + e.habit };
+    if (e.famTaskId) return { kind: "fam", id: e.famTaskId };
+    if (e.fromRecurringEvent && e.recurId) return { kind: "recur", id: e.recurId };
+    if (e.personId) return { kind: "person", id: e.personId };
+    if (!e.generated) return { kind: "event", id: e.id };
+    return null;
+  }
   function renderEventsPage() {
     const fromEl = document.getElementById("evlFrom"), toEl = document.getElementById("evlTo");
     if (!fromEl.value) fromEl.value = keyOf(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
@@ -28872,14 +28929,43 @@
         lastKey = k;
       }
       const time = e.allDay ? "All day" : fmtTime(e.start);
-      html += `<div class="evl-row" style="color:${TRACK_INK[e.track]}">
+      const disp = evlDispatchFor(e);
+      html += `<div class="evl-row${disp ? " evl-clickable" : ""}" style="color:${TRACK_INK[e.track]}"${disp ? ` data-evl-kind="${disp.kind}" data-evl-id="${esc(disp.id)}"` : ""}>
         <span class="t">${time}</span>
         <span class="nm">${e.icon ? `<span class="p-icon">${e.icon}</span>` : ""}${esc(e.title)}</span>
         ${e.category ? `<span class="cat">${esc(e.category)}</span>` : ""}
+        ${disp ? `<span class="evl-editicon" aria-hidden="true">✎</span>` : ""}
       </div>`;
     });
     el.innerHTML = html;
   }
+  // tap a row to open the right editor for its kind -- same underlying open-calls
+  // the rest of the app already uses (data-rt-open/data-edit/data-fam-edit/
+  // #pplTable's data-ppl-edit branches), just resolved ahead of time by
+  // evlDispatchFor() since this list holds full occurrence objects already
+  // instead of day-scoped ids.
+  document.getElementById("evlList").addEventListener("click", e => {
+    const row = e.target.closest("[data-evl-kind]");
+    if (!row) return;
+    const id = row.dataset.evlId;
+    const kind = row.dataset.evlKind;
+    if (kind === "routine") {
+      const task = ROUTINE_TASKS.find(t => t.id === id);
+      if (task) { state.view = "routines"; render(); openRtnForm(task); }
+    } else if (kind === "fam") {
+      const task = FAMILY_TASKS.find(t => t.id === id);
+      if (task) { state.view = "family"; render(); openFamForm(task); }
+    } else if (kind === "recur") {
+      const rt = RECURRING_EVENTS.find(x => x.id === id);
+      if (rt) openFormForRecurEdit(rt);
+    } else if (kind === "person") {
+      const p = personById(id);
+      if (p) { state.view = "people"; render(); openPplForm(p); }
+    } else if (kind === "event") {
+      const ev = EVENTS.find(x => x.id === id);
+      if (ev) openFormForEdit(ev);
+    }
+  });
   document.getElementById("evlTrackPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-evltrack]"); if (!b) return;
     state.evlTrack = b.dataset.evltrack;
