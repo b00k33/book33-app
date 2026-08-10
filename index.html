@@ -6484,6 +6484,14 @@
     background: color-mix(in oklab, var(--link-accent) 14%, transparent);
   }
   .ev-scope-btn.link-jump-btn:hover { border-color: var(--link-accent); }
+  /* brief lands on the tier column the ↻ linked jump button pointed to (see
+     jumpToLinkedSource) -- a quiet pulse in the tier's own header confirms "you're
+     here", same intent as the existing .is-due gold treatment on the same element. */
+  @keyframes hxJumpFlash {
+    0%, 100% { box-shadow: none; }
+    30% { box-shadow: inset 0 0 0 2px var(--cat-personal-beauty); }
+  }
+  .hx-jump-flash { animation: hxJumpFlash 1.6s ease-out; }
   .hx-row td { border-top: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); }
   .hx-name { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink); }
   .hx-min { font-size: 10px; color: var(--ink-faint); font-weight: 400; white-space: nowrap; }
@@ -13927,7 +13935,7 @@
       const n = hairTierSteps(tier.id).length;
       const rt = hairRoutineFor(tier.id);
       const made = !!rt;   // a routine exists for this tier (copy-model, 2026-08-09)
-      return `<th class="hx-tier-h hx-c-${i}${dueTier === tier.id ? " is-due" : ""}">
+      return `<th class="hx-tier-h hx-c-${i}${dueTier === tier.id ? " is-due" : ""}" data-hx-tier="${esc(tier.id)}">
         <span class="hx-t-ic">${tier.icon}</span>
         <span class="hx-t-lb">${esc(tier.label)}</span>
         <span class="hx-t-n">${n} steps · ${hairTierMin(tier.id)} min</span>
@@ -15262,7 +15270,7 @@
     if (!items.length) return `<div class="dp-recap-left">Nothing tickable on today's page yet.</div>`;
     const row = (e, done) => `<button type="button" class="dp-t-row${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}
         aria-label="${done ? "Un-tick" : "Mark done"}: ${esc(e.title)}">
-        <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>
+        <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>${linkedBadgeHtml(e.linkInfo)}
       </button>`;
     const doneItems = items.filter(e => isDone(e.id));
     const todoItems = items.filter(e => !isDone(e.id));
@@ -31142,6 +31150,19 @@
       d.el.classList.remove("tl-dragging");
       document.body.classList.remove("dragging-block");
       hoverLine.hidden = true;
+      // 2026-08-10 (Linh: "i cant edit work" — tapping a block did nothing): touch only
+      // arms drag mode via the LONG_PRESS_MS timer, not real movement (mouse arms on
+      // MOUSE_DRAG_PX instead, so it can't hit this) — a normal tap that simply lingers
+      // past 450ms (easy on real hardware) armed drag, then landed here with ~0 movement,
+      // silently "rescheduled" to its own unchanged time, and suppressed the trailing
+      // click that would've opened the detail sheet. Net effect: a plain tap did nothing.
+      // If the finger never actually moved, this was a tap, not a drag — open the sheet.
+      const movedPx = Math.max(Math.abs(e.clientX - pressX), Math.abs(e.clientY - pressY));
+      if (!d.mouse && movedPx < MOVE_CANCEL_PX) {
+        renderDay();
+        openTlDetail(d.id, document.querySelector(`[data-tl-detail="${CSS.escape(d.id)}"]`));
+        return;
+      }
       // every completed drag suppresses the trailing native click — touch fires one
       // too when the finger stayed inside the browser's tap slop (bug 2 above)
       suppressNextItemClick = true;
