@@ -16618,7 +16618,12 @@
     const fldTitle = dayScope ? e.title : (rtnT ? rtnT.title : e.title);
     const fldStart = dayScope ? (e.start || "") : (rtnT ? rtnT.start || "" : "");
     const rtnTplDur = rtnT ? (rtnT.durationMin || (rtnT.start && rtnT.end ? Math.max(5, timeToMin(rtnT.end) - timeToMin(rtnT.start)) : "")) : "";
-    const fldDur = dayScope ? itemDurationMin(e) : rtnTplDur;
+    // 2026-08-10 (Linh: "let me choose what time it finishes"): End is a direct clock-
+    // time field here too, same as the main routine editor's Start+End (2026-08-08 —
+    // superseded typing a raw minutes count). Day-scope reads the merged occurrence's
+    // own end (falls back to itemEndMin's derived value); routine-scope reads the
+    // template's end, falling back to start+its old durationMin for pre-Start+End data.
+    const fldEnd = dayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : (rtnT ? (rtnT.end || (rtnT.start && rtnTplDur ? minToTime(Math.min(timeToMin(rtnT.start) + rtnTplDur, 1439)) : "")) : "");
     const scopeHtml = isRtnOcc && rtnT ? `
         <div class="ovr-scope" role="group" aria-label="What should this edit change?">
           <button type="button" class="ovr-scope-opt" data-ovr-scope="day" aria-pressed="${dayScope}">This day only<span class="sub">${esc(occDateLbl)}</span></button>
@@ -16637,8 +16642,8 @@
             <input type="time" id="ovrStart" value="${esc(fldStart)}">
           </label>
           <label class="fit-field">
-            <span class="fit-field-lbl">Duration (min)</span>
-            <input type="number" min="5" step="5" id="ovrDur" value="${fldDur || ""}">
+            <span class="fit-field-lbl">End time</span>
+            <input type="time" id="ovrEnd" value="${esc(fldEnd)}">
           </label>
         </div>
         <div class="ovr-actions">
@@ -17037,24 +17042,26 @@
       if (!item || !p || !t) return;
       const title = (document.getElementById("ovrTitle")?.value || "").trim();
       const start = document.getElementById("ovrStart")?.value || "";
-      const dur = Math.max(5, parseInt(document.getElementById("ovrDur")?.value, 10) || 0) || null;
+      // 2026-08-10 (Linh: "let me choose what time it finishes"): End is now a direct
+      // clock-time field here, same as the main routine editor's Start+End — no more
+      // typing a raw minutes count. dur is explicitly cleared on every save so a stale
+      // dur from before this change can never silently outrank the freshly-typed end
+      // (generatedFor's occurrence logic prefers ovr.dur over ovr.end when both exist).
+      const end = document.getElementById("ovrEnd")?.value || "";
       if (tlOvrScope === "routine") {
         // template edit — every occurrence changes; existing per-day overrides stay put
         if (title) t.title = title;
         t.start = start || t.start;
         const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
-        if (!subs.length && dur) {
-          t.durationMin = dur;
-          if (t.end && t.start) t.end = minToTime(Math.min(timeToMin(t.start) + dur, 1439));
-        }
+        if (!subs.length && end) t.end = end;
         saveRoutines();
       } else {
         // this day only — writes overrides[patternDate]; title override only when it
         // actually differs from the template (same value would be pure noise)
         setRtnOvr(t.id, p.date, {
           start: start || undefined,
-          dur: dur || undefined,
-          end: undefined,
+          end: end || undefined,
+          dur: undefined,
           title: title && title !== t.title ? title : undefined,
         });
       }
@@ -33080,7 +33087,9 @@
   function setLive(on) {
     lastLiveOn = on;
     var d = document.getElementById("b33Live"); if (!d) return;
-    d.style.background = on ? "#8fd6b4" : "#c98b6b";
+    // 2026-08-10: dot colour moved to updateLiveBadge() (below) -- #b33Live is the
+    // pill CONTAINER now (dot + always-visible text), not the dot itself, so
+    // painting its own background here would tint the whole pill instead.
     var label = on ? "Synced — live" : "Reconnecting…";
     d.title = label;
     d.setAttribute("aria-label", "Cloud sync: " + label);
@@ -33090,6 +33099,7 @@
       if (localStorage.getItem(DIRTY)) extra = on ? " · pushing an edit…" : " · edit waiting to send";
       pop.textContent = label + extra;
     }
+    updateLiveBadge();
   }
   // 2026-08-09 (manual "Sync to cloud now" button, settings-screen sync card):
   // priority order matters -- a failed push while offline must read as Offline
@@ -33168,6 +33178,12 @@
   // agree, per the brief's "shared source of truth" requirement. Safe no-op
   // before the card exists (go() hasn't run / not signed in yet).
   function updateSyncCard() {
+    // 2026-08-10: the always-visible bottom-right pill (badge()/updateLiveBadge())
+    // shares this function's every call site (markDirtyKey, pushNow start/success/
+    // fail, offline event) -- unconditional, ahead of the settings-card-only guard
+    // below, so it refreshes on every page, not just while the settings screen
+    // (where #b33SyncCard actually lives) happens to be open.
+    updateLiveBadge();
     var card = document.getElementById("b33SyncCard");
     if (!card) return;
     var dot = document.getElementById("b33ScDot"), label = document.getElementById("b33ScLabel"),
@@ -33221,16 +33237,34 @@
   // fixed dot desktop always had (see positionDot()), so there's one code path instead
   // of a mobile/desktop branch. Global again (every page, not just Day), same as before
   // it ever moved into page-specific chrome.
+  // 2026-08-10 (Linh: "show the syncing initiation at bottom of every page
+  // especially on day page"): SUPERSEDES the silent colour-only dot below --
+  // she's asked what this dot means before (2026-08-02 note above), so a tap-to-
+  // reveal popover clearly wasn't enough. Now a small always-visible pill (dot +
+  // short text, same bottom-right/every-page placement) reads "Syncing…" the
+  // moment a push actually starts, not just on tap. updateLiveBadge() (below)
+  // drives the text from syncState() -- the SAME function the settings-page sync
+  // card already uses -- so this pill and that card can never disagree.
   function badge() {
     if (document.getElementById("b33Live")) return;
     var b = document.createElement("div");
     b.id = "b33Live";
     b.setAttribute("role", "status");
     b.setAttribute("tabindex", "0");
-    b.style.cssText = "position:fixed;width:13px;height:13px;border-radius:50%;background:#c98b6b;z-index:2147483000;box-shadow:0 0 0 3px rgba(0,0,0,.12);cursor:pointer";
+    b.style.cssText = "position:fixed;display:flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:999px;background:var(--paper,#251D13);border:1px solid var(--note-line,rgba(240,230,212,.26));box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:2147483000;cursor:pointer;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--ink,#F0E6D4)";
+    var dot = document.createElement("span");
+    dot.id = "b33LiveDot";
+    dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none;background:#c98b6b";
+    var text = document.createElement("span");
+    text.id = "b33LiveText";
+    text.style.cssText = "white-space:nowrap";
+    b.appendChild(dot); b.appendChild(text);
     var pop = document.createElement("span");
     pop.id = "b33LiveLabel";
-    pop.style.cssText = "position:absolute;top:calc(100% + 8px);right:0;display:none;white-space:nowrap;background:var(--paper,#251D13);color:var(--ink,#F0E6D4);border:1px solid var(--note-line,rgba(240,230,212,.26));border-radius:8px;padding:5px 10px;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)";
+    // opens UPWARD now -- the pill lives bottom-right (positionDot below), so a
+    // popover opening downward (the old top:calc(100%+8px), from when this dot
+    // lived in the header) would render off the bottom of the screen.
+    pop.style.cssText = "position:absolute;bottom:calc(100% + 8px);right:0;display:none;white-space:nowrap;background:var(--paper,#251D13);color:var(--ink,#F0E6D4);border:1px solid var(--note-line,rgba(240,230,212,.26));border-radius:8px;padding:5px 10px;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3)";
     b.appendChild(pop);
     var hideTimer;
     // 2026-08-04 (offline-first rework): sign-in is no longer an automatic screen
@@ -33254,6 +33288,26 @@
     document.documentElement.appendChild(b);
     positionDot();
     window.addEventListener("resize", positionDot);
+    updateLiveBadge();
+  }
+  // the pill's always-visible text -- reads syncState() (pushInFlight/offline/
+  // lastPushFailed/DIRTY), the same source of truth updateSyncCard() uses for the
+  // settings-page card, so "Syncing…" appears here the instant a push starts,
+  // not just when she happens to tap. "synced" falls back to the realtime-
+  // channel's own on/off (lastLiveOn) for its last bit of nuance -- a dropped
+  // realtime subscription with nothing pending is a quieter, less alarming state
+  // than a real offline/error, so it keeps the gentler amber "Reconnecting…"
+  // rather than reading as broken.
+  function updateLiveBadge() {
+    var dot = document.getElementById("b33LiveDot"), text = document.getElementById("b33LiveText");
+    if (!dot || !text) return;
+    var st = syncState();
+    var GOLD = "var(--margin-rule)", GREEN = "var(--fit-workout)", RED = "var(--warn)";
+    if (st === "syncing") { dot.style.background = GOLD; text.textContent = "Syncing…"; }
+    else if (st === "offline") { dot.style.background = RED; text.textContent = "Offline"; }
+    else if (st === "error") { dot.style.background = RED; text.textContent = "Sync failed"; }
+    else if (st === "pending") { dot.style.background = GOLD; text.textContent = "Unsynced"; }
+    else { dot.style.background = lastLiveOn ? GREEN : GOLD; text.textContent = lastLiveOn ? "Synced" : "Reconnecting…"; }
   }
   // Sign out → switch login. signOut() clears the session; onAuthStateChange then
   // drops straight to sign-in (baked config stays, so no Connect step).
