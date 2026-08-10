@@ -16848,13 +16848,17 @@
       // every item — event, task or routine — can be ticked off (Linh 2026-07-27)
       // fitLink/date ride along on the dataset so tickTask() can auto-log a fitness
       // session without needing to reverse-parse the id (2026-08-02, see applyFitLink)
-      // 2026-08-06 (outcomes spec): the ring is the STATUS ring now — its face and
-      // colour read outcomeOf(), and tapping it opens the outcome picker sheet (see
-      // the .tl-tick branch in the document click delegate) instead of instant-toggling.
+      // 2026-08-06 (outcomes spec): the ring is the STATUS ring — its face and colour
+      // still read outcomeOf(). 2026-08-10 (Linh: "when i click on the tick circle i
+      // want to be able to instantly tick it off"): a tap now instant-toggles done,
+      // same as every other quick-tick surface — see the data-tick-ev branch in the
+      // document click delegate. Cancelled/Rescheduled moved to a press-and-hold on
+      // this same ring (see the long-press IIFE near the block-drag code) instead of
+      // hijacking every tap.
       const oc = outcomeOf(e.id);
       const tickFace = done ? "✓" : oc.status === "cancelled" ? "✕" : oc.status === "rescheduled" ? "🕑" : "";
       const tick = `<button type="button" class="tl-tick" data-oc-status="${oc.status}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}
-        aria-label="Outcome for ${esc(e.title)} — currently ${oc.status}">${tickFace}</button>`;
+        aria-label="${esc(e.title)} — tap to ${done ? "un-tick" : "tick off"}, hold for Cancelled/Rescheduled">${tickFace}</button>`;
       // rescheduled/cancelled trail line under the time — the item is KEPT, this is its story
       const ocSub = oc.status === "rescheduled" && oc.to ? `<span class="oc-sub oc-sub-r">→ Rescheduled to ${esc(ocWhenLabel(oc.to))}</span>`
         : oc.status === "cancelled" ? `<span class="oc-sub oc-sub-c">Cancelled${oc.reason ? ` · ${esc(oc.reason)}` : ""}</span>` : "";
@@ -17378,6 +17382,13 @@
       <textarea id="ocNoteTa" class="oc-note" rows="2" placeholder="Add a note…">${esc(oc.note)}</textarea>`;
   }
   document.getElementById("ocOverlay").addEventListener("click", ev => {
+    // 2026-08-10 (tick long-press): opening this sheet mid-hold leaves the finger's
+    // eventual release to fire one trailing native click at the same screen point —
+    // now over this backdrop, which would read as "tap outside, close" a beat after
+    // opening. suppressNextItemClick (declared with the tick long-press IIFE) is the
+    // same app-wide flag the block-drag system already uses for this exact class of
+    // trailing-click bug — see its declaration comment for the full story.
+    if (suppressNextItemClick) { suppressNextItemClick = false; return; }
     if (ev.target === ev.currentTarget || ev.target.closest("[data-oc-close]")) { closeOutcomeSheet(); return; }
     const e = TL_ITEMS_BY_ID[ocOpenId];
     if (!e) { closeOutcomeSheet(); return; }
@@ -29828,12 +29839,15 @@
     }
     // tick a calendar item straight on the timeline (covers both the compact .tl-tick
     // card button and the detail sheet's .tl-detail-done-btn — same data-tick-ev)
+    // 2026-08-10 (Linh: "when i click on the tick circle i want to be able to instantly
+    // tick it off"): the Day-timeline ring's tap now instant-toggles too, same as every
+    // other quick-tick surface — SUPERSEDES the 2026-08-06 outcomes-spec special case
+    // that opened the Done/Reschedule/Cancelled picker on every tap. That picker is
+    // still one gesture away via press-and-hold on the ring (see the long-press IIFE
+    // near the block-drag code, which sets suppressNextItemClick so the trailing click
+    // this branch would otherwise run doesn't double-toggle right after).
     const tickEv = e.target.closest("[data-tick-ev]");
     if (tickEv) {
-      // the Day-timeline block's ring is the STATUS ring (outcomes spec §2) — it opens
-      // the Done/Reschedule/Cancelled picker; every other quick-tick surface (week
-      // grid, desktop row buttons, the detail sheet's Mark done) keeps instant toggle
-      if (tickEv.classList.contains("tl-tick")) { openOutcomeSheet(tickEv.dataset.tickEv); return; }
       const willBeOn = tickEv.dataset.on !== "true";
       celebrateIfDone(tickEv, willBeOn);   // reads the still-attached node's position before renderDay() replaces it
       tickTask(tickEv.dataset.tickEv, willBeOn, tickEv.dataset.fitLink, tickEv.dataset.fitDate);
@@ -31889,6 +31903,47 @@
       drag = null;
       renderDay();
     });
+  })();
+
+  // 2026-08-10 (Linh: "when i click on the tick circle i want to be able to instantly
+  // tick it off"): a tap on the Day-timeline .tl-tick ring now instant-toggles done
+  // (see the data-tick-ev branch in the #wrap click delegate) — this is what used to
+  // hijack every tap into the Done/Reschedule/Cancelled outcome sheet (2026-08-06
+  // spec). Rather than lose Cancelled/Rescheduled off the timeline entirely, the same
+  // 450ms press-and-hold gesture the block-drag system above already teaches now opens
+  // that sheet — a plain tap stays instant, a held tap reaches the fuller picker.
+  // .tl-tick is excluded from the block-drag arm above (its own pointerdown guard
+  // checks e.target.closest(".tl-tick") and bails), so this is fully independent —
+  // no shared state, no risk of the two press-and-holds fighting over the same finger.
+  // Android's contextmenu-on-long-press is already swallowed for any non-mouse pointer
+  // by the dayPage contextmenu listener above, which covers this ring too.
+  (function () {
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 12;
+    const layer = document.getElementById("eventsLayer");
+    let timer = null, pressX = 0, pressY = 0;
+    function cancel() { clearTimeout(timer); timer = null; }
+    layer.addEventListener("pointerdown", e => {
+      const tick = e.target.closest(".tl-tick");
+      if (!tick) return;
+      pressX = e.clientX; pressY = e.clientY;
+      const id = tick.dataset.tickEv;
+      timer = setTimeout(() => {
+        timer = null;
+        if (navigator.vibrate) navigator.vibrate(10);
+        // fires while the finger/mouse is still down — the eventual release still
+        // synthesizes a native click at this same point, now over the sheet's own
+        // backdrop; suppressNextItemClick (checked by ocOverlay's own click listener,
+        // see its declaration comment there) is what stops that click from reading as
+        // "tapped outside, close" a beat after opening
+        suppressNextItemClick = true;
+        openOutcomeSheet(id);
+      }, LONG_PRESS_MS);
+    });
+    layer.addEventListener("pointermove", e => {
+      if (timer && (Math.abs(e.clientX - pressX) > MOVE_CANCEL_PX || Math.abs(e.clientY - pressY) > MOVE_CANCEL_PX)) cancel();
+    });
+    layer.addEventListener("pointerup", cancel);
+    layer.addEventListener("pointercancel", cancel);
   })();
 
   // 2026-08-06 (drag-and-drop, "drag the top or bottom edge to resize — web only, snap
