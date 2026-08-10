@@ -1997,6 +1997,9 @@
     display: flex; align-items: flex-start; gap: 14px; padding: 9px 0; font-size: 14px; color: var(--ink);
   }
   .tl-detail-row .tl-detail-em { flex: none; width: 18px; text-align: center; color: var(--ink-faint); }
+  /* 2026-08-10 (Notes brief): plain events/tasks can now write a multi-line note --
+     keep its line breaks instead of collapsing them to one run like normal inline text. */
+  .tl-detail-note-text { white-space: pre-wrap; }
   .tl-detail-row .tl-detail-sub { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
   .tl-detail-done-btn {
     display: flex; align-items: center; gap: 10px; width: 100%; margin: 2px 0 6px; padding: 10px 14px;
@@ -4769,6 +4772,47 @@
      shared "Fitness" token rather than inventing a new colour (see .rtg-auto-switch.on
      for the other place this same token is used for an "on/derived" state). */
   .rtn-dur-readout { font-size: 12px; font-weight: 600; color: var(--fit-workout); white-space: nowrap; }
+  /* 2026-08-10 (How-long duration-source toggle, Linh: "unambiguous what sets a
+     routine's length"): the segmented control reuses .track-picker/.track-opt as-is --
+     already gold-selected inside #rtnAddForm via the generic rule above -- just needs
+     its own spacing between the label and whichever of picker/read-out it's choosing. */
+  .rtn-durmode-toggle { margin: 4px 0 8px; }
+  /* "From steps": a locked live sum standing in for the h·m boxes -- fitness green
+     marks it as derived/auto, same token+reasoning as .rtn-dur-readout just above.
+     Stays a real button (tap jumps to the editable list below in More options) rather
+     than reading as inert static text. */
+  .rtn-dur-locked {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px;
+    padding: 8px 12px; margin-top: 8px; cursor: pointer; text-align: left;
+    font-family: var(--font-body); background: color-mix(in oklab, var(--fit-workout) 10%, var(--field-bg));
+    border: 1px solid color-mix(in oklab, var(--fit-workout) 30%, transparent); border-radius: var(--radius-sm);
+  }
+  .rtn-dur-locked:hover, .rtn-dur-locked:focus-visible { border-color: var(--fit-workout); }
+  #rtnDurLockedVal { font-size: 13px; font-weight: 700; color: var(--fit-workout); }
+  .rtn-dur-locked-tag { font-size: 11px; color: var(--fit-workout); opacity: .85; }
+  /* "Set total" with steps saved alongside: collapsed to one line rather than vanishing
+     with no trace (Linh: "steps not deleted") -- same tappable-field-that-jumps-through
+     language as .rtn-repeat-sum below, just muted since nothing here currently drives
+     anything -- switching it to bold/gold would overstate that. */
+  .rtn-subs-summary {
+    display: block; width: 100%; min-height: 36px; margin-top: 8px; padding: 6px 2px;
+    text-align: left; font-family: var(--font-body); font-size: 12px; color: var(--ink-soft);
+    background: none; border: none; cursor: pointer;
+  }
+  .rtn-subs-summary:hover, .rtn-subs-summary:focus-visible { color: var(--margin-rule); }
+  /* non-blocking mismatch banner -- --warn per CLAUDE.md's "no hardcoded hex" rule,
+     same token the rest of the app already uses for its one other warning colour. */
+  .rtn-dur-warn {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px;
+    padding: 8px 10px; background: color-mix(in oklab, var(--warn) 12%, transparent);
+    border-radius: var(--radius-sm); font-size: 12px; color: var(--warn);
+  }
+  .rtn-fit-steps-btn {
+    flex: 0 0 auto; border: none; background: none; padding: 4px 0;
+    font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--margin-rule);
+    cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .rtn-fit-steps-btn:hover, .rtn-fit-steps-btn:focus-visible { color: var(--nav-active); }
   /* the compact editor's read-only repeat line for non-weekly routines (code44 pass) —
      looks like a field, taps through to the real pickers inside More options */
   .rtn-repeat-sum {
@@ -10768,6 +10812,9 @@
          at >=1024px and brings it back here below that (phone behaviour unchanged). -->
     <div id="rtnFormHome" hidden></div>
     <form class="add-form" id="rtnAddForm" hidden>
+      <div class="rtn-topbar full">
+        <button type="submit" class="addform-head-save rtn-top-save" id="rtnTopSaveBtn">Save</button>
+      </div>
       <!-- 2026-08-06 (Linh's "New routine" mockup): an icon box beside the name --
            reuses her existing convention (an emoji she's always typed by hand at the
            start of the title, e.g. "🌅 A · Before Pilates") rather than a new field:
@@ -10873,6 +10920,15 @@
            unchanged. -->
         <div class="field" id="rtnDurPickerField">
           <label>How long <span class="field-hint">optional — fills in End</span></label>
+          <!-- 2026-08-10 (How-long duration-source toggle, Linh: "unambiguous what sets
+               a routine's length"): only shown once there's an actual choice to make --
+               a routine with no saved sub-tasks has nothing for "From steps" to sum, so
+               the toggle stays hidden and Set total (the boxes below) is simply the only
+               way, same as before this brief (see updateRtnSubTotal's hasSubs gate). -->
+          <div class="track-picker rtn-durmode-toggle" id="rtnDurModeToggle" role="group" aria-label="What sets this routine's length" hidden>
+            <button type="button" class="track-opt" data-durmode="set" aria-pressed="true">Set total</button>
+            <button type="button" class="track-opt" data-durmode="steps" aria-pressed="false">From steps</button>
+          </div>
           <div class="dur-picker" id="rtnDurPicker">
             <div class="dur-boxes">
               <label class="dur-box-wrap">
@@ -10893,6 +10949,20 @@
             </div>
           </div>
           <input type="hidden" id="rtnDur">
+          <!-- "From steps" mode: h·m above hides, this locked live sum takes its place --
+               tapping it jumps down to the real editable list (still just Sub-tasks in
+               More options, see openRtnSubsEditor -- not duplicated here). -->
+          <button type="button" class="rtn-dur-locked" id="rtnDurLocked" hidden>
+            <span id="rtnDurLockedVal"></span><span class="rtn-dur-locked-tag">🔒 auto</span>
+          </button>
+          <!-- "Set total" mode with sub-tasks saved: they're not driving the length, but
+               "steps not deleted" (brief) -- this collapsed line says so and taps
+               straight into From-steps mode + the real list, rather than just vanishing. -->
+          <button type="button" class="rtn-subs-summary" id="rtnSubsSummary" hidden></button>
+          <div class="rtn-dur-warn" id="rtnDurWarn" hidden>
+            <span id="rtnDurWarnText"></span>
+            <button type="button" class="rtn-fit-steps-btn" id="rtnFitStepsBtn">Fit to steps</button>
+          </div>
         </div>
       </div>
       <!-- own full-width row now (see rtnTimeDurGroup above) -- six pill options read
@@ -11072,7 +11142,7 @@
              above) instead of Also-runs-on, which predates this brief's pairing. -->
         <div class="field rtn-g6" id="rtnNoteField">
           <label for="rtnNote">Note <span class="field-hint">optional</span></label>
-          <input type="text" id="rtnNote" placeholder="Any detail worth remembering" autocomplete="off">
+          <textarea id="rtnNote" rows="3" placeholder="Any detail worth remembering — notes, links, anything" autocomplete="off"></textarea>
         </div>
       </div>
       <!-- 2026-08-06 (routines redesign, "delete-with-confirm" in the editor, inline
@@ -12007,6 +12077,10 @@
               <input type="text" id="fLoc" class="field-bare" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
               <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
               <datalist id="locList"></datalist>
+            </div>
+            <div class="field full" id="fNoteField">
+              <label for="fNote">Notes <span class="field-hint">optional</span></label>
+              <textarea id="fNote" class="field-bare" rows="3" placeholder="Add notes or a description…"></textarea>
             </div>
           </div>
         </form>
@@ -16957,7 +17031,7 @@
     // CSS comment). A plain read-only note (non-routine e.note) is DISPLAY, not an
     // editable field, so it stays visible too, same as location/category above it.
     const fitLinkHtml = e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : "";
-    const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span>${esc(e.note)}</span></div>` : "";
+    const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span class="tl-detail-note-text">${esc(e.note)}</span></div>` : "";
     const fitResolved = resolveFitSessionFor(e);
     const fs = fitResolved && fitResolved.sess;
     // 2026-08-04 (Linh: "move ALL the editable fields -- Time, Duration, Location,
@@ -27803,6 +27877,12 @@
   // to match calOn's own "absent/true = on" convention every reader elsewhere in
   // the app already uses. Same rtnTrack/rtnFreq pattern (see openRtnForm/the submit handler).
   let rtnCalOn = true;
+  // 2026-08-10 (How-long duration-source toggle): "steps" matches subtaskDurMin's own
+  // unwritten default (durationMode absent behaves as "steps") so a freshly-opened
+  // routine with saved sub-tasks shows the toggle already pointed at whichever one is
+  // actually driving its length -- same rtnFreq/rtnTrack pattern, reset in closeRtnForm,
+  // set from task.durationMode in openRtnForm.
+  let rtnDurMode = "steps";
 
   // 2026-08-06 (Linh's "New routine" mockup): single bold initial, no planet icon --
   // this form's own compact style, see the #rtnWeekdayPicker CSS above for why.
@@ -27918,21 +27998,85 @@
       min: Math.max(0, parseInt(r.querySelector(".rtn-sub-min").value, 10) || 0),
     })).filter(s => s.text);
   }
+  // 2026-08-10 (How-long duration-source toggle): jumps to the real editable sub-tasks
+  // list -- still just #rtnSubTasksField inside More options, never duplicated -- from
+  // either the locked read-out or the collapsed summary line up in How-long.
+  function openRtnSubsEditor() {
+    setRtnMoreOptionsOpen(true);
+    document.getElementById("rtnSubTasksField")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function setRtnDurMode(mode) {
+    rtnDurMode = mode === "set" ? "set" : "steps";
+    updateRtnSubTotal();
+  }
+  document.getElementById("rtnDurModeToggle").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    setRtnDurMode(b.dataset.durmode);
+  });
+  document.getElementById("rtnSubsSummary").addEventListener("click", () => { setRtnDurMode("steps"); openRtnSubsEditor(); });
+  document.getElementById("rtnDurLocked").addEventListener("click", openRtnSubsEditor);
+  // one-tap correction, NOT a mode switch (Linh: "Fit to steps") -- Set total stays the
+  // driver, this just squares its typed value up to what the steps currently add to.
+  document.getElementById("rtnFitStepsBtn").addEventListener("click", () => {
+    const sum = roundUp5(readRtnSubs().reduce((a, s) => a + Math.max(1, s.min || 0), 0));
+    rtnDurHours.value = sum > 0 ? String(Math.floor(sum / 60)) : "";
+    rtnDurMinutes.value = sum > 0 ? String(sum % 60) : "";
+    rtnSyncDurFromBoxes();
+  });
   function updateRtnSubTotal() {
-    const hasSubs = !!rtnSubList.querySelector(".rtn-sub-row");
+    const subs = readRtnSubs();
+    const hasSubs = subs.length > 0;
+    // 2026-08-10: the toggle only makes sense once there's an actual choice -- no saved
+    // sub-tasks means Set total (the boxes below) is the only way, same as pre-toggle.
+    const modeToggle = document.getElementById("rtnDurModeToggle");
+    if (modeToggle) {
+      modeToggle.hidden = !hasSubs;
+      modeToggle.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.durmode === rtnDurMode)));
+    }
+    const stepsMode = hasSubs && rtnDurMode === "steps";
+    const stepsSum = hasSubs ? roundUp5(subs.reduce((a, s) => a + Math.max(1, s.min || 0), 0)) : 0;
     // 2026-08-06 (Linh: "make sub-tasks fully optional... if I do add sub-tasks, keep
     // the current back-to-back behaviour"): Duration only makes sense when there's no
     // sub-task list deciding the length instead -- hidden the moment a sub-task exists,
     // shown again the moment the list empties back out. Runs on every add/remove/edit
     // of a sub-task row (same call sites this function already had). Retargeted
     // 2026-08-08 from the old single Mins field to the End field's own wrapper.
+    // 2026-08-10: narrowed from "a sub-task exists" to "...AND From-steps is picked" --
+    // Set total now keeps typing the length even with steps saved alongside.
     const durField = document.getElementById("rtnEndField");
-    if (durField) durField.hidden = hasSubs;
-    // the "How long" picker just writes End, same reasoning as above
-    const durPickerField = document.getElementById("rtnDurPickerField");
-    if (durPickerField) durPickerField.hidden = hasSubs;
+    if (durField) durField.hidden = stepsMode;
+    // the "How long" boxes+chips just write End, same reasoning as above -- the FIELD
+    // wrapper itself (label, toggle, summary/warning) always stays visible now, only
+    // this inner picker swaps for the locked read-out.
+    const durPicker = document.getElementById("rtnDurPicker");
+    if (durPicker) durPicker.hidden = stepsMode;
+    const lockedEl = document.getElementById("rtnDurLocked");
+    if (lockedEl) {
+      lockedEl.hidden = !stepsMode;
+      if (stepsMode) document.getElementById("rtnDurLockedVal").textContent = `${stepsSum} min`;
+    }
     updateRtnDurReadout();
-    const tot = readRtnSubs().reduce((a, s) => a + s.min, 0);
+    // "steps not deleted" (brief) -- Set total with steps saved alongside collapses them
+    // to one line rather than hiding them with no trace, and flags it if they'd disagree.
+    const summaryBtn = document.getElementById("rtnSubsSummary");
+    const warnBox = document.getElementById("rtnDurWarn");
+    if (hasSubs && !stepsMode) {
+      summaryBtn.hidden = false;
+      summaryBtn.textContent = `▸ Sub-tasks (${subs.length} saved) — hidden while length is set manually. Tap to view`;
+      const typedTotal = rtnDurFromRange(document.getElementById("rtnStart").value, document.getElementById("rtnEnd").value);
+      if (typedTotal != null && stepsSum !== typedTotal) {
+        const diff = Math.abs(stepsSum - typedTotal);
+        document.getElementById("rtnDurWarnText").textContent =
+          `⚠︎ Steps add to ${stepsSum}m — ${diff}m ${stepsSum > typedTotal ? "over" : "under"} your ${typedTotal}m block`;
+        warnBox.hidden = false;
+      } else {
+        warnBox.hidden = true;
+      }
+    } else {
+      summaryBtn.hidden = true;
+      warnBox.hidden = true;
+    }
+    const tot = subs.reduce((a, s) => a + s.min, 0);
     const el = document.getElementById("rtnSubTotal");
     // 2026-08-09 (sub-tasks robust-logic brief): a row that exists but has no minutes
     // yet used to just hide this line entirely -- no feedback that anything's needed.
@@ -28236,6 +28380,7 @@
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
     rtnCalOn = true; syncRtnAutoToggle();
+    rtnDurMode = "steps";
     document.getElementById("rtnFitLink").value = "";
     document.getElementById("rtnSubmitBtn").textContent = "Add routine";
     syncRtnFreqFields(); syncRtnTrackButtons(); renderRtnCatList();
@@ -28278,6 +28423,10 @@
     rtnExtraSchedules = [];
     if (task) {
       rtnEditId = task.id;
+      // 2026-08-10 (How-long duration-source toggle): set BEFORE the addRtnSubRow
+      // loop below, which fires updateRtnSubTotal() per row -- otherwise those
+      // interim calls would render every field against last routine's leftover mode.
+      rtnDurMode = task.durationMode === "set" ? "set" : "steps";
       document.getElementById("rtnSubmitBtn").textContent = "Save changes";
       const { icon, rest } = splitRtnIconTitle(task.title);
       document.getElementById("rtnIcon").value = icon;
@@ -28509,7 +28658,10 @@
     const task = { id: rtnEditId || uid(), title, track: rtnTrack, category, freq: rtnFreq, note, calOn: rtnCalOn };
     if (fitLink) task.fitLink = fitLink;
     if (start) task.start = start;
-    if (subtasks.length) task.subtasks = subtasks;
+    // 2026-08-10 (How-long duration-source toggle): only worth a flag when there's an
+    // actual choice to record -- "steps" is the unwritten default (subtaskDurMin treats
+    // absent the same as "steps"), so only "set" ever needs saving.
+    if (subtasks.length) { task.subtasks = subtasks; if (rtnDurMode === "set") task.durationMode = "set"; }
     // 2026-08-07 ("give an option to indicate when the routine ends"): general across
     // every freq type, so it's read here rather than nested in the freq-specific
     // branches below -- hidden (and therefore empty) for One-off, which is its own end.
@@ -28523,8 +28675,9 @@
     // (tOvr ? tOvr.end : t.end) || ""`), no addition/rounding needed. Only applies
     // with no sub-tasks -- their own minutes decide the block length instead, same as
     // before. durationMin (below, rtnDurFromRange) is only needed for the multi-
-    // schedule branch, whose layers don't share one end time.
-    if (!subtasks.length && end) task.end = end;
+    // schedule branch, whose layers don't share one end time. 2026-08-10: also saved
+    // whenever "Set total" overrides steps -- the typed length needs somewhere to live.
+    if ((!subtasks.length || rtnDurMode === "set") && end) task.end = end;
     const durationMin = rtnDurFromRange(start, end) || 0;
     if (rtnExtraDates.length) task.extraDates = rtnExtraDates.slice();
 
@@ -28574,7 +28727,7 @@
           })),
         ];
         delete task.weekdays; delete task.weekInterval; delete task.weekAnchor; delete task.start; delete task.end;
-        if (!subtasks.length && durationMin > 0) task.durationMin = durationMin;
+        if ((!subtasks.length || rtnDurMode === "set") && durationMin > 0) task.durationMin = durationMin;
       } else {
         task.weekdays = days;
         if (wi > 1) { task.weekInterval = wi; task.weekAnchor = wa; }
@@ -30008,6 +30161,7 @@
     document.getElementById("fStages").value = (ev.stages || []).join("\n");
     fCat.value = ev.category || "";
     fLoc.value = (ev.locPath || []).join(" > ");
+    document.getElementById("fNote").value = ev.note || "";
     fAllDay.checked = !!ev.allDay;
     fStart.disabled = fEnd.disabled = fDur.disabled = !!ev.allDay;
     setDurDisabled(!!ev.allDay);
@@ -30023,7 +30177,7 @@
     // there (Who/All day/Category/Where) — Ends and duration live on the main
     // form now, and Follow-ups has its own ghost row (see setFollowUpsOpen below),
     // so neither is a reason to open More options any more.
-    const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || (ev.locPath && ev.locPath.length);
+    const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || (ev.locPath && ev.locPath.length) || ev.note;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(!!(ev.stages && ev.stages.length));
     fTitle.focus();
@@ -30042,6 +30196,7 @@
     formWho = t.who || "me"; syncWho();
     fCat.value = t.category || "";
     fLoc.value = (t.locPath || []).join(" > ");
+    document.getElementById("fNote").value = t.note || "";
     document.getElementById("fStages").value = "";
     fAllDay.checked = false;
     fStart.disabled = fEnd.disabled = fDur.disabled = false;
@@ -30063,7 +30218,7 @@
     formKind = "event"; syncKind();
     // duration lives on the main form now (always visible for an event/series),
     // so it's no longer a signal that something "extra" needs surfacing
-    const hasExtra = (t.who && t.who !== "me") || t.category || (t.locPath && t.locPath.length);
+    const hasExtra = (t.who && t.who !== "me") || t.category || (t.locPath && t.locPath.length) || t.note;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(false);   // recurring events are never formKind "task" -- the whole field stays hidden
     fTitle.focus();
@@ -32000,6 +32155,7 @@
     }
     const title = fTitle.value.trim();
     if (!title) { fTitle.focus(); return; }
+    const noteVal = document.getElementById("fNote").value.trim();
     const allDay = fAllDay.checked || !fStart.value;
     let start = allDay ? "" : fStart.value;
     let end = allDay ? "" : fEnd.value;
@@ -32045,7 +32201,7 @@
       const durationMin = parseInt(fDur.value, 10) || 0;
       const fields = {
         title, track: state.track, freq: "weekly", category: fCat.value.trim(),
-        locPath: parseLocPath(fLoc.value), schedules,
+        locPath: parseLocPath(fLoc.value), schedules, note: noteVal,
       };
       if (editingRecurTemplateId) {
         const t = RECURRING_EVENTS.find(x => x.id === editingRecurTemplateId);
@@ -32070,7 +32226,7 @@
       if (ev) {
         Object.assign(ev, {
           date: dateVal, track: state.track, title, kind: formKind, category: fCat.value.trim(),
-          locPath: parseLocPath(fLoc.value), allDay, start, end,
+          locPath: parseLocPath(fLoc.value), allDay, start, end, note: noteVal,
         });
         if (formWho === "me") delete ev.who; else ev.who = formWho;
         if (stages.length) { ev.stages = stages; ev.stageAt = Math.min(ev.stageAt || 0, stages.length); }
@@ -32081,6 +32237,7 @@
       EVENTS.push({
         id: uid(), date: dateVal, track: state.track, title, kind: formKind,
         category: fCat.value.trim(), locPath: parseLocPath(fLoc.value), allDay, start, end,
+        ...(noteVal ? { note: noteVal } : {}),
         ...(formWho !== "me" ? { who: formWho } : {}),
         ...(stages.length ? { stages, stageAt: 0 } : {}),
         ...(estVal > 0 ? { estMin: estVal } : {}),
