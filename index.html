@@ -3171,7 +3171,7 @@
      track-tinted fill/text as .mo-chip (month view) reuses the timeline's own
      --tl-*-bg/--tl-*-title pair, so it reads as a calendar item, not a to-do. ---- */
   .tl-allday-row:empty { display: none; }
-  .tl-allday-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .tl-allday-row { display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; }
   .tl-allday-chip {
     display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
     border-radius: var(--radius-sm); padding: 5px 10px 5px 8px;
@@ -3182,6 +3182,31 @@
   .tl-allday-chip[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
   .tlac-ic { font-family: var(--font-emoji); font-size: 13px; line-height: 1; flex: none; }
   .tlac-ttl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 2026-08-11 (Linh: "I like option B" -- the celebration ribbon, tappable): birthdays
+     (and belled person-dates, same category) get their own full-width look inside this
+     same all-day row instead of the plain track-tinted chip above -- a soft gold→green
+     wash from central vars only (never a hardcoded hex, works dark AND light). Tapping
+     opens that person's profile; dragging onto the calendar still works as before. */
+  #tlAlldayRow .tl-allday-chip.bday-ribbon {
+    width: 100%; min-height: 44px; padding: 9px 14px; cursor: pointer; font-size: 13px; color: var(--ink);
+    background: linear-gradient(90deg, color-mix(in oklab, var(--accent-seed) 22%, transparent),
+                                       color-mix(in oklab, var(--cat-personal-fitness) 15%, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-seed) 26%, transparent);
+  }
+  #tlAlldayRow .tl-allday-chip.bday-ribbon:hover {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--accent-seed) 30%, transparent),
+                                       color-mix(in oklab, var(--cat-personal-fitness) 20%, transparent));
+  }
+  #tlAlldayRow .tl-allday-chip.bday-ribbon .tlac-ic { font-size: 16px; }
+  .tlac-turns { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); flex: none; }
+  .wk-bd, .mo-bd {
+    display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border: none;
+    background: color-mix(in oklab, var(--cat-personal-fitness) 22%, transparent);
+    color: color-mix(in oklab, var(--cat-personal-fitness), var(--ink) 30%); font-weight: 700;
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--cat-personal-fitness) 34%, transparent);
+  }
+  .wk-bd { font-size: 10px; border-radius: 5px; padding: 2px 6px; width: 100%; text-align: left; }
+  .mo-bd { font-size: 9px; border-radius: 4px; padding: 1.5px 5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* ---- meal-log sheet (2026-08-11, "log my actual lunch") — same sheet chrome as
      the outcome picker above, own tag/photo/nutrition-numbers fields ---- */
   .ml-sheet { width: min(400px, 100vw); padding: 16px; gap: 12px; overflow-y: auto; max-height: 85vh; }
@@ -15326,6 +15351,12 @@
     if (mealDel && confirm("Delete this meal log?")) deleteMealEntry(mealDel.dataset.mealDate, mealDel.dataset.mealDelete);
     const mealArchRestore = e.target.closest("[data-meal-archive-restore]");
     if (mealArchRestore) { restoreMealFromArchive(mealArchRestore.dataset.mealArchiveRestore); renderRtnArchive(); }
+    // 2026-08-11 (Linh: birthday ribbon/chip "make it tappable"): a birthday or belled
+    // person-date anywhere in the calendar (Day ribbon, Week/Month chip) opens that
+    // person's profile on the People page. openPersonProfile is defined further down
+    // (function declaration, hoisted -- same pattern the rest of this file relies on).
+    const bd = e.target.closest("[data-bday-person]");
+    if (bd && bd.dataset.bdayPerson) { e.stopPropagation(); openPersonProfile(bd.dataset.bdayPerson); }
   });
 
   // the every-2-days rhythm re-anchors on any actual wash she places by hand: once she
@@ -17425,7 +17456,14 @@
   // the To-Do's box (the drop handler lives on #dayPage, so it works from any
   // descendant with these data- attributes, no change needed there).
   function renderAlldayRow(items) {
-    document.getElementById("tlAlldayRow").innerHTML = items.map(e => `<span class="tl-allday-chip" data-track="${e.track}" draggable="true" data-drag-title="${esc(e.title)}" data-drag-track="${e.track}" title="${esc(e.note ? `${e.title} — ${e.note}` : e.title)}">${e.icon ? `<span class="tlac-ic">${e.icon}</span>` : ""}<span class="tlac-ttl">${esc(e.title)}</span></span>`).join("");
+    // 2026-08-11 (Linh: "I like option B" -- the celebration ribbon, tappable): a
+    // Birthdays-category item gets the full-width ribbon look + opens the person on
+    // tap; anything else that ever lands in this row keeps the plain track chip.
+    document.getElementById("tlAlldayRow").innerHTML = items.map(e => {
+      const isBday = e.category === "Birthdays";
+      const personAttr = isBday && e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
+      return `<span class="tl-allday-chip${isBday ? " bday-ribbon" : ""}" data-track="${e.track}" draggable="true" data-drag-title="${esc(e.title)}" data-drag-track="${e.track}"${personAttr} title="${esc(e.note ? `${e.title} — ${e.note}` : e.title)}">${e.icon ? `<span class="tlac-ic">${e.icon}</span>` : ""}<span class="tlac-ttl">${esc(e.title)}</span>${isBday && e.note ? `<span class="tlac-turns">${esc(e.note)}</span>` : ""}</span>`;
+    }).join("");
   }
   function buildHours() {
     let html = "";
@@ -21086,7 +21124,11 @@
       // light rows instead of filled pills; cap 5 + "+N more"; routines fold to one line
       const isRoutine = e => e.generated && e.allDay && e.category !== "Birthdays" && !e.fromRecurringEvent;
       const routines = evs.filter(isRoutine);
-      const shown = evs.filter(e => !isRoutine(e));
+      // 2026-08-11 (Linh: birthday in the calendar, tappable): birthdays get their own
+      // jade chip that opens the person -- kept out of the tickable event rows below.
+      const shown = evs.filter(e => !isRoutine(e) && e.category !== "Birthdays");
+      const bdayChips = wkBdays.map(b =>
+        `<button type="button" class="wk-bd"${b.personId ? ` data-bday-person="${esc(b.personId)}"` : ""} title="${esc(b.title)}">${b.icon || "🎂"} ${esc(b.title)}</button>`).join("");
       const doneN = shown.filter(e => isDone(e.id)).length;
       const rows = shown.slice(0, 5).map(e => {
         const time = e.allDay ? "All day" : fmtTime(e.start);
@@ -21122,7 +21164,7 @@
           ${shown.length ? `<div class="wk-count">${doneN ? `${shown.length} · ${doneN} done` : `${shown.length} event${shown.length === 1 ? "" : "s"}`}</div>` : ""}
         </div>
         <div class="wk-events">
-          ${(rows || routineChip) ? rows + more + routineChip : `<div class="wk-empty">—</div>`}
+          ${(bdayChips || rows || routineChip) ? bdayChips + rows + more + routineChip : `<div class="wk-empty">—</div>`}
         </div>
       </div>`;
 
@@ -21631,11 +21673,11 @@
             title="Personal Month ${esc(pl)} begins — ${esc(pfm.title)}${pmv === 1 ? " · the IMPRINT month: what starts here sets the whole cycle" : ""}">🌙 PM ${esc(pl)}${pmv === 1 ? " ✦" : ""} begins</span>`;
         })()}
         ${state.moShowEvents ? `<div class="mo-evs">
+          ${bdays.map(b => `<span class="mo-bd" ${b.personId ? `data-bday-person="${esc(b.personId)}" ` : ""}title="${esc(b.title)}">${b.icon || "🎂"} ${esc(b.title.split(/\s+|—/)[0].trim())}</span>`).join("")}
           ${chips.slice(0, 3).map(e => `<span class="mo-chip" data-track="${e.track}" data-eid="${e.id}" title="${esc(e.title)} — right-click to edit">${e.allDay || !e.start ? "" : fmtTime(e.start) + " "}${esc(e.title)}</span>`).join("")}
           ${chips.length > 3 ? `<span class="mo-more">+${chips.length - 3} more</span>` : ""}
           <div class="mo-dots">
             ${dots.map(e => `<span class="d" style="background:${TRACK_INK[e.track]}"></span>`).join("")}
-            ${bdays.map(() => `<span class="em">🎂</span>`).join("")}
           </div>
         </div>` : ""}
       </button><div class="mo-hover-pop${moPopSide}">
@@ -27436,6 +27478,9 @@
     // the CD tap in the header opens the quick-log popover (document-level
     // [data-cd-log] delegate) — it must not ALSO ride the column's data-jump
     if (e.target.closest("[data-cd-log]")) return;
+    // a birthday chip opens the person (document-level [data-bday-person] delegate),
+    // it must not ALSO ride the column's data-jump
+    if (e.target.closest("[data-bday-person]")) return;
     const col = e.target.closest("[data-jump]"); if (!col) return;
     state.anchor = parseKey(col.dataset.jump); state.view = "day"; render();
   });
@@ -27668,6 +27713,8 @@
     // a tap on the cell's CD chip opens the quick-log popover (document-level
     // [data-cd-log] delegate) instead of riding the cell's own jump-to-day
     if (e.target.closest("[data-cd-log]")) return;
+    // a birthday chip opens the person (document-level [data-bday-person] delegate)
+    if (e.target.closest("[data-bday-person]")) return;
     const cell = e.target.closest("[data-jump]"); if (!cell) return;
     const [yy, mm, dd] = cell.dataset.jump.split("-").map(Number);
     state.anchor = new Date(yy, mm - 1, dd);
