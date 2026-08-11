@@ -1093,6 +1093,13 @@
   .num-hover-pop .df-tile .t-value { color: var(--cosmic-gold); font-size: 24px; }
   .num-hover-pop .df-tile .t-title { color: #F5F1E6; font-size: 14px; }
   .num-hover-pop .df-tile .t-label { color: #A99C82; font-size: 8.5px; }
+  /* 2026-08-11: numerologyDeskPopoverHtml() stacks 3 .t-head rows (Universal/
+     Personal/Month) in one card, unlike every other df-tile popover's single row —
+     a smaller value size keeps three from crowding the fixed 230px width, and this
+     gap only fires between rows 2 and 3, never against the single-row popovers. */
+  .num-hover-pop .df-tile .t-head + .t-head { margin-top: 8px; }
+  .num-hover-pop .df-tile .t-head .t-value { font-size: 19px; }
+  .num-hover-pop .df-tile .t-head .t-title { font-size: 12px; }
   /* !important: beats the base .df-tile .theme-acts span[data-add-action] rule's higher
      specificity (3 classes/attrs vs 2 here), same pattern #focusTile's own override uses. */
   .num-hover-pop .theme-acts span {
@@ -13614,6 +13621,26 @@
     return `<div class="num-hover-pop num-hover-pop--right"><div class="df-tile">
       <div class="t-label">Upcoming birthdays</div>
       ${rows}
+    </div></div>`;
+  }
+
+  // 2026-08-11 (Book33 popover-anchor fix brief): the desktop "★ Numerology" icon
+  // used to just scroll-and-flash #railNum (a card of bare numbers, no popover at
+  // all) — this gives it the same real detail-card treatment focusPopoverHtml()
+  // already gives Universal Day/Personal Month individually, stacked as one
+  // Universal/Personal/Month reading instead of three separate hovers.
+  function numerologyDeskPopoverHtml(d) {
+    const rows = [
+      { label: "Universal Day", value: universalDay(d).value },
+      { label: "Personal Day", value: personalDay(d) },
+      { label: "Personal Month", value: personalMonth(d) },
+    ];
+    return `<div class="num-hover-pop"><div class="df-tile">
+      <div class="t-label">Numerology</div>
+      ${rows.map(r => {
+        const f = focusFor(r.value);
+        return `<div class="t-head"><span class="t-value">${esc(String(r.value))}</span><span class="t-title">${f.em ? f.em + " " : ""}${esc(r.label)} — ${esc(f.title)}</span></div>`;
+      }).join("")}
     </div></div>`;
   }
 
@@ -28378,16 +28405,69 @@
     card.classList.add("desk-jump-flash");
   }
   document.getElementById("railNumInfo")?.addEventListener("click", () => jumpFlash("railNum"));
-  // toolbar: each icon drives an EXISTING control — no new features, just desktop homes
-  // 2026-08-06 (Linh, screenshot of this row: "why are these here, they do nothing"):
-  // the star used to toggle #tilesDate's "expanded" class — dead code, that class has
-  // NO rule anywhere in the stylesheet (confirmed by search), almost certainly a
-  // leftover from before desktop started always showing Universal/Personal/Month in
-  // the rail card. Repointed at the one thing that's actually true now: jump to +
-  // flash that card. Not a toggle anymore, so aria-pressed is gone too.
+  // 2026-08-11 (Book33 fix brief, "left-rail Numerology/Zodiac/Birthdays popover
+  // opens nothing / on the wrong side — Fire Horse card hangs off the far right"):
+  // the desk-tools Zodiac/Birthdays icons used to proxy-click astroMotifMini/
+  // birthdayHover — real .num-hover-trigger elements, but ones that physically live
+  // inside #miniCalWrap, which placeMiniCalDesk() moves into the RIGHT rail at
+  // desktop widths. Their own popover anchors correctly to THEM, just not to the
+  // button she actually pressed in the LEFT column — exactly the "Zodiac (left)
+  // opens Fire Horse (right)" symptom. Numerology (deskToolStar) had no popover at
+  // all, just a scroll-and-flash of a card of bare numbers.
+  // Fix: one small self-contained popover, anchored in JS to the CLICKED button's
+  // own rect (position:fixed, appended to <body>, so no ancestor column/overflow can
+  // misplace or clip it) and clamped inside the viewport. Content still comes from
+  // the SAME functions/data every other cosmic popover already uses (never
+  // hand-duplicated) — only WHERE it renders changes, not what it says.
+  let deskToolPopBtn = null;
+  function closeDeskToolPop() {
+    if (!deskToolPopBtn) return;
+    deskToolPopBtn.setAttribute("aria-pressed", "false");
+    deskToolPopBtn = null;
+    const host = document.getElementById("deskToolPopHost");
+    if (host) host.innerHTML = "";
+  }
+  function positionDeskToolPop(btn, pop) {
+    const margin = 10;
+    const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    pop.style.position = "fixed"; pop.style.display = "block";
+    pop.style.right = "auto"; pop.style.transform = "none";
+    pop.style.left = "0px"; pop.style.top = "0px";
+    const r = btn.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    // left-aligned to the button by default, same as the base .num-hover-pop rule —
+    // only shifted when that would run past an edge, never on a comfortably-placed one
+    let left = Math.min(Math.max(r.left, margin), Math.max(margin, vw - margin - pw));
+    // below by default; flips above only when there's truly more room up there —
+    // same rule clampPopoverToViewport uses for the relative-positioned popovers
+    let top = r.bottom + 8;
+    if (top + ph > vh - margin) {
+      const above = r.top - 8 - ph;
+      top = above >= margin ? above : Math.max(margin, vh - margin - ph);
+    }
+    pop.style.left = `${Math.round(left)}px`;
+    pop.style.top = `${Math.round(top)}px`;
+  }
+  function openDeskToolPop(btn, html) {
+    if (!html) return;
+    const reopening = deskToolPopBtn === btn;
+    closeDeskToolPop();
+    if (reopening) return;   // second click on the same button = toggle-closed
+    document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => el.classList.remove("pop-open"));
+    let host = document.getElementById("deskToolPopHost");
+    if (!host) { host = document.createElement("div"); host.id = "deskToolPopHost"; document.body.appendChild(host); }
+    host.innerHTML = html;
+    const pop = host.firstElementChild;
+    if (!pop) return;
+    deskToolPopBtn = btn;
+    btn.setAttribute("aria-pressed", "true");
+    positionDeskToolPop(btn, pop);
+  }
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeDeskToolPop(); });
+  window.addEventListener("resize", closeDeskToolPop);
   document.getElementById("deskToolStar")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    jumpFlash("railNum");
+    openDeskToolPop(e.currentTarget, numerologyDeskPopoverHtml(state.anchor));
   });
   document.getElementById("deskToolMoon")?.addEventListener("click", (e) => {
     const btn = e.currentTarget;
@@ -28396,17 +28476,11 @@
   });
   document.getElementById("deskToolZodiac")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const t = document.getElementById("astroMotifMini");
-    if (!t) return;
-    t.click();
-    e.currentTarget.setAttribute("aria-pressed", String(t.classList.contains("pop-open")));
+    openDeskToolPop(e.currentTarget, zodiacYearPopoverHtml(state.anchor));
   });
   document.getElementById("deskToolBday")?.addEventListener("click", (e) => {
     e.stopPropagation();
-    const t = document.getElementById("birthdayHover");
-    if (!t || t.hidden) return;
-    t.click();
-    e.currentTarget.setAttribute("aria-pressed", String(t.classList.contains("pop-open")));
+    openDeskToolPop(e.currentTarget, birthdayPopoverHtml());
   });
   // 2026-08-10 (STEP 5): the "tap outside to close" dismiss that used to live here
   // (for the #numGroupStrip floating panel) is gone along with the panel itself --
@@ -33746,6 +33820,12 @@
   // phone. One delegated tap-to-toggle covers all of them since they share this one
   // trigger class; tapping outside (or a second tap on the same trigger) closes it.
   document.addEventListener("click", e => {
+    // 2026-08-11 (Book33 popover-anchor fix brief): the desk-tool popover (see
+    // openDeskToolPop near the desk-tools handlers) is a separate system from
+    // .num-hover-trigger — close it on any click that isn't on its own host or one
+    // of the 3 buttons that manage it directly, so opening any OTHER popover (or
+    // just clicking elsewhere) always leaves at most one popover on screen.
+    if (deskToolPopBtn && !e.target.closest("#deskToolPopHost") && !e.target.closest(".desk-tool")) closeDeskToolPop();
     const trig = e.target.closest(".num-hover-trigger");
     // the pointerup fallback (below) just handled this exact tap — a synthesized
     // click arriving on its heels must not instantly toggle it back shut
