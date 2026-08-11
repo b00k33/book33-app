@@ -2872,9 +2872,9 @@
     .tl-item .tl-title { font-size: 15px; line-height: 1.3; }
     .tl-item .tl-meta { font-size: 11.5px; font-weight: 500; opacity: 0.85; }
     .tl-point { flex-direction: column; align-items: stretch; min-height: 0; padding: 8px 12px; gap: 2px; }
-    /* 2026-08-06 (overlap fixes): SUPERSEDES the white-space:normal wrap here — one
-       line + ellipsis like every block title, so half-width overlap columns never
-       chop text mid-word (base .tl-point rule already carries hidden/ellipsis). */
+    /* just the size bump — wrap-vs-ellipsis itself lives once on the base
+       .tl-point .tl-title rule (now -webkit-line-clamp, see its own comment)
+       and cascades down to mobile unchanged, same as it always has. */
     .tl-point .tl-title { font-size: 15px; }
     .tl-point .tl-meta { font-size: 11.5px; }
     .tl-point .tl-tick { width: 15px; height: 15px; margin-right: 7px; font-size: 10px; vertical-align: -2px; }
@@ -2903,9 +2903,19 @@
   .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] { --cat-c: var(--cat-personal-beauty); }
   .tl-block { background: var(--cat-c); background-image: none; border-left: none; }
   /* 2026-08-06 (Linh, overlap fixes: "text uses nowrap/hidden/ellipsis so nothing is
-     cut off mid-word"): block titles were free to wrap and then clip mid-line against
-     the block's overflow:hidden — in a half-width overlap column that read as chopped
-     text. One line + ellipsis everywhere instead.
+     cut off mid-word"): block titles were free to wrap and then clip mid-LINE against
+     the block's overflow:hidden — a half-width overlap column read as chopped text
+     with no ellipsis marking it, since a plain white-space:normal + overflow:hidden
+     combo just hard-cuts whatever partial line runs past the box, glyphs and all.
+     2026-08-11 ("Add box, toggle, undo, cycle fix, day view + event names" job, STEP
+     6, Linh: "event names are being truncated... the name must be visible at ALL
+     times"): SUPERSEDES the one-line+ellipsis fix above with -webkit-line-clamp
+     instead of plain overflow:hidden — line-clamp measures whole rendered LINES and
+     only ever ellipsizes at a clean line boundary, so it gets the "never chop
+     mid-word" property the 2026-08-06 fix wanted WITHOUT giving up the name itself to
+     get it. Up to 2 full lines before it ellipsizes (essentially never, for a real
+     event name) instead of 1. Time is what yields room first now — see .tl-tight
+     below, which drops .tl-meta on a block too short to fit both.
      2026-08-10: relocated ABOVE the mobile/desktop --cat-t overrides below (was
      originally right after them) — this rule and the mobile #0c2417 override just
      below share the exact same selector (.tl-block .tl-title) at EQUAL specificity,
@@ -2915,9 +2925,19 @@
      while adding the desktop ink fix below — a real pre-existing bug, not something
      this pass introduced, just never surfaced until a computed-style check caught
      it). Must stay above both --cat-t overrides for either to ever actually apply. */
-  .tl-block .tl-title { color: var(--cat-t); padding-right: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-block .tl-title {
+    color: var(--cat-t); padding-right: 36px;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    white-space: normal; overflow: hidden; overflow-wrap: break-word;
+  }
   .tl-block .tl-meta  { color: var(--cat-t); opacity: 0.82; }
   .tl-block .tl-meta .loc { color: var(--cat-t); opacity: 0.7; }
+  /* a block too short (at her current hour-height zoom) to comfortably fit a
+     2-line title AND the time line — set from the same p.h the collision/lane-
+     packing math already computes, see renderTimeline()'s cls string. Never hides
+     the title, only the time, per the brief's own ordering ("shorten or hide the
+     time, never the name"). */
+  .tl-block.tl-tight .tl-meta { display: none; }
   /* 2026-08-10 (Day page redesign, "event block = dark ink on track colour, gradient
      into a calm green, fixes grey-on-green contrast"): mobile only — --cat-c is
      already "this event's own colour" (track, or its category tint), so the gradient
@@ -2963,14 +2983,26 @@
       right: auto; width: fit-content; max-width: calc(100% - 10px);
     }
   }
-  /* short/point events read as solid mini-pills, same fill/text tokens as the full block */
+  /* short/point events read as solid mini-pills, same fill/text tokens as the full
+     block. No explicit height in JS (top only) — always auto-height, sized to its
+     own content — so letting the title wrap below just grows the pill instead of
+     needing a full "thin bar + beside label" rebuild for a duration this short. */
   .tl-point {
     border-left: none; border-radius: 9px;
     background: var(--cat-c);
-    padding: 1px 9px; min-height: 17px;
+    padding: 2px 9px; min-height: 17px;
     flex-direction: row; align-items: center; gap: 8px;
   }
-  .tl-point .tl-title { font-size: 11.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--cat-t); }
+  /* 2026-08-11 (STEP 6, "very short events must not become a nameless pill... the
+     name must be visible at ALL times"): same -webkit-line-clamp swap as .tl-block
+     above, plus min-width:0 -- a flex child's default min-width is its unwrapped
+     content width, which would silently defeat the wrap the instant this pill sits
+     in a lane-packed (narrower) column, the exact case that needs it most. */
+  .tl-point .tl-title {
+    font-size: 11.5px; line-height: 1.2; color: var(--cat-t); min-width: 0;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    white-space: normal; overflow: hidden; overflow-wrap: break-word;
+  }
   .tl-point .tl-meta { font-size: 9.5px; flex: none; color: var(--cat-t); opacity: 0.82; }
   /* 2026-08-01 ("change calendar to mockup calendar... if that means removing certain
      elements do it"): a plain to-do has no colour identity in the mockup — it's a bare
@@ -17300,7 +17332,14 @@
       // data-chain lets renderChainLayer() find this chain's rendered blocks and hang
       // the spine/nodes off their REAL painted geometry (min-height-inflated and
       // clamped), not the raw time maths — see its comment.
-      const cls = (isBlock ? "tl-block" : "tl-point")
+      // 2026-08-11 (STEP 6, "if a block is too small to fit both the title and the
+      // time, shorten or hide the time, never the name"): p.h is the block's REAL
+      // painted height at her current hour-height zoom (topForMin/HOUR_H already
+      // folded in above) — 52px is roughly padding + a 2-line title with no room
+      // left for .tl-meta, so anything shorter drops the time via .tl-tight (CSS)
+      // rather than let it fight the title for space inside a fixed-height box.
+      const tight = isBlock && p.h < 52;
+      const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
       const colStyle = p.cols > 1
