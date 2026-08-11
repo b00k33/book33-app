@@ -6562,6 +6562,143 @@
   .sb-amt { flex: none; width: 84px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
   #spendList .wrp-del { margin-left: 8px; }
 
+  /* ============ EXPENSES & BILLS (2026-08-11 brief) — recurring bill tracker, a
+     separate concept from the spending log above (SPEND = free-typed day-to-day
+     transactions; this = recurring bills/commitments by cadence with an auto-
+     calculated Weekly/Monthly/Yearly triple from one entered figure). Personal/
+     Business/Marriage switched via #expSeg, same lightweight in-page segmented-tab
+     pattern as Habits' Week/Month/Manage (.hb-seg) -- no CATEGORIES/render() wiring. */
+  #moneyPage {
+    --exp-gold: var(--accent-seed);
+    --exp-gold-tint: color-mix(in oklab, var(--accent-seed) 18%, transparent);
+    --exp-green: var(--cat-personal-fitness);
+    --exp-green-tint: color-mix(in oklab, var(--cat-personal-fitness) 16%, transparent);
+    --exp-red: var(--danger);
+    --exp-red-tint: color-mix(in oklab, var(--danger) 14%, transparent);
+    --marriage-a: var(--personal-seed);
+    --marriage-b: var(--marriage-seed);
+    /* status-pill TEXT only (bold colour on its own faint tint) -- dark theme's tint
+       sits on a dark card so the plain accent colours above already read fine there;
+       on light theme the same colours on a near-white tint go closer to unreadable
+       (same "theme gold is unreadable on white" issue already fixed once at .w-card
+       --margin-rule:#8A6A12), so deepen just these three for the light override below. */
+    --exp-gold-ink: var(--exp-gold);
+    --exp-green-ink: var(--exp-green);
+    --exp-red-ink: var(--exp-red);
+  }
+  :root[data-theme="light"] #moneyPage {
+    --exp-gold-ink: #8A6A12;
+    --exp-green-ink: color-mix(in oklab, var(--exp-green), black 30%);
+    --exp-red-ink: color-mix(in oklab, var(--exp-red), black 20%);
+  }
+  .exp-kpi-strip { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .exp-kpi { flex: 1 1 120px; background: var(--note-bg); border-radius: var(--radius-md); padding: 12px 14px; }
+  .exp-kpi .n { font-size: 20px; font-weight: 800; color: var(--exp-gold); font-variant-numeric: tabular-nums; }
+  .exp-kpi .l { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
+  .exp-kpi .sub { font-size: 10.5px; color: var(--ink-faint); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .exp-kpi-strip-marriage .exp-kpi { border-top: 3px solid var(--kpi-c, var(--exp-gold)); }
+
+  .exp-group { margin-bottom: 20px; }
+  .exp-group-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 8px; flex-wrap: wrap; }
+  .exp-group-name { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+  .exp-group-totals { margin-left: auto; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  /* table -> mobile cards: same technique as .ppl-table (2026-08-05 note above it) --
+     markup untouched, pure display-model switch, no separate mobile render path. */
+  .exp-table-wrap { overflow-x: auto; }
+  .exp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--note-bg); border-radius: var(--radius-md); overflow: hidden; }
+  .exp-table th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-faint); padding: 8px 8px; border-bottom: 1px solid var(--note-line); white-space: nowrap; }
+  .exp-table td { padding: 7px 8px; border-bottom: 1px solid var(--note-line); vertical-align: middle; }
+  .exp-table tbody tr:last-child td { border-bottom: none; }
+  .exp-table input[type="text"], .exp-table input[type="number"] {
+    background: none; border: none; color: var(--ink); font-family: var(--font-body); font-size: 12.5px; width: 100%; padding: 4px 2px;
+  }
+  .exp-table input[type="text"]:focus, .exp-table input[type="number"]:focus { outline: none; background: var(--field-bg); border-radius: 6px; }
+  .exp-table .nm input { font-weight: 600; }
+  .exp-due-input { width: 44px !important; }
+  .exp-empty { color: var(--ink-faint); font-style: italic; font-size: 12px; padding: 14px 8px; }
+
+  .exp-add-bill {
+    margin-top: 6px; background: none; border: 1px dashed var(--note-line); border-radius: var(--radius-sm);
+    color: var(--ink-soft); font-size: 12px; padding: 8px 12px; cursor: pointer; width: 100%;
+  }
+  .exp-add-bill:hover { border-color: var(--exp-gold); color: var(--exp-gold); }
+
+  /* amount cells -- entered (bold gold ring) vs the two derived ("≈", faint) --
+     the entered cell is whichever of weekly/monthly/yearly she last typed into. */
+  .exp-amtcell { text-align: right; }
+  .amt { display: inline-flex; align-items: center; justify-content: flex-end; border-radius: 8px; padding: 2px 6px; gap: 2px; }
+  .amt input { text-align: right; font-variant-numeric: tabular-nums; }
+  .amt.entered { background: var(--exp-gold-tint); box-shadow: inset 0 0 0 1.5px var(--exp-gold); }
+  .amt.entered input { color: var(--ink); font-weight: 700; font-size: 13px; }
+  .amt.calc { background: none; box-shadow: none; }
+  .amt.calc input { color: var(--ink-faint); font-weight: 500; }
+  .amt.calc::before { content: "≈"; color: var(--ink-faint); font-size: 11px; }
+  .exp-pct-suffix, .exp-per-suffix { color: var(--ink-faint); font-size: 11px; flex: none; }
+
+  /* type tag -- coloured pill select, driven by the editable EXPENSES.types list */
+  .exp-type-select { background: color-mix(in oklab, var(--tag-c) 16%, transparent); border: 1px solid var(--note-line); border-radius: 999px; color: var(--tag-c); font-size: 11px; padding: 3px 8px; font-weight: 600; }
+
+  /* payment: direct debit (green) vs manual (gold) -- manual is the one that needs a reminder */
+  .exp-pay-toggle { display: inline-flex; border-radius: 999px; background: var(--field-bg); padding: 2px; gap: 2px; }
+  .exp-pay-toggle button { border: none; background: none; font-size: 13px; padding: 4px 8px; border-radius: 999px; cursor: pointer; min-width: 32px; }
+  .exp-pay-toggle button.active[data-exp-pay-set="auto"] { background: var(--exp-green-tint); }
+  .exp-pay-toggle button.active[data-exp-pay-set="manual"] { background: var(--exp-gold-tint); }
+
+  /* status: Paid (green) / Due (gold) / Overdue (red) -- tap toggles paid */
+  .exp-status { border: none; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; white-space: nowrap; min-height: 28px; }
+  .exp-status-paid { background: var(--exp-green-tint); color: var(--exp-green-ink); }
+  .exp-status-due { background: var(--exp-gold-tint); color: var(--exp-gold-ink); }
+  .exp-status-overdue { background: var(--exp-red-tint); color: var(--exp-red-ink); }
+
+  /* marriage: split control + per-member share columns */
+  .exp-split-ctrl { display: flex; align-items: center; gap: 4px; }
+  .exp-split-ctrl select { background: none; border: 1px solid var(--note-line); border-radius: 8px; font-size: 11px; padding: 3px 6px; color: var(--ink-soft); }
+  .exp-split-ctrl input { width: 44px !important; }
+  .exp-share { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--kpi-c, var(--ink)); }
+
+  /* type editor -- same inline-editable-row shape as the Categories table (33130+) */
+  .exp-types-toggle { margin-top: 10px; }
+  .exp-type-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  .exp-type-table td { padding: 5px 6px; border-bottom: 1px solid var(--note-line); }
+  .exp-type-table input[type="color"] { width: 28px; height: 28px; border: none; background: none; padding: 0; cursor: pointer; }
+  .exp-type-table input[type="text"] { background: none; border: 1px solid var(--note-line); border-radius: 8px; padding: 4px 8px; font-size: 12.5px; color: var(--ink); width: 100%; }
+
+  @media (max-width: 640px) {
+    .exp-table-wrap { overflow-x: visible; }
+    .exp-table thead { display: none; }
+    .exp-table, .exp-table tbody { display: block; background: none; }
+    .exp-table tbody tr {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+      border: 1px solid var(--note-line); border-radius: var(--radius-md);
+      padding: 12px; margin-bottom: 8px; background: var(--note-bg);
+    }
+    .exp-table td { display: block; padding: 0; border: none; }
+    /* Personal/Business columns: Bill·Type·Weekly·Monthly·Yearly·Due·Repeats·Payment·Status·(del) */
+    .exp-table td:nth-child(1) { flex: 1 1 60%; order: 1; }              /* Bill name */
+    .exp-table td:nth-child(9) { order: 2; margin-left: auto; }          /* Status pill, top-right beside name */
+    .exp-table td:nth-child(2) { order: 3; flex: 1 1 100%; }             /* Type tag, own line */
+    .exp-table td.exp-amtcell { order: 4; flex: 0 1 auto; text-align: left; } /* Weekly/Monthly/Yearly pack onto one row together */
+    .exp-table td.exp-amtcell .amt { padding: 4px 6px; white-space: nowrap; }
+    /* headers are hidden on mobile, so each packed cell needs its own unit word --
+       fixed narrow input width (overriding the desktop width:100% column-fill rule)
+       is what actually lets three cells fit on one row instead of each wrapping full-width */
+    .exp-table td.exp-amtcell input[type="number"] { width: 42px !important; text-align: right; }
+    .exp-table td.exp-amtcell .exp-per-suffix { font-size: 10px; margin-left: 1px; }
+    .exp-table td:nth-child(6), .exp-table td:nth-child(7) { order: 5; flex: 1 1 auto; font-size: 11px; color: var(--ink-faint); } /* Due, Repeats */
+    .exp-table td:nth-child(8) { order: 6; }                             /* Payment */
+    .exp-table td:nth-child(10) { order: 7; margin-left: auto; }         /* delete */
+    /* Marriage columns: Bill·Total·Split·MemberA·MemberB·Status·(del) -- overrides the generic rules above */
+    .exp-table-marriage td:nth-child(2) { order: 3; flex: 1 1 100%; text-align: left; }
+    .exp-table-marriage td:nth-child(3) { order: 4; flex: 1 1 100%; font-size: 11px; }
+    .exp-table-marriage td:nth-child(4), .exp-table-marriage td:nth-child(5) { order: 5; flex: 1 1 auto; font-size: 12.5px; }
+    .exp-table-marriage td:nth-child(6) { order: 2; margin-left: auto; }
+    .exp-table-marriage td:nth-child(7) { order: 6; margin-left: auto; }
+    /* Taxes % table: Name·Rate·(del) only -- overrides the 9/10-column rules above, which don't apply */
+    .exp-table-pct td:nth-child(1) { flex: 1 1 auto; order: 1; }
+    .exp-table-pct td:nth-child(3) { order: 2; margin-left: auto; }
+  }
+
   /* 2026-08-06 (Linh, fasting indicator 2b): reuses .spend-bar-row/.sb-label/.sb-track/
      .sb-fill/.sb-amt as-is (the app's one label-bar-value component) for the Day page's
      Fasting status row, just overriding the fill colour to --fast. */
@@ -10393,7 +10530,21 @@
       <div class="eyebrow">Financial management</div>
       <h1>Money</h1>
     </div>
-    <div class="cyc-nav">
+    <div class="section-head"><h2>Expenses &amp; bills</h2><span class="rule"></span></div>
+    <div id="expWrap">
+      <div class="view-tabs hb-seg" id="expSeg" style="margin-bottom:14px">
+        <button type="button" data-expmode="personal" aria-pressed="true">Personal</button>
+        <button type="button" data-expmode="business" aria-pressed="false">Business</button>
+        <button type="button" data-expmode="marriage" aria-pressed="false">Marriage</button>
+      </div>
+      <div id="expStrip"></div>
+      <div id="expGroups"></div>
+      <div class="exp-types-toggle">
+        <button type="button" class="btn-cancel" id="expManageTypesBtn">Manage types</button>
+      </div>
+      <div id="expTypeEditor" hidden></div>
+    </div>
+    <div class="cyc-nav" style="margin-top:20px">
       <button class="nav-arrow" id="spendPrev" aria-label="Previous month">‹</button>
       <span class="cyc-title" id="spendTitle"></span>
       <button class="nav-arrow" id="spendNext" aria-label="Next month">›</button>
@@ -16031,7 +16182,7 @@
                   track: "work", year: TODAY.getFullYear(),
                   habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
-                  miniCalAnchor: new Date(TODAY), spendAnchor: new Date(TODAY),
+                  miniCalAnchor: new Date(TODAY), spendAnchor: new Date(TODAY), expMode: "personal",
                   // 2026-08-06: Habits page (real routines + weight, Week/Month/Manage)
                   hbMode: "week", hbAnchor: new Date(TODAY),
                   // 2026-08-04 (Linh: "remove manual hour-expand, hours auto-fit their
@@ -25879,6 +26030,97 @@
     SPEND = SPEND.filter(s => s.id !== del.dataset.spendDel);
     saveSpend(); renderMoney();
   });
+  // Expenses & bills (2026-08-11 brief) — segmented Personal/Business/Marriage tabs
+  // (same lightweight pattern as #hbSeg above), then three delegated listeners on
+  // #expWrap for every bill/tax/type CRUD action, same click/change split as the
+  // Categories table's own three-listener delegate (see catRowHtml's block).
+  document.getElementById("expSeg").addEventListener("click", e => {
+    const b = e.target.closest("[data-expmode]"); if (!b) return;
+    state.expMode = b.dataset.expmode; renderExpenses();
+  });
+  document.getElementById("expManageTypesBtn").addEventListener("click", () => {
+    const panel = document.getElementById("expTypeEditor");
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) panel.innerHTML = expTypeEditorHtml();
+  });
+  document.getElementById("expWrap").addEventListener("click", e => {
+    const addBill = e.target.closest("[data-exp-add-bill]");
+    if (addBill) { expAddBillToGroup(addBill.dataset.expAddBill); return; }
+    const delBill = e.target.closest("[data-exp-bill-del]");
+    if (delBill) {
+      const found = expFindBill(delBill.dataset.expBillDel);
+      if (found) { found.group.bills = found.group.bills.filter(x => x.id !== found.bill.id); saveExpenses(); renderExpenses(); }
+      return;
+    }
+    const toggle = e.target.closest("[data-exp-toggle-paid]");
+    if (toggle) { expTogglePaid(toggle.dataset.expTogglePaid); return; }
+    const paySet = e.target.closest("[data-exp-pay-set]");
+    if (paySet) {
+      const wrap = paySet.closest("[data-exp-pay]");
+      const found = expFindBill(wrap.dataset.expPay);
+      if (found) { found.bill.payMethod = paySet.dataset.expPaySet; saveExpenses(); renderExpenses(); }
+      return;
+    }
+    const addTax = e.target.closest("[data-exp-add-tax]");
+    if (addTax) { EXPENSES.business.taxes.push({ id: uid(), name: "", ratePct: 0 }); saveExpenses(); renderExpenses(); return; }
+    const delTax = e.target.closest("[data-exp-tax-del]");
+    if (delTax) {
+      EXPENSES.business.taxes = EXPENSES.business.taxes.filter(x => x.id !== delTax.dataset.expTaxDel);
+      saveExpenses(); renderExpenses(); return;
+    }
+    const addType = e.target.closest("[data-exp-add-type]");
+    if (addType) {
+      EXPENSES.types.push({ id: uid(), name: "New type", color: "#8A7D68" });
+      saveExpenses(); document.getElementById("expTypeEditor").innerHTML = expTypeEditorHtml(); renderExpenses();
+      return;
+    }
+    const delType = e.target.closest("[data-exp-type-del]");
+    if (delType) {
+      EXPENSES.types = EXPENSES.types.filter(x => x.id !== delType.dataset.expTypeDel);
+      saveExpenses(); document.getElementById("expTypeEditor").innerHTML = expTypeEditorHtml(); renderExpenses();
+      return;
+    }
+  });
+  document.getElementById("expWrap").addEventListener("change", e => {
+    const nameIn = e.target.closest("[data-exp-name]");
+    if (nameIn) { const f = expFindBill(nameIn.dataset.expName); if (f) { f.bill.name = nameIn.value; saveExpenses(); } return; }
+    const amtIn = e.target.closest("[data-exp-amt-input]");
+    if (amtIn) {
+      const f = expFindBill(amtIn.dataset.expAmtInput);
+      if (f) { f.bill.amount = parseFloat(amtIn.value) || 0; f.bill.per = amtIn.dataset.expPer; saveExpenses(); renderExpenses(); }
+      return;
+    }
+    const dueIn = e.target.closest("[data-exp-due]");
+    if (dueIn) { const f = expFindBill(dueIn.dataset.expDue); if (f) { f.bill.dueDay = dueIn.value; saveExpenses(); renderExpenses(); } return; }
+    const freqIn = e.target.closest("[data-exp-freq]");
+    if (freqIn) { const f = expFindBill(freqIn.dataset.expFreq); if (f) { f.bill.freqMonth = freqIn.value; saveExpenses(); } return; }
+    const typeSel = e.target.closest("[data-exp-type]");
+    if (typeSel) { const f = expFindBill(typeSel.dataset.expType); if (f) { f.bill.type = typeSel.value; saveExpenses(); renderExpenses(); } return; }
+    const splitType = e.target.closest("[data-exp-split-type]");
+    if (splitType) {
+      const f = expFindBill(splitType.dataset.expSplitType);
+      if (f) { f.bill.split = { type: splitType.value, sharePctA: splitType.value === "pct" ? 50 : 0 }; saveExpenses(); renderExpenses(); }
+      return;
+    }
+    const splitVal = e.target.closest("[data-exp-split-val]");
+    if (splitVal) {
+      const f = expFindBill(splitVal.dataset.expSplitVal);
+      if (f) { f.bill.split = f.bill.split || { type: "pct" }; f.bill.split.sharePctA = parseFloat(splitVal.value) || 0; saveExpenses(); renderExpenses(); }
+      return;
+    }
+    const taxName = e.target.closest("[data-exp-tax-name]");
+    if (taxName) { const row = EXPENSES.business.taxes.find(x => x.id === taxName.dataset.expTaxName); if (row) { row.name = taxName.value; saveExpenses(); } return; }
+    const taxRate = e.target.closest("[data-exp-tax-rate]");
+    if (taxRate) { const row = EXPENSES.business.taxes.find(x => x.id === taxRate.dataset.expTaxRate); if (row) { row.ratePct = parseFloat(taxRate.value) || 0; saveExpenses(); } return; }
+    const typeName = e.target.closest("[data-exp-type-name]");
+    if (typeName) { const t = expTypeById(typeName.dataset.expTypeName); if (t) { t.name = typeName.value; saveExpenses(); renderExpenses(); } return; }
+    const typeColor = e.target.closest("[data-exp-type-color]");
+    if (typeColor) {
+      const t = expTypeById(typeColor.dataset.expTypeColor);
+      if (t) { t.color = typeColor.value; saveExpenses(); renderExpenses(); document.getElementById("expTypeEditor").innerHTML = expTypeEditorHtml(); }
+      return;
+    }
+  });
   // PY/PM action chips on the Month page → open a sensible day with the form pre-filled
   document.getElementById("moThemes").addEventListener("click", e => {
     const chip = e.target.closest("[data-mo-action]"); if (!chip) return;
@@ -30278,6 +30520,7 @@
   function addSpend(s) { const entry = { id: uid(), ...s }; SPEND.push(entry); saveSpend(); return entry.id; }
 
   function renderMoney() {
+    renderExpenses();
     const y = state.spendAnchor.getFullYear(), m = state.spendAnchor.getMonth();
     document.getElementById("spendTitle").textContent = `${MONTHS[m]} ${y}`;
     const inMonth = SPEND.filter(s => { const d = parseKey(s.date); return d.getFullYear() === y && d.getMonth() === m; });
@@ -30309,6 +30552,299 @@
             <button type="button" class="wrp-del" data-spend-del="${s.id}" aria-label="Delete entry">×</button></div>`;
         }).join("")
       : `<div class="h-empty">Nothing logged this month.</div>`;
+  }
+
+  /* ============ EXPENSES & BILLS (2026-08-11 brief) — recurring bill tracker,
+     Personal/Business/Marriage, feeding the same Money page as the spending log
+     above but a distinct concept/store: SPEND is free-typed transactions, this is
+     recurring commitments tracked by cadence with an auto-calculated Weekly/
+     Monthly/Yearly triple from one entered figure (precise 52/12 convention). ============ */
+  const EXP_KEY = "book33-expenses";
+  const EXP_WEEKS = 52, EXP_MONTHS = 12;
+  const EXP_CADENCES = [
+    { id: "weekly",  label: "Weekly" },
+    { id: "monthly", label: "Monthly" },
+    { id: "quarter", label: "Quarter/Half-year" },
+    { id: "yearly",  label: "Yearly" },
+    { id: "other",   label: "Other" },
+  ];
+  const DEFAULT_EXP_TYPES = [
+    { id: "subscription", name: "Subscription", color: "#8B5CF6" },
+    { id: "rent",         name: "Rent",         color: "#B98D36" },
+    { id: "insurance",    name: "Insurance",     color: "#1E8FB8" },
+    { id: "software",     name: "Software",      color: "#5B8DEF" },
+    { id: "utility",      name: "Utility",       color: "#37844D" },
+    { id: "tax",          name: "Tax",           color: "#DB4B4B" },
+    { id: "loan",         name: "Loan",          color: "#CD495B" },
+    { id: "groceries",    name: "Groceries",     color: "#37AF65" },
+    { id: "transport",    name: "Transport",     color: "#6B6152" },
+    { id: "investment",   name: "Investment",    color: "#D4AF37" },
+    { id: "savings",      name: "Savings",       color: "#00B85C" },
+    { id: "goal",         name: "Goal",          color: "#E3A06F" },
+    { id: "other",        name: "Other",         color: "#8A7D68" },
+  ];
+  function expDefaultGroups() { return EXP_CADENCES.map(c => ({ id: uid(), label: c.label, cadence: c.id, bills: [] })); }
+  function defaultExpenses() {
+    return {
+      types: DEFAULT_EXP_TYPES.map(t => ({ ...t })),
+      personal: { groups: expDefaultGroups() },
+      business: { groups: expDefaultGroups(), taxes: [
+        { id: uid(), name: "Tax", ratePct: 30 },
+        { id: uid(), name: "Super", ratePct: 10 },
+      ] },
+      marriage: {
+        members: [ { name: "Linh", color: "var(--marriage-a)" }, { name: "Partner", color: "var(--marriage-b)" } ],
+        groups: expDefaultGroups(),
+      },
+    };
+  }
+  function loadExpenses() {
+    try {
+      const raw = localStorage.getItem(EXP_KEY);
+      if (raw) { const v = JSON.parse(raw); if (v && v.personal && v.business && v.marriage) return v; }
+    } catch (e) {}
+    return defaultExpenses();
+  }
+  let EXPENSES = loadExpenses();
+  function saveExpenses() { try { localStorage.setItem(EXP_KEY, JSON.stringify(EXPENSES)); } catch (e) {} }
+  const expTypeById = id => EXPENSES.types.find(t => t.id === id) || null;
+  function expYearlyOf(amount, per) {
+    amount = Number(amount) || 0;
+    return per === "yearly" ? amount : per === "monthly" ? amount * EXP_MONTHS : amount * EXP_WEEKS;
+  }
+  function expThreeCols(amount, per) {
+    const y = expYearlyOf(amount, per);
+    return { weekly: y / EXP_WEEKS, monthly: y / EXP_MONTHS, yearly: y };
+  }
+  function expMoney(n) { return `$${(Number(n) || 0).toFixed(2)}`; }
+  function expNewBill() {
+    return { id: uid(), name: "", type: "other", amount: 0, per: "monthly", dueDay: "", freqMonth: "", payMethod: "manual", paid: false, lastPaid: "" };
+  }
+  // status: Paid (green) once ticked this cycle; otherwise Due (gold) or Overdue (red)
+  // once past dueDay -- dueDay is a loose day-of-month string per the brief ("day-of-
+  // month or date"), so anything non-numeric just reads as a plain Due with no overdue check.
+  function expBillStatus(b) {
+    if (b.paid) return "paid";
+    const day = parseInt(b.dueDay, 10);
+    if (!day || day < 1 || day > 31) return "due";
+    return TODAY.getDate() > day ? "overdue" : "due";
+  }
+  function expGroupTotals(group) {
+    return group.bills.reduce((acc, b) => {
+      const t = expThreeCols(b.amount, b.per);
+      acc.weekly += t.weekly; acc.monthly += t.monthly; acc.yearly += t.yearly;
+      return acc;
+    }, { weekly: 0, monthly: 0, yearly: 0 });
+  }
+  function expPageTotals(sub) {
+    return sub.groups.reduce((acc, g) => {
+      const t = expGroupTotals(g);
+      acc.weekly += t.weekly; acc.monthly += t.monthly; acc.yearly += t.yearly;
+      return acc;
+    }, { weekly: 0, monthly: 0, yearly: 0 });
+  }
+  // a marriage bill's split ratio for member A, resolved once so every reader (per-row
+  // shares, group totals, the top who-pays-what strip) agrees on the same number.
+  function expSplitRatioA(bill) {
+    const sp = bill.split || { type: "even" };
+    const entered = Number(bill.amount) || 0;
+    if (sp.type === "pct") return (Number(sp.sharePctA) || 0) / 100;
+    if (sp.type === "amount") return entered > 0 ? Math.min(entered, Number(sp.sharePctA) || 0) / entered : 0.5;
+    return 0.5; // even
+  }
+  function expMemberTotals(sub) {
+    const res = { weekly: { a: 0, b: 0 }, monthly: { a: 0, b: 0 }, yearly: { a: 0, b: 0 } };
+    sub.groups.forEach(g => g.bills.forEach(bill => {
+      const three = expThreeCols(bill.amount, bill.per);
+      const ratioA = expSplitRatioA(bill);
+      ["weekly", "monthly", "yearly"].forEach(k => { res[k].a += three[k] * ratioA; res[k].b += three[k] * (1 - ratioA); });
+    }));
+    return res;
+  }
+  function expFindGroup(groupId) {
+    for (const key of ["personal", "business", "marriage"]) {
+      const g = EXPENSES[key].groups.find(x => x.id === groupId);
+      if (g) return { subKey: key, sub: EXPENSES[key], group: g };
+    }
+    return null;
+  }
+  function expFindBill(billId) {
+    for (const key of ["personal", "business", "marriage"]) {
+      for (const g of EXPENSES[key].groups) {
+        const b = g.bills.find(x => x.id === billId);
+        if (b) return { subKey: key, sub: EXPENSES[key], group: g, bill: b };
+      }
+    }
+    return null;
+  }
+  function expAddBillToGroup(groupId) {
+    const found = expFindGroup(groupId);
+    if (!found) return;
+    const bill = expNewBill();
+    // default the entered unit to match the group's own cadence -- a bill added
+    // under "Weekly" should highlight the weekly cell, not always monthly; groups
+    // with no direct per-unit match (Quarter/Half-year, Other) keep the monthly default.
+    if (found.group.cadence === "weekly" || found.group.cadence === "yearly") bill.per = found.group.cadence;
+    if (found.subKey === "marriage") bill.split = { type: "even", sharePctA: 50 };
+    found.group.bills.push(bill);
+    saveExpenses(); renderExpenses();
+  }
+  function expTogglePaid(billId) {
+    const found = expFindBill(billId);
+    if (!found) return;
+    found.bill.paid = !found.bill.paid;
+    if (found.bill.paid) found.bill.lastPaid = keyOf(TODAY);
+    saveExpenses(); renderExpenses();
+  }
+
+  function expTypeSelectHtml(bill) {
+    const t = expTypeById(bill.type);
+    const opts = EXPENSES.types.map(x => `<option value="${x.id}" ${x.id === bill.type ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    return `<select data-exp-type="${bill.id}" class="exp-type-select" style="--tag-c:${t ? esc(t.color) : "var(--ink-faint)"}">${opts}</select>`;
+  }
+  function expPayToggleHtml(b) {
+    return `<div class="exp-pay-toggle" data-exp-pay="${b.id}">
+      <button type="button" class="${b.payMethod === "auto" ? "active" : ""}" data-exp-pay-set="auto" title="Direct debit" aria-label="Direct debit">⚡</button>
+      <button type="button" class="${b.payMethod !== "auto" ? "active" : ""}" data-exp-pay-set="manual" title="Manual" aria-label="Manual">✋</button>
+    </div>`;
+  }
+  function expStatusPillHtml(bill) {
+    const st = expBillStatus(bill);
+    const label = st === "paid" ? "Paid" : st === "overdue" ? "Overdue" : (bill.dueDay ? `Due ${esc(bill.dueDay)}` : "Due");
+    return `<button type="button" class="exp-status exp-status-${st}" data-exp-toggle-paid="${bill.id}">${label}</button>`;
+  }
+  const EXP_PER_SHORT = { weekly: "/wk", monthly: "/mo", yearly: "/yr" };
+  const EXP_PER_WORD = { weekly: "weekly", monthly: "monthly", yearly: "yearly" };
+  function expAmtTd(bill, key) {
+    const three = expThreeCols(bill.amount, bill.per);
+    const isEntered = bill.per === key;
+    const val = isEntered ? Number(bill.amount) || 0 : three[key];
+    // headers are hidden once the table reflows into mobile cards, so each cell
+    // carries its own unit word -- short "/wk" on the entered (gold) figure, the
+    // full word after the two faint "≈" calculated figures, per Linh's mobile mock
+    const suffix = isEntered ? EXP_PER_SHORT[key] : EXP_PER_WORD[key];
+    return `<td class="exp-amtcell"><span class="amt ${isEntered ? "entered" : "calc"}">
+      <input type="number" step="0.01" min="0" inputmode="decimal" data-exp-amt-input="${bill.id}" data-exp-per="${key}" value="${val.toFixed(2)}"><b class="exp-per-suffix">${suffix}</b></span></td>`;
+  }
+
+  function expKpiStripHtml(sub) {
+    const t = expPageTotals(sub);
+    return `<div class="exp-kpi-strip">
+      <div class="exp-kpi"><div class="n">${expMoney(t.weekly)}</div><div class="l">Weekly</div></div>
+      <div class="exp-kpi"><div class="n">${expMoney(t.monthly)}</div><div class="l">Monthly</div></div>
+      <div class="exp-kpi"><div class="n">${expMoney(t.yearly)}</div><div class="l">Yearly</div></div>
+    </div>`;
+  }
+  function expMarriageStripHtml(sub) {
+    const totals = expMemberTotals(sub);
+    const [mA, mB] = sub.members;
+    return `<div class="exp-kpi-strip exp-kpi-strip-marriage">
+      <div class="exp-kpi" style="--kpi-c:${esc(mA.color)}"><div class="n">${expMoney(totals.monthly.a)}/mo</div><div class="l">${esc(mA.name)} pays</div>
+        <div class="sub">${expMoney(totals.weekly.a)}/wk · ${expMoney(totals.yearly.a)}/yr</div></div>
+      <div class="exp-kpi" style="--kpi-c:${esc(mB.color)}"><div class="n">${expMoney(totals.monthly.b)}/mo</div><div class="l">${esc(mB.name)} pays</div>
+        <div class="sub">${expMoney(totals.weekly.b)}/wk · ${expMoney(totals.yearly.b)}/yr</div></div>
+      <div class="exp-kpi"><div class="n">${expMoney(totals.monthly.a + totals.monthly.b)}/mo</div><div class="l">Household total</div>
+        <div class="sub">${expMoney(totals.weekly.a + totals.weekly.b)}/wk · ${expMoney(totals.yearly.a + totals.yearly.b)}/yr</div></div>
+    </div>`;
+  }
+  function expGroupTableHtml(group) {
+    const totals = expGroupTotals(group);
+    const rows = group.bills.map(b => `
+      <tr data-exp-bill="${b.id}">
+        <td class="nm"><input type="text" data-exp-name="${b.id}" value="${esc(b.name)}" placeholder="Bill name"></td>
+        <td>${expTypeSelectHtml(b)}</td>
+        ${expAmtTd(b, "weekly")}${expAmtTd(b, "monthly")}${expAmtTd(b, "yearly")}
+        <td><input type="text" class="exp-due-input" data-exp-due="${b.id}" value="${esc(b.dueDay || "")}" placeholder="Day"></td>
+        <td><input type="text" data-exp-freq="${b.id}" value="${esc(b.freqMonth || "")}" placeholder="e.g. Monthly"></td>
+        <td>${expPayToggleHtml(b)}</td>
+        <td>${expStatusPillHtml(b)}</td>
+        <td><button type="button" class="wrp-del" data-exp-bill-del="${b.id}" aria-label="Delete bill">×</button></td>
+      </tr>`).join("");
+    return `<div class="exp-group" data-exp-group="${group.id}">
+      <div class="exp-group-head"><span class="exp-group-name">${esc(group.label)}</span>
+        <span class="exp-group-totals">${expMoney(totals.weekly)}/wk · ${expMoney(totals.monthly)}/mo · ${expMoney(totals.yearly)}/yr</span></div>
+      <div class="exp-table-wrap"><table class="exp-table">
+        <thead><tr><th>Bill</th><th>Type</th><th>Weekly</th><th>Monthly</th><th>Yearly</th><th>Due</th><th>Repeats</th><th>Payment</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="10" class="exp-empty">No bills yet.</td></tr>`}</tbody>
+      </table></div>
+      <button type="button" class="exp-add-bill" data-exp-add-bill="${group.id}">＋ Add bill</button>
+    </div>`;
+  }
+  function expSplitControlHtml(b) {
+    const sp = b.split || { type: "even", sharePctA: 50 };
+    const opts = [["even", "50/50"], ["pct", "Custom %"], ["amount", "Fixed $ to A"]];
+    const select = `<select data-exp-split-type="${b.id}">${opts.map(([v, l]) => `<option value="${v}" ${sp.type === v ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+    const extra = sp.type === "even" ? "" :
+      sp.type === "pct" ? `<input type="number" min="0" max="100" step="1" data-exp-split-val="${b.id}" value="${Number(sp.sharePctA) || 50}"><b class="exp-pct-suffix">%</b>` :
+      `<input type="number" min="0" step="0.01" data-exp-split-val="${b.id}" value="${Number(sp.sharePctA) || 0}">`;
+    return `<div class="exp-split-ctrl">${select}${extra}</div>`;
+  }
+  function expMarriageGroupTableHtml(sub, group) {
+    const [mA, mB] = sub.members;
+    let totA = 0, totB = 0, totH = 0;
+    const rows = group.bills.map(b => {
+      const ratioA = expSplitRatioA(b);
+      const entered = Number(b.amount) || 0;
+      const shareA = entered * ratioA, shareB = entered - shareA;
+      totA += shareA; totB += shareB; totH += entered;
+      const perLabel = b.per === "weekly" ? "/wk" : b.per === "yearly" ? "/yr" : "/mo";
+      return `<tr data-exp-bill="${b.id}">
+        <td class="nm"><input type="text" data-exp-name="${b.id}" value="${esc(b.name)}" placeholder="Bill name"></td>
+        <td class="exp-amtcell"><span class="amt entered"><input type="number" step="0.01" min="0" data-exp-amt-input="${b.id}" data-exp-per="${b.per}" value="${entered.toFixed(2)}"><b class="exp-per-suffix">${perLabel}</b></span></td>
+        <td>${expSplitControlHtml(b)}</td>
+        <td class="exp-share" style="--kpi-c:${esc(mA.color)}">${expMoney(shareA)}</td>
+        <td class="exp-share" style="--kpi-c:${esc(mB.color)}">${expMoney(shareB)}</td>
+        <td>${expStatusPillHtml(b)}</td>
+        <td><button type="button" class="wrp-del" data-exp-bill-del="${b.id}" aria-label="Delete bill">×</button></td>
+      </tr>`;
+    }).join("");
+    return `<div class="exp-group" data-exp-group="${group.id}">
+      <div class="exp-group-head"><span class="exp-group-name">${esc(group.label)}</span>
+        <span class="exp-group-totals">Household ${expMoney(totH)} · ${esc(mA.name)} ${expMoney(totA)} · ${esc(mB.name)} ${expMoney(totB)}</span></div>
+      <div class="exp-table-wrap"><table class="exp-table exp-table-marriage">
+        <thead><tr><th>Bill</th><th>Total</th><th>Split</th><th>${esc(mA.name)}</th><th>${esc(mB.name)}</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="exp-empty">No shared bills yet.</td></tr>`}</tbody>
+      </table></div>
+      <button type="button" class="exp-add-bill" data-exp-add-bill="${group.id}">＋ Add bill</button>
+    </div>`;
+  }
+  function expTaxRowHtml(row) {
+    return `<tr data-exp-tax="${row.id}">
+      <td class="nm"><input type="text" data-exp-tax-name="${row.id}" value="${esc(row.name)}" placeholder="Name"></td>
+      <td class="exp-amtcell"><span class="amt entered"><input type="number" step="0.1" min="0" max="100" data-exp-tax-rate="${row.id}" value="${(Number(row.ratePct) || 0).toFixed(1)}"><b class="exp-pct-suffix">%</b></span></td>
+      <td><button type="button" class="wrp-del" data-exp-tax-del="${row.id}" aria-label="Delete row">×</button></td>
+    </tr>`;
+  }
+  function expTaxesHtml(sub) {
+    const rows = (sub.taxes || []).map(expTaxRowHtml).join("");
+    return `<div class="exp-group exp-group-taxes">
+      <div class="exp-group-head"><span class="exp-group-name">Taxes &amp; Super</span></div>
+      <div class="exp-table-wrap"><table class="exp-table exp-table-pct">
+        <thead><tr><th>Name</th><th>Rate</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="3" class="exp-empty">No rows yet.</td></tr>`}</tbody>
+      </table></div>
+      <button type="button" class="exp-add-bill" data-exp-add-tax="1">＋ Add row</button>
+    </div>`;
+  }
+  function expTypeEditorHtml() {
+    const rows = EXPENSES.types.map(t => `
+      <tr data-exp-type-row="${t.id}">
+        <td><input type="color" data-exp-type-color="${t.id}" value="${esc(t.color)}"></td>
+        <td><input type="text" data-exp-type-name="${t.id}" value="${esc(t.name)}"></td>
+        <td><button type="button" class="wrp-del" data-exp-type-del="${t.id}" aria-label="Delete type">×</button></td>
+      </tr>`).join("");
+    return `<table class="exp-type-table"><tbody>${rows}</tbody></table>
+      <button type="button" class="exp-add-bill" data-exp-add-type="1">＋ Add type</button>`;
+  }
+  function renderExpenses() {
+    document.querySelectorAll("#expSeg [data-expmode]").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.expmode === state.expMode)));
+    const sub = EXPENSES[state.expMode];
+    const stripHtml = state.expMode === "marriage" ? expMarriageStripHtml(sub) : expKpiStripHtml(sub);
+    const groupsHtml = sub.groups.map(g => state.expMode === "marriage" ? expMarriageGroupTableHtml(sub, g) : expGroupTableHtml(g)).join("");
+    const taxesHtml = state.expMode === "business" ? expTaxesHtml(sub) : "";
+    document.getElementById("expStrip").innerHTML = stripHtml;
+    document.getElementById("expGroups").innerHTML = groupsHtml + taxesHtml;
   }
 
   /* ---- quick add: type/paste natural language, the parser fills date, time,
