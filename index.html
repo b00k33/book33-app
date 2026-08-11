@@ -6688,12 +6688,13 @@
     .exp-table td:nth-child(6), .exp-table td:nth-child(7) { order: 5; flex: 1 1 auto; font-size: 11px; color: var(--ink-faint); } /* Due, Repeats */
     .exp-table td:nth-child(8) { order: 6; }                             /* Payment */
     .exp-table td:nth-child(10) { order: 7; margin-left: auto; }         /* delete */
-    /* Marriage columns: Bill·Total·Split·MemberA·MemberB·Status·(del) -- overrides the generic rules above */
+    /* Marriage columns: Bill·Total·Split·MemberA·MemberB·Due·Status·(del) -- overrides the generic rules above */
     .exp-table-marriage td:nth-child(2) { order: 3; flex: 1 1 100%; text-align: left; }
     .exp-table-marriage td:nth-child(3) { order: 4; flex: 1 1 100%; font-size: 11px; }
     .exp-table-marriage td:nth-child(4), .exp-table-marriage td:nth-child(5) { order: 5; flex: 1 1 auto; font-size: 12.5px; }
-    .exp-table-marriage td:nth-child(6) { order: 2; margin-left: auto; }
-    .exp-table-marriage td:nth-child(7) { order: 6; margin-left: auto; }
+    .exp-table-marriage td:nth-child(6) { order: 5; flex: 1 1 auto; font-size: 11px; color: var(--ink-faint); } /* Due */
+    .exp-table-marriage td:nth-child(7) { order: 2; margin-left: auto; }  /* Status */
+    .exp-table-marriage td:nth-child(8) { order: 6; margin-left: auto; } /* delete */
     /* Taxes % table: Name·Rate·(del) only -- overrides the 9/10-column rules above, which don't apply */
     .exp-table-pct td:nth-child(1) { flex: 1 1 auto; order: 1; }
     .exp-table-pct td:nth-child(3) { order: 2; margin-left: auto; }
@@ -30601,7 +30602,28 @@
   function loadExpenses() {
     try {
       const raw = localStorage.getItem(EXP_KEY);
-      if (raw) { const v = JSON.parse(raw); if (v && v.personal && v.business && v.marriage) return v; }
+      if (raw) {
+        const v = JSON.parse(raw);
+        if (v && v.personal && v.business && v.marriage) {
+          // 2026-08-11 (Linh: "track monthly paid bills on a regular basis... show it
+          // was paid for x month"): Paid used to be a sticky boolean that, once ticked,
+          // stayed "Paid" forever -- wrong for a RECURRING bill, which needs to go back
+          // to Due/Overdue every new month. lastPaid (already recorded on toggle) is now
+          // the sole source of truth: "paid" means lastPaid falls in the CURRENT
+          // calendar month (see expBillStatus below). One-time migration for bills saved
+          // under the old shape: only touch rows that STILL carry the old `paid` field
+          // (new bills never get one) -- clear a stale lastPaid on a legacy paid:false
+          // row, then drop the now-redundant field. Gating on "paid" in b is essential:
+          // without it this would wipe lastPaid off EVERY bill on EVERY load, including
+          // ones correctly marked paid this month (caught this in verification -- a
+          // paid bill reverted to Overdue the instant the page was refreshed).
+          ["personal", "business", "marriage"].forEach(k => (v[k].groups || []).forEach(g =>
+            (g.bills || []).forEach(b => {
+              if ("paid" in b) { if (!b.paid) b.lastPaid = ""; delete b.paid; }
+            })));
+          return v;
+        }
+      }
     } catch (e) {}
     return defaultExpenses();
   }
@@ -30617,14 +30639,23 @@
     return { weekly: y / EXP_WEEKS, monthly: y / EXP_MONTHS, yearly: y };
   }
   function expMoney(n) { return `$${(Number(n) || 0).toFixed(2)}`; }
-  function expNewBill() {
-    return { id: uid(), name: "", type: "other", amount: 0, per: "monthly", dueDay: "", freqMonth: "", payMethod: "manual", paid: false, lastPaid: "" };
+  // "11 Aug" from a "YYYY-MM-DD" key -- the short, dense date format the status pill
+  // needs for both the paid date and (via expBillStatus) the due-day comparison.
+  function expShortDate(k) {
+    if (!k) return "";
+    const d = parseKey(k);
+    return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
   }
-  // status: Paid (green) once ticked this cycle; otherwise Due (gold) or Overdue (red)
-  // once past dueDay -- dueDay is a loose day-of-month string per the brief ("day-of-
-  // month or date"), so anything non-numeric just reads as a plain Due with no overdue check.
+  function expNewBill() {
+    return { id: uid(), name: "", type: "other", amount: 0, per: "monthly", dueDay: "", freqMonth: "", payMethod: "manual", lastPaid: "" };
+  }
+  // status: Paid (green) when lastPaid falls in the CURRENT calendar month -- so it
+  // automatically reverts to Due/Overdue at the start of a new month instead of
+  // staying stuck "Paid" forever, which is what a recurring bill actually needs.
+  // Due/Overdue is unchanged: dueDay is a loose day-of-month string per the brief
+  // ("day-of-month or date"), so anything non-numeric just reads as a plain Due.
   function expBillStatus(b) {
-    if (b.paid) return "paid";
+    if (b.lastPaid && b.lastPaid.slice(0, 7) === keyOf(TODAY).slice(0, 7)) return "paid";
     const day = parseInt(b.dueDay, 10);
     if (!day || day < 1 || day > 31) return "due";
     return TODAY.getDate() > day ? "overdue" : "due";
@@ -30692,8 +30723,8 @@
   function expTogglePaid(billId) {
     const found = expFindBill(billId);
     if (!found) return;
-    found.bill.paid = !found.bill.paid;
-    if (found.bill.paid) found.bill.lastPaid = keyOf(TODAY);
+    const paidNow = expBillStatus(found.bill) === "paid";
+    found.bill.lastPaid = paidNow ? "" : keyOf(TODAY);
     saveExpenses(); renderExpenses();
   }
 
@@ -30710,7 +30741,12 @@
   }
   function expStatusPillHtml(bill) {
     const st = expBillStatus(bill);
-    const label = st === "paid" ? "Paid" : st === "overdue" ? "Overdue" : (bill.dueDay ? `Due ${esc(bill.dueDay)}` : "Due");
+    // Paid and Overdue both carry a real date now (2026-08-11, "include a date for
+    // when it is due/paid") -- Paid shows the day it was actually marked paid, not
+    // just the month, so re-paying next cycle reads as a fresh, distinct tick.
+    const label = st === "paid" ? `Paid ${expShortDate(bill.lastPaid)}`
+      : st === "overdue" ? `Overdue ${esc(bill.dueDay)}`
+      : (bill.dueDay ? `Due ${esc(bill.dueDay)}` : "Due");
     return `<button type="button" class="exp-status exp-status-${st}" data-exp-toggle-paid="${bill.id}">${label}</button>`;
   }
   const EXP_PER_SHORT = { weekly: "/wk", monthly: "/mo", yearly: "/yr" };
@@ -30794,6 +30830,7 @@
         <td>${expSplitControlHtml(b)}</td>
         <td class="exp-share" style="--kpi-c:${esc(mA.color)}">${expMoney(shareA)}</td>
         <td class="exp-share" style="--kpi-c:${esc(mB.color)}">${expMoney(shareB)}</td>
+        <td><input type="text" class="exp-due-input" data-exp-due="${b.id}" value="${esc(b.dueDay || "")}" placeholder="Day"></td>
         <td>${expStatusPillHtml(b)}</td>
         <td><button type="button" class="wrp-del" data-exp-bill-del="${b.id}" aria-label="Delete bill">×</button></td>
       </tr>`;
@@ -30802,8 +30839,8 @@
       <div class="exp-group-head"><span class="exp-group-name">${esc(group.label)}</span>
         <span class="exp-group-totals">Household ${expMoney(totH)} · ${esc(mA.name)} ${expMoney(totA)} · ${esc(mB.name)} ${expMoney(totB)}</span></div>
       <div class="exp-table-wrap"><table class="exp-table exp-table-marriage">
-        <thead><tr><th>Bill</th><th>Total</th><th>Split</th><th>${esc(mA.name)}</th><th>${esc(mB.name)}</th><th>Status</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7" class="exp-empty">No shared bills yet.</td></tr>`}</tbody>
+        <thead><tr><th>Bill</th><th>Total</th><th>Split</th><th>${esc(mA.name)}</th><th>${esc(mB.name)}</th><th>Due</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="8" class="exp-empty">No shared bills yet.</td></tr>`}</tbody>
       </table></div>
       <button type="button" class="exp-add-bill" data-exp-add-bill="${group.id}">＋ Add bill</button>
     </div>`;
