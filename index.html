@@ -6661,6 +6661,16 @@
   .nut-meal-time { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 12px; flex: none; }
   .nut-meal-desc { color: var(--ink); font-weight: 600; }
   .nut-meal-jump { font-size: 12px; padding: 0; }
+  /* same 32px-circle + invisible hit-slop trick as .ml-photo-remove (the log sheet's
+     own × button) -- compact on a dense itemised row, still a real 44px tap target. */
+  .nut-meal-del {
+    position: relative; width: 32px; height: 32px; border-radius: 50%; border: none;
+    background: none; color: var(--ink-faint); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; padding: 0; flex: none;
+    margin-left: auto;
+  }
+  .nut-meal-del::before { content: ""; position: absolute; inset: -6px; }
+  .nut-meal-del:hover, .nut-meal-del:focus-visible { color: var(--danger); background: color-mix(in oklab, var(--danger) 12%, transparent); }
   .log-head {
     font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.13em;
     color: var(--ink-faint); margin: 14px 0 2px;
@@ -13823,6 +13833,65 @@
     renderDay();
     return item;
   }
+  // 2026-08-11 (STEP 7, meal log, "edit/delete uses STEP 3's undo flow"): same
+  // archive shape as routines/events above -- a logged meal lives in NUT_MEALS[date],
+  // an array per day, so the archived copy carries `date` alongside it (there's no
+  // single flat store to find it back in otherwise). Restoring also has to re-link
+  // LINKED_MEALS so the source calendar event's "✓ Logged" line comes back too.
+  const MEAL_ARCHIVE_KEY = "book33-meals-archive";
+  function loadMealArchive() {
+    try {
+      const v = JSON.parse(localStorage.getItem(MEAL_ARCHIVE_KEY));
+      if (Array.isArray(v)) return v;
+    } catch (e) {}
+    return [];
+  }
+  function saveMealArchive() { try { localStorage.setItem(MEAL_ARCHIVE_KEY, JSON.stringify(MEAL_ARCHIVE)); } catch (e) {} }
+  let MEAL_ARCHIVE = loadMealArchive();
+  function archiveMealEntry(entry, date) {
+    MEAL_ARCHIVE = MEAL_ARCHIVE.filter(r => r.id !== entry.id);
+    MEAL_ARCHIVE.unshift({ ...entry, date, deletedAt: Date.now() });
+    saveMealArchive();
+  }
+  function restoreMealFromArchive(id) {
+    const idx = MEAL_ARCHIVE.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    const { deletedAt, date, ...entry } = MEAL_ARCHIVE[idx];
+    MEAL_ARCHIVE.splice(idx, 1);
+    saveMealArchive();
+    NUT_MEALS[date] = NUT_MEALS[date] || [];
+    NUT_MEALS[date].push(entry);
+    saveNutMeals();
+    if (entry.linkedEventId) { LINKED_MEALS[entry.linkedEventId] = { mealId: entry.id, date }; saveLinkedMeals(); }
+    try { renderNutrition(); } catch (err) {}
+    try { renderBoostWidget(); } catch (err) {}
+    renderDay();
+    return entry;
+  }
+  // the delete affordance itself -- pulls the entry out of NUT_MEALS, unlinks it
+  // from its source event (so that event's popup reverts to "Log what I ate →"),
+  // archives it, and offers the standard 6s undo on top of the permanent archive,
+  // same two-layer safety net as deleting a routine or event.
+  function deleteMealEntry(date, mealId) {
+    const list = NUT_MEALS[date] || [];
+    const idx = list.findIndex(m => m.id === mealId);
+    if (idx === -1) return;
+    const entry = list[idx];
+    list.splice(idx, 1);
+    saveNutMeals();
+    if (entry.linkedEventId && LINKED_MEALS[entry.linkedEventId]?.mealId === mealId) {
+      delete LINKED_MEALS[entry.linkedEventId];
+      saveLinkedMeals();
+    }
+    archiveMealEntry(entry, date);
+    try { renderNutrition(); } catch (err) {}
+    try { renderBoostWidget(); } catch (err) {}
+    if (entry.linkedEventId && TL_ITEMS_BY_ID[entry.linkedEventId]) {
+      renderTlDetailHeadActions(TL_ITEMS_BY_ID[entry.linkedEventId]);
+      renderTlDetailBody(TL_ITEMS_BY_ID[entry.linkedEventId]);
+    }
+    showUndoSnackbar(`Deleted "${entry.desc}"`, () => restoreMealFromArchive(mealId));
+  }
   /* seed function stripped from the public sync build */
   // the wedding date moved to PEOPLE (as a milestone) so it gets Birthdays-tab visibility +
   // event/gift sub-tasks like every other date in that list — remove the old routine-only version
@@ -15144,6 +15213,14 @@
     // jumps back to the meal's source calendar event -- see its own comment.
     const mealJump = e.target.closest("[data-meal-jump]");
     if (mealJump) jumpToLinkedMealEvent(mealJump.dataset.mealJump);
+    // 2026-08-11 (STEP 7 follow-up, "edit/delete uses STEP 3's undo flow"): confirm-
+    // before-delete matches STEP 3's own routine/event rule ("keep the confirm-before-
+    // delete step") -- a meal log is quick to re-enter but the photo (if any) isn't,
+    // so a bare tap shouldn't be enough to lose it.
+    const mealDel = e.target.closest("[data-meal-delete]");
+    if (mealDel && confirm("Delete this meal log?")) deleteMealEntry(mealDel.dataset.mealDate, mealDel.dataset.mealDelete);
+    const mealArchRestore = e.target.closest("[data-meal-archive-restore]");
+    if (mealArchRestore) { restoreMealFromArchive(mealArchRestore.dataset.mealArchiveRestore); renderRtnArchive(); }
   });
 
   // the every-2-days rhythm re-anchors on any actual wash she places by hand: once she
@@ -21916,6 +21993,7 @@
               <div class="nut-meal-line"><span class="nut-meal-time">${esc(m.time || "")}</span><span class="nut-meal-desc">${esc(m.desc)}</span>${(m.tags || []).map(t => (MEAL_TAGS.find(x => x.id === t) || {}).icon || "").join("")}</div>
               ${m.linkedEventId ? `<button type="button" class="tab-link nut-meal-jump" data-meal-jump="${esc(m.linkedEventId)}">↩ ${esc(m.linkedEventTitle || "")}${m.linkedEventTimeLabel ? ` · ${esc(m.linkedEventTimeLabel)}` : ""}</button>` : ""}
             </div>
+            <button type="button" class="nut-meal-del" data-meal-delete="${esc(m.id)}" data-meal-date="${keyOf(TODAY)}" aria-label="Delete this meal log">✕</button>
           </div>`).join("")}
       </div>`).join("");
   }
@@ -25050,6 +25128,10 @@
     const all = [
       ...ROUTINE_ARCHIVE.map(r => ({ ...r, archiveKind: "routine" })),
       ...EVENT_ARCHIVE.map(r => ({ ...r, archiveKind: "event" })),
+      // 2026-08-11 (STEP 7 follow-up): meals have no .title/.track (they're a
+      // description + tags, not a life-category item) -- normalise here so the shared
+      // row renderer below doesn't need a third branch just for those two fields.
+      ...MEAL_ARCHIVE.map(r => ({ ...r, archiveKind: "meal", title: r.desc, track: null })),
     ].sort((a, b) => b.deletedAt - a.deletedAt);
     section.hidden = !all.length;
     if (!all.length) { body.innerHTML = ""; return; }
@@ -25058,9 +25140,12 @@
       const d = new Date(r.deletedAt);
       const when = `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
       const seriesTag = r.kind === "recur" ? " · series" : "";
-      const restoreAttr = r.archiveKind === "routine" ? `data-rtn-archive-restore="${esc(r.id)}"` : `data-event-archive-restore="${esc(r.id)}"`;
+      const subLabel = r.archiveKind === "meal" ? "Meal log" : trackLabel(r.track);
+      const restoreAttr = r.archiveKind === "routine" ? `data-rtn-archive-restore="${esc(r.id)}"`
+        : r.archiveKind === "meal" ? `data-meal-archive-restore="${esc(r.id)}"`
+        : `data-event-archive-restore="${esc(r.id)}"`;
       return `<div class="rtn-archive-row">
-        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(trackLabel(r.track))}${seriesTag} · deleted ${when}</span></div>
+        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(subLabel)}${seriesTag} · deleted ${when}</span></div>
         <button type="button" class="rtn-archive-restore" ${restoreAttr}>Restore</button>
       </div>`;
     }).join("");
