@@ -13828,7 +13828,7 @@
     } catch (e) {}
     return [{ id: "laundry", title: "Laundry", track: "personal", category: "Home", freq: "weekly", weekday: 6, note: "" }];
   }
-  function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} }
+  function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} saveWidgetDigest(); }
   let ROUTINE_TASKS = loadRoutines();
   // 2026-08-11 (CBD Work clinic-ops brief): strips a leading hand-typed icon/emoji
   // (same convention splitRtnIconTitle parses for the editor's Name row) and
@@ -15653,7 +15653,7 @@
       }));
     } catch (e) { return []; }
   }
-  function saveEvents(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {} }
+  function saveEvents(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {} saveWidgetDigest(); }
   function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveDone(map) { try { localStorage.setItem(DONE_KEY, JSON.stringify(map)); } catch (e) {} }
   // 2026-08-06 (Linh, outcomes spec): per-OCCURRENCE completion outcomes — keyed by the
@@ -16284,6 +16284,7 @@
     if (on) DONE[id] = true; else delete DONE[id];
     saveDone(DONE);
     if (on) fireReward(id);
+    saveWidgetDigest();
   }
   /* 2026-08-06 (Linh: "when I tick something off, play a quick, delightful UI response
      -- a little confetti burst or a springy check with a soft colour pop"): a fixed-
@@ -22105,7 +22106,7 @@
   function loadHealth() {
     try { return JSON.parse(localStorage.getItem(HEALTH_KEY) || "{}"); } catch (e) { return {}; }
   }
-  function saveHealth() { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(HEALTH)); } catch (e) {} }
+  function saveHealth() { try { localStorage.setItem(HEALTH_KEY, JSON.stringify(HEALTH)); } catch (e) {} saveWidgetDigest(); }
   let HEALTH = loadHealth();
   HEALTH.weights   = HEALTH.weights   || [];   // { id, date, kg }
   // one-time cleanup (2026-08-06): #weightForm used to push a new entry on every
@@ -27061,6 +27062,7 @@
     // same blind spot the Day-page fix above closed for state.view — a reload wiped it
     // back to its "list" default. Carried in the same restore payload for the same fix.
     try { sessionStorage.setItem("b33-restore", JSON.stringify({ view: state.view, anchor: keyOf(state.anchor), rtnView: rtnListMode })); } catch (e) {}
+    saveWidgetDigest();   // cheap, same-content guarded — see its own comment above
   }
 
   function renderNav() {
@@ -28326,6 +28328,99 @@
       ? pats.map(p => `<div class="rail-pat-row"><span class="t">${fmtTime(p.start)}</span><span>${esc(p.title)}</span><span class="dot"></span></div>`).join("")
       : `<div class="rail-pat-empty">Nothing booked this day.</div>`;
   }
+  /* ============================================================
+     WIDGET DIGEST (2026-08-11 brief) — a tiny precomputed snapshot of
+     "today", pushed to Supabase under book33-widget-today so an iOS
+     home-screen widget can draw today at a glance without re-running
+     any of this app's own recurrence/override/chain logic. Every value
+     below is read straight off functions the app already has (dayProgress,
+     the Categories table, HEALTH.activeFast, the same astro/cycle/birthday
+     reads renderDeskGlance/renderDeskRail use) — nothing here is a second
+     computation of anything, just a different serialisation of it.
+     ============================================================ */
+  const WIDGET_DIGEST_KEY = "book33-widget-today";
+  // mirrors the calendar block's own fill rule exactly (sub-category colour
+  // if it has one, else its part-of-life colour) but returns a real hex, since
+  // the widget has no CSS engine to resolve a var(--work-seed) reference.
+  function resolveEventColorHex(item) {
+    if (!item || !item.track) return "#8a7d67";
+    const sub = catSubFor(item.track, item.category);
+    if (sub && sub.color) return sub.color;
+    const life = CAT_BY_ID[item.track];
+    return (life && life.color) || "#8a7d67";
+  }
+  // one pre-formatted line so the widget needs zero logic of its own — same
+  // moon/sign/cycle/birthday reads renderDeskGlance()/renderDeskRail() already
+  // use for their own chips, just joined into a string instead of 4 DOM nodes.
+  function widgetContextLine(d) {
+    const a = astroFor(d);
+    const q = cycleQuickInfo(d);
+    const bdays = birthdaysOn(d).length;
+    const parts = [
+      `${MOON_EM[moonIndex(d)]} ${MOON_NAME[moonIndex(d)]}`,
+      `${a.sign.gl} ${a.sign.name}`,
+    ];
+    if (q) parts.push(`Day ${q.cd}${q.phase ? ` ${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : ""}`);
+    if (bdays) parts.push(`🎂 ${bdays}`);
+    return parts.join(" · ");
+  }
+  // same read HEALTH.activeFast/fastGoalHours that renderFastBar()/
+  // renderDeskFastCard() already do — just returns data instead of painting it.
+  function widgetFastingDigest() {
+    if (!HEALTH.activeFast) return { active: false };
+    const goalH = HEALTH.fastGoalHours || 16;
+    const goalMs = goalH * 3600000;
+    const start = new Date(HEALTH.activeFast);
+    const elapsedMs = Math.max(0, Date.now() - start.getTime());
+    const over = elapsedMs >= goalMs;
+    const goalEnd = new Date(start.getTime() + goalMs);
+    return {
+      active: true,
+      label: fmtHrs(elapsedMs),
+      goal: `${goalH}h`,
+      pct: Math.min(elapsedMs / goalMs, 1),
+      note: over ? `${fmtHrs(elapsedMs - goalMs)} over` : `breaks ${fmtTime(`${goalEnd.getHours()}:${goalEnd.getMinutes()}`)}`,
+    };
+  }
+  function computeWidgetDigest() {
+    const d = TODAY;
+    const dp = dayProgress(d);
+    const items = dp.items
+      .filter(e => e.start)
+      .sort((a, b) => toMin(a.start) - toMin(b.start))
+      .slice(0, 8)
+      .map(e => ({ time: fmtTime(e.start), name: e.title, color: resolveEventColorHex(e), done: isDone(e.id) }));
+    return {
+      date: keyOf(d),
+      dayNum: String(d.getDate()),
+      weekday: WD_FULL[(d.getDay() + 6) % 7],
+      ud: universalDay(d).value,
+      progress: { done: dp.done, total: dp.total },
+      context: { line: widgetContextLine(d) },
+      fasting: widgetFastingDigest(),
+      items,
+    };
+  }
+  // recomputed often (every render(), every tick, every fast toggle) by design
+  // — it's a cheap snapshot, not a heavy recalculation — but skips the actual
+  // localStorage write when nothing changed, so a render() with no real change
+  // to today doesn't churn schedulePush()'s debounce or the sync card for no
+  // reason. Wrapped in try/catch: a widget refresh must never be why a real
+  // user action throws.
+  let lastWidgetDigestJSON = "";
+  function saveWidgetDigest() {
+    try {
+      const json = JSON.stringify(computeWidgetDigest());
+      if (json === lastWidgetDigestJSON) return;
+      lastWidgetDigestJSON = json;
+      localStorage.setItem(WIDGET_DIGEST_KEY, json);
+    } catch (e) {}
+  }
+  // date-change/fasting-freshness catch-all for whenever the app just sits
+  // open with no interaction — every OTHER trigger (tick/add/move/fast
+  // toggle) is hooked at its own save function instead, see toggleDone(),
+  // saveHealth(), saveEvents(), saveRoutines().
+  setInterval(saveWidgetDigest, 5 * 60 * 1000);
   function closeDeskTodayMenu() {
     const m = document.getElementById("deskTodayMenu");
     if (m) m.hidden = true;
@@ -35753,7 +35848,7 @@
   // having been opened recently. NOISY keys still get pushed (so the queue itself
   // stays current in the cloud) but never set DIRTY and never count toward "is this
   // meaningfully different from the cloud" -- only an edit she actually made does.
-  var NOISY = { "book33-push-queue": 1 };
+  var NOISY = { "book33-push-queue": 1, "book33-widget-today": 1 };
   function stripNoisy(obj) {
     var o = {};
     Object.keys(obj).forEach(function (k) { if (!NOISY[k]) o[k] = obj[k]; });
