@@ -17751,6 +17751,17 @@
         chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span><button type="button" class="tab-link" data-chain-open="${chainT.id}" style="margin-left:0">Chain it — glue this to another routine, event, or a deadline →</button></span></div>`;
       }
     }
+    // 2026-08-11 (Linh, screenshot of the Lunch popup: "i want to record straight to
+    // the nutrition page to record what i eat"): title-matched, not a stored flag --
+    // works immediately for her existing Breakfast/Lunch/Dinner/Snack routines with no
+    // re-tagging, at the cost of not catching an unusually-named meal (or of a
+    // non-meal event that happens to say "lunch"). Same quiet-link shape as "Chain
+    // it →" above, and closeTlDetail() + bubble-to-document is the same handoff
+    // data-rt-open/data-chain-open already use just below.
+    const isMealEvent = /\b(breakfast|lunch|dinner|snack)\b/i.test(e.title || "");
+    const nutritionRowHtml = isMealEvent
+      ? `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-jump-view="nutrition" style="margin-left:0">Log what I ate — jump to Nutrition →</button></span></div>`
+      : "";
     // 2026-08-06 (Linh's "routine phases" mockup): the full Before/Event/After banded
     // list for this item's whole chain, under the single-line relationship row above.
     const phaseBandsHtml = chainT ? chainPhaseBandsHtml(chainT, state.anchor) : "";
@@ -17770,6 +17781,7 @@
       ${path.length ? `<div class="tl-detail-row"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
       ${chainRowHtml}
+      ${nutritionRowHtml}
       ${phaseBandsHtml}
       ${remHtml}
       ${starsHtml}
@@ -18098,6 +18110,10 @@
     // the global document click delegate (near ROUTINE_TASKS.find) does the actual
     // navigate-to-Routines-page-and-open-the-form work once this bubbles up to it.
     if (e.target.closest("[data-rt-open]")) { closeTlDetail(); return; }
+    // "Log what I ate" (nutritionRowHtml) -- same handoff: close this sheet, let the
+    // tap bubble to the global [data-jump-view] delegate (near #hairToHabits), which
+    // does the actual state.view="nutrition"; render().
+    if (e.target.closest("[data-jump-view]")) { closeTlDetail(); return; }
     // 2026-08-06 (chain UX): one-tap unchain right in the sheet — the item keeps its
     // own saved time, same contract as the Chains card's × button. Sheet stays open,
     // its ⛓ row flips to the "Chain it →" state; the timeline re-renders behind it.
