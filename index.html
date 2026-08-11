@@ -10901,6 +10901,20 @@
             <button type="submit" class="btn-save">Log</button>
           </form>
         </div>
+
+        <!-- sleep (2026-08-11, Wellness v2 positive factors: "the biggest all-round
+             lift") -- same upsert-by-date form shape as Weight/Body fat above, just
+             one number (hours) instead of a chart -- feeds computeTodayBoosts() only,
+             no separate trend view yet. -->
+        <div class="h-card">
+          <div class="section-head"><h2>Sleep</h2><span class="rule"></span></div>
+          <div class="h-current" id="sleepCurrent"></div>
+          <form class="h-add" id="sleepForm">
+            <input type="date" id="sleepDate" aria-label="Date">
+            <input type="number" id="sleepVal" step="0.25" min="0" max="16" placeholder="hours" aria-label="Hours slept" required>
+            <button type="submit" class="btn-save">Log</button>
+          </form>
+        </div>
       </div>
 
       <div class="bdy-col bdy-col-weight">
@@ -22029,6 +22043,7 @@
     if (dedupedBf.length !== HEALTH.bodyFat.length) { HEALTH.bodyFat = dedupedBf; saveHealth(); }
     else HEALTH.bodyFat = dedupedBf;
   }
+  HEALTH.sleep     = HEALTH.sleep     || [];   // { id, date, hours } -- 2026-08-11 (Wellness v2 positive factors)
   HEALTH.periods   = HEALTH.periods   || [];   // legacy, superseded by HEALTH.flow
   HEALTH.flow      = HEALTH.flow      || {};   // { "YYYY-MM-DD": "spotting"|"light"|"medium"|"heavy" }
   HEALTH.fasts     = HEALTH.fasts     || [];   // { id, start, end }  ISO
@@ -23000,6 +23015,13 @@
       ? `<div class="bdy-kpi"><div class="v">${lastB.pct}<small>%</small></div><div class="k">Body fat</div><div class="d">${bfTarget != null ? `target ${bfTarget}%` : ""}</div></div>`
       : `<div class="bdy-kpi"><div class="v">—</div><div class="k">Body fat</div><div class="d">${bfTarget != null ? `target ${bfTarget}%` : "no reading yet"}</div></div>`;
 
+    /* ---------- sleep (2026-08-11, Wellness v2 positive factors) ---------- */
+    const sleepSorted = HEALTH.sleep.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const lastS = sleepSorted[sleepSorted.length - 1];
+    document.getElementById("sleepCurrent").innerHTML = lastS
+      ? `${lastS.hours}<span class="u">h</span>${lastS.date === keyOf(TODAY) ? "" : `<span class="delta">${growthDateLabel(lastS.date)}</span>`}`
+      : `<span class="none">No sleep logged yet.</span>`;
+
     /* ---------- KPI strip ---------- */
     const kpiCd = cycleDayFor(TODAY);
     const kpiPhase = kpiCd ? phaseOn(TODAY, wPred) : null;
@@ -23274,6 +23296,24 @@
       add("physical", 15, "Logged a session");
       if ((s.rating || 0) >= 4) add("cognitive", 10, "Rated the session highly");
     });
+    // 2026-08-11 (Wellness v2, "positive factors first" phase): the three sources
+    // below all had a real, existing signal to auto-detect from -- no new manual
+    // logging needed except sleep hours (§4b), which mirrors the weight-log's own
+    // upsert-by-date pattern (see HEALTH.sleep below).
+    const { done: dpDone, total: dpTotal } = dayProgress(TODAY);
+    if (dpTotal) {
+      const ratio = dpDone / dpTotal;
+      add("cognitive", Math.round(ratio * 15), "Task completion");
+      add("emotional", Math.round(ratio * 10), "Task completion");
+    }
+    const dateNightRtn = ROUTINE_TASKS.find(t => t.role === "date-night");
+    if (dateNightRtn && routineOccursOn(dateNightRtn, TODAY) && isDone(`rt-${dateNightRtn.id}-${keyOf(TODAY)}`)) {
+      add("physical", 5, "Date night"); add("emotional", 15, "Date night"); add("cognitive", 5, "Date night");
+    }
+    const sleepToday = (HEALTH.sleep || []).find(s => s.date === keyOf(TODAY));
+    if (sleepToday && sleepToday.hours >= 7) {
+      add("physical", 20, "Slept 7h+"); add("cognitive", 20, "Slept 7h+"); add("emotional", 12, "Slept 7h+");
+    }
     ["physical", "cognitive", "emotional"].forEach(ax => { boosts[ax] = Math.max(0, Math.min(100, Math.round(boosts[ax]))); });
     return { boosts, why };
   }
@@ -27881,6 +27921,16 @@
     const existing = HEALTH.weights.find(x => x.date === k);
     if (existing) existing.kg = kg; else HEALTH.weights.push({ id: uid(), date: k, kg });
     saveHealth(); e.target.reset(); renderHealth();
+  });
+  document.getElementById("sleepForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const hours = parseFloat(document.getElementById("sleepVal").value);
+    if (!isFinite(hours)) return;
+    const k = document.getElementById("sleepDate").value || todayISO();
+    const existing = HEALTH.sleep.find(x => x.date === k);
+    if (existing) existing.hours = hours; else HEALTH.sleep.push({ id: uid(), date: k, hours });
+    saveHealth(); e.target.reset(); renderHealth();
+    try { renderBoostWidget(); } catch (err) {}
   });
   document.getElementById("bfForm").addEventListener("submit", e => {
     e.preventDefault();
