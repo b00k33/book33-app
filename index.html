@@ -30424,6 +30424,19 @@
     return { icon: cluster, rest: title.slice(cluster.length).replace(/^\s+/, "") };
   }
   function openRtnForm(task, focusField) {
+    // 2026-08-11 ("edit routine from hair page, it glitches"): a DIRECT open (Hair
+    // page, calendar block, fitness link) can land while a DIFFERENT routine is still
+    // inline-docked in the table/list/board from before this navigation -- openRtnFormInline
+    // always clears a prior rtnInlineId before setting its own, but these direct call
+    // sites never did, so the stale id survived. That skipped this function's own
+    // placeRtnForm(true) call below (see its guard), and the next render's
+    // rtnInlineDetach()/rtnInlineRedock() pair (view mismatch) left #rtnAddForm
+    // stranded as a bare child of <body> -- background page renders, but the routine
+    // sheet the user is looking at is float appended after everything else and out of
+    // its normal container, and it's this floating leftover that reads as "blank
+    // page behind the sheet". Closing out any inline edit for a DIFFERENT task first
+    // (matching openRtnFormInline's own discipline) restores the direct-open contract.
+    if (rtnInlineId != null && rtnInlineId !== (task ? task.id : RTN_NEW)) rtnCloseInline();
     if (!rtnInlineId) rtnAddRow.hidden = true;   // inline mode leaves the top "+ Add routine" banner alone
     rtnForm.hidden = false;
     document.getElementById("rtnDeleteBtn").hidden = !task;
