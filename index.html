@@ -3549,17 +3549,130 @@
      comment) land as direct grid items, packing "+ Add sub-task" in as the next tile
      instead of a separate full-width row below. SUPERSEDES the old one-per-row list +
      its Step/Minutes column header (a header only made sense for aligned single-column
-     rows, not independent tiles). */
-  .rtn-sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; counter-reset: substep; }
-  .rtn-sub-list { display: contents; }
-  .rtn-sub-row { display: flex; align-items: center; gap: 6px; counter-increment: substep;
+     rows, not independent tiles).
+     2026-08-11 (grouped sub-tasks brief): #rtnSubList is no longer the grid itself --
+     it now stacks one or more .rtn-sub-group sections (each with its OWN 2-col
+     .rtn-sub-group-grid for that group's tiles). counter-reset stays up here on the
+     outer list so numbering is continuous DOM-order across group boundaries -- group
+     membership is otherwise purely positional (whichever .rtn-sub-group-grid a row
+     physically sits in), so nothing else needs to track it separately. A routine with
+     zero explicit groups renders one section (.rtn-sub-group-ungrouped) with its
+     header hidden via .rtn-sub-group-headless -- pixel-identical to the old flat list. */
+  .rtn-sub-list { display: block; counter-reset: substep; margin-bottom: 10px; }
+  .rtn-sub-group { margin-bottom: 10px; }
+  .rtn-sub-group:last-child { margin-bottom: 0; }
+  .rtn-sub-group-head { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; min-height: 22px; }
+  .rtn-sub-group-headless .rtn-sub-group-head { display: none; }
+  .rtn-sub-group-toggle { flex: none; border: none; background: none; color: var(--ink-soft);
+    font-size: 11px; cursor: pointer; padding: 2px; line-height: 1; }
+  .rtn-sub-group-icon { flex: none; width: 22px; font: inherit; font-size: 13px; text-align: center;
+    padding: 2px 0; border: none; border-radius: 6px; background: none; color: var(--ink); }
+  .rtn-sub-group-icon:focus { background: var(--field-bg); outline: 1px solid var(--note-line); }
+  .rtn-sub-group-name { flex: 1; min-width: 0; font: inherit; font-size: 11px; font-weight: 700;
+    letter-spacing: .03em; text-transform: uppercase; padding: 2px 4px; border: none; border-radius: 6px;
+    background: none; color: var(--ink-soft); }
+  .rtn-sub-group-name:focus { background: var(--field-bg); color: var(--ink); outline: 1px solid var(--note-line); }
+  .rtn-sub-group-ungrouped .rtn-sub-group-name { pointer-events: none; }
+  .rtn-sub-group-total { flex: none; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .rtn-sub-group-del { flex: none; border: none; background: none; color: var(--ink-faint); cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 6px; }
+  .rtn-sub-group-del:hover { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 12%, transparent); }
+  .rtn-sub-group-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .rtn-sub-group-grid.rtn-sub-group-collapsed { display: none; }
+  .rtn-sub-add-ingroup { height: 36px; box-sizing: border-box; border: 1px dashed var(--margin-rule); border-radius: 10px;
+    background: none; color: var(--margin-rule); font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .rtn-sub-add-ingroup:hover { background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
+  .rtn-sub-actions { display: flex; gap: 7px; margin-top: 2px; }
+  .rtn-sub-actions .add-btn { flex: 1; }
+  .rtn-sub-row { display: flex; align-items: center; gap: 5px; counter-increment: substep;
     height: 36px; box-sizing: border-box;
     background: color-mix(in oklab, var(--ink) 4%, var(--field-bg)); border: 1px solid var(--note-line);
     border-radius: 10px; padding: 0 6px; min-width: 0; }
+  /* drag-reorder: the grip is the ONLY drag/touch surface (touch-action:none stops
+     the page stealing the gesture as a scroll -- see project memory on real-phone
+     touch-drag traps), so the rest of the row keeps normal tap/type/scroll behaviour.
+     Pointer events (not native HTML5 draggable) because this is a touch-first app and
+     native drag-and-drop never fires from touch without a polyfill. */
+  .rtn-sub-grip { flex: none; width: 13px; color: var(--ink-faint); font-size: 11px; cursor: grab;
+    touch-action: none; user-select: none; display: flex; align-items: center; justify-content: center; }
+  .rtn-sub-row.rtn-sub-row-dragging { opacity: .35; }
+  .rtn-sub-ghost { position: fixed; z-index: 999; pointer-events: none; opacity: .92;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35); }
   .rtn-sub-num { flex: none; width: 19px; height: 19px; border-radius: 50%; display: grid; place-items: center;
     font-size: 10px; font-weight: 700; color: var(--nav-active); font-variant-numeric: tabular-nums;
     background: color-mix(in oklab, var(--nav-active) 16%, transparent); }
   .rtn-sub-num::before { content: counter(substep); }
+  /* ================= CBD Work clinic-ops board (2026-08-11 brief) =================
+     Work green for clinic chrome (tile head, day-strip active state), fitness green
+     for done-state (ticks + progress rings) -- a deliberate split so "this belongs to
+     Work" and "this is finished" read as two different signals, not one colour doing
+     both jobs. Everything else (gold add-links, gold-tint day tags) is the app's
+     existing central variables -- nothing hardcoded, no orange anywhere. */
+  .cbd-head { position: relative; }
+  .cbd-progress { margin-top: 4px; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .cbd-empty { text-align: center; padding: 48px 20px; color: var(--ink-soft); }
+  .cbd-empty p { margin: 0 0 16px; max-width: 40ch; margin-left: auto; margin-right: auto; }
+  .cbd-daystrip { display: flex; gap: 6px; margin-bottom: 12px; }
+  .cbd-day-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-height: 44px; padding: 6px 0; border: 1px solid var(--note-line); border-radius: var(--radius-sm);
+    background: var(--field-bg); color: var(--ink-soft); cursor: pointer; }
+  .cbd-day-l { font-size: 12px; font-weight: 700; }
+  .cbd-day-n { font-size: 10px; font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+  .cbd-day-btn.today { border-color: var(--accent-seed); }
+  .cbd-day-btn.active { background: var(--work-seed); border-color: var(--work-seed); color: #fff; }
+  .cbd-day-btn.active .cbd-day-n { color: rgba(255,255,255,.78); }
+  .cbd-phase-filter { flex-wrap: wrap; margin-bottom: 16px; }
+  .cbd-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .cbd-tiles { grid-template-columns: 1fr; } }
+  .cbd-tile { background: var(--note-bg); border: 1px solid var(--note-line); border-radius: var(--radius-md, 14px);
+    padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .cbd-tile-head { display: flex; align-items: center; gap: 8px; }
+  .cbd-tile-icon { font-size: 15px; flex: none; }
+  .cbd-tile-name { flex: 1; min-width: 0; font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .03em;
+    text-transform: uppercase; color: var(--work-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    background: none; border: none; padding: 2px 4px; border-radius: 6px; }
+  input.cbd-tile-name:focus { background: var(--field-bg); outline: 1px solid var(--note-line); color: var(--ink); }
+  .cbd-tile-name-fixed { color: var(--ink-soft); }
+  .cbd-tile-ring { --pct: 0; flex: none; width: 32px; height: 32px; border-radius: 50%; position: relative;
+    display: grid; place-items: center;
+    background: conic-gradient(var(--cat-personal-fitness) calc(var(--pct) * 1%), var(--note-line) 0); }
+  .cbd-tile-ring::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--note-bg); }
+  .cbd-tile-ring span { position: relative; font-size: 9px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .cbd-tile-rows { display: flex; flex-direction: column; gap: 4px; }
+  .cbd-duty-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 8px; cursor: pointer; min-height: 30px; }
+  .cbd-duty-row:hover { background: color-mix(in oklab, var(--ink) 4%, transparent); }
+  .cbd-duty-text { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cbd-duty-row.done .cbd-duty-text { text-decoration: line-through; color: var(--ink-faint); }
+  .cbd-phase-tag { flex: none; font-size: 12px; }
+  .cbd-day-tag { flex: none; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 999px;
+    background: color-mix(in oklab, var(--accent-seed) 18%, transparent); color: var(--accent-seed); }
+  .cbd-duty-min { flex: none; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .cbd-tile-nomatch { font-size: 12px; color: var(--ink-faint); font-style: italic; padding: 4px 2px; }
+  .cbd-tile-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    border-top: 1px solid var(--note-line); padding-top: 8px; }
+  .cbd-tile-add { border: none; background: none; color: var(--accent-seed); font-size: 12px; font-weight: 700; cursor: pointer; padding: 4px; }
+  .cbd-tile-min { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .cbd-tile-addgroup { border: 1px dashed var(--margin-rule); background: none; color: var(--margin-rule);
+    border-radius: var(--radius-md, 14px); min-height: 64px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; cursor: pointer; }
+  /* fitness-green ticks are scoped to THIS page only (an ID beats the app-wide
+     ".page .tick:checked{background:var(--margin-rule)}" gold default) -- everywhere
+     else in the app a tick stays gold; only here does "done" mean clinic-green. */
+  #cbdWorkPage .tick { border-color: var(--cat-personal-fitness); }
+  #cbdWorkPage .tick:checked { background: var(--cat-personal-fitness); }
+  /* inline duty add/edit mini-form -- same field-stack idiom as every other compact
+     add-form in this app (Sub-category, Also-runs-on, etc.), scoped to one tile so
+     opening it never disturbs the rest of the board. */
+  .cbd-editor { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px dashed var(--note-line); }
+  .cbd-ed-name, .cbd-ed-min { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--note-line);
+    border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); width: 100%; }
+  .cbd-ed-row2 { display: flex; gap: 8px; align-items: center; }
+  .cbd-ed-row2 .cbd-ed-min { width: 64px; flex: none; }
+  .cbd-ed-row2 .cbd-ed-phase { flex: 1; }
+  .cbd-ed-phase, .cbd-ed-freq, .cbd-ed-days { flex-wrap: wrap; }
+  .cbd-ed-days[hidden] { display: none; }
+  .cbd-ed-acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .cbd-ed-del { margin-right: auto; color: var(--power-bad); }
   /* 2026-08-02 (Linh, real-phone screenshot: "hard to read and disportionate... the
      inconsistencies make me wanna cry"): the generic ".field input[type=...] { width:
      100% }" rule a few hundred lines down (0,2,1 specificity — the [type] attribute
@@ -3582,7 +3695,7 @@
     background: none; color: var(--margin-rule); font-size: 13px; display: flex; align-items: center; justify-content: center; }
   .rtn-sub-add:hover { background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
   .rtn-sub-total { margin-top: 8px; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 600; }
-  @media (max-width: 640px) { .rtn-sub-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) { .rtn-sub-group-grid { grid-template-columns: 1fr; } }
   .rtn-sched-extra-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
   .rtn-sched-extra-row { border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   .rtn-sched-extra-row .track-picker { flex-wrap: wrap; }
@@ -4774,9 +4887,9 @@
   #rtnAddForm.rtn-inline-mode #rtnFitLinkField { flex: 1 1 32%; min-width: 0; }
   /* the sub-tasks tile grid is normally 2-up at the form's full ~640px width; halved
      to ~300px in its new paired slot, 2-up would squeeze each tile to ~140px --
-     force 1-up here specifically rather than fight the shared .rtn-sub-grid rule
+     force 1-up here specifically rather than fight the shared .rtn-sub-group-grid rule
      (still 2-up everywhere else it's used, e.g. the Add-routine drawer at full width). */
-  #rtnSubTasksField .rtn-sub-grid { grid-template-columns: 1fr; }
+  #rtnSubTasksField .rtn-sub-group-grid { grid-template-columns: 1fr; }
   #rtnAddForm.rtn-inline-mode .rtn-g6 { min-width: 140px; }
   /* 2026-08-08 (Start+End brief): derived duration, shown only once both times are
      filled (updateRtnDurReadout) -- fitness green per spec, reusing the app's one
@@ -11290,19 +11403,16 @@
         </div>
         <div class="field rtn-g6" id="rtnSubTasksField">
           <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
-          <!-- 2026-08-06 (tessellate spec, "narrow, TWO PER ROW"): #rtnSubList becomes
-               display:contents so its .rtn-sub-row tiles lay out as direct children of
-               .rtn-sub-grid's 2-col grid, right alongside #rtnSubAdd -- the "+ Add
-               sub-task" tile is the next grid item in DOM order, so it packs in as the
-               next tile instead of a separate full-width row below. #rtnSubAdd can't
-               move INSIDE #rtnSubList itself: clearRtnSubRows() does
-               rtnSubList.innerHTML = "", which would delete it. The old Step/Minutes
-               column header (#rtnSubHead) assumed the previous single-column row
-               layout -- meaningless once each tile is self-contained, so it's gone
-               along with its updateRtnSubTotal() toggle. -->
-          <div class="rtn-sub-grid">
-            <div id="rtnSubList" class="rtn-sub-list"></div>
+          <!-- 2026-08-11 (grouped sub-tasks brief): #rtnSubList now holds one or more
+               .rtn-sub-group sections (each its own 2-col .rtn-sub-group-grid of tiles)
+               instead of being the grid itself -- see the CSS comment by .rtn-sub-list
+               for why group membership needs no separate bookkeeping. #rtnSubAdd/
+               #rtnSubAddGroup moved OUT into their own row below #rtnSubList so
+               clearRtnSubRows()'s rtnSubList.innerHTML="" can't delete them. -->
+          <div id="rtnSubList" class="rtn-sub-list"></div>
+          <div class="rtn-sub-actions">
             <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
+            <button type="button" class="add-btn rtn-sub-addgroup" id="rtnSubAddGroup">+ Add group</button>
           </div>
           <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
         </div>
@@ -11435,6 +11545,30 @@
         <button type="submit" class="btn-save">Add section</button>
       </div>
     </form>
+  </div>
+
+  <!-- ================= CBD WORK (clinic ops board) ================= -->
+  <!-- 2026-08-11 (grouped sub-tasks + CBD Work brief): NOT a separate data silo --
+       this page reads/writes the SAME "CBD Work" routine's subtasks (group/text/min
+       from Part A, plus freq/days/phase added here) that the routine editor already
+       manages. Found purely by matching her own routine's title (see
+       findCbdWorkRoutine) -- there's no dedicated id, so it degrades gracefully to
+       the empty state below if she hasn't made that routine yet on a given device. -->
+  <div class="page" id="cbdWorkPage" hidden>
+    <div class="bd-head cbd-head">
+      <div class="eyebrow">One list, ticked as you go</div>
+      <h1>🩺 CBD Work</h1>
+      <div class="cbd-progress" id="cbdWorkProgress"></div>
+    </div>
+    <div id="cbdWorkEmpty" class="cbd-empty" hidden>
+      <p>No "CBD Work" routine yet on this device — create one and its sub-tasks (grouped, from the routine editor) become this board.</p>
+      <button type="button" class="add-btn add-btn-gold" id="cbdWorkCreateBtn">+ Create CBD Work routine</button>
+    </div>
+    <div id="cbdWorkBody" hidden>
+      <div class="cbd-daystrip" id="cbdDayStrip" role="group" aria-label="Day"></div>
+      <div class="track-picker cbd-phase-filter" id="cbdPhaseFilter" role="group" aria-label="Phase"></div>
+      <div class="cbd-tiles" id="cbdTiles"></div>
+    </div>
   </div>
 
   <!-- ================= CPD POINTS ================= -->
@@ -13328,6 +13462,13 @@
   }
   function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} }
   let ROUTINE_TASKS = loadRoutines();
+  // 2026-08-11 (CBD Work clinic-ops brief): strips a leading hand-typed icon/emoji
+  // (same convention splitRtnIconTitle parses for the editor's Name row) and
+  // lower-cases the rest, so "🩺 CBD Work" and "CBD Work" both resolve to the same
+  // routine -- there's no dedicated flag marking a routine as "the ops board one",
+  // it's found purely by matching her own routine title.
+  function normTitle(t) { return (t || "").replace(/^[^\w\s]+\s*/u, "").trim().toLowerCase(); }
+  function findCbdWorkRoutine() { return ROUTINE_TASKS.find(r => normTitle(r.title) === "cbd work"); }
   // 2026-08-09 (STEP 3, "Book33 -- Add box, toggle, undo, cycle fix + day view" job,
   // Linh: "keep deleted routines in an Archived/Recently deleted list where I can
   // restore any of them at any time"): the permanent home for a deleted routine --
@@ -16193,6 +16334,7 @@
         { id: "today", label: "Today" } ] },
     // Work: the clinic — dispensary, professional development, procedures
     { id: "work", label: "CH4", short: "CH4", icon: "🩺", views: [
+        { id: "cbdWork", label: "CBD Work" },
         { id: "cpd", label: "CPD Points" },
         { id: "workManual", label: "Work Manual" } ] },
   ];
@@ -24709,6 +24851,7 @@
         <td class="rtg-muted"${chained ? "" : ` data-rtg-cell="rtnStart"`}>${timeLabel}</td>
         <td class="rtg-auto-td"><button type="button" class="rtg-auto-switch${calOn ? " on" : ""}" data-rtg-cal="${esc(t.id)}" role="switch" aria-checked="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button></td>
         <td class="rtg-acts-td"><div class="rtg-acts">
+          ${normTitle(t.title) === "cbd work" ? `<button type="button" class="rtg-ic rtg-acts-quick" data-rtg-board title="Open ops board" aria-label="Open CBD Work ops board">🩺</button>` : ""}
           <button type="button" class="rtg-ic rtg-acts-quick" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
           <button type="button" class="rtg-ic rtg-ic-del rtg-acts-quick" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
           <button type="button" class="rtg-ic" data-rtg-more="${esc(t.id)}" title="More actions" aria-label="More actions for ${esc(t.title)}" aria-haspopup="true">⋯</button>
@@ -24844,6 +24987,8 @@
       if (t) { t.calOn = t.calOn === false ? true : false; saveRoutines(); renderRoutines(); renderDay(); }
       return;
     }
+    const boardBtn = e.target.closest("[data-rtg-board]");
+    if (boardBtn) { state.view = "cbdWork"; render(); return; }
     const moreBtn = e.target.closest("[data-rtg-more]");
     if (moreBtn) { openRtnMoreMenu(moreBtn.dataset.rtgMore, moreBtn); return; }
     const editIcon = e.target.closest("[data-rtg-edit]");
@@ -25364,6 +25509,253 @@
   });
 
   /* ============================================================
+     CBD WORK — clinic ops board (2026-08-11 brief). Not a separate
+     data silo: reads/writes the "CBD Work" routine's own subtasks
+     (group from Part A, freq/days/phase added here) via the SAME
+     book33-routines store, and ticks against the SAME book33-done
+     map every other checklist in the app already uses.
+     ============================================================ */
+  const CBD_PHASE_LABEL = { opening: "🔓 Opening", during: "🩺 During", closing: "🔒 Closing" };
+  const CBD_PHASE_ORDER = ["opening", "during", "closing"];
+  const CBD_MONDAY_FIRST = i => (i + 6) % 7;   // Date#getDay() (Sun=0) -> WD_FULL index (Mon=0)
+  let cbdSelectedDay = null;      // WD_FULL index, null until first render (defaults to today)
+  let cbdPhaseFilter = "all";     // "all" | "opening" | "during" | "closing"
+  let cbdOpenGroup = null;        // group label the inline mini-form is open under, or null
+  let cbdOpenDutySlug = null;     // slug of the duty being edited, or null (add-mode)
+  function dutySlug(s) { return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x"; }
+  function cbdDuties(routine) { return Array.isArray(routine.subtasks) ? routine.subtasks.filter(s => s && s.text) : []; }
+  function cbdDutyId(routine, duty, dateKey) { return `cbdwork-${routine.id}-${dutySlug((duty.group || "") + "-" + duty.text)}-${dateKey}`; }
+  // "shift"/"as-needed" duties are relevant every day the board is open (the DAY
+  // STRIP is a viewing lens, not a schedule); only "weekly" duties are actually
+  // gated to their own saved days (blank days = every day, same as the default
+  // free-standing weekly routine already behaves elsewhere in this app).
+  function cbdRelevantOnDay(duty, weekday) {
+    if (duty.freq !== "weekly") return true;
+    const days = Array.isArray(duty.days) ? duty.days : [];
+    return days.length === 0 || days.includes(weekday);
+  }
+  function cbdGroupSections(routine) {
+    const order = Array.isArray(routine.groupOrder) ? routine.groupOrder.slice() : [];
+    cbdDuties(routine).forEach(d => { if (d.group && !order.includes(d.group)) order.push(d.group); });
+    return order;
+  }
+  function cbdDutyEditorHtml(duty) {
+    const phase = duty?.phase || "", freq = duty?.freq || "shift";
+    const days = Array.isArray(duty?.days) ? duty.days : [];
+    return `<div class="cbd-editor">
+      <input type="text" class="cbd-ed-name" placeholder="Duty — e.g. Wipe down beds" value="${esc(duty?.text || "")}">
+      <div class="cbd-ed-row2">
+        <input type="number" class="cbd-ed-min" min="0" step="1" placeholder="min" value="${duty?.min || ""}">
+        <div class="track-picker cbd-ed-phase" role="group" aria-label="Phase">
+          <button type="button" class="track-opt" data-cbd-phase-opt="" aria-pressed="${phase === ""}">—</button>
+          <button type="button" class="track-opt" data-cbd-phase-opt="opening" aria-pressed="${phase === "opening"}">🔓</button>
+          <button type="button" class="track-opt" data-cbd-phase-opt="during" aria-pressed="${phase === "during"}">🩺</button>
+          <button type="button" class="track-opt" data-cbd-phase-opt="closing" aria-pressed="${phase === "closing"}">🔒</button>
+        </div>
+      </div>
+      <div class="track-picker cbd-ed-freq" role="group" aria-label="Repeats">
+        <button type="button" class="track-opt" data-cbd-freq-opt="shift" aria-pressed="${freq === "shift"}">Every shift</button>
+        <button type="button" class="track-opt" data-cbd-freq-opt="weekly" aria-pressed="${freq === "weekly"}">Weekly</button>
+        <button type="button" class="track-opt" data-cbd-freq-opt="asneeded" aria-pressed="${freq === "asneeded"}">As needed</button>
+      </div>
+      <div class="track-picker cbd-ed-days" role="group" aria-label="Which days" ${freq === "weekly" ? "" : "hidden"}>
+        ${WD_FULL.map((wd, i) => `<button type="button" class="track-opt" data-cbd-day-opt="${i}" aria-pressed="${days.includes(i)}">${wd[0]}</button>`).join("")}
+      </div>
+      <div class="cbd-ed-acts">
+        ${duty ? `<button type="button" class="btn-cancel cbd-ed-del" data-cbd-ed-del="1">Delete</button>` : ""}
+        <button type="button" class="btn-cancel" data-cbd-ed-cancel="1">Cancel</button>
+        <button type="button" class="btn-save" data-cbd-ed-save="1">Save</button>
+      </div>
+    </div>`;
+  }
+  function renderCbdWork() {
+    const routine = findCbdWorkRoutine();
+    const emptyEl = document.getElementById("cbdWorkEmpty");
+    const bodyEl = document.getElementById("cbdWorkBody");
+    if (!routine) { emptyEl.hidden = false; bodyEl.hidden = true; document.getElementById("cbdWorkProgress").textContent = ""; return; }
+    emptyEl.hidden = true; bodyEl.hidden = false;
+
+    const todayWeekday = CBD_MONDAY_FIRST(TODAY.getDay());
+    if (cbdSelectedDay == null) cbdSelectedDay = todayWeekday;
+    const selectedDate = addDays(startOfWeek(TODAY), cbdSelectedDay);
+    const dateKey = keyOf(selectedDate);
+    const allDuties = cbdDuties(routine);
+    const todayDuties = allDuties.filter(d => cbdRelevantOnDay(d, cbdSelectedDay));
+
+    document.getElementById("cbdDayStrip").innerHTML = WD_FULL.map((wd, i) => {
+      const n = allDuties.filter(d => cbdRelevantOnDay(d, i)).length;
+      return `<button type="button" class="cbd-day-btn${i === cbdSelectedDay ? " active" : ""}${i === todayWeekday ? " today" : ""}" data-cbd-day="${i}" aria-pressed="${i === cbdSelectedDay}">
+        <span class="cbd-day-l">${wd[0]}</span><span class="cbd-day-n">${n}</span>
+      </button>`;
+    }).join("");
+
+    const phaseCounts = { opening: 0, during: 0, closing: 0 };
+    todayDuties.forEach(d => { if (phaseCounts[d.phase] != null) phaseCounts[d.phase]++; });
+    document.getElementById("cbdPhaseFilter").innerHTML =
+      `<button type="button" class="track-opt" data-cbd-phase="all" aria-pressed="${cbdPhaseFilter === "all"}">All · ${todayDuties.length}</button>` +
+      CBD_PHASE_ORDER.map(p => `<button type="button" class="track-opt" data-cbd-phase="${p}" aria-pressed="${cbdPhaseFilter === p}">${CBD_PHASE_LABEL[p]} · ${phaseCounts[p]}</button>`).join("");
+
+    const sections = cbdGroupSections(routine);
+    let doneTotal = 0, allTotal = 0, minLeft = 0;
+    const tilesHtml = sections.map(label => {
+      const groupAll = allDuties.filter(d => (d.group || "") === label);
+      const groupToday = groupAll.filter(d => cbdRelevantOnDay(d, cbdSelectedDay));
+      const doneCount = groupToday.filter(d => isDone(cbdDutyId(routine, d, dateKey))).length;
+      doneTotal += doneCount; allTotal += groupToday.length;
+      minLeft += groupToday.filter(d => !isDone(cbdDutyId(routine, d, dateKey))).reduce((a, d) => a + (d.min || 0), 0);
+      const pct = groupToday.length ? Math.round(doneCount / groupToday.length * 100) : 0;
+      const groupMin = groupToday.reduce((a, d) => a + (d.min || 0), 0);
+      const meta = (routine.groupMeta && routine.groupMeta[label]) || {};
+      const shownRows = groupToday.filter(d => cbdPhaseFilter === "all" || d.phase === cbdPhaseFilter);
+      const rowsHtml = shownRows.map(d => {
+        const id = cbdDutyId(routine, d, dateKey);
+        const done = isDone(id);
+        const slug = dutySlug(d.text);
+        const dayTag = d.freq === "weekly" && Array.isArray(d.days) && d.days.length
+          ? `<span class="cbd-day-tag">${d.days.map(i => WD_FULL[i][0]).join("")}</span>` : "";
+        const phaseTag = d.phase ? `<span class="cbd-phase-tag">${CBD_PHASE_LABEL[d.phase].split(" ")[0]}</span>` : "";
+        return `<label class="cbd-duty-row${done ? " done" : ""}" data-cbd-duty-edit="${esc(label)}::${esc(slug)}">
+          <input type="checkbox" class="tick" data-cbd-tick="${esc(id)}" ${done ? "checked" : ""} aria-label="Mark ${esc(d.text)} done">
+          <span class="cbd-duty-text">${esc(d.text)}</span>
+          ${phaseTag}${dayTag}
+          <span class="cbd-duty-min">${d.min || 0}m</span>
+        </label>`;
+      }).join("") || `<div class="cbd-tile-nomatch">Nothing here${cbdPhaseFilter === "all" ? " today" : " for this phase"}</div>`;
+      const openDuty = cbdOpenGroup === label && cbdOpenDutySlug ? groupAll.find(d => dutySlug(d.text) === cbdOpenDutySlug) : null;
+      const editorHtml = cbdOpenGroup === label ? cbdDutyEditorHtml(cbdOpenDutySlug ? openDuty : null) : "";
+      const nameHtml = label
+        ? `<input type="text" class="cbd-tile-name" value="${esc(label)}" data-cbd-tile-name="${esc(label)}">`
+        : `<span class="cbd-tile-name cbd-tile-name-fixed">Ungrouped</span>`;
+      return `<div class="cbd-tile" data-cbd-tile="${esc(label)}">
+        <div class="cbd-tile-head">
+          ${meta.icon ? `<span class="cbd-tile-icon">${esc(meta.icon)}</span>` : ""}
+          ${nameHtml}
+          <span class="cbd-tile-ring" style="--pct:${pct}" aria-label="${doneCount} of ${groupToday.length} done"><span>${doneCount}/${groupToday.length}</span></span>
+        </div>
+        <div class="cbd-tile-rows">${rowsHtml}</div>
+        <div class="cbd-tile-foot">
+          <button type="button" class="cbd-tile-add" data-cbd-add-group="${esc(label)}">+ Add</button>
+          <span class="cbd-tile-min">${groupMin} min</span>
+        </div>
+        ${editorHtml}
+      </div>`;
+    }).join("") + `<button type="button" class="cbd-tile cbd-tile-addgroup" id="cbdAddGroupTile">+ Add group</button>`;
+    document.getElementById("cbdTiles").innerHTML = tilesHtml;
+    document.getElementById("cbdWorkProgress").textContent = `${doneTotal} / ${allTotal} done · ${minLeft} min left`;
+  }
+  document.getElementById("cbdWorkCreateBtn").addEventListener("click", () => {
+    ROUTINE_TASKS.push({ id: uid(), title: "🩺 CBD Work", track: "work", freq: "weekly", weekdays: [0, 1, 2, 3, 4], calOn: false, note: "" });
+    saveRoutines(); renderCbdWork();
+  });
+  document.getElementById("cbdWorkPage").addEventListener("click", e => {
+    const dayBtn = e.target.closest("[data-cbd-day]");
+    if (dayBtn) { cbdSelectedDay = +dayBtn.dataset.cbdDay; renderCbdWork(); return; }
+    const phaseBtn = e.target.closest("[data-cbd-phase]");
+    if (phaseBtn) { cbdPhaseFilter = phaseBtn.dataset.cbdPhase; renderCbdWork(); return; }
+    const addGroupTile = e.target.closest("#cbdAddGroupTile");
+    if (addGroupTile) {
+      const routine = findCbdWorkRoutine(); if (!routine) return;
+      // auto-named like Part A's "+ Add group" (Group 1, Group 2…) -- she renames it
+      // right there in the tile header (.cbd-tile-name is a live input, see the
+      // change handler below), then the add-duty editor opens under it immediately
+      // so the first duty doesn't need a second tap to get to.
+      const n = cbdGroupSections(routine).filter(Boolean).length + 1;
+      const label = `Group ${n}`;
+      routine.groupOrder = [...(routine.groupOrder || []), label];
+      saveRoutines();
+      cbdOpenGroup = label; cbdOpenDutySlug = null;
+      renderCbdWork();
+      return;
+    }
+    const addBtn = e.target.closest("[data-cbd-add-group]");
+    if (addBtn) { cbdOpenGroup = addBtn.dataset.cbdAddGroup; cbdOpenDutySlug = null; renderCbdWork(); return; }
+    const dutyLabel = e.target.closest("[data-cbd-duty-edit]");
+    if (dutyLabel && !e.target.closest(".tick")) {
+      const [g, slug] = dutyLabel.dataset.cbdDutyEdit.split("::");
+      cbdOpenGroup = g; cbdOpenDutySlug = slug; renderCbdWork();
+      return;
+    }
+    const cancelBtn = e.target.closest("[data-cbd-ed-cancel]");
+    if (cancelBtn) { cbdOpenGroup = null; cbdOpenDutySlug = null; renderCbdWork(); return; }
+    const phaseOpt = e.target.closest("[data-cbd-phase-opt]");
+    if (phaseOpt) { phaseOpt.parentElement.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(b === phaseOpt))); return; }
+    const freqOpt = e.target.closest("[data-cbd-freq-opt]");
+    if (freqOpt) {
+      freqOpt.parentElement.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(b === freqOpt)));
+      const daysBox = freqOpt.closest(".cbd-editor").querySelector(".cbd-ed-days");
+      daysBox.hidden = freqOpt.dataset.cbdFreqOpt !== "weekly";
+      return;
+    }
+    const dayOpt = e.target.closest("[data-cbd-day-opt]");
+    if (dayOpt) { dayOpt.setAttribute("aria-pressed", String(dayOpt.getAttribute("aria-pressed") !== "true")); return; }
+    const delBtn = e.target.closest("[data-cbd-ed-del]");
+    if (delBtn) {
+      const routine = findCbdWorkRoutine(); if (!routine) return;
+      routine.subtasks = (routine.subtasks || []).filter(d => !(((d.group || "") === cbdOpenGroup) && dutySlug(d.text) === cbdOpenDutySlug));
+      saveRoutines();
+      cbdOpenGroup = null; cbdOpenDutySlug = null; renderCbdWork();
+      return;
+    }
+    const saveBtn = e.target.closest("[data-cbd-ed-save]");
+    if (saveBtn) {
+      const routine = findCbdWorkRoutine(); if (!routine) return;
+      const editor = saveBtn.closest(".cbd-editor");
+      const text = editor.querySelector(".cbd-ed-name").value.trim();
+      if (!text) return;
+      const min = Math.max(0, parseInt(editor.querySelector(".cbd-ed-min").value, 10) || 0);
+      const phase = editor.querySelector("[data-cbd-phase-opt][aria-pressed='true']")?.dataset.cbdPhaseOpt || "";
+      const freq = editor.querySelector("[data-cbd-freq-opt][aria-pressed='true']")?.dataset.cbdFreqOpt || "shift";
+      const days = [...editor.querySelectorAll("[data-cbd-day-opt][aria-pressed='true']")].map(b => +b.dataset.cbdDayOpt);
+      const duty = { text, group: cbdOpenGroup || undefined };
+      if (min) duty.min = min;
+      if (phase) duty.phase = phase;
+      if (freq !== "shift") duty.freq = freq;
+      if (freq === "weekly" && days.length) duty.days = days;
+      if (!Array.isArray(routine.subtasks)) routine.subtasks = [];
+      if (cbdOpenDutySlug) {
+        const idx = routine.subtasks.findIndex(d => ((d.group || "") === cbdOpenGroup) && dutySlug(d.text) === cbdOpenDutySlug);
+        if (idx !== -1) routine.subtasks[idx] = { ...routine.subtasks[idx], ...duty }; else routine.subtasks.push(duty);
+      } else {
+        routine.subtasks.push(duty);
+      }
+      if (cbdOpenGroup && (!Array.isArray(routine.groupOrder) || !routine.groupOrder.includes(cbdOpenGroup))) {
+        routine.groupOrder = [...(routine.groupOrder || []), cbdOpenGroup];
+      }
+      saveRoutines();
+      cbdOpenGroup = null; cbdOpenDutySlug = null; renderCbdWork();
+      return;
+    }
+  });
+  document.getElementById("cbdWorkPage").addEventListener("change", e => {
+    const tickBox = e.target.closest("[data-cbd-tick]");
+    if (tickBox) {
+      celebrateIfDone(tickBox, tickBox.checked);
+      toggleDone(tickBox.dataset.cbdTick, tickBox.checked);
+      renderCbdWork();
+      return;
+    }
+    // renamed straight off the tile header, same "no separate rename step" reasoning
+    // as the routine editor's own .rtn-sub-group-name -- updates the group's entry
+    // in groupOrder, every duty currently tagged with the old label, and its
+    // groupMeta key (icon/collapsed), all in one go so nothing goes orphaned.
+    const nameInput = e.target.closest("[data-cbd-tile-name]");
+    if (nameInput) {
+      const routine = findCbdWorkRoutine(); if (!routine) return;
+      const oldLabel = nameInput.dataset.cbdTileName;
+      const newLabel = nameInput.value.trim();
+      if (!newLabel || newLabel === oldLabel) { renderCbdWork(); return; }
+      if (Array.isArray(routine.groupOrder)) routine.groupOrder = routine.groupOrder.map(g => g === oldLabel ? newLabel : g);
+      (routine.subtasks || []).forEach(d => { if ((d.group || "") === oldLabel) d.group = newLabel; });
+      if (routine.groupMeta && routine.groupMeta[oldLabel]) {
+        routine.groupMeta[newLabel] = routine.groupMeta[oldLabel];
+        delete routine.groupMeta[oldLabel];
+      }
+      saveRoutines();
+      renderCbdWork();
+    }
+  });
+
+  /* ============================================================
      WORK MANUAL — a browsable checklist grouped into the cycles
      the job runs on, so nothing has to be held in her head
      ============================================================ */
@@ -25632,6 +26024,7 @@
     document.getElementById("chainsPage").hidden = state.view !== "chains";
     document.getElementById("medicalPage").hidden = state.view !== "medical";
     document.getElementById("routinesPage").hidden = state.view !== "routines";
+    document.getElementById("cbdWorkPage").hidden = state.view !== "cbdWork";
     document.getElementById("workManualPage").hidden = state.view !== "workManual";
     document.getElementById("cpdPage").hidden = state.view !== "cpd";
     document.getElementById("shoppingPage").hidden = state.view !== "shopping";
@@ -25666,6 +26059,7 @@
     else if (state.view === "chains") renderChainsPage();
     else if (state.view === "medical") renderMedical();
     else if (state.view === "routines") renderRoutines();
+    else if (state.view === "cbdWork") renderCbdWork();
     else if (state.view === "workManual") renderWorkManual();
     else if (state.view === "cpd") renderCpd();
     else if (state.view === "shopping") renderShoppingPage();
@@ -26262,6 +26656,7 @@
     else if (state.view === "skinNails") renderSkinNails();
     else if (state.view === "today") renderToday();
     else if (state.view === "routines") renderRoutines();
+    else if (state.view === "cbdWork") renderCbdWork();
     else if (state.view === "workManual") renderWorkManual();
     else if (state.view === "cpd") renderCpd();
     else if (state.view === "shopping") renderShoppingPage();
@@ -28296,11 +28691,84 @@
     rtnDurMinutes.value = total > 0 ? String(total % 60) : "";
     rtnSyncDurFromBoxes();
   });
+  // 2026-08-11 (grouped sub-tasks brief): group is purely POSITIONAL -- whichever
+  // .rtn-sub-group section a row's DOM node sits in at read time IS its group, read
+  // straight off that section's own name input. Nothing on the row itself records a
+  // group, so a rename (retype the header) or a drag into another section needs no
+  // separate sync step -- this is the one place membership gets resolved into data.
+  // `group` is only added to a sub-task when non-blank, so an ungrouped routine's
+  // subtasks keep the exact old {text,min} shape -- every existing .reduce(...) over
+  // readRtnSubs() (updateRtnSubTotal, Fit-to-steps) is unaffected by the extra key.
   function readRtnSubs() {
-    return [...rtnSubList.querySelectorAll(".rtn-sub-row")].map(r => ({
-      text: r.querySelector(".rtn-sub-text").value.trim(),
-      min: Math.max(0, parseInt(r.querySelector(".rtn-sub-min").value, 10) || 0),
-    })).filter(s => s.text);
+    return [...rtnSubList.querySelectorAll(".rtn-sub-group")].flatMap(sec => {
+      const label = sec.classList.contains("rtn-sub-group-ungrouped") ? "" : sec.querySelector(".rtn-sub-group-name").value.trim();
+      return [...sec.querySelectorAll(".rtn-sub-row")].map(r => ({
+        text: r.querySelector(".rtn-sub-text").value.trim(),
+        min: Math.max(0, parseInt(r.querySelector(".rtn-sub-min").value, 10) || 0),
+        ...(label ? { group: label } : {}),
+      }));
+    }).filter(s => s.text);
+  }
+  function rtnSubGroupSections() { return [...rtnSubList.querySelectorAll(".rtn-sub-group:not(.rtn-sub-group-ungrouped)")]; }
+  // headless (no visible header/name/subtotal chrome) the moment there are zero
+  // explicit groups -- keeps an ungrouped routine's editor pixel-identical to the
+  // pre-grouping flat list, since that's still the overwhelming common case.
+  function rtnRefreshGroupless() {
+    const ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
+    if (ug) ug.classList.toggle("rtn-sub-group-headless", rtnSubGroupSections().length === 0);
+  }
+  function rtnSetGroupCollapsed(sec, collapsed) {
+    sec.querySelector(".rtn-sub-group-grid").classList.toggle("rtn-sub-group-collapsed", collapsed);
+    const t = sec.querySelector(".rtn-sub-group-toggle");
+    if (t) t.textContent = collapsed ? "▸" : "▾";
+  }
+  // recomputed after anything that can change membership or minutes (add/remove/
+  // drag/type) -- cheap enough to just re-sum every section rather than track deltas.
+  function rtnRefreshGroupTotals() {
+    rtnSubList.querySelectorAll(".rtn-sub-group").forEach(sec => {
+      const tot = [...sec.querySelectorAll(".rtn-sub-row .rtn-sub-min")].reduce((a, i) => a + Math.max(0, parseInt(i.value, 10) || 0), 0);
+      const totalEl = sec.querySelector(".rtn-sub-group-total");
+      if (totalEl) totalEl.textContent = sec.querySelector(".rtn-sub-row") ? `${tot} min` : "";
+    });
+  }
+  function rtnMakeGroupSection(label, isUngrouped, icon, collapsed) {
+    const sec = document.createElement("div");
+    sec.className = "rtn-sub-group" + (isUngrouped ? " rtn-sub-group-ungrouped rtn-sub-group-headless" : "");
+    sec.innerHTML = isUngrouped
+      ? `<div class="rtn-sub-group-head"><span class="rtn-sub-group-name">Ungrouped</span><span class="rtn-sub-group-total"></span></div>
+         <div class="rtn-sub-group-grid"></div>`
+      : `<div class="rtn-sub-group-head">
+           <button type="button" class="rtn-sub-group-toggle" aria-label="Collapse group">▾</button>
+           <input type="text" class="rtn-sub-group-icon" placeholder="＋" maxlength="4" autocomplete="off">
+           <input type="text" class="rtn-sub-group-name" placeholder="Group name" autocomplete="off">
+           <span class="rtn-sub-group-total"></span>
+           <button type="button" class="rtn-sub-group-del" aria-label="Remove group">×</button>
+         </div>
+         <div class="rtn-sub-group-grid"><button type="button" class="rtn-sub-add-ingroup">+ Add</button></div>`;
+    if (isUngrouped) {
+      sec.querySelector(".rtn-sub-group-name").tabIndex = -1;
+      rtnSubList.appendChild(sec);
+    } else {
+      sec.querySelector(".rtn-sub-group-name").value = label;
+      sec.querySelector(".rtn-sub-group-icon").value = icon || "";
+      if (collapsed) rtnSetGroupCollapsed(sec, true);
+      const ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
+      rtnSubList.insertBefore(sec, ug || null);
+      rtnRefreshGroupless();
+    }
+    return sec;
+  }
+  // finds the group section by its CURRENT typed name (creating it if this is the
+  // first row that names it, e.g. loading a saved subtask whose group never got an
+  // explicit groupOrder entry) -- "" always resolves to the one Ungrouped bucket.
+  function rtnGroupGridFor(label) {
+    if (!label) {
+      let ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
+      if (!ug) ug = rtnMakeGroupSection("", true);
+      return ug.querySelector(".rtn-sub-group-grid");
+    }
+    const existing = rtnSubGroupSections().find(s => s.querySelector(".rtn-sub-group-name").value.trim() === label);
+    return (existing || rtnMakeGroupSection(label, false)).querySelector(".rtn-sub-group-grid");
   }
   // 2026-08-10 (How-long duration-source toggle): jumps to the real editable sub-tasks
   // list -- still just #rtnSubTasksField inside More options, never duplicated -- from
@@ -28328,6 +28796,7 @@
     rtnSyncDurFromBoxes();
   });
   function updateRtnSubTotal() {
+    rtnRefreshGroupTotals();
     const subs = readRtnSubs();
     const hasSubs = subs.length > 0;
     // 2026-08-10: the toggle only makes sense once there's an actual choice -- no saved
@@ -28402,25 +28871,103 @@
     }
     el.textContent = txt;
   }
-  function addRtnSubRow(text = "", min = "") {
+  function addRtnSubRow(text = "", min = "", group = "") {
     const row = document.createElement("div");
     row.className = "rtn-sub-row";
-    row.innerHTML = `<span class="rtn-sub-num" aria-hidden="true"></span>
+    row.innerHTML = `<span class="rtn-sub-grip" aria-hidden="true">⋮⋮</span>
+      <span class="rtn-sub-num" aria-hidden="true"></span>
       <input type="text" class="rtn-sub-text" placeholder="Step — e.g. Cleanse" autocomplete="off">
       <span class="rtn-sub-min-wrap"><input type="number" class="rtn-sub-min" min="1" step="1" placeholder="0"><span class="rtn-sub-min-suffix">min</span></span>
       <button type="button" class="rtn-sub-del" aria-label="Remove sub-task">×</button>`;
     row.querySelector(".rtn-sub-text").value = text;
     row.querySelector(".rtn-sub-min").value = min;
-    rtnSubList.appendChild(row);
+    const grid = rtnGroupGridFor((group || "").trim());
+    const addTile = grid.querySelector(".rtn-sub-add-ingroup");
+    if (addTile) grid.insertBefore(row, addTile); else grid.appendChild(row);
+    updateRtnSubTotal();
+    return row;
+  }
+  // always leaves the (headless) Ungrouped bucket behind so addRtnSubRow/
+  // rtnGroupGridFor always have somewhere to land -- same "never truly empty" shape
+  // openRtnForm's population loop and a fresh Add-routine form both rely on.
+  function clearRtnSubRows() {
+    rtnSubList.innerHTML = "";
+    rtnMakeGroupSection("", true);
     updateRtnSubTotal();
   }
-  function clearRtnSubRows() { rtnSubList.innerHTML = ""; updateRtnSubTotal(); }
   document.getElementById("rtnSubAdd").addEventListener("click", () => addRtnSubRow());
+  document.getElementById("rtnSubAddGroup").addEventListener("click", () => {
+    const sec = rtnMakeGroupSection(`Group ${rtnSubGroupSections().length + 1}`, false);
+    updateRtnSubTotal();
+    const nameInput = sec.querySelector(".rtn-sub-group-name");
+    nameInput.focus(); nameInput.select();
+  });
   rtnSubList.addEventListener("click", e => {
-    const del = e.target.closest(".rtn-sub-del"); if (!del) return;
-    del.closest(".rtn-sub-row").remove(); updateRtnSubTotal();
+    const del = e.target.closest(".rtn-sub-del");
+    if (del) { del.closest(".rtn-sub-row").remove(); updateRtnSubTotal(); return; }
+    const addIn = e.target.closest(".rtn-sub-add-ingroup");
+    if (addIn) { addRtnSubRow("", "", addIn.closest(".rtn-sub-group").querySelector(".rtn-sub-group-name").value.trim()); return; }
+    const toggle = e.target.closest(".rtn-sub-group-toggle");
+    if (toggle) {
+      const sec = toggle.closest(".rtn-sub-group");
+      rtnSetGroupCollapsed(sec, !sec.querySelector(".rtn-sub-group-grid").classList.contains("rtn-sub-group-collapsed"));
+      return;
+    }
+    const gdel = e.target.closest(".rtn-sub-group-del");
+    if (gdel) {
+      // demotes the group's rows to Ungrouped rather than deleting the sub-tasks
+      // themselves -- removing a group heading shouldn't silently discard her steps.
+      const sec = gdel.closest(".rtn-sub-group");
+      const ugGrid = rtnGroupGridFor("");
+      sec.querySelectorAll(".rtn-sub-row").forEach(r => ugGrid.appendChild(r));
+      sec.remove();
+      rtnRefreshGroupless(); updateRtnSubTotal();
+      return;
+    }
   });
   rtnSubList.addEventListener("input", updateRtnSubTotal);
+  // ---- drag-to-reorder, grip-only, pointer events (see .rtn-sub-grip CSS comment
+  // for why not native HTML5 draggable -- this is a touch-first app) ----
+  let rtnDrag = null;
+  rtnSubList.addEventListener("pointerdown", e => {
+    const grip = e.target.closest(".rtn-sub-grip");
+    if (!grip) return;
+    const row = grip.closest(".rtn-sub-row");
+    e.preventDefault();
+    grip.setPointerCapture(e.pointerId);
+    const rect = row.getBoundingClientRect();
+    const ghost = row.cloneNode(true);
+    ghost.classList.add("rtn-sub-ghost");
+    ghost.style.width = rect.width + "px";
+    ghost.style.left = rect.left + "px";
+    ghost.style.top = rect.top + "px";
+    document.body.appendChild(ghost);
+    row.classList.add("rtn-sub-row-dragging");
+    rtnDrag = { row, ghost, pointerId: e.pointerId, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
+  });
+  rtnSubList.addEventListener("pointermove", e => {
+    if (!rtnDrag || e.pointerId !== rtnDrag.pointerId) return;
+    rtnDrag.ghost.style.left = (e.clientX - rtnDrag.offX) + "px";
+    rtnDrag.ghost.style.top = (e.clientY - rtnDrag.offY) + "px";
+    const overEl = document.elementFromPoint(e.clientX, e.clientY);
+    const overRow = overEl && overEl.closest(".rtn-sub-row");
+    if (overRow && overRow !== rtnDrag.row) {
+      const r = overRow.getBoundingClientRect();
+      overRow.parentElement.insertBefore(rtnDrag.row, e.clientY < r.top + r.height / 2 ? overRow : overRow.nextSibling);
+    } else {
+      const overGrid = overEl && overEl.closest(".rtn-sub-group-grid");
+      if (overGrid && !overGrid.contains(rtnDrag.row)) overGrid.insertBefore(rtnDrag.row, overGrid.querySelector(".rtn-sub-add-ingroup") || null);
+    }
+  });
+  function rtnDragEnd(e) {
+    if (!rtnDrag || (e && e.pointerId !== rtnDrag.pointerId)) return;
+    rtnDrag.row.classList.remove("rtn-sub-row-dragging");
+    rtnDrag.ghost.remove();
+    rtnDrag = null;
+    updateRtnSubTotal();
+  }
+  rtnSubList.addEventListener("pointerup", rtnDragEnd);
+  rtnSubList.addEventListener("pointercancel", rtnDragEnd);
   // duration and End stay in lockstep, same rule the event form's own picker
   // follows: moving Start re-applies a picked duration to End; typing an exact
   // End by hand clears the picker so it stops claiming to be authoritative.
@@ -28761,7 +29308,15 @@
       // task object that never carries it forward.
       const subs = Array.isArray(task.subtasks) && task.subtasks.length ? task.subtasks
         : task.hairLink ? hairLinkSteps(task.hairLink.tier) : [];
-      subs.forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0)));
+      // 2026-08-11 (grouped sub-tasks brief): seed the explicit group sections (in
+      // their saved order, with icon/collapsed meta) BEFORE the rows land -- lets an
+      // empty group she made but hasn't filled yet survive a reload, which relying on
+      // rtnGroupGridFor's lazy per-row creation alone wouldn't preserve.
+      (Array.isArray(task.groupOrder) ? task.groupOrder : []).forEach(label => {
+        const meta = (task.groupMeta && task.groupMeta[label]) || {};
+        rtnMakeGroupSection(label, false, meta.icon, meta.collapsed);
+      });
+      subs.forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0), s.group || ""));
       rtnTrack = task.track; syncRtnTrackButtons();
       rtnCalOn = task.calOn !== false; syncRtnAutoToggle();
       rtnFreq = task.freq;
@@ -28966,6 +29521,27 @@
     // actual choice to record -- "steps" is the unwritten default (subtaskDurMin treats
     // absent the same as "steps"), so only "set" ever needs saving.
     if (subtasks.length) { task.subtasks = subtasks; if (rtnDurMode === "set") task.durationMode = "set"; }
+    // 2026-08-11 (grouped sub-tasks brief): groupOrder/groupMeta are read straight off
+    // the live DOM sections (name input, icon input, collapsed class) -- same "no
+    // separate sync needed" reasoning as readRtnSubs() itself. A group left unnamed
+    // is dropped (its rows already saved as ungrouped by readRtnSubs above), matching
+    // the empty-label branch there rather than persisting a phantom blank group.
+    const groupSecs = rtnSubGroupSections();
+    if (groupSecs.length) {
+      const groupOrder = [], groupMeta = {};
+      groupSecs.forEach(sec => {
+        const label = sec.querySelector(".rtn-sub-group-name").value.trim();
+        if (!label) return;
+        groupOrder.push(label);
+        const icon = sec.querySelector(".rtn-sub-group-icon").value.trim();
+        const collapsed = sec.querySelector(".rtn-sub-group-grid").classList.contains("rtn-sub-group-collapsed");
+        if (icon || collapsed) groupMeta[label] = { ...(icon ? { icon } : {}), ...(collapsed ? { collapsed: true } : {}) };
+      });
+      if (groupOrder.length) {
+        task.groupOrder = groupOrder;
+        if (Object.keys(groupMeta).length) task.groupMeta = groupMeta;
+      }
+    }
     // 2026-08-07 ("give an option to indicate when the routine ends"): general across
     // every freq type, so it's read here rather than nested in the freq-specific
     // branches below -- hidden (and therefore empty) for One-off, which is its own end.
