@@ -1294,7 +1294,14 @@
      above, plus a soft shadow so it visually separates from the timeline underneath it
      while it's being moved. */
   .tl-item.tl-dragging { opacity: 0.9; box-shadow: 0 10px 28px -6px rgba(0,0,0,0.5); z-index: 30; }
-  .tl-item.tl-resizing { box-shadow: 0 10px 28px -6px rgba(0,0,0,0.5); z-index: 30; }
+  /* 2026-08-11 (Build brief, "resizing block gets a subtle gold ring"): the same
+     lifted shadow as tl-dragging, plus a thin gold ring so a resize reads distinctly
+     from a reschedule-drag at a glance. Specificity note: `.tl-block[data-track] {
+     box-shadow: none }` (the flat-design pass, further down this sheet) ties this
+     selector's specificity and wins on source order alone -- every real block also
+     carries [data-track] (see renderTimeline's template), so matching it here too
+     bumps this rule to 3 selectors and wins regardless of where either rule sits. */
+  .tl-item.tl-resizing[data-track] { box-shadow: 0 0 0 2px var(--cosmic-gold), 0 10px 28px -6px rgba(0,0,0,0.5); z-index: 30; }
   body.dragging-block, body.dragging-block * { cursor: grabbing !important; user-select: none !important; }
   /* 2026-08-06 (drag-and-drop, "drag the top or bottom edge to resize — web only"):
      a thin full-width grab strip straddling each edge, flat/invisible until hovered so
@@ -1308,7 +1315,7 @@
   .tl-resize-handle.tl-resize-bottom { bottom: -6px; }
   .tl-resize-handle::after {
     content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 28px; height: 3px; border-radius: 2px; background: var(--cat-t, #fff); opacity: 0.6;
+    width: 28px; height: 3px; border-radius: 2px; background: var(--cosmic-gold); opacity: 0.85;
   }
   @media (hover: hover) and (pointer: fine) {
     .tl-item:hover .tl-resize-handle, .tl-resize-handle:focus-visible { opacity: 1; }
@@ -1316,6 +1323,13 @@
   @media (hover: none), (pointer: coarse) {
     .tl-resize-handle { display: none; }
   }
+  /* 2026-08-11 (Build brief, "grip + preview + tooltip in gold"): a resize-scoped
+     variant of the shared hover-add-line ghost (also used by the reschedule-drag and
+     the plain hover-to-add preview) -- toggled on/off for the duration of a resize
+     drag only, so those other two interactions keep their existing --nav-active
+     colour untouched. */
+  .hover-add-line.tl-resize-preview { border-top-color: var(--cosmic-gold); }
+  .hover-add-line.tl-resize-preview .hv-lbl { background: var(--cosmic-gold); color: #2A1B06; }
 
   /* --- timeline --- */
   .timeline-wrap { position: relative; margin-bottom: 10px; }
@@ -13088,6 +13102,10 @@
     return m === 0 ? `${h12}${ap}` : `${h12}:${pad(m)}${ap}`;
   }
   const hourLabel = h => { if (h === 24) return "12am"; const ap = h < 12 ? "am" : "pm"; let x = h % 12; if (x === 0) x = 12; return `${x}${ap}`; };
+  // 2026-08-11 (Build brief, resize-drag tooltip "10:45am · 1h 15m"): a plain-minutes
+  // duration formatter for calendar-block lengths -- distinct from fmtHrs (ms-based,
+  // fasting-specific, always shows "0h"), this omits the hour part under 60min.
+  const fmtDurShort = mins => { const h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`; };
 
   /* ============================================================
      LIFE MAP — recurring patterns. Mirrors "Life Map.md".
@@ -33433,7 +33451,9 @@
   // whole gesture, only the active edge's live value changes.
   (function () {
     const layer = document.getElementById("eventsLayer");
-    const MIN_DUR = 5;
+    // 2026-08-11 (Build brief): "~15 min minimum" -- was 5, shared by both edges'
+    // clamp below (don't allow inverting past the start).
+    const MIN_DUR = 15;
     let rdrag = null;
     layer.addEventListener("pointerdown", e => {
       const handle = e.target.closest(".tl-resize-handle");
@@ -33447,12 +33467,18 @@
       try { item.setPointerCapture(e.pointerId); } catch (err) {}
       item.classList.add("tl-resizing");
       document.body.classList.add("dragging-block");
+      hoverLine.classList.add("tl-resize-preview");
     });
     layer.addEventListener("pointermove", e => {
       if (!rdrag) return;
       e.preventDefault();
       const rect = layer.getBoundingClientRect();
-      let mins = Math.round(minForTop(e.clientY - rect.top) / 5) * 5;
+      // 2026-08-11 (Build brief): "snap to 15 min by default; hold a modifier ... for
+      // 5 min" -- checked live off the move event itself (not just at drag-start) so
+      // pressing/releasing Shift mid-drag re-snaps immediately, same as the brief's
+      // "slow-drag" spirit without needing actual pointer-speed tracking.
+      const step = e.shiftKey ? 5 : 15;
+      let mins = Math.round(minForTop(e.clientY - rect.top) / step) * step;
       mins = Math.max(START_MIN, Math.min(END_MIN, mins));
       let startMin = rdrag.startMin, endMin = rdrag.endMin;
       if (rdrag.edge === "top") startMin = Math.max(START_MIN, Math.min(mins, rdrag.endMin - MIN_DUR));
@@ -33462,13 +33488,19 @@
       rdrag.el.style.top = `${top}px`;
       rdrag.el.style.height = `${bottom - top}px`;
       hoverLine.hidden = false;
+      // the edge actually being dragged is the one whose new time is worth reading at
+      // a glance ("↕ 10:45am · 1h 15m" -- brief's exact example, new end + duration);
+      // the anchor edge stays put so showing IT would just repeat what was already
+      // true before the drag started.
+      const activeMin = rdrag.edge === "top" ? startMin : endMin;
       hoverLine.style.top = `${rdrag.edge === "top" ? top : bottom}px`;
-      hoverLine.querySelector(".hv-lbl").textContent = `${fmtTime(minToTime(startMin))} – ${fmtTime(minToTime(endMin))}`;
+      hoverLine.querySelector(".hv-lbl").textContent = `↕ ${fmtTime(minToTime(activeMin))} · ${fmtDurShort(endMin - startMin)}`;
     }, { passive: false });
     function endResize() {
       if (!rdrag) return;
       const d = rdrag; rdrag = null;
       d.el.classList.remove("tl-resizing");
+      hoverLine.classList.remove("tl-resize-preview");
       document.body.classList.remove("dragging-block");
       hoverLine.hidden = true;
       suppressNextItemClick = true;
