@@ -7300,6 +7300,11 @@
     background: color-mix(in oklab, var(--cat-personal-fitness) 14%, transparent);
     border-radius: 999px; padding: 1px 7px; margin: 3px auto 0; width: fit-content; white-space: nowrap;
   }
+  /* 2026-08-11 (Hair page mockup, "regular wash not editable"): a routine that exists
+     but has no steps (the hair-regular bug) reuses .med-pill's own "overdue"/attention
+     token instead of the .hx-badge green above -- same color a stalled state already
+     uses elsewhere, so this doesn't invent a new meaning for a new hex. */
+  .hx-badge--empty { color: var(--power-bad); background: color-mix(in oklab, var(--power-bad) 14%, transparent); }
   /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): marks any
      routine whose steps derive from another page (see linkInfo() near hairRoutineFor)
      everywhere it renders -- Today's progress, Routines table/cards, the routine
@@ -15346,16 +15351,25 @@
     const minPer = HAIRD.minPerStep || HAIR_STEP_MIN;
     const lede = document.getElementById("hairLede");
     if (lede) lede.textContent = `Washes run every ${HAIR.intervalDays} days — the three tiers share one product list, each step ${minPer} minutes. Gold dot = that tier includes the step.`;
+    // 2026-08-11 (Hair page mockup, "regular wash not editable"): `made` used to just
+    // mean "a routine object exists", which is exactly the bug that left hair-regular
+    // an empty shell with no steps and no hairLink for months, indistinguishable from
+    // a real, populated routine. hasSteps is the real "is this actually usable" check
+    // -- a routine can now exist (made) but still be empty, and the badge/footer below
+    // read hasSteps, not made, so an empty shell can never look finished again.
+    const hairRoutineHasSteps = rt => !!rt && (!!rt.hairLink || (Array.isArray(rt.subtasks) && rt.subtasks.length > 0));
     const heads = HAIRD.tiers.map((tier, i) => {
       const n = hairTierSteps(tier.id).length;
       const rt = hairRoutineFor(tier.id);
       const made = !!rt;   // a routine exists for this tier (copy-model, 2026-08-09)
+      const hasSteps = hairRoutineHasSteps(rt);
       return `<th class="hx-tier-h hx-c-${i}${dueTier === tier.id ? " is-due" : ""}" data-hx-tier="${esc(tier.id)}">
         <span class="hx-t-ic">${tier.icon}</span>
         <span class="hx-t-lb">${esc(tier.label)}</span>
         <span class="hx-t-n">${n} steps · ${hairTierMin(tier.id)} min</span>
         ${dueTier === tier.id ? `<span class="hx-due">${esc(dueLbl)}</span>` : ""}
-        ${made ? `<span class="hx-badge">↻ routine</span>` : ""}
+        ${hasSteps ? `<span class="hx-badge">↻ routine</span>`
+          : made ? `<span class="hx-badge hx-badge--empty">no steps yet</span>` : ""}
       </th>`;
     }).join("");
     const rows = HAIRD.steps.map(s => `<tr class="hx-row" data-hx-row="${esc(s.id)}">
@@ -15373,10 +15387,17 @@
     const feet = HAIRD.tiers.map((tier, i) => {
       const rt = hairRoutineFor(tier.id);
       const made = !!rt;   // copy-model: existence, not a live link, marks it "made"
+      const hasSteps = hairRoutineHasSteps(rt);
+      // an empty shell (made but hasSteps false) gets ONE action, not the usual pair --
+      // "Open routine" on a checklist with nothing in it just shows an empty sheet, so
+      // send her straight to filling it in first (same data-hx-mk-rtn handler "↻ Make
+      // routine" already uses below: it copies the tier's current steps in either way).
       return `<td class="hx-foot hx-c-${i}">
-        ${made
+        ${hasSteps
           ? `<button type="button" class="btn-save hx-mk" data-hx-open-rtn="${tier.id}">Open routine</button>
              <button type="button" class="tab-link hx-mk-refresh" data-hx-mk-rtn="${tier.id}" title="Re-copy the current steps into the routine">↻ Refresh steps</button>`
+          : made
+          ? `<button type="button" class="btn-save hx-mk" data-hx-mk-rtn="${tier.id}">+ Add steps</button>`
           : `<button type="button" class="btn-save hx-mk" data-hx-mk-rtn="${tier.id}">↻ Make routine</button>`}
         <button type="button" class="tab-link hx-task" data-hx-task="${tier.id}">📅 task · ${hairTierMin(tier.id)} min</button>
       </td>`;
