@@ -4658,6 +4658,44 @@
     color: var(--ink-faint); font-weight: 700; border-top: none;
   }
   .rtg-group-row:first-child td { padding-top: 6px; }
+  /* 2026-08-11 (Linh: grouped Track ▸ sub-category redesign) — the nested banded routines
+     view: Track headers, sub-category sub-bands, rows tinted (~11%) by their sub-category
+     colour with a matching left rail. Reuses .rtg-phase/.rtg-auto-switch/.rtg-ic so the
+     row actions match the sortable table exactly. */
+  .rn-wrap { border: 1px solid var(--note-line, rgba(240,230,212,.09)); border-radius: var(--radius-md); overflow: hidden; }
+  .rn-head, .rn-row { display: grid; grid-template-columns: 1.7fr 1.5fr .7fr .7fr auto auto; align-items: center; gap: 10px; }
+  .rn-head { padding: 9px 14px; border-bottom: 1px solid var(--note-line, rgba(240,230,212,.09)); }
+  .rn-head span { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .rn-trk { display: flex; align-items: center; gap: 10px; padding: 9px 14px; font-weight: 800; font-size: 12.5px;
+            letter-spacing: .05em; text-transform: uppercase; color: var(--ink);
+            background: color-mix(in oklab, var(--tc) 16%, transparent); border-left: 4px solid var(--tc);
+            border-top: 1px solid var(--note-line, rgba(240,230,212,.09)); }
+  .rn-trk:first-child { border-top: none; }
+  .rn-trk .rn-n, .rn-sub .rn-n { margin-left: auto; color: var(--ink-faint); font-weight: 700; font-size: 11px; }
+  .rn-sub { display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 28px;
+            background: color-mix(in oklab, var(--cc) 12%, transparent); border-left: 3px solid var(--cc);
+            font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--cc); }
+  .rn-row { padding: 9px 14px 9px 28px; font-size: 13.5px; cursor: pointer;
+            background: color-mix(in oklab, var(--cc) 11%, transparent);
+            border-left: 3px solid color-mix(in oklab, var(--cc) 45%, transparent);
+            border-bottom: 1px solid var(--note-line, rgba(240,230,212,.06)); }
+  .rn-row:hover { background: color-mix(in oklab, var(--cc) 17%, transparent); }
+  .rn-name { display: flex; align-items: center; gap: 9px; font-weight: 700; min-width: 0; }
+  .rn-name .rn-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rn-tile { flex: none; width: 22px; text-align: center; font-size: 15px; }
+  .rn-rep { color: var(--ink-soft); font-size: 12px; }
+  .rn-time { color: var(--ink); font-weight: 600; font-size: 12.5px; }
+  .rn-cal, .rn-acts { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+  @media (max-width: 640px) {
+    .rn-head { display: none; }
+    .rn-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px 10px 18px; }
+    .rn-name { flex: 1 1 100%; }
+    .rn-rep { flex: 0 0 auto; color: var(--ink-faint); font-size: 11.5px; order: 3; }
+    .rn-time { flex: 0 0 auto; order: 2; }
+    .rn-row > div:nth-child(4) { order: 4; }         /* phase */
+    .rn-cal { order: 5; margin-left: auto; }
+    .rn-acts { flex: 0 0 100%; order: 6; justify-content: flex-start; }
+  }
   /* 2026-08-09 (Linh, "do the same on the routines page" -- keep the horizontal
      chain view on mobile, applied here too): SUPERSEDES the table -> cards swap a
      same-day commit introduced for this exact overflow problem (names cut to
@@ -5110,7 +5148,7 @@
   .rtn-inline-row > td { padding: 0 !important; border-top: none !important; background: none; }
   .rtn-inline-dock { padding: 2px 0 10px; }
   /* the clicked row stays visibly "open" while its editor is expanded under it */
-  tr.rtn-inline-anchor, .rtn-row.rtn-inline-anchor, .rtb-task.rtn-inline-anchor {
+  tr.rtn-inline-anchor, .rtn-row.rtn-inline-anchor, .rtb-task.rtn-inline-anchor, .rn-row.rtn-inline-anchor {
     background: color-mix(in oklab, var(--accent-seed, var(--margin-rule)) 10%, transparent) !important;
   }
   /* design44: capped to match the standalone Add-routine form's width -- Table
@@ -11787,6 +11825,7 @@
     <div class="rtg-toolbar">
       <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…">
       <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
+        <option value="trackcat" selected>Group by: Track ▸ Category</option>
         <option value="none">Group by: None</option>
         <option value="track">Group by: Track</option>
         <option value="phase">Group by: Phase</option>
@@ -25667,7 +25706,7 @@
      that field (openRtnForm's new 2nd param) rather than growing real per-cell
      mini-editors -- far less surface area, reuses everything already working. */
   let rtnGridSort = { col: "title", dir: 1 };
-  let rtnGridGroupBy = "none";
+  let rtnGridGroupBy = "trackcat";
   let rtnGridSearch = "";
   // 2026-08-07 (Linh, "allow for adjusting table width"): per-device display
   // preference, not app data -- deliberately NOT "book33-"-prefixed (see bakExport/
@@ -25770,6 +25809,11 @@
     if (!host || rtnListMode !== "table") return;
     rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
     closeRtnMoreMenu();  // its anchor button is about to be destroyed too
+    // 2026-08-11 (Linh: grouped Track ▸ sub-category redesign): a distinct banded layout
+    // — Track headers, sub-category sub-bands, rows tinted by sub-category colour, Track/
+    // Category dropped as columns (they're the headers now). Its own renderer so the
+    // sortable-column table is untouched for the other Group-by modes.
+    if (rtnGridGroupBy === "trackcat") { renderRtnGridNested(host); return; }
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const segments = rtnGridRows();
     if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; return; }
@@ -25849,6 +25893,72 @@
         <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("subcat", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Cal</th><th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
+    rtnInlineRedock("table");
+  }
+  // 2026-08-11 (Linh: grouped Track ▸ sub-category redesign): banded nested view. Track
+  // (part-of-life) headers, sub-category sub-bands, rows tinted by the sub-category colour.
+  // Track & Category are the headers, so rows drop those columns — each row shows only
+  // name · repeats · time · phase · cal + the same ✎/🗑/⋯ actions the table uses (same
+  // data-rtg-* hooks, so the one #rtnGrid click delegate handles both layouts).
+  function renderRtnGridNested(host) {
+    const q = rtnGridSearch.trim().toLowerCase();
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
+    const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
+    if (!rows.length) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; rtnInlineRedock("table"); return; }
+    const trackOrder = lifeCats().map(c => c.id);
+    const trackRank = tk => { const i = trackOrder.indexOf(tk); return i === -1 ? 99 : i; };
+    // track -> category -> [routines]
+    const byTrack = new Map();
+    rows.forEach(t => {
+      const tk = t.track || "other";
+      const cat = (t.category && t.category.trim()) || "No category";
+      if (!byTrack.has(tk)) byTrack.set(tk, new Map());
+      const cm = byTrack.get(tk);
+      if (!cm.has(cat)) cm.set(cat, []);
+      cm.get(cat).push(t);
+    });
+    const tracks = [...byTrack.keys()].sort((a, b) => trackRank(a) - trackRank(b) || (trackLabel(a) || "").localeCompare(trackLabel(b) || ""));
+    const phasePill = t => { const p = rtnGridPhaseOf(t); return `<span class="rtg-phase phase-lbl-${p}">${p === "during" ? "event" : p}</span>`; };
+    const timeLabel = t => { const m = rtnGridTimeMin(t); return m == null ? "—" : fmtTime(minToTime(m)); };
+    const tileOf = t => {
+      const lm = t.title.match(RTN_LETTER_RE);
+      if (lm) return { ic: `<span class="rn-tile" style="color:var(--${t.track}-seed)">${lm[1]}</span>`, name: lm[2] };
+      const em = t.title.match(RTN_EMOJI_RE);
+      return { ic: em ? `<span class="rn-tile">${em[1]}</span>` : `<span class="rn-tile"></span>`, name: em ? t.title.slice(em[0].length) : t.title };
+    };
+    const rowHtml = (t, cc) => {
+      const calOn = t.calOn !== false, tl = tileOf(t);
+      return `<div class="rn-row" data-rtg-row="${esc(t.id)}" style="--cc:${cc}">
+          <div class="rn-name">${tl.ic}<span class="rn-txt">${esc(tl.name)}</span></div>
+          <div class="rn-rep">${esc(routineFreqLabel(t))}</div>
+          <div class="rn-time">${timeLabel(t)}</div>
+          <div>${phasePill(t)}</div>
+          <div class="rn-cal"><button type="button" class="rtg-auto-switch${calOn ? " on" : ""}" data-rtg-cal="${esc(t.id)}" role="switch" aria-checked="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button></div>
+          <div class="rn-acts">
+            ${normTitle(t.title) === "cbd work" ? `<button type="button" class="rtg-ic" data-rtg-board title="Open ops board" aria-label="Open CBD Work ops board">🩺</button>` : ""}
+            <button type="button" class="rtg-ic" data-rtg-edit="${esc(t.id)}" title="Edit" aria-label="Edit ${esc(t.title)}">✎</button>
+            <button type="button" class="rtg-ic rtg-ic-del" data-rtg-del="${esc(t.id)}" title="Delete" aria-label="Delete ${esc(t.title)}">🗑</button>
+            <button type="button" class="rtg-ic" data-rtg-more="${esc(t.id)}" title="More actions" aria-label="More actions for ${esc(t.title)}" aria-haspopup="true">⋯</button>
+          </div>
+        </div>`;
+    };
+    let html = `<div class="rn-wrap">
+        <div class="rn-head"><span>Routine</span><span>Repeats</span><span>Time</span><span>Phase</span><span>Cal</span><span></span></div>`;
+    tracks.forEach(tk => {
+      const cm = byTrack.get(tk), tc = `var(--${tk}-seed, var(--ink-faint))`;
+      const tcount = [...cm.values()].reduce((a, arr) => a + arr.length, 0);
+      html += `<div class="rn-trk" style="--tc:${tc}">${esc(trackLabel(tk) || "Other")}<span class="rn-n">${tcount}</span></div>`;
+      const cats = [...cm.keys()].sort((a, b) => (a === "No category") - (b === "No category") || a.localeCompare(b));
+      cats.forEach(cat => {
+        const arr = cm.get(cat);
+        const sub = cat === "No category" ? null : catSubFor(tk, cat);
+        const cc = sub ? `var(--cat-${sub.parent}-${sub.id})` : tc;
+        html += `<div class="rn-sub" style="--cc:${cc}">${esc(cat)}<span class="rn-n">${arr.length}</span></div>`;
+        html += arr.map(t => rowHtml(t, cc)).join("");
+      });
+    });
+    html += `</div>`;
+    host.innerHTML = html;
     rtnInlineRedock("table");
   }
   // Extracted so both the row's quick-tap icons AND the ⋯ menu's own click
@@ -30305,16 +30415,32 @@
     // can reuse this exact same inline-row machinery instead of a second code path:
     // dock as the FIRST row of the table body rather than after some existing row,
     // since there isn't one yet.
+    // 2026-08-11 (Track ▸ Category grouped view): "table" now covers TWO different DOM
+    // shapes -- the classic sortable <table>/<tr> (other Group-by modes) and the nested
+    // grouped view's plain <div class="rn-wrap">/<div class="rn-row"> (renderRtnGridNested,
+    // the new default). Both branches below detect which is live and build a matching
+    // dock instead of assuming a <table> exists.
     if (view === "table" && rtnInlineId === RTN_NEW) {
-      const headTr = document.querySelector("#rtnGrid table thead tr");
-      const tbody = document.querySelector("#rtnGrid table tbody");
+      const tableEl = document.querySelector("#rtnGrid table");
       let dock = null;
-      if (headTr && tbody) {
-        const tr = document.createElement("tr");
-        tr.className = "rtn-inline-row";
-        tr.innerHTML = `<td colspan="${headTr.children.length}"><div class="rtn-inline-dock"></div></td>`;
-        tbody.insertBefore(tr, tbody.firstChild);
-        dock = tr.querySelector(".rtn-inline-dock");
+      if (tableEl) {
+        const headTr = tableEl.querySelector("thead tr");
+        const tbody = tableEl.querySelector("tbody");
+        if (headTr && tbody) {
+          const tr = document.createElement("tr");
+          tr.className = "rtn-inline-row";
+          tr.innerHTML = `<td colspan="${headTr.children.length}"><div class="rtn-inline-dock"></div></td>`;
+          tbody.insertBefore(tr, tbody.firstChild);
+          dock = tr.querySelector(".rtn-inline-dock");
+        }
+      } else {
+        const wrap = document.querySelector("#rtnGrid .rn-wrap");
+        const head = wrap && wrap.querySelector(".rn-head");
+        if (wrap) {
+          dock = document.createElement("div");
+          dock.className = "rtn-inline-row rtn-inline-dock";
+          if (head) head.after(dock); else wrap.prepend(dock);
+        }
       }
       if (!dock) { closeRtnForm(); return; }
       dock.appendChild(rtnForm);
@@ -30323,13 +30449,17 @@
     let anchor = null, dock = null;
     const idSel = CSS.escape(rtnInlineId);
     if (view === "table") {
-      anchor = document.querySelector(`#rtnGrid tr[data-rtg-row="${idSel}"]`);
-      if (anchor) {
+      anchor = document.querySelector(`#rtnGrid [data-rtg-row="${idSel}"]`);
+      if (anchor && anchor.tagName === "TR") {
         const tr = document.createElement("tr");
         tr.className = "rtn-inline-row";
         tr.innerHTML = `<td colspan="${anchor.children.length}"><div class="rtn-inline-dock"></div></td>`;
         anchor.after(tr);
         dock = tr.querySelector(".rtn-inline-dock");
+      } else if (anchor) {
+        dock = document.createElement("div");
+        dock.className = "rtn-inline-row rtn-inline-dock";
+        anchor.after(dock);
       }
     } else if (view === "list") {
       anchor = document.querySelector(`#rtnManage .rtn-row[data-rtn-edit="${idSel}"]`);
