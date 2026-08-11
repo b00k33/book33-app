@@ -11747,9 +11747,6 @@
           <input type="date" id="rtnEndDate">
         </div>
       </div>
-      <div class="field full note-inline" id="rtnHairNote" hidden>
-        This wash type's day is decided by the every-2-days rotation, not a repeat pattern here — use the calendar switch on its row to show or hide it, or the date list below for an extra one-off wash.
-      </div>
       <!-- 2026-08-06 (Linh: "fold rarely-used fields into a collapsed More options"):
            same collapsible pattern as #addForm's own .more-opts-toggle/.addform-more
            (display:contents when open, so these lay out as plain direct children of
@@ -14236,6 +14233,14 @@
     return true;
   }
   function routineOccursOn(t, date) {
+    // 2026-08-11 (every-2-days rotation removal): the 3 hair-wash types now carry a
+    // real freq (see migrateHairToRealFreq) so routineOwnPatternOn below CAN match
+    // them -- but they must never surface through this generic routine pipeline
+    // (Day timeline/streak/fitLink-crossref), only through generatedFor's own
+    // calOn-gated hair branch, or the same wash would double-render. washType/
+    // nextWashDate call routineOwnPatternOn directly, bypassing this gate entirely,
+    // so this exclusion never affects which day a wash is actually due.
+    if (HAIR_TYPE_IDS.has(t.id)) return false;
     // she's toggled this routine off the calendar entirely (Linh 2026-07-27) — the
     // Routines table's calendar switch; blocks BEFORE extraDates too, since turning
     // a routine off means off, extra placements included
@@ -15192,12 +15197,14 @@
 
   // one-time: the hair wash TYPES also become real ROUTINE_TASKS entries, so their
   // name/steps are editable right on the Routines page (Linh 2026-07-27: "edit these
-  // routines in the routine page directly, dont direct to another page"). The
-  // every-2-days ROTATION stays exactly as it was — isWashDay/washType are untouched
-  // and still decide WHICH day and WHICH type — this only moves the type's NAME and
-  // STEPS to a live, editable source; generatedFor() below reads title/steps/calOn
-  // from this entry when one exists. id is fixed ("hair-regular" etc.) because the
-  // rotation logic depends on exactly these three keys existing — never delete one.
+  // routines in the routine page directly, dont direct to another page"). This only
+  // moves the type's NAME and STEPS to a live, editable source; generatedFor() below
+  // reads title/steps/calOn from this entry when one exists. id is fixed
+  // ("hair-regular" etc.) because washType() (below) depends on exactly these three
+  // keys existing — never delete one (there's a delete-guard on the routine itself).
+  // 2026-08-11: used to also seed freq:"asNeeded" here and leave WHICH day/type to a
+  // bespoke every-2-days rotation -- migrateHairToRealFreq right below now gives each
+  // of the three its own real freq instead, same as any other routine.
   (function migrateHairRoutines() {
     const FLAG = "book33-rtn-hair-migrated";
     try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
@@ -15215,6 +15222,30 @@
     });
     if (changed) saveRoutines();
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+  })();
+  // one-time (2026-08-11, "I don't like this function anymore" -- turn off the
+  // every-2-days auto-rotation, let each wash type run on its own real schedule
+  // instead): gives the 3 hair routines a real freq for the first time -- they've
+  // sat on the inert "asNeeded" freq (never auto-occurs) since migrateHairRoutines
+  // above, since the rotation used to decide their days FOR them. Defaults echo the
+  // old rotation's shape (regular ran ~every 2 days, treatment/everything once a
+  // week each) but are ordinary, editable schedules now — change any of the three
+  // from its own routine editor exactly like any other routine. Guarded per-routine
+  // (still "asNeeded") rather than a one-shot flag, same precedent
+  // migrateLinkedToEditable uses below, so a routine she's since customised off
+  // "asNeeded" is never touched again.
+  (function migrateHairToRealFreq() {
+    let changed = false;
+    const set = (id, patch) => {
+      const t = ROUTINE_TASKS.find(x => x.id === id);
+      if (!t || t.freq !== "asNeeded") return;
+      Object.assign(t, patch);
+      changed = true;
+    };
+    set("hair-regular", { freq: "interval", intervalUnit: "days", intervalDays: 2, anchor: keyOf(HAIR.anchor) });
+    set("hair-treatment", { freq: "weekly", weekdays: [2] });    // Wednesday
+    set("hair-everything", { freq: "weekly", weekdays: [6] });  // Sunday
+    if (changed) saveRoutines();
   })();
   // one-time: skincare AM/PM were migrated as "asNeeded" along with the other beauty
   // routines, but she does them every day — "asNeeded" never auto-occurs (only via a
@@ -15340,9 +15371,9 @@
   function renderHairMatrix() {
     const host = document.getElementById("hairMatrix");
     if (!host) return;
-    // the DUE flag rides the real rotation (cadence + last-done re-anchoring +
-    // overrides, see washTypeWithOverride) — today's wash if there is one, else
-    // the next scheduled one with its day named
+    // 2026-08-11: the DUE flag now rides each tier's own real schedule (+ overrides,
+    // see washTypeWithOverride) instead of a shared rotation — today's wash if
+    // there is one, else the next scheduled one with its day named
     let dueTier = washTypeWithOverride(TODAY), dueLbl = "Due today";
     if (!dueTier) {
       const nx = nextWashDate(TODAY);
@@ -15350,7 +15381,7 @@
     }
     const minPer = HAIRD.minPerStep || HAIR_STEP_MIN;
     const lede = document.getElementById("hairLede");
-    if (lede) lede.textContent = `Washes run every ${HAIR.intervalDays} days — the three tiers share one product list, each step ${minPer} minutes. Gold dot = that tier includes the step.`;
+    if (lede) lede.textContent = `Each wash type runs on its own schedule (set it from its routine) — the three tiers share one product list, each step ${minPer} minutes. Gold dot = that tier includes the step.`;
     // 2026-08-11 (Hair page mockup, "regular wash not editable"): `made` used to just
     // mean "a routine object exists", which is exactly the bug that left hair-regular
     // an empty shell with no steps and no hairLink for months, indistinguishable from
@@ -15533,45 +15564,29 @@
     if (bd && bd.dataset.bdayPerson) { e.stopPropagation(); openPersonProfile(bd.dataset.bdayPerson); }
   });
 
-  // the every-2-days rhythm re-anchors on any actual wash she places by hand: once she
-  // logs/moves a wash to a given day, that day becomes the new "day 0" and every wash
-  // AFTER it shifts to keep the 2-day spacing. A plain "skip" (none) does NOT re-anchor —
-  // she just misses that one and the rhythm resumes. So the effective anchor for a date
-  // is the most recent hand-placed wash on or before it (else the base anchor).
-  function hairAnchorFor(date) {
-    const k = keyOf(date);
-    let best = HAIR.anchor, bestKey = keyOf(HAIR.anchor);
-    for (const ok in HAIR_OVERRIDES) {
-      const ov = HAIR_OVERRIDES[ok];
-      if (ov === "none" || !HAIR.types[ov]) continue;   // skips + junk don't re-anchor
-      if (ok <= k && ok > bestKey) { bestKey = ok; best = parseKey(ok); }
-    }
-    return best;
-  }
-  function isWashDay(date) {
-    const diff = dayDiff(date, hairAnchorFor(date));
-    return diff >= 0 && diff % HAIR.intervalDays === 0;
-  }
-  function washDaysInWeek(date) {
-    const mon = startOfWeek(date), out = [];
-    for (let i = 0; i < 7; i++) { const d = addDays(mon, i); if (isWashDay(d)) out.push(d); }
-    return out;
-  }
+  // 2026-08-11 ("I don't like this function anymore" -- the every-2-days auto-
+  // rotation): SUPERSEDES the anchor+intervalDays math that used to live here
+  // (hairAnchorFor/isWashDay/washDaysInWeek, all removed). Each of the 3 wash
+  // types is now a real routine with its own real freq (see
+  // migrateHairToRealFreq below) -- so "is this tier due today" is just the
+  // same question every other routine already answers via
+  // routineOwnPatternOn(), not calOn-gated (a routine she's hidden from her
+  // calendar can still be "the day's wash", same as before calOn only ever
+  // meant "don't also put an event block on the calendar"). Everything beats
+  // Treatment beats Regular if more than one lands on the same day, same
+  // precedence the old rotation always gave the richer wash.
   function washType(date) {
-    if (!isWashDay(date)) return null;
-    const week = washDaysInWeek(date), k = keyOf(date);
-    const weekend = week.filter(d => ((d.getDay()+6)%7) >= 5);
-    const everythingDay = weekend.length ? weekend[weekend.length - 1] : null;
-    if (everythingDay && keyOf(everythingDay) === k) return "everything";
-    const treatmentDay = week.find(d => !everythingDay || keyOf(d) !== keyOf(everythingDay));
-    if (treatmentDay && keyOf(treatmentDay) === k) return "treatment";
-    return "regular";
-  }
-  function nextWashDate(from) {
-    for (let i = 1; i <= 10; i++) { const d = addDays(from, i); if (washType(d)) return d; }
+    for (const t of ["everything", "treatment", "regular"]) {
+      const rt = hairRoutineFor(t);
+      if (rt && routineOwnPatternOn(rt, date)) return t;
+    }
     return null;
   }
-  // an explicit override always wins over the automatic every-2-days cycle — "none"
+  function nextWashDate(from) {
+    for (let i = 1; i <= 30; i++) { const d = addDays(from, i); if (washType(d)) return d; }
+    return null;
+  }
+  // an explicit override always wins over each type's own schedule — "none"
   // means "skip today" (and suppress the preview too, since she's already decided)
   function washTypeWithOverride(date) {
     const ov = HAIR_OVERRIDES[keyOf(date)];
@@ -25665,10 +25680,9 @@
     const AREA_ORDER = lifeCats().map(c => c.id);
     // which weekday indices (0=Mon..6=Sun) are this routine's OWN real active
     // days -- null when its freq isn't a day-of-week pattern at all (monthly/
-    // yearly/once/interval/numMoney/hair rotation), in which case the row
-    // falls back to the plain recurrence label instead of drawing empty dots.
+    // yearly/once/interval/numMoney), in which case the row falls back to the
+    // plain recurrence label instead of drawing empty dots.
     const dowFor = t => {
-      if (HAIR_TYPE_IDS.has(t.id)) return null;
       if (t.freq === "daily") return [0, 1, 2, 3, 4, 5, 6];
       // union of every layer's days -- a multi-schedule routine's dots show every
       // day it touches, even though different layers run at different times
@@ -25717,7 +25731,7 @@
           : t.freq === "monthly" ? ` (day ${t.day})`
           : t.freq === "once" ? (t.date ? ` (${t.date})` : " (undated)")
           : "";
-        const freqLabel = HAIR_TYPE_IDS.has(t.id) ? `Every ${HAIR.intervalDays} days, rotating` : routineFreqLabel(t) + freqDetail;
+        const freqLabel = routineFreqLabel(t) + freqDetail;
         const timePart = t.start ? fmtTime(minToTime(timeToMin(t.start))) : "";
         metaHtml = `<span class="rtn-meta-time">${esc(freqLabel)}${timePart ? " · " + esc(timePart) : ""}</span>`;
       }
@@ -28925,14 +28939,6 @@
       renderDay();
     }
   });
-  document.getElementById("hairOverrideRow")?.addEventListener("change", e => {
-    if (e.target.id !== "hairOverrideSelect") return;
-    const k = e.target.dataset.hairDate, v = e.target.value;
-    if (v === "") delete HAIR_OVERRIDES[k]; else HAIR_OVERRIDES[k] = v;
-    saveHairOverrides();
-    renderDay();
-    if (state.view === "habits") renderHabits();
-  });
 
   /* ---- health, logged straight from the day it happened ---- */
   function commitDhWeight() {
@@ -30714,7 +30720,6 @@
     rtnExtraDates = []; renderRtnExtraDates();
     rtnExtraSchedules = []; renderRtnSchedExtra();
     document.getElementById("rtnFreqGroup").hidden = false;
-    document.getElementById("rtnHairNote").hidden = true;
     document.getElementById("rtnDeleteBtn").hidden = true;
     setRtnMoreOptionsOpen(false);
     if (rtnInlineId != null) rtnCloseInline(); else placeRtnForm(false);   // undock inline row OR the side rail, return the form to its anchor
@@ -30842,13 +30847,6 @@
     } else {
       rtnExtraDates = [];
     }
-    // the 3 wash types have their day decided by the rotation, not by a repeat
-    // pattern on this form — hide the (non-functional, here) Repeats picker for them,
-    // and the compact summary line too (the hair note right there explains instead)
-    const isHairType = !!task && HAIR_TYPE_IDS.has(task.id);
-    document.getElementById("rtnFreqGroup").hidden = isHairType;
-    if (isHairType) document.getElementById("rtnRepeatSummaryField").hidden = true;
-    document.getElementById("rtnHairNote").hidden = !isHairType;
     renderRtnExtraDates();
     renderRtnSchedExtra();
     renderRtnCatList();
