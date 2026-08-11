@@ -3158,6 +3158,23 @@
   .oc-mini-d { color: var(--cat-personal-fitness); }
   .oc-mini-r { color: var(--cosmic-gold); }
   .oc-mini-c { color: var(--cat-personal-beauty); }
+  /* ---- all-day banner row, Day page (2026-08-11, "i want to see the birthday in
+     day calendar as an all day event") — sits above #timelineScroll, outside the
+     scroll area, so it stays visible like Google Calendar's all-day row. Same
+     track-tinted fill/text as .mo-chip (month view) reuses the timeline's own
+     --tl-*-bg/--tl-*-title pair, so it reads as a calendar item, not a to-do. ---- */
+  .tl-allday-row:empty { display: none; }
+  .tl-allday-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .tl-allday-chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+    border-radius: var(--radius-sm); padding: 5px 10px 5px 8px;
+    font-family: var(--font-body); font-size: 12px; font-weight: 600; cursor: grab;
+  }
+  .tl-allday-chip[data-track="work"]     { background: var(--tl-work-bg);     color: var(--tl-work-title); }
+  .tl-allday-chip[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
+  .tl-allday-chip[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
+  .tlac-ic { font-family: var(--font-emoji); font-size: 13px; line-height: 1; flex: none; }
+  .tlac-ttl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* ---- meal-log sheet (2026-08-11, "log my actual lunch") — same sheet chrome as
      the outcome picker above, own tag/photo/nutrition-numbers fields ---- */
   .ml-sheet { width: min(400px, 100vw); padding: 16px; gap: 12px; overflow-y: auto; max-height: 85vh; }
@@ -12437,6 +12454,15 @@
              past-due still-open items — OFF by default, gated by the Follow-ups
              switch on the Notifications page. Filled by renderOcPrompts(). -->
         <div class="oc-prompts" id="ocPrompts"></div>
+        <!-- 2026-08-11 (Linh: "i want to see the birthday in day calendar as an all
+             day event"): birthdays (and belled person-dates, same category) used to
+             only surface buried in the "To-Do's" list below, labelled like a task even
+             though they're not tickable — this is the real all-day banner, sitting
+             above the scrollable hour grid exactly like Google Calendar's all-day row,
+             so it stays visible regardless of scroll position. Filled by
+             renderAlldayRow(); collapses to zero height when there's nothing today,
+             same empty-is-invisible pattern as #chainChips/#ocPrompts above. -->
+        <div class="tl-allday-row" id="tlAlldayRow"></div>
         <div class="timeline-scroll" id="timelineScroll">
         <div class="timeline-wrap">
           <div class="sky-layer" id="skyLayer"></div>
@@ -17324,6 +17350,17 @@
     for (let h = START_HOUR; h < END_HOUR; h++) if (!busy.has(h)) compact.add(h);
     state.compactHours = compact;
   }
+  // 2026-08-11 (Linh: "i want to see the birthday in day calendar as an all day
+  // event"): the banner strip above the hour grid (#tlAlldayRow, sits outside
+  // #timelineScroll so it never scrolls away) — same track-tinted chip look as the
+  // real timeline blocks (.mo-chip's --tl-*-bg/--tl-*-title pattern) so it visually
+  // reads as "this is a calendar item", just one without a specific hour. Keeps the
+  // existing "drag onto the calendar to schedule" affordance the same chip had in
+  // the To-Do's box (the drop handler lives on #dayPage, so it works from any
+  // descendant with these data- attributes, no change needed there).
+  function renderAlldayRow(items) {
+    document.getElementById("tlAlldayRow").innerHTML = items.map(e => `<span class="tl-allday-chip" data-track="${e.track}" draggable="true" data-drag-title="${esc(e.title)}" data-drag-track="${e.track}" title="${esc(e.note ? `${e.title} — ${e.note}` : e.title)}">${e.icon ? `<span class="tlac-ic">${e.icon}</span>` : ""}<span class="tlac-ttl">${esc(e.title)}</span></span>`).join("");
+  }
   function buildHours() {
     let html = "";
     for (let h = START_HOUR; h < END_HOUR; h++) {
@@ -17721,6 +17758,26 @@
     document.getElementById("outsideNote").innerHTML = outside.length
       ? `<div class="outside-note">Outside today's window: ${outside.map(e => `${esc(e.title)} (${fmtTime(e.start)})`).join(", ")}</div>`
       : "";
+  }
+
+  // 2026-08-11 (Fix: expanding hours misaligns blocks): every layer whose own
+  // position/height derives from topForMin()/HOUR_H() — same set renderDay() itself
+  // calls (see its "renderAnimalBands()...renderTimeline(timed)" run), minus the
+  // widgets in between that don't (birthday/numerology/fast-bar/boost/rail order).
+  // Grouped so a scale-only change (pinch-zoom live drag, window resize) can re-run
+  // exactly this set — one render pass, nothing stale — without repeating renderDay()'s
+  // much heavier dayEvents/chain regeneration. Takes the day's item list explicitly
+  // (renderDay passes its freshly computed `timed`; live callers reuse the already-
+  // rendered TL_ITEMS_BY_ID, snapshotted via Object.values() since renderTimeline
+  // resets that map at the top of its own call) rather than recomputing it.
+  function renderTimelineLayout(items) {
+    renderAnimalBands();
+    renderSky();
+    renderSleepBand();
+    renderPowerHours();
+    renderElapsedFade();
+    renderFastLine();
+    renderTimeline(items);
   }
 
   /* ============================================================
@@ -20281,16 +20338,18 @@
     // calendar on/off switch there (Linh 2026-07-27): if she's left it on, she wants
     // to see it, timed or not — that's what "on the calendar" means to her, and hiding
     // it silently here is exactly what made an added routine look like it "did not add".
+    // birthdays (and belled person-dates, same category) now get their own all-day
+    // banner above the timeline (Linh 2026-08-11: "i want to see the birthday in day
+    // calendar as an all day event") instead of the To-Do's box below — see
+    // renderAlldayRow() and its call site near buildHours().
+    const alldayBdays = dayEvents.filter(e => (e.allDay || !e.start) && e.category === "Birthdays");
     const allDay = dayEvents.filter(e =>
-      (e.allDay || !e.start) &&
-      // birthdays (and belled person-dates, same category) always surface here as
-      // all-day events — Linh 2026-08-09 — even though they're generated+personal,
-      // which the rule below would otherwise hide. They render as non-tickable event
-      // chips (eventKind -> "event"), edited from the People page, not here.
-      (e.category === "Birthdays" || (e.track === "personal" ? (!e.generated || e.fromRoutine) : true)));
+      (e.allDay || !e.start) && e.category !== "Birthdays" &&
+      (e.track === "personal" ? (!e.generated || e.fromRoutine) : true));
     // anything with a real time goes on the calendar, whatever its life-area —
     // personal/family timed items also stay in their sidebar lists for ticking off
     const timed = dayEvents.filter(e => !e.allDay && e.start);
+    renderAlldayRow(alldayBdays);
     // 2026-08-04 (Linh: "hours size to their content automatically"): see this
     // function's own comment near buildHours() for exactly what "compact" means here.
     computeCompactHours(timed);
@@ -33530,15 +33589,25 @@
   /* 2026-08-02 (Linh: "allow for pinching screen to expand hour blocks both mobile and
      desktop, i have a touch screen"): two-finger pinch over the timeline scales
      --hour-h, the single var almost the whole timeline is already wired through (see
-     HOUR_H() above). Same trade-off as the drag-resize handler right above: during the
-     live gesture only cheap style tweaks happen (row heights via the CSS var — free;
-     scrollTop, to keep the pinched time under her fingers instead of the view
-     drifting) — event/sky/power-hour blocks stay visually frozen mid-gesture and only
-     snap to their correct new positions via the real renderDay() on release. */
+     HOUR_H() above).
+     2026-08-11 (Fix: "expanding calendar hours misaligns blocks + their colours/
+     buttons" — Linh, with a "push automatically" instruction): SUPERSEDES the freeze-
+     mid-gesture trade-off this used to make. Blocks visibly not tracking the rescaling
+     hour grid WHILE she's actively pinching is exactly the bug she reported — real,
+     even though it always self-corrected by the time her fingers lifted. Every touchmove
+     now also re-runs renderTimelineLayout() (rAF-throttled to once per frame, not once
+     per event — pinch can fire touchmove faster than the display refreshes) so blocks,
+     colours, on-block tick buttons, resize handles (all children of their block, or
+     re-derived fresh from each item's own id — see renderTimelineLayout's own comment)
+     and the now-line stay locked to the grid at every intermediate hourH, not just the
+     final one. Reuses TL_ITEMS_BY_ID (already exactly today's rendered item set) rather
+     than recomputing dayEvents from scratch every frame — that heavier recompute stays
+     release-only, via the unchanged renderDay() call in endPinch(). */
   (function () {
     const HOUR_H_KEY = "book33-hour-h", MIN_H = 24, MAX_H = 160;
     const scroller = document.getElementById("timelineScroll");
     let startDist = 0, startH = 0, anchorMin = 0, pinching = false;
+    let liveRaf = null, pendingMidY = 0;
     const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     // 2026-08-04: compactH() is deliberately NOT proportional to HOUR_H() (see its own
     // comment near topForMin) -- a compact row's live height during the gesture has to
@@ -33566,19 +33635,43 @@
       const scale = dist(e.touches[0], e.touches[1]) / startDist;
       const newH = Math.max(MIN_H, Math.min(MAX_H, startH * scale));
       document.documentElement.style.setProperty("--hour-h", `${newH.toFixed(1)}px`);
-      repositionRows();
       const rect = scroller.getBoundingClientRect();
-      const midYViewport = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-      scroller.scrollTop = topForMin(anchorMin) - midYViewport;
+      pendingMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+      if (liveRaf) return;
+      liveRaf = requestAnimationFrame(() => {
+        liveRaf = null;
+        repositionRows();
+        renderTimelineLayout(Object.values(TL_ITEMS_BY_ID));
+        scroller.scrollTop = topForMin(anchorMin) - pendingMidY;
+      });
     }, { passive: false });
     const endPinch = () => {
       if (!pinching) return;
       pinching = false;
+      if (liveRaf) { cancelAnimationFrame(liveRaf); liveRaf = null; }
       try { localStorage.setItem(HOUR_H_KEY, HOUR_H().toFixed(1)); } catch (e) {}
       renderDay();
     };
     scroller.addEventListener("touchend", endPinch);
     scroller.addEventListener("touchcancel", endPinch);
+  })();
+  // 2026-08-11 (Fix: expanding calendar hours misaligns blocks — acceptance criterion
+  // "re-run on every trigger that changes scale: the expand/zoom control, WINDOW
+  // RESIZE, and view switches"): --hour-h itself doesn't currently change across any
+  // CSS breakpoint (mobile and desktop both declare 48px — see the two --hour-h
+  // declarations), but renderTimeline() also reads window.innerWidth directly (the
+  // mobile/desktop track-label line, and the solo-block width-equalising pass), so a
+  // resize CAN change block layout today even with hourH held constant, and would
+  // silently go stale without this. View switches need no extra wiring: render()'s
+  // dispatch always calls the real renderDay() fresh on every entry into the Day view,
+  // which re-reads HOUR_H() live — already correct, see topForMin().
+  (function () {
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      if (state.view !== "day") return;
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => renderTimelineLayout(Object.values(TL_ITEMS_BY_ID)), 150);
+    });
   })();
   document.addEventListener("click", () => document.getElementById("patientsNudge")?.classList.remove("open"));
   document.getElementById("dayHealthBody").addEventListener("click", e => {
@@ -33654,9 +33747,9 @@
   // trigger class; tapping outside (or a second tap on the same trigger) closes it.
   document.addEventListener("click", e => {
     const trig = e.target.closest(".num-hover-trigger");
-    // the mascot's own pointerup fallback (below) just handled this exact tap — a
-    // synthesized click arriving on its heels must not instantly toggle it back shut
-    if (trig && trig.id === "astroMotifMini" && Date.now() - mascotPointerAt < 500) return;
+    // the pointerup fallback (below) just handled this exact tap — a synthesized
+    // click arriving on its heels must not instantly toggle it back shut
+    if (trig && trig === lastHoverTrigEl && Date.now() - hoverTrigPointerAt < 500) return;
     document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => {
       if (el !== trig) el.classList.remove("pop-open");
     });
@@ -33711,23 +33804,30 @@
   // real taps on the mascot never arrive as click events, so the delegate above never
   // runs for it. Root cause unprovable remotely (candidates: a re-render swapping the
   // glyph node mid-gesture so Android drops the synthesized click, a stuck .pop-done,
-  // touch-to-click synthesis failing on the reparented mascot) — this fallback
-  // sidesteps all of them by acting on the RAW pointerup, which always fires. Guards:
-  // taps that moved (scrolling over it) are ignored, taps inside the open card fall
-  // through to the card's own chips, and mascotPointerAt (checked by the click
-  // delegate above) stops a tap that DOES synthesize a click from toggling twice.
-  let mascotPointerAt = 0, mascotDownXY = null;
+  // touch-to-click synthesis failing on a reparented node) — this fallback sidesteps
+  // all of them by acting on the RAW pointerup, which always fires. Guards: taps that
+  // moved (scrolling over it) are ignored, taps inside the open card fall through to
+  // the card's own chips, and hoverTrigPointerAt/lastHoverTrigEl (checked by the click
+  // delegate above) stop a tap that DOES synthesize a click from toggling twice.
+  // 2026-08-11 (Linh: "the hover over moon sign horse year etc should bring up
+  // info"): SUPERSEDES the #astroMotifMini-only scoping this originally shipped
+  // with — the dropped-click symptom was never actually mascot-specific (any
+  // .num-hover-trigger glyph can get swapped mid-gesture by the same renderDay()
+  // re-render the mascot does), it just hadn't been reported on the others yet.
+  // Now covers every .num-hover-trigger, the same class the CSS reveal rule and
+  // the click delegate above already key off.
+  let hoverTrigPointerAt = 0, hoverTrigDownXY = null, lastHoverTrigEl = null;
   document.addEventListener("pointerdown", e => {
-    const trig = e.target.closest && e.target.closest("#astroMotifMini");
-    mascotDownXY = trig && !e.target.closest(".num-hover-pop") ? [e.clientX, e.clientY] : null;
+    const trig = e.target.closest && e.target.closest(".num-hover-trigger");
+    hoverTrigDownXY = trig && !e.target.closest(".num-hover-pop, .wcard-hover-pop") ? [e.clientX, e.clientY] : null;
   });
   document.addEventListener("pointerup", e => {
-    if (!mascotDownXY) return;
-    const downXY = mascotDownXY; mascotDownXY = null;
-    const trig = e.target.closest && e.target.closest("#astroMotifMini");
-    if (!trig || e.target.closest(".num-hover-pop")) return;
+    if (!hoverTrigDownXY) return;
+    const downXY = hoverTrigDownXY; hoverTrigDownXY = null;
+    const trig = e.target.closest && e.target.closest(".num-hover-trigger");
+    if (!trig || e.target.closest(".num-hover-pop, .wcard-hover-pop")) return;
     if (Math.abs(e.clientX - downXY[0]) + Math.abs(e.clientY - downXY[1]) > 12) return;   // a scroll, not a tap
-    mascotPointerAt = Date.now();
+    lastHoverTrigEl = trig; hoverTrigPointerAt = Date.now();
     document.querySelectorAll(".num-hover-trigger.pop-open").forEach(el => { if (el !== trig) el.classList.remove("pop-open"); });
     trig.classList.remove("pop-done");
     trig.classList.toggle("pop-open");
