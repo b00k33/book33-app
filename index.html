@@ -35997,6 +35997,18 @@
   if (!window.__BOOK33_SYNC) return;                      // offline build → do nothing
 
   var TABLE   = "book33";
+  // 2026-08-11 (Fix: phone widget can't read the private table without her real
+  // login): the widget's Android host app has no way to sign in as her, and the
+  // main `book33` table's RLS requires that -- confirmed live, a plain anon-key
+  // fetch against it returns zero rows even though the app's own authenticated
+  // client syncs fine. Rather than hand a phone widget app her real access token,
+  // this key gets its OWN narrow, single-row, publicly-READABLE table (SQL in the
+  // build notes) -- anon can SELECT it, only her authenticated session can write
+  // it. computeWidgetDigest() already deliberately excludes anything private (no
+  // patient/pharmacy/notes -- just what the widget itself shows), so an anonymous
+  // read of just this one row exposes nothing the main table's lockdown protects.
+  var WIDGET_PUBLIC_TABLE = "book33_widget_public";
+  var WIDGET_PUBLIC_KEY = "book33-widget-today";
   var CFG_KEY = "book33-sync-config";                     // {url, key} fallback (unused when baked)
   var APPLIED = "book33-applied-at";                      // sessionStorage: cloud updated_at we last adopted
   // 2026-08-05 (Linh: "mobile offline version doesn't save automatically"): edits made
@@ -36107,6 +36119,11 @@
       // recomputed notification queue is never that.
       if (!NOISY[k]) { try { _setItem.call(window.localStorage, DIRTY, "1"); } catch (e) {} markDirtyKey(k); }
       if (ready) schedulePush();
+      // 2026-08-11 (Fix: phone widget can't read the private table): the digest
+      // rides the same interception point as everything else here, but pushes to
+      // its OWN public-readable row (WIDGET_PUBLIC_TABLE) instead of the full
+      // authenticated snapshot pushNow() sends — see that function's own comment.
+      if (k === WIDGET_PUBLIC_KEY) scheduleWidgetPublicPush(v);
     }
   };
   // sync card bookkeeping only (see DIRTY_KEYS above) -- uses the raw setItem, same
@@ -36171,6 +36188,32 @@
       lastPushFailed = true;
       pushInFlight = false; updateSyncCard();
     });                                                      // failed — lastPushed unchanged, stays retryable
+  }
+
+  // 2026-08-11 (Fix: phone widget can't read the private table): pushes ONLY the
+  // already-privacy-safe digest into its own public-readable row — see
+  // WIDGET_PUBLIC_TABLE's own comment above for why this needs to be separate from
+  // pushNow()'s full authenticated snapshot. Debounced same as schedulePush(), and
+  // same-content guarded so ticking through a day that doesn't change the digest
+  // (nothing timed left, digest byte-identical) doesn't spam the network. Best-
+  // effort: a failure here must never affect the real sync (pushNow() above) or
+  // surface an error to her — this is a display convenience for one glance-only
+  // widget, not data of record. On failure, un-marks lastWidgetPublicPushed so the
+  // NEXT digest change (or the next boot's ready-time push, see go()) retries it —
+  // never queues its own retry timer, to keep this one-shot and simple.
+  var widgetPublicTimer = null, lastWidgetPublicPushed = "";
+  function scheduleWidgetPublicPush(json) {
+    clearTimeout(widgetPublicTimer);
+    widgetPublicTimer = setTimeout(function () { pushWidgetPublic(json); }, 1400);
+  }
+  function pushWidgetPublic(json) {
+    if (!sb || !ready || !json || json === lastWidgetPublicPushed) return;
+    var digest;
+    try { digest = JSON.parse(json); } catch (e) { return; }
+    lastWidgetPublicPushed = json;
+    sb.from(WIDGET_PUBLIC_TABLE).upsert({ id: 1, digest: digest, updated_at: new Date().toISOString() }, { onConflict: "id" })
+      .then(function (r) { if (r && r.error) lastWidgetPublicPushed = ""; },
+            function () { lastWidgetPublicPushed = ""; });
   }
 
   /* ---- pull (cloud changed → app) ------------------------------------- */
@@ -36871,6 +36914,12 @@
   }
   function go() {
     ready = true; lastPushed = JSON.stringify(gather());
+    // 2026-08-11 (Fix: phone widget can't read the private table): the setItem
+    // interception only fires on an actual CONTENT change — a device that opens the
+    // app, signs in, but doesn't edit anything would otherwise never push the public
+    // digest this boot, even once ready. One direct push here (bypassing the
+    // interception, reading whatever's already in localStorage) covers that.
+    pushWidgetPublic(localStorage.getItem(WIDGET_PUBLIC_KEY));
     hideOverlay(); badge(); signoutBtn(); syncCardEl(); forceResyncBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
