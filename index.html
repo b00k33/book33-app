@@ -32672,6 +32672,15 @@
     }
     return null;
   }
+  // every bill across all three areas, flattened with its own cadence -- the one
+  // place Book33Notify's bill-reminder pass (below) reads from, so a bill's Due
+  // picker and its reminder always agree on the same occurrence/cycle logic.
+  function expAllBillsWithCadence() {
+    const out = [];
+    ["personal", "business", "marriage"].forEach(key =>
+      EXPENSES[key].groups.forEach(g => g.bills.forEach(b => out.push({ areaKey: key, bill: b, cadence: g.cadence }))));
+    return out;
+  }
   function expAddBillToGroup(groupId) {
     const found = expFindGroup(groupId);
     if (!found) return;
@@ -34963,6 +34972,7 @@
               perCategory: { "Work/Clinic": 15, "Personal": 30, "Fitness": 30, "Marriage": 60 },
               allowPerEventOverride: true },
     fasting: { on: true, warnBeforeMin: 30, notifyOnBreak: true, fastLengthHr: 18 },
+    bills: { on: true, leadDays: 1 },
     commute: { on: true, matchKeywords: ["train"], extraEventIds: [], fireDelayMin: 2,
                messageMorning: "On the train (coffee) Plan your day or read?",
                messageEvening: "Heading home. Wind down — log habits or just breathe." },
@@ -35234,6 +35244,32 @@
           data: { date: keyOf(breakT) },
         });
       }
+      // bills — a lead-time nudge before each unpaid bill's own due occurrence, reusing
+      // the exact same cadence-aware Due/Status math the Money page's table already
+      // computes (expDueOccurrence/expBillStatus/expCycleBucket), so the reminder and
+      // what the pill shows can never disagree. Only bills that are still due (not
+      // paid this cycle, and not already overdue -- that's what the Status pill is
+      // for) get a forward-looking nudge; the tag is cycle-scoped so a weekly bill
+      // gets a fresh reminder every week instead of the old cycle's tag suppressing it.
+      if (NOTIF.bills.on) {
+        expAllBillsWithCadence().forEach(({ bill, cadence }) => {
+          const info = expBillStatus(bill, cadence);
+          if (info.state !== "due" || !info.date) return;
+          const bucket = expCycleBucket(cadence, TODAY) || keyOf(info.date);
+          const dueAt = new Date(info.date.getFullYear(), info.date.getMonth(), info.date.getDate(), 9, 0, 0, 0).getTime();
+          const when = dueAt - (NOTIF.bills.leadDays || 0) * 86400000;
+          if (when <= now) return;
+          const amt = expMoney(expThreeCols(bill.amount, bill.per)[bill.per] || bill.amount);
+          const dueDays = dayDiff(info.date, TODAY);
+          const dueLabel = dueDays === 0 ? "today" : dueDays === 1 ? "tomorrow" : `${info.date.getDate()} ${MON_SHORT[info.date.getMonth()]}`;
+          out.push({
+            when, urgent: false, tag: `bill-${bill.id}-${bucket}`,
+            title: "💰 Bill due soon",
+            body: `${bill.name || "Bill"} · ${amt} · due ${dueLabel}`,
+            data: { date: keyOf(info.date) },
+          });
+        });
+      }
       // quiet hours: non-urgent nudges wait for the window's end; event reminders and
       // the about-to-break warning are time-critical and come through
       out.forEach(r => { if (!r.urgent && inQuiet(r.when)) r.when = quietEndAfter(r.when); });
@@ -35395,6 +35431,7 @@
     "fasting.warnBeforeMin": { min: 0, max: 240, step: 5, unit: "min" },
     "fasting.fastLengthHr": { min: 8, max: 36, step: 1, unit: "h" },
     "commute.fireDelayMin": { min: 0, max: 60, step: 1, unit: "min" },
+    "bills.leadDays": { min: 0, max: 7, step: 1, unit: "d" },
   };
   function ntLeadLabel(mins) {
     if (mins % 1440 === 0 && mins >= 1440) { const d = mins / 1440; return d === 1 ? "1 day before" : `${d} days before`; }
@@ -35551,6 +35588,20 @@
           <div class="nt-row">
             <span class="nt-lbl">Fast length<span class="nt-sub">One number with your fasting ring's goal — changing it here changes the ring too</span></span>
             ${ntStepper("fasting.fastLengthHr", NOTIF.fasting.fastLengthHr)}
+          </div>
+        </div>` : ""}
+      </div>
+
+      <div class="nt-group">
+        <div class="nt-group-label">💰 Bills</div>
+        <div class="nt-row">
+          <span class="nt-lbl">Bill reminders<span class="nt-sub">Follows each bill's own Due picker and Status pill on the Money page — a paid bill never nudges</span></span>
+          ${ntSwitch("bills.on", NOTIF.bills.on)}
+        </div>
+        ${NOTIF.bills.on ? `<div class="nt-subwrap">
+          <div class="nt-row">
+            <span class="nt-lbl">Remind me before it's due</span>
+            ${ntStepper("bills.leadDays", NOTIF.bills.leadDays)}
           </div>
         </div>` : ""}
       </div>
@@ -35928,6 +35979,7 @@
   const _ntSvHl = saveHealth;           saveHealth = function () { _ntSvHl(); Book33Notify.rescheduleSoon(); };
   const _ntSvOvr = saveEvTimeOvr;       saveEvTimeOvr = function () { _ntSvOvr(); Book33Notify.rescheduleSoon(); };
   const _ntSvSk = saveEvSkips;          saveEvSkips = function () { _ntSvSk(); Book33Notify.rescheduleSoon(); };
+  const _ntSvExp = saveExpenses;        saveExpenses = function () { _ntSvExp(); Book33Notify.rescheduleSoon(); };
 
   buildHours();
   syncTrack();
