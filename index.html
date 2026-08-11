@@ -1323,6 +1323,19 @@
   @media (hover: none), (pointer: coarse) {
     .tl-resize-handle { display: none; }
   }
+  /* 2026-08-11 (Linh, "the calendar events aren't resizing" on a mouse+touch tablet):
+     (hover:none)/(pointer:coarse) reflects the OS's "primary" input, which on a
+     hybrid Windows tablet is often the touchscreen even while she's actively driving
+     the UI with a mouse -- the media query above then hides the handle outright,
+     which also makes it un-clickable (display:none isn't hit-testable), not just
+     invisible. body.mouse-active is set the moment any real mouse pointer event is
+     seen anywhere on the page (see the pointerover listener near the resize-drag
+     IIFE) and beats the media-query rule on specificity alone, so a tablet with a
+     mouse attached gets the handle back without weakening the coarse-only-touch
+     case (a phone that's never seen a mouse event stays exactly as before). */
+  body.mouse-active .tl-resize-handle { display: block; }
+  body.mouse-active .tl-item:hover .tl-resize-handle,
+  body.mouse-active .tl-resize-handle:focus-visible { opacity: 1; }
   /* 2026-08-11 (Build brief, "grip + preview + tooltip in gold"): a resize-scoped
      variant of the shared hover-add-line ghost (also used by the reschedule-drag and
      the plain hover-to-add preview) -- toggled on/off for the duration of a resize
@@ -3145,6 +3158,30 @@
   .oc-mini-d { color: var(--cat-personal-fitness); }
   .oc-mini-r { color: var(--cosmic-gold); }
   .oc-mini-c { color: var(--cat-personal-beauty); }
+  /* ---- meal-log sheet (2026-08-11, "log my actual lunch") — same sheet chrome as
+     the outcome picker above, own tag/photo/nutrition-numbers fields ---- */
+  .ml-sheet { width: min(400px, 100vw); padding: 16px; gap: 12px; overflow-y: auto; max-height: 85vh; }
+  .ml-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ml-sheet .nt-chip {
+    border: 1px solid var(--note-line); border-radius: 999px; background: var(--field-bg);
+    color: var(--ink-soft); font-family: var(--font-body); font-size: 12px; font-weight: 600;
+    padding: 6px 12px; min-height: 32px; cursor: pointer;
+  }
+  .ml-sheet .nt-chip[aria-pressed="true"] {
+    background: var(--gold-bright); border-color: var(--gold-bright); color: var(--accent-on); font-weight: 700;
+  }
+  .ml-photo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ml-photo-preview { width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; flex: none; }
+  .ml-photo-remove {
+    position: relative; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--note-line);
+    background: var(--field-bg); color: var(--ink-soft); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center; padding: 0; flex: none;
+  }
+  .ml-photo-remove::before { content: ""; position: absolute; inset: -6px; }
+  /* same 2-col grid mechanics as .add-form (#addForm etc.), without its own card
+     chrome (background/border/shadow) — that's already the .ml-sheet it sits inside */
+  #mealLogForm { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  #mealLogForm .full { grid-column: 1 / -1; }
   /* 2026-08-06 (Linh: "a little confetti burst or a springy check with a soft colour
      pop"): celebrateTickAt() (JS, near toggleDone) appends one of these per tick-to-
      done, positioned via inline left/top rather than any ancestor -- fixed, so it reads
@@ -5387,9 +5424,16 @@
   #addForm #trackPicker .track-opt[aria-pressed="true"] {
     color: var(--accent-on); box-shadow: none; font-weight: 600;
   }
-  #addForm #trackPicker .track-opt[data-track="work"][aria-pressed="true"] { background: var(--work-seed); border-color: var(--work-seed); }
-  #addForm #trackPicker .track-opt[data-track="marriage"][aria-pressed="true"] { background: var(--marriage-seed); border-color: var(--marriage-seed); }
-  #addForm #trackPicker .track-opt[data-track="personal"][aria-pressed="true"] { background: var(--personal-seed); border-color: var(--personal-seed); }
+  /* 2026-08-11: was one hardcoded rule per data-track id (work/marriage/personal) --
+     a 4th (Family) needed a 4th copy-pasted rule just to pick up a colour that was
+     already sitting in --family-seed via applyCategoryColours(). Read the seed
+     generically off the button's own data-track instead, so any future life category
+     (added the normal way, via "+ Add part of life") lights up here with zero new CSS. */
+  #addForm #trackPicker .track-opt[aria-pressed="true"] { background: var(--track-seed); border-color: var(--track-seed); }
+  #addForm #trackPicker .track-opt[data-track="work"] { --track-seed: var(--work-seed); }
+  #addForm #trackPicker .track-opt[data-track="family"] { --track-seed: var(--family-seed); }
+  #addForm #trackPicker .track-opt[data-track="marriage"] { --track-seed: var(--marriage-seed); }
+  #addForm #trackPicker .track-opt[data-track="personal"] { --track-seed: var(--personal-seed); }
   /* 2026-08-09 (readable + tessellated mobile editor brief, "Part-of-life selected
      chip fills with its OWN track colour... so the choice reads at a glance"):
      mirrors #addForm #trackPicker directly above, verbatim pattern, just retargeted
@@ -6601,6 +6645,22 @@
   .log-row .val { font-family: var(--font-body); flex: 1; font-variant-numeric: tabular-nums; }
   .log-row .del { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 15px; padding: 2px 5px; }
   .log-row .del:hover { color: var(--margin-rule); }
+
+  /* ---- Meals today (2026-08-11, "log my actual lunch") — itemized, grouped by slot ---- */
+  .nut-meal-slot { margin-top: 12px; }
+  .nut-meal-slot:first-child { margin-top: 0; }
+  .nut-meal-slot-h { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-faint); font-weight: 700; margin-bottom: 4px; }
+  .nut-meal-row {
+    display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
+    border-top: 1px solid var(--note-line); font-size: 13px;
+  }
+  .nut-meal-slot-h + .nut-meal-row { border-top: none; }
+  .nut-meal-photo { width: 40px; height: 40px; border-radius: var(--radius-sm); object-fit: cover; flex: none; }
+  .nut-meal-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .nut-meal-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .nut-meal-time { color: var(--ink-soft); font-variant-numeric: tabular-nums; font-size: 12px; flex: none; }
+  .nut-meal-desc { color: var(--ink); font-weight: 600; }
+  .nut-meal-jump { font-size: 12px; padding: 0; }
   .log-head {
     font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.13em;
     color: var(--ink-faint); margin: 14px 0 2px;
@@ -7671,6 +7731,7 @@
     .page { padding: 24px 16px 30px; }
     .date-block .date-big .date-num { font-size: 32px; }
     .add-form { grid-template-columns: 1fr; }
+    #mealLogForm { grid-template-columns: 1fr; }
     .p-steps, .p-loc-line { margin-left: 25px; }
   }
 
@@ -10562,6 +10623,14 @@
     <div class="tl-detail-sheet oc-sheet" id="ocSheet" role="dialog" aria-label="What happened?"></div>
   </div>
 
+  <!-- 2026-08-11 (Linh, "log my actual lunch"): quick meal-log sheet, opened from a
+       meal-titled event's "Log what I ate" button (renderTlDetailBody). Same
+       overlay+sheet chrome as the outcome picker above (component reuse). Rendered by
+       renderMealLogSheet(). -->
+  <div class="tl-detail-overlay ml-overlay" id="mealLogOverlay" hidden>
+    <div class="tl-detail-sheet ml-sheet" id="mealLogSheet" role="dialog" aria-label="Log what you ate"></div>
+  </div>
+
   <!-- person profile sheet (2026-08-05, Linh's Book44 mock): one person's family,
        significant dates, life updates and notes — rendered by ppRenderSheet(),
        opened from the People table (and from family chips inside itself: the web). -->
@@ -10737,6 +10806,12 @@
 
     <div class="section-head" style="margin-top:26px"><h2>Today</h2><span class="rule"></span></div>
     <div class="nut-today" id="nutToday"></div>
+
+    <!-- 2026-08-11 (Linh, "log my actual lunch"): itemized meals, grouped by slot --
+         separate from the flat daily-total rings above, filled by the "Log what I
+         ate" button on a meal-titled event (renderTlDetailBody/openMealLogSheet). -->
+    <div class="section-head" style="margin-top:26px"><h2>Meals today</h2><span class="rule"></span></div>
+    <div id="nutMealsToday"></div>
 
     <div class="section-head" style="margin-top:26px"><h2>Recent days</h2><span class="rule"></span></div>
     <div id="nutHistory"></div>
@@ -12452,6 +12527,7 @@
             <label>Part of life</label>
             <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life">
               <button type="button" class="track-opt" data-track="work" aria-pressed="true">Work</button>
+              <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
               <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
               <button type="button" class="track-opt" data-track="personal" aria-pressed="false">Personal</button>
             </div>
@@ -12610,12 +12686,17 @@
         </form>
 
         <!-- 2026-08-06 (Linh: "i like that fasting [bar/line]. remove the wellness
-             widget"): this glance card (fasting %, weight, fitness-week progress) is
-             superseded by the Day grid's own fasting line + progress bar above -- see
-             #fastStatus/#fastLine and renderFastLine()/renderFastBar(). Its CSS (.head-fast,
-             .wellness-glance, .wg-*) is left in place, unused -- some class names (.bw-*,
-             .head-body) are shared with #dayBodyCard's own styling, too much of a shared
-             surface to safely prune under this change. -->
+             widget"): the old 3-line glance card (fasting %, weight, fitness-week
+             progress) that used to live in this exact slot was superseded by the Day
+             grid's own fasting line + progress bar -- see #fastStatus/#fastLine and
+             renderFastLine()/renderFastBar(). Its CSS (.head-fast, .wellness-glance,
+             .wg-*) is left in place, unused -- some class names (.bw-*, .head-body) are
+             shared with #dayBodyCard's own styling, too much of a shared surface to
+             safely prune under that change.
+             2026-08-11 (Linh, new positive-factor engine): a deliberate, score-based
+             revival of a widget in this same spot -- #boostWidget/renderBoostWidget(),
+             not the old glance. See computeTodayBoosts() for what it reads. -->
+        <div class="h-card" id="boostWidget"></div>
         <div id="biomechTip"></div>
         <!-- the two-person board: what's on his plate today and what you're both on -->
         <div id="usBox" class="us-box" hidden></div>
@@ -12888,6 +12969,17 @@
     el.textContent = css;
   }
   CATS = loadCategories();
+  // 2026-08-11 (Add-box redesign brief, STEP 1: Part-of-life chips "Work/Family/
+  // Marriage/Personal"): Family didn't exist as a life category before this -- one-time
+  // seed on boot, same shape as DEFAULT_CATS' other three, a distinct seed colour from
+  // all of them. Uses the app's own existing extensible-category machinery
+  // (applyCategoryColours() injects --family-seed + derived -ink/-tint automatically
+  // for any life category that isn't one of the original hand-authored three), not a
+  // new parallel system.
+  if (!CATS.some(c => c.type === "life" && c.id === "family")) {
+    CATS.push({ id: "family", name: "Family", type: "life", parent: null, color: "#B8456B" });
+    saveCategories(CATS);
+  }
   rebuildCatIndex();
   applyCategoryColours();
   /* ---- two-person system (2026-07-27, Linh: "a section where I want to designate or
@@ -13698,6 +13790,38 @@
     ROUTINE_TASKS.push(routine);
     saveRoutines(); renderRoutines(); renderDay(); renderHabits();
     return routine;
+  }
+  // 2026-08-11 (STEP 3 follow-up, "deleting a routine (OR EVENT) is currently
+  // permanent"): the routine archive above already covers routines; a whole plain
+  // event or a whole recurring-event series had only the 6s undo snackbar, so missing
+  // that window made the delete final -- same gap, same fix, same shape. `kind`
+  // records which store to restore into ("plain" -> EVENTS, "recur" -> RECURRING_
+  // EVENTS) since they're different arrays under one shared archive list.
+  const EVENT_ARCHIVE_KEY = "book33-events-archive";
+  function loadEventArchive() {
+    try {
+      const v = JSON.parse(localStorage.getItem(EVENT_ARCHIVE_KEY));
+      if (Array.isArray(v)) return v;
+    } catch (e) {}
+    return [];
+  }
+  function saveEventArchive() { try { localStorage.setItem(EVENT_ARCHIVE_KEY, JSON.stringify(EVENT_ARCHIVE)); } catch (e) {} }
+  let EVENT_ARCHIVE = loadEventArchive();
+  function archiveEvent(item, kind) {
+    EVENT_ARCHIVE = EVENT_ARCHIVE.filter(r => r.id !== item.id);
+    EVENT_ARCHIVE.unshift({ ...item, kind, deletedAt: Date.now() });
+    saveEventArchive();
+  }
+  function restoreEventFromArchive(id) {
+    const idx = EVENT_ARCHIVE.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    const { deletedAt, kind, ...item } = EVENT_ARCHIVE[idx];
+    EVENT_ARCHIVE.splice(idx, 1);
+    saveEventArchive();
+    if (kind === "recur") { RECURRING_EVENTS.push(item); saveRecurringEvents(); }
+    else { EVENTS.push(item); saveEvents(EVENTS); }
+    renderDay();
+    return item;
   }
   /* seed function stripped from the public sync build */
   // the wedding date moved to PEOPLE (as a milestone) so it gets Birthdays-tab visibility +
@@ -14511,6 +14635,20 @@
   function saveLinkedFit() { try { localStorage.setItem(LINKED_FIT_KEY, JSON.stringify(LINKED_FIT)); } catch (e) {} }
   let LINKED_FIT = loadLinkedFit();   // { [tickId]: fitSessionId }
 
+  /* --- Meal logging link: which NUT_MEALS entry (if any) a meal-titled calendar item
+     was logged from (Linh 2026-08-11: "log my actual lunch"). Stores {mealId, date}
+     rather than a bare id like LINKED_FIT above — a meal's storage date is deliberately
+     NOT re-synced to the source event's date on reschedule (nothing here plays the
+     moveFitLogSession role FIT_LOG needs), so a bare id alone wouldn't be enough to
+     find the entry again. See resolveMealFor() near resolveFitSessionFor. --- */
+  const LINKED_MEALS_KEY = "book33-linked-meals";
+  function loadLinkedMeals() {
+    try { const v = JSON.parse(localStorage.getItem(LINKED_MEALS_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveLinkedMeals() { try { localStorage.setItem(LINKED_MEALS_KEY, JSON.stringify(LINKED_MEALS)); } catch (e) {} }
+  let LINKED_MEALS = loadLinkedMeals();   // { [eventOrOccId]: { mealId, date } }
+
   /* --- Shopping days: numerology --- */
   const DAY_OF_MONTH_RULE = [8, 17, 26, 28];
   function reduceDigits(n) { while (n > 9) n = String(n).split("").reduce((a,c) => a + (+c), 0); return n; }
@@ -15002,6 +15140,10 @@
     if (e.target.closest("#hairToHabits")) { state.view = "habits"; render(); }
     const jump = e.target.closest("[data-jump-view]");
     if (jump) { state.view = jump.dataset.jumpView; render(); }
+    // 2026-08-11 (meal logging): the Nutrition page's "↩ <title> · <time>" chip,
+    // jumps back to the meal's source calendar event -- see its own comment.
+    const mealJump = e.target.closest("[data-meal-jump]");
+    if (mealJump) jumpToLinkedMealEvent(mealJump.dataset.mealJump);
   });
 
   // the every-2-days rhythm re-anchors on any actual wash she places by hand: once she
@@ -16392,6 +16534,18 @@
     }
     return null;
   }
+
+  // 2026-08-11 (meal logging): the LINKED_MEALS analogue of resolveFitSessionFor above
+  // -- unlike LINKED_FIT, the stored link already carries the meal's storage date (see
+  // LINKED_MEALS's own declaration comment for why a bare id isn't enough here), so this
+  // is a direct two-step lookup rather than a re-derive-the-date-from-e.date one.
+  function resolveMealFor(e) {
+    if (!e) return null;
+    const link = LINKED_MEALS[e.id];
+    if (!link) return null;
+    const entry = (NUT_MEALS[link.date] || []).find(m => m.id === link.mealId);
+    return entry ? { date: link.date, entry } : null;
+  }
   // one place decides what a calendar item IS — her taxonomy:
   //   Routine = has sub-tasks and/or comes from a recurring engine (hair, Routines, Family, Supplements)
   //   Event   = an appointment/occasion (explicitly chosen on the form, or categorised e.g. Work, Birthdays)
@@ -17360,6 +17514,15 @@
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
+      // 2026-08-11 (STEP 6 investigation): tried a min-width floor here so a 5-way
+      // overlap couldn't squeeze columns to a sliver -- measured against real titles
+      // (detached-clone harness) and reverted: a floor tight enough to avoid pushing
+      // the cluster past the screen edge (~64px) still wasn't wide enough to stop
+      // -webkit-line-clamp from ellipsizing a normal title, so it added real risk
+      // (later columns clipped off-screen entirely by .timeline-wrap's overflow:
+      // hidden) for no actual readability win. The 2-line clamp on .tl-title already
+      // shows a full, meaningful prefix of the name at any column width and never
+      // regresses to a nameless pill -- that's the real fix, already in place above.
       const colStyle = p.cols > 1
         ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 3px);width:calc(${(100 / p.cols).toFixed(2)}% - 8px);right:auto;`
         : "";
@@ -17777,9 +17940,14 @@
     // it →" above, and closeTlDetail() + bubble-to-document is the same handoff
     // data-rt-open/data-chain-open already use just below.
     const isMealEvent = /\b(breakfast|lunch|dinner|snack)\b/i.test(e.title || "");
-    const nutritionRowHtml = isMealEvent
-      ? `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-jump-view="nutrition" style="margin-left:0">Log what I ate — jump to Nutrition →</button></span></div>`
-      : "";
+    // 2026-08-11: SUPERSEDES the plain jump-link above — the button now opens the real
+    // quick-log sheet (openMealLogSheet) instead of just switching to the Nutrition
+    // page with no context. A logged meal shows a "✓ Logged: X" line with a way to log
+    // again, same "Mark done" vs "already done" shape as everywhere else in this sheet.
+    const mealLinked = isMealEvent ? resolveMealFor(e) : null;
+    const nutritionRowHtml = !isMealEvent ? "" : mealLinked
+      ? `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span>✓ Logged: ${esc(mealLinked.entry.desc)}<span class="tl-detail-sub"><button type="button" class="tab-link" data-log-meal="${e.id}">Log again</button></span></span></div>`
+      : `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-log-meal="${e.id}" style="margin-left:0">Log what I ate →</button></span></div>`;
     // 2026-08-06 (Linh's "routine phases" mockup): the full Before/Event/After banded
     // list for this item's whole chain, under the single-line relationship row above.
     const phaseBandsHtml = chainT ? chainPhaseBandsHtml(chainT, state.anchor) : "";
@@ -17967,6 +18135,185 @@
     }
   });
 
+  /* ============================================================
+     MEAL LOG SHEET (2026-08-11, Linh: "log my actual lunch"): opened from a
+     meal-titled event's "Log what I ate" button (renderTlDetailBody, isMealEvent).
+     Same overlay+sheet chrome as the outcome picker above, stacked ON TOP of the
+     still-open event detail sheet rather than replacing it -- exactly the pattern
+     the tick-circle long-press already proved works (openOutcomeSheet does the same).
+     ============================================================ */
+  const MEAL_SLOT_RE = [["Breakfast", /\bbreakfast\b/i], ["Lunch", /\blunch\b/i],
+                         ["Dinner", /\bdinner\b/i], ["Snack", /\bsnack\b/i]];
+  function mealSlotOf(title) {
+    for (const [slot, re] of MEAL_SLOT_RE) if (re.test(title || "")) return slot;
+    return "Snack";
+  }
+  let mlOpenEventId = null, mlPressedTags = [], mlPhotoData = null;
+  function openMealLogSheet(eventId) {
+    const e = TL_ITEMS_BY_ID[eventId];
+    if (!e) return;
+    mlOpenEventId = eventId; mlPressedTags = []; mlPhotoData = null;
+    renderMealLogSheet();
+    document.getElementById("mealLogOverlay").hidden = false;
+  }
+  function closeMealLogSheet() {
+    mlOpenEventId = null; mlPressedTags = []; mlPhotoData = null;
+    document.getElementById("mealLogOverlay").hidden = true;
+  }
+  function renderMealLogSheet() {
+    const e = TL_ITEMS_BY_ID[mlOpenEventId];
+    const host = document.getElementById("mealLogSheet");
+    if (!e || !host) return;
+    const now = new Date(), nowStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    // every daily metric except water applies to a single meal -- water is a
+    // whole-day hydration total, not something one meal's log line should carry
+    const numFields = NUT_METRICS.filter(m => m.id !== "water");
+    host.innerHTML = `
+      <form id="mealLogForm">
+        <div class="addform-head full">
+          <button type="button" class="addform-head-close" id="mlClose" aria-label="Close">✕</button>
+          <span class="addform-head-title">Log what you ate — ${esc(e.title)}</span>
+          <button type="submit" class="addform-head-save">Save</button>
+        </div>
+        <div class="field full">
+          <input type="text" id="mlDesc" class="field-bare" placeholder="What did you have?" autocomplete="off">
+        </div>
+        <div class="ml-tags full" role="group" aria-label="Quick tags">
+          ${MEAL_TAGS.map(t => `<button type="button" class="nt-chip" data-ml-tag="${t.id}" aria-pressed="false">${t.icon} ${esc(t.label)}</button>`).join("")}
+        </div>
+        <div class="field">
+          <label for="mlPortion">Portion</label>
+          <input type="text" id="mlPortion" class="field-bare" placeholder="e.g. 1 bowl" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="mlTime">Time</label>
+          <input type="time" id="mlTime" class="field-bare" value="${nowStr}">
+        </div>
+        <div class="ml-photo-row full">
+          <button type="button" class="add-btn" id="mlPhotoBtn">📷 Add a photo</button>
+          <input type="file" id="mlPhotoInput" accept="image/*" capture="environment" hidden>
+          <img id="mlPhotoPreview" class="ml-photo-preview" hidden alt="Meal photo">
+          <button type="button" class="ml-photo-remove" id="mlPhotoRemove" hidden aria-label="Remove photo">✕</button>
+        </div>
+        <button type="button" class="more-opts-toggle full" id="mlNutToggle" aria-expanded="false" aria-controls="mlNutMore">
+          <span id="mlNutLabel">+ Nutrition numbers</span><span class="moreopts-chevron">›</span>
+        </button>
+        <div class="addform-more" id="mlNutMore" hidden>
+          ${numFields.map(m => `<div class="field">
+            <label for="mlNut-${m.id}">${esc(m.label)} (${m.unit})</label>
+            <input type="number" id="mlNut-${m.id}" class="field-bare" data-ml-nut="${m.id}" step="${m.step}" min="0" placeholder="—">
+          </div>`).join("")}
+        </div>
+      </form>`;
+  }
+  // adds the entry's macro numbers onto TODAY's existing daily NUTRITION totals
+  // (Linh: "yes, auto-sum into today's totals") -- only the fields she actually
+  // filled in on this meal add anything; everything else is left untouched
+  function applyMealNutritionToDaily(entry) {
+    const k = keyOf(TODAY);
+    NUTRITION.log[k] = NUTRITION.log[k] || {};
+    NUT_METRICS.forEach(m => {
+      if (m.id !== "water" && entry[m.id] != null) NUTRITION.log[k][m.id] = (NUTRITION.log[k][m.id] || 0) + entry[m.id];
+    });
+    saveNutrition();
+  }
+  function commitMealLog() {
+    const e = TL_ITEMS_BY_ID[mlOpenEventId];
+    if (!e) { closeMealLogSheet(); return; }
+    const text = (document.getElementById("mlDesc")?.value || "").trim();
+    if (!text && !mlPressedTags.length) return;   // near-zero-friction save still needs SOMETHING logged
+    const tagLabels = mlPressedTags.map(id => (MEAL_TAGS.find(t => t.id === id) || {}).label).filter(Boolean);
+    const entry = {
+      id: uid(), slot: mealSlotOf(e.title), time: document.getElementById("mlTime")?.value || "",
+      desc: text || tagLabels.join(", ") || "Logged", tags: mlPressedTags.slice(),
+      portion: (document.getElementById("mlPortion")?.value || "").trim(), photo: mlPhotoData || undefined,
+      linkedEventId: e.id, linkedEventTitle: e.title, linkedEventTimeLabel: e.start ? fmtTime(e.start) : "",
+    };
+    document.querySelectorAll("#mlNutMore [data-ml-nut]").forEach(inp => {
+      const v = parseFloat(inp.value);
+      if (isFinite(v) && v > 0) entry[inp.dataset.mlNut] = v;
+    });
+    const k = keyOf(TODAY);
+    NUT_MEALS[k] = NUT_MEALS[k] || [];
+    NUT_MEALS[k].push(entry);
+    saveNutMeals();
+    LINKED_MEALS[e.id] = { mealId: entry.id, date: k };
+    saveLinkedMeals();
+    applyMealNutritionToDaily(entry);
+    closeMealLogSheet();
+    // refresh every surface this touches: the still-open event sheet's "✓ Logged"
+    // line, the Nutrition page (if she's on it), and the Day boost widget
+    renderTlDetailHeadActions(e); renderTlDetailBody(e);
+    try { renderNutrition(); } catch (err) {}
+    try { renderBoostWidget(); } catch (err) {}
+  }
+  // the Nutrition-page "↩ <title> · <time>" chip's tap target -- resolves the
+  // source date fresh (routine occurrence via parseOccId, plain event via EVENTS),
+  // since the meal entry itself only carries a display snapshot, not a live one
+  // (see LINKED_MEALS's own declaration comment for why)
+  function jumpToLinkedMealEvent(occOrEventId) {
+    const p = parseOccId(occOrEventId);
+    const dateKey = p ? p.date : (EVENTS.find(x => x.id === occOrEventId) || {}).date;
+    if (!dateKey) return;   // source event deleted -- nothing to jump to
+    state.view = "day"; state.anchor = parseKey(dateKey); render();
+    openTlDetail(occOrEventId, null);
+  }
+  document.getElementById("mealLogOverlay").addEventListener("click", ev => {
+    if (ev.target === ev.currentTarget || ev.target.closest("#mlClose")) { closeMealLogSheet(); return; }
+    const tagBtn = ev.target.closest("[data-ml-tag]");
+    if (tagBtn) {
+      const id = tagBtn.dataset.mlTag, on = tagBtn.getAttribute("aria-pressed") !== "true";
+      tagBtn.setAttribute("aria-pressed", String(on));
+      mlPressedTags = on ? [...mlPressedTags, id] : mlPressedTags.filter(t => t !== id);
+      return;
+    }
+    if (ev.target.closest("#mlNutToggle")) {
+      const more = document.getElementById("mlNutMore"), btn = document.getElementById("mlNutToggle");
+      const open = more.hidden;
+      more.hidden = !open;
+      btn.setAttribute("aria-expanded", String(open));
+      document.getElementById("mlNutLabel").textContent = open ? "− Nutrition numbers" : "+ Nutrition numbers";
+      return;
+    }
+    if (ev.target.closest("#mlPhotoBtn")) { document.getElementById("mlPhotoInput").click(); return; }
+    if (ev.target.closest("#mlPhotoRemove")) {
+      mlPhotoData = null;
+      document.getElementById("mlPhotoPreview").hidden = true;
+      document.getElementById("mlPhotoRemove").hidden = true;
+      return;
+    }
+  });
+  document.getElementById("mealLogOverlay").addEventListener("submit", ev => {
+    if (ev.target.id === "mealLogForm") { ev.preventDefault(); commitMealLog(); }
+  });
+  // hidden file input -> FileReader -> downscale through an offscreen canvas before
+  // storing (no image precedent anywhere in this app; a raw phone-camera photo can
+  // be several MB, which would blow through the ~5-10MB localStorage quota every
+  // save*() in the app shares -- this is the minimum needed to keep that safe)
+  document.getElementById("mealLogOverlay").addEventListener("change", ev => {
+    if (ev.target.id !== "mlPhotoInput") return;
+    const file = ev.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = loadEv => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 480, scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        mlPhotoData = canvas.toDataURL("image/jpeg", 0.7);
+        const preview = document.getElementById("mlPhotoPreview");
+        preview.src = mlPhotoData; preview.hidden = false;
+        document.getElementById("mlPhotoRemove").hidden = false;
+      };
+      img.src = loadEv.target.result;
+    };
+    reader.readAsDataURL(file);
+    ev.target.value = "";   // lets picking the same file twice re-fire change
+  });
+
   // §4 — the gentle "Did this happen?" rows: today's past-due, still-open timed items,
   // max 3, only while the (default-OFF) Follow-ups switch on the Notifications page is
   // on. Inline and ignorable — never a popup.
@@ -18128,10 +18475,12 @@
     // the global document click delegate (near ROUTINE_TASKS.find) does the actual
     // navigate-to-Routines-page-and-open-the-form work once this bubbles up to it.
     if (e.target.closest("[data-rt-open]")) { closeTlDetail(); return; }
-    // "Log what I ate" (nutritionRowHtml) -- same handoff: close this sheet, let the
-    // tap bubble to the global [data-jump-view] delegate (near #hairToHabits), which
-    // does the actual state.view="nutrition"; render().
     if (e.target.closest("[data-jump-view]")) { closeTlDetail(); return; }
+    // 2026-08-11: "Log what I ate" / "Log again" (nutritionRowHtml) -- opens the quick
+    // meal-log sheet ON TOP of this one rather than closing it, since Save needs to come
+    // back and re-render this exact sheet's "✓ Logged" line (see commitMealLog).
+    const logMealBtn = e.target.closest("[data-log-meal]");
+    if (logMealBtn) { openMealLogSheet(logMealBtn.dataset.logMeal); return; }
     // 2026-08-06 (chain UX): one-tap unchain right in the sheet — the item keeps its
     // own saved time, same contract as the Chains card's × button. Sheet stays open,
     // its ⛓ row flips to the "Chain it →" state; the timeline re-renders behind it.
@@ -18325,10 +18674,16 @@
       EVENTS = EVENTS.filter(ev => ev.id !== id);
       delete DONE[id];
       saveEvents(EVENTS); saveDone(DONE);
+      // permanent net (STEP 3 follow-up) alongside the 6s one below -- archived
+      // first so it's recoverable even after the snackbar expires; the undo
+      // snackbar's own restore below re-removes it from the archive on success.
+      if (victim) archiveEvent(victim, "plain");
       if (victim) undoFn = () => {
         EVENTS.push(victim);
         if (wasDone !== undefined) DONE[id] = wasDone;
-        saveEvents(EVENTS); saveDone(DONE); renderDay();
+        saveEvents(EVENTS); saveDone(DONE);
+        EVENT_ARCHIVE = EVENT_ARCHIVE.filter(r => r.id !== victim.id); saveEventArchive();
+        renderDay();
       };
     } else if (kind === "fitcal") {
       const victim = fitSessionsOn(state.anchor).find(s => s.id === id);
@@ -18348,8 +18703,18 @@
         const victim = tlDelTarget.rtTaskId ? ROUTINE_TASKS.find(t => t.id === tlDelTarget.rtTaskId) : null;
         if (victim) {
           ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== tlDelTarget.rtTaskId); saveRoutines();
+          // 2026-08-11 (STEP 3 follow-up): deleting a whole routine series from THIS
+          // sheet (the Day-timeline popup) skipped archiveRoutine() -- the Routines-
+          // page delete path already calls it (showRtnDeleteUndo), so a routine
+          // deleted from there was always recoverable past 6s, but one deleted from
+          // here wasn't. Same permanent net both paths now.
+          archiveRoutine(victim);
           undoLabel = `Deleted routine "${title}"`;
-          undoFn = () => { ROUTINE_TASKS.push(victim); saveRoutines(); renderRoutines(); renderDay(); };
+          undoFn = () => {
+            ROUTINE_TASKS.push(victim); saveRoutines();
+            ROUTINE_ARCHIVE = ROUTINE_ARCHIVE.filter(r => r.id !== victim.id); saveRoutineArchive();
+            renderRoutines(); renderDay();
+          };
         }
       } else {
         const p = parseOccId(id);
@@ -18369,8 +18734,13 @@
         if (victim) {
           RECURRING_EVENTS = RECURRING_EVENTS.filter(t => t.id !== tlDelTarget.recurId);
           saveRecurringEvents();
+          archiveEvent(victim, "recur");
           undoLabel = `Deleted "${title}" series`;
-          undoFn = () => { RECURRING_EVENTS.push(victim); saveRecurringEvents(); render(); };
+          undoFn = () => {
+            RECURRING_EVENTS.push(victim); saveRecurringEvents();
+            EVENT_ARCHIVE = EVENT_ARCHIVE.filter(r => r.id !== victim.id); saveEventArchive();
+            render();
+          };
         }
       } else {
         const wasSkipped = EVENT_SKIPS[id];
@@ -19961,6 +20331,7 @@
     renderElapsedFade();
     renderFastLine();
     renderFastBar();
+    renderBoostWidget();
     orderDayRail();
     renderTimeline(timed);
     // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
@@ -21429,10 +21800,14 @@
     { id: "choline",  label: "Choline",   unit: "mg",   step: 10 },
     { id: "vitaminC", label: "Vitamin C", unit: "mg",   step: 10 },
     { id: "water",    label: "Water",     unit: "glasses", step: 1 },
+    // 2026-08-11 (meal logging): added so a logged meal's macro numbers have a
+    // daily-total home to add into, same treatment as every other metric here
+    { id: "carbs",    label: "Carbs",     unit: "g",    step: 10 },
+    { id: "fat",      label: "Fat",       unit: "g",    step: 5  },
   ];
   // standard adult-female daily reference values (RDA/AI), just sensible starting
   // targets — editable any time in Daily goals, never a clinical prescription
-  const NUT_DEFAULT_GOALS = { calories: 2000, iron: 18, protein: 50, choline: 425, vitaminC: 75, water: 8 };
+  const NUT_DEFAULT_GOALS = { calories: 2000, iron: 18, protein: 50, choline: 425, vitaminC: 75, water: 8, carbs: 275, fat: 78 };
   function loadNutrition() {
     try {
       const v = JSON.parse(localStorage.getItem(NUT_KEY));
@@ -21449,6 +21824,20 @@
     if (NUTRITION.goals[m.id] === undefined) { NUTRITION.goals[m.id] = NUT_DEFAULT_GOALS[m.id]; nutGoalsSeeded = true; }
   });
   if (nutGoalsSeeded) saveNutrition();
+
+  // 2026-08-11 (Linh, "log my actual lunch"): itemized meals, separate from the flat
+  // daily NUT_METRICS totals above — a real per-meal record (what/when/tags/photo),
+  // keyed by the day she logs it (today), same today-only convention the rest of this
+  // Nutrition system already uses (see nutTodayMetricsHTML's own comment below).
+  const NUT_MEALS_KEY = "book33-nutrition-meals";
+  function loadNutMeals() {
+    try { const v = JSON.parse(localStorage.getItem(NUT_MEALS_KEY)); return v && typeof v === "object" ? v : {}; }
+    catch (e) { return {}; }
+  }
+  function saveNutMeals() { try { localStorage.setItem(NUT_MEALS_KEY, JSON.stringify(NUT_MEALS)); } catch (e) {} }
+  let NUT_MEALS = loadNutMeals();   // { "YYYY-MM-DD": [{id, slot, time, desc, tags, portion, photo,
+                                     //   calories, iron, protein, choline, vitaminC, carbs, fat,
+                                     //   linkedEventId, linkedEventTitle, linkedEventTimeLabel}] }
 
   // small ring, same stroke-dasharray trick as the fasting ring — quick "did I have enough" glance
   function nutRingSVG(pct, over) {
@@ -21495,6 +21884,8 @@
     const todayHost = document.getElementById("todayNutMetrics");
     if (todayHost) todayHost.innerHTML = nutTodayMetricsHTML();
 
+    renderNutMealsToday();
+
     const days = Object.keys(NUTRITION.log).sort().reverse().slice(0, 7);
     document.getElementById("nutHistory").innerHTML = days.length ? days.map(dk => {
       const entry = NUTRITION.log[dk];
@@ -21504,6 +21895,29 @@
         <span class="val">${NUT_METRICS.map(m => entry[m.id] ? `${entry[m.id]}${m.unit === "kcal" ? "kcal" : m.unit === "glasses" ? " glasses" : m.unit}` : null).filter(Boolean).join(" · ") || "—"}</span>
       </div>`;
     }).join("") : `<div class="h-empty">Nothing logged yet.</div>`;
+  }
+  // 2026-08-11 (Linh, "log my actual lunch"): itemized meals for today, grouped by
+  // slot in a fixed Breakfast/Lunch/Dinner/Snack order -- separate list from the
+  // flat daily-total rings above, filled by openMealLogSheet()/commitMealLog().
+  function renderNutMealsToday() {
+    const host = document.getElementById("nutMealsToday");
+    if (!host) return;
+    const meals = NUT_MEALS[keyOf(TODAY)] || [];
+    if (!meals.length) { host.innerHTML = `<div class="h-empty">No meals logged yet today.</div>`; return; }
+    const bySlot = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
+    meals.forEach(m => (bySlot[m.slot] || bySlot.Snack).push(m));
+    host.innerHTML = ["Breakfast", "Lunch", "Dinner", "Snack"].filter(slot => bySlot[slot].length).map(slot => `
+      <div class="nut-meal-slot">
+        <div class="nut-meal-slot-h">${slot}</div>
+        ${bySlot[slot].map(m => `
+          <div class="nut-meal-row">
+            ${m.photo ? `<img class="nut-meal-photo" src="${m.photo}" alt="">` : ""}
+            <div class="nut-meal-main">
+              <div class="nut-meal-line"><span class="nut-meal-time">${esc(m.time || "")}</span><span class="nut-meal-desc">${esc(m.desc)}</span>${(m.tags || []).map(t => (MEAL_TAGS.find(x => x.id === t) || {}).icon || "").join("")}</div>
+              ${m.linkedEventId ? `<button type="button" class="tab-link nut-meal-jump" data-meal-jump="${esc(m.linkedEventId)}">↩ ${esc(m.linkedEventTitle || "")}${m.linkedEventTimeLabel ? ` · ${esc(m.linkedEventTimeLabel)}` : ""}</button>` : ""}
+            </div>
+          </div>`).join("")}
+      </div>`).join("");
   }
 
   /* ============================================================
@@ -22740,6 +23154,70 @@
     }
     return streak;
   }
+
+  // 2026-08-11 (Linh: new "positive factor" wellbeing engine, replacing the old
+  // 3-line Wellness glance she'd had removed on 2026-08-04 — this time it's a real
+  // score, not a glance). Nothing here is persisted: every call re-reads today's
+  // meals/fasting/fitness live and re-derives the three axis totals, so there's no
+  // extra store to keep in sync with those domains' own data. Same shape as the
+  // numerology dpScoreDay() (accumulate weighted points, clamp, keep a why-trail).
+  const MEAL_TAGS = [
+    { id: "protein", label: "Protein/iron", icon: "🥩" },
+    { id: "veg",     label: "Veg",          icon: "🥗" },
+    { id: "carbs",   label: "Carbs",        icon: "🍞" },
+    { id: "drink",   label: "Drink",        icon: "☕" },
+    { id: "treat",   label: "Treat",        icon: "🍰" },
+  ];
+  const MEAL_TAG_BOOST = {
+    protein: { physical: 10, cognitive: 5 },
+    veg:     { physical: 8 },
+    carbs:   { physical: 5 },
+    drink:   { cognitive: 5 },
+    treat:   { emotional: 10 },
+  };
+  function computeTodayBoosts() {
+    const boosts = { physical: 0, cognitive: 0, emotional: 0 };
+    const why = { physical: [], cognitive: [], emotional: [] };
+    const add = (axis, pts, reason) => { if (!pts) return; boosts[axis] += pts; why[axis].push(reason); };
+    (NUT_MEALS[keyOf(TODAY)] || []).forEach(m => {
+      add("physical", 5, "Logged a meal");
+      (m.tags || []).forEach(tag => {
+        const b = MEAL_TAG_BOOST[tag], label = (MEAL_TAGS.find(t => t.id === tag) || {}).label || tag;
+        if (!b) return;
+        add("physical", b.physical, `${label} meal`);
+        add("cognitive", b.cognitive, `${label} meal`);
+        add("emotional", b.emotional, `${label} meal`);
+      });
+    });
+    const fastedH = fastedHoursOn(TODAY), fastGoal = HEALTH.fastGoalHours || 16;
+    if (fastedH >= fastGoal) { add("physical", 20, "Fasting goal met"); add("emotional", 5, "Finished your fast"); }
+    else if (fastedH > 0) add("physical", 8, "Fasting in progress");
+    fitSessionsOn(TODAY).forEach(s => {
+      add("physical", 15, "Logged a session");
+      if ((s.rating || 0) >= 4) add("cognitive", 10, "Rated the session highly");
+    });
+    ["physical", "cognitive", "emotional"].forEach(ax => { boosts[ax] = Math.max(0, Math.min(100, Math.round(boosts[ax]))); });
+    return { boosts, why };
+  }
+  // 2026-08-11: the Day-page widget for the above — reuses the Nutrition page's own
+  // ring markup (nutRingSVG/.nut-metric/.nut-today) verbatim, just without the
+  // editable <input> (these numbers are computed, not typed in). One shared ring
+  // colour for all three meters (nutRingSVG's own convention) rather than a
+  // colour-per-axis scheme — the app's palette has no Physical/Cognitive/Emotional
+  // mapping to hang one on.
+  function renderBoostWidget() {
+    const host = document.getElementById("boostWidget");
+    if (!host) return;
+    const { boosts } = computeTodayBoosts();
+    const meter = (icon, label, val) => `<div class="nut-metric">
+        <div class="nut-ring-wrap">${nutRingSVG(val / 100, false)}
+          <div class="nut-ring-center"><b>${val}</b><span>${icon}</span></div></div>
+        <div class="nut-metric-label">${label}</div>
+      </div>`;
+    host.innerHTML = `
+      <div class="section-head"><h2>Today's boost</h2><span class="rule"></span></div>
+      <div class="nut-today">${meter("💪", "Physical", boosts.physical)}${meter("🧠", "Cognitive", boosts.cognitive)}${meter("🙂", "Emotional", boosts.emotional)}</div>`;
+  }
   // small weekly bar chart, same rounded-bar/gold-dashed-target grammar as the
   // fasting hours chart above, generalised to any weekly count instead of hours.
   function growthWeeklyBarChart(weeks, opts) {
@@ -23332,7 +23810,16 @@
     const ctx = periodContext(date);
     if (!ctx) return null;
     const cd = cycleDayFor(date);
-    const cp = cyclePhase(cd, { cycleLen: p?.avgCycle, periodLen: p?.avgLen || 5, lutealLen: LUTEAL_LEN });
+    // 2026-08-11 (STEP 4 follow-up): a CLOSED cycle (a real next period already confirmed)
+    // has a known, real length -- use it instead of the overall running average, same as
+    // daysToPeriod below and ovulationWindowFor() already do. Without this, browsing back
+    // to a cycle that happened to run shorter/longer than average could still classify its
+    // phase off the average length while the countdown correctly used the real one -- the
+    // same "phase and countdown disagree" bug the 2026-08-10 fix solved, just retrospective.
+    // The still-open current cycle (ctx.next null) is untouched -- falls back to p?.avgCycle
+    // exactly as before.
+    const cycleLen = ctx.next ? dayDiff(parseKey(ctx.next.start), parseKey(ctx.cur.start)) : p?.avgCycle;
+    const cp = cyclePhase(cd, { cycleLen, periodLen: p?.avgLen || 5, lutealLen: LUTEAL_LEN });
     if (cp.phase === "Menstrual") return "menstrual";
     const win = ovulationWindowFor(date, p);
     if (win && dayDiff(date, win.fertileFrom) >= 0 && dayDiff(win.fertileTo, date) >= 0) return "fertile";
@@ -24552,20 +25039,29 @@
     renderRtnArchive();
     showUndoSnackbar(`Deleted "${routine.title}"`, () => restoreRoutineFromArchive(routine.id));
   }
+  // 2026-08-11 (STEP 3 follow-up): merges ROUTINE_ARCHIVE with the new EVENT_ARCHIVE
+  // into one list, newest-deleted first -- one "Archived / Recently deleted" home
+  // instead of two near-identical sections, same restore-anytime guarantee for both.
   function renderRtnArchive() {
     const section = document.getElementById("rtnArchiveSection");
     const body = document.getElementById("rtnArchiveBody");
     const countEl = document.getElementById("rtnArchiveCount");
     if (!section || !body || !countEl) return;
-    section.hidden = !ROUTINE_ARCHIVE.length;
-    if (!ROUTINE_ARCHIVE.length) { body.innerHTML = ""; return; }
-    countEl.textContent = `${ROUTINE_ARCHIVE.length}`;
-    body.innerHTML = ROUTINE_ARCHIVE.map(r => {
+    const all = [
+      ...ROUTINE_ARCHIVE.map(r => ({ ...r, archiveKind: "routine" })),
+      ...EVENT_ARCHIVE.map(r => ({ ...r, archiveKind: "event" })),
+    ].sort((a, b) => b.deletedAt - a.deletedAt);
+    section.hidden = !all.length;
+    if (!all.length) { body.innerHTML = ""; return; }
+    countEl.textContent = `${all.length}`;
+    body.innerHTML = all.map(r => {
       const d = new Date(r.deletedAt);
       const when = `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+      const seriesTag = r.kind === "recur" ? " · series" : "";
+      const restoreAttr = r.archiveKind === "routine" ? `data-rtn-archive-restore="${esc(r.id)}"` : `data-event-archive-restore="${esc(r.id)}"`;
       return `<div class="rtn-archive-row">
-        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(trackLabel(r.track))} · deleted ${when}</span></div>
-        <button type="button" class="rtn-archive-restore" data-rtn-archive-restore="${esc(r.id)}">Restore</button>
+        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(trackLabel(r.track))}${seriesTag} · deleted ${when}</span></div>
+        <button type="button" class="rtn-archive-restore" ${restoreAttr}>Restore</button>
       </div>`;
     }).join("");
   }
@@ -30910,6 +31406,8 @@
     // time limit -- this is the "at any time" path the snackbar's Undo shortcuts)
     const rtnArchRestore = e.target.closest("[data-rtn-archive-restore]");
     if (rtnArchRestore) { restoreRoutineFromArchive(rtnArchRestore.dataset.rtnArchiveRestore); return; }
+    const evArchRestore = e.target.closest("[data-event-archive-restore]");
+    if (evArchRestore) { restoreEventFromArchive(evArchRestore.dataset.eventArchiveRestore); renderRtnArchive(); return; }
     const rtnArchToggle = e.target.closest("#rtnArchiveToggle");
     if (rtnArchToggle) {
       const body = document.getElementById("rtnArchiveBody");
@@ -33439,6 +33937,22 @@
     layer.addEventListener("pointerup", cancel);
     layer.addEventListener("pointercancel", cancel);
   })();
+
+  // 2026-08-11 (Linh, "the calendar events aren't resizing" on a mouse+touch tablet):
+  // (hover:hover)/(pointer:fine) reports the OS's "primary" pointer, which a hybrid
+  // Windows tablet often reports as the touchscreen even with a mouse plugged in --
+  // this listens once, globally, for any REAL mouse pointer event (pointerType is
+  // reliable per-event even when the static media features lie) and flips
+  // body.mouse-active, which the .tl-resize-handle CSS above treats as an alternate
+  // "yes, show it" signal alongside the media query. Never removed once set — a
+  // mouse seen once means the device can drive precise drags, that doesn't change
+  // mid-session; a device that never fires a mouse pointer event (a real phone)
+  // never gets the class, so nothing changes there.
+  window.addEventListener("pointerover", function onFirstMouse(e) {
+    if (e.pointerType !== "mouse") return;
+    document.body.classList.add("mouse-active");
+    window.removeEventListener("pointerover", onFirstMouse);
+  }, { passive: true });
 
   // 2026-08-06 (drag-and-drop, "drag the top or bottom edge to resize — web only, snap
   // 5–15 min, live preview + new time, save on drop"): a second, separate pointer-drag
