@@ -6650,6 +6650,10 @@
   .exp-status-paid { background: var(--exp-green-tint); color: var(--exp-green-ink); }
   .exp-status-due { background: var(--exp-gold-tint); color: var(--exp-gold-ink); }
   .exp-status-overdue { background: var(--exp-red-tint); color: var(--exp-red-ink); }
+  .exp-status-wrap { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  /* the exact day a Paid bill was marked paid -- native picker, so color-scheme
+     keeps its calendar-icon chrome legible against whichever theme is active. */
+  .exp-paid-date { width: 116px !important; font-size: 11px !important; color: var(--ink-soft) !important; color-scheme: light dark; }
 
   /* marriage: split control + per-member share columns */
   .exp-split-ctrl { display: flex; align-items: center; gap: 4px; }
@@ -26093,6 +26097,8 @@
     }
     const dueIn = e.target.closest("[data-exp-due]");
     if (dueIn) { const f = expFindBill(dueIn.dataset.expDue); if (f) { f.bill.dueDay = dueIn.value; saveExpenses(); renderExpenses(); } return; }
+    const paidDateIn = e.target.closest("[data-exp-paid-date]");
+    if (paidDateIn) { const f = expFindBill(paidDateIn.dataset.expPaidDate); if (f) { f.bill.lastPaid = paidDateIn.value; saveExpenses(); renderExpenses(); } return; }
     const freqIn = e.target.closest("[data-exp-freq]");
     if (freqIn) { const f = expFindBill(freqIn.dataset.expFreq); if (f) { f.bill.freqMonth = freqIn.value; saveExpenses(); } return; }
     const typeSel = e.target.closest("[data-exp-type]");
@@ -30570,19 +30576,20 @@
     { id: "other",   label: "Other" },
   ];
   const DEFAULT_EXP_TYPES = [
-    { id: "subscription", name: "Subscription", color: "#8B5CF6" },
-    { id: "rent",         name: "Rent",         color: "#B98D36" },
-    { id: "insurance",    name: "Insurance",     color: "#1E8FB8" },
-    { id: "software",     name: "Software",      color: "#5B8DEF" },
-    { id: "utility",      name: "Utility",       color: "#37844D" },
-    { id: "tax",          name: "Tax",           color: "#DB4B4B" },
-    { id: "loan",         name: "Loan",          color: "#CD495B" },
-    { id: "groceries",    name: "Groceries",     color: "#37AF65" },
-    { id: "transport",    name: "Transport",     color: "#6B6152" },
-    { id: "investment",   name: "Investment",    color: "#D4AF37" },
-    { id: "savings",      name: "Savings",       color: "#00B85C" },
     { id: "goal",         name: "Goal",          color: "#E3A06F" },
+    { id: "groceries",    name: "Groceries",     color: "#37AF65" },
+    { id: "insurance",    name: "Insurance",     color: "#1E8FB8" },
+    { id: "investment",   name: "Investment",    color: "#D4AF37" },
+    { id: "loan",         name: "Loan",          color: "#CD495B" },
+    { id: "mortgage",     name: "Mortgage",      color: "#8B5A2B" },
     { id: "other",        name: "Other",         color: "#8A7D68" },
+    { id: "rent",         name: "Rent",         color: "#B98D36" },
+    { id: "savings",      name: "Savings",       color: "#00B85C" },
+    { id: "software",     name: "Software",      color: "#5B8DEF" },
+    { id: "subscription", name: "Subscription", color: "#8B5CF6" },
+    { id: "tax",          name: "Tax",           color: "#DB4B4B" },
+    { id: "transport",    name: "Transport",     color: "#6B6152" },
+    { id: "utility",      name: "Utility",       color: "#37844D" },
   ];
   function expDefaultGroups() { return EXP_CADENCES.map(c => ({ id: uid(), label: c.label, cadence: c.id, bills: [] })); }
   function defaultExpenses() {
@@ -30621,6 +30628,12 @@
             (g.bills || []).forEach(b => {
               if ("paid" in b) { if (!b.paid) b.lastPaid = ""; delete b.paid; }
             })));
+          // 2026-08-11 (Linh: "add mortgage to typ"): backfill the new default type
+          // into stores saved before it existed -- defaultExpenses() only seeds a
+          // brand-new store, so an already-populated types list needs its own top-up.
+          if (v.types && !v.types.some(t => t.id === "mortgage")) {
+            v.types.push({ id: "mortgage", name: "Mortgage", color: "#8B5A2B" });
+          }
           return v;
         }
       }
@@ -30639,13 +30652,6 @@
     return { weekly: y / EXP_WEEKS, monthly: y / EXP_MONTHS, yearly: y };
   }
   function expMoney(n) { return `$${(Number(n) || 0).toFixed(2)}`; }
-  // "11 Aug" from a "YYYY-MM-DD" key -- the short, dense date format the status pill
-  // needs for both the paid date and (via expBillStatus) the due-day comparison.
-  function expShortDate(k) {
-    if (!k) return "";
-    const d = parseKey(k);
-    return `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
-  }
   function expNewBill() {
     return { id: uid(), name: "", type: "other", amount: 0, per: "monthly", dueDay: "", freqMonth: "", payMethod: "manual", lastPaid: "" };
   }
@@ -30728,9 +30734,13 @@
     saveExpenses(); renderExpenses();
   }
 
+  // alphabetised for display only -- storage order (and each type's id) is untouched,
+  // so this stays correct however types were added (default seed order, or new ones
+  // appended via "+ Add type") without needing a one-time re-sort migration.
+  const expTypesSorted = () => EXPENSES.types.slice().sort((a, b) => a.name.localeCompare(b.name));
   function expTypeSelectHtml(bill) {
     const t = expTypeById(bill.type);
-    const opts = EXPENSES.types.map(x => `<option value="${x.id}" ${x.id === bill.type ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    const opts = expTypesSorted().map(x => `<option value="${x.id}" ${x.id === bill.type ? "selected" : ""}>${esc(x.name)}</option>`).join("");
     return `<select data-exp-type="${bill.id}" class="exp-type-select" style="--tag-c:${t ? esc(t.color) : "var(--ink-faint)"}">${opts}</select>`;
   }
   function expPayToggleHtml(b) {
@@ -30741,13 +30751,16 @@
   }
   function expStatusPillHtml(bill) {
     const st = expBillStatus(bill);
-    // Paid and Overdue both carry a real date now (2026-08-11, "include a date for
-    // when it is due/paid") -- Paid shows the day it was actually marked paid, not
-    // just the month, so re-paying next cycle reads as a fresh, distinct tick.
-    const label = st === "paid" ? `Paid ${expShortDate(bill.lastPaid)}`
-      : st === "overdue" ? `Overdue ${esc(bill.dueDay)}`
-      : (bill.dueDay ? `Due ${esc(bill.dueDay)}` : "Due");
-    return `<button type="button" class="exp-status exp-status-${st}" data-exp-toggle-paid="${bill.id}">${label}</button>`;
+    const label = st === "paid" ? "Paid" : st === "overdue" ? "Overdue" : "Due";
+    const pill = `<button type="button" class="exp-status exp-status-${st}" data-exp-toggle-paid="${bill.id}">${label}</button>`;
+    // 2026-08-11 (Linh: "allow me to also select when it was paid"): clicking the pill
+    // is still the fast path (marks paid=today), but once paid a native date input
+    // sits right beside it so she can pick or correct the exact day -- opens the OS/
+    // browser date picker, same direct-edit convention as every other field in this row.
+    const dateInput = st === "paid"
+      ? `<input type="date" class="exp-paid-date" data-exp-paid-date="${bill.id}" value="${esc(bill.lastPaid)}">`
+      : "";
+    return `<span class="exp-status-wrap">${pill}${dateInput}</span>`;
   }
   const EXP_PER_SHORT = { weekly: "/wk", monthly: "/mo", yearly: "/yr" };
   const EXP_PER_WORD = { weekly: "weekly", monthly: "monthly", yearly: "yearly" };
@@ -30864,7 +30877,7 @@
     </div>`;
   }
   function expTypeEditorHtml() {
-    const rows = EXPENSES.types.map(t => `
+    const rows = expTypesSorted().map(t => `
       <tr data-exp-type-row="${t.id}">
         <td><input type="color" data-exp-type-color="${t.id}" value="${esc(t.color)}"></td>
         <td><input type="text" data-exp-type-name="${t.id}" value="${esc(t.name)}"></td>
