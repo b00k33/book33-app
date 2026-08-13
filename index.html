@@ -11135,7 +11135,7 @@
       <div class="eyebrow">Beauty</div>
       <h1>Hair</h1>
     </div>
-    <div class="section-head"><h2>The wash rhythm</h2><span class="rule"></span><button class="tab-link" id="hairToHabits" type="button">Tracking lives in Habits →</button></div>
+    <div class="section-head"><h2>The wash rhythm</h2><span class="rule"></span><button class="tab-link" id="hairToHabits" type="button">Schedules live in Routines →</button></div>
     <!-- 2026-08-07 (wash-rhythm rebuild): ONE step×tier matrix replaces the old three
          cumulative-tier cards (every product used to repeat across three columns).
          Rendered by renderHairMatrix() from book33-hair — the product shelf section
@@ -15396,10 +15396,11 @@
   function renderHairMatrix() {
     const host = document.getElementById("hairMatrix");
     if (!host) return;
-    // 2026-08-11: the DUE flag now rides each tier's own real schedule (+ overrides,
-    // see washTypeWithOverride) instead of a shared rotation — today's wash if
-    // there is one, else the next scheduled one with its day named
-    let dueTier = washTypeWithOverride(TODAY), dueLbl = "Due today";
+    // 2026-08-13 (Linh: "unlink each wash — full control"): the override popover is
+    // retired, so this reads each tier's own real schedule directly (washType, no
+    // override layer) — today's wash if there is one, else the next scheduled one
+    // with its day named.
+    let dueTier = washType(TODAY), dueLbl = "Due today";
     if (!dueTier) {
       const nx = nextWashDate(TODAY);
       if (nx) { dueTier = washType(nx); dueLbl = `Due ${WD_FULL[dowIndex(nx)].slice(0, 3)}`; }
@@ -15566,7 +15567,7 @@
   // that lived here is gone — its only emitters were the retired wash cards; the matrix
   // footer's own 📅 task link (data-hx-task, delegate above) is the snapshot path now.
   document.addEventListener("click", e => {
-    if (e.target.closest("#hairToHabits")) { state.view = "habits"; render(); }
+    if (e.target.closest("#hairToHabits")) { state.view = "routines"; render(); }
     const jump = e.target.closest("[data-jump-view]");
     if (jump) { state.view = jump.dataset.jumpView; render(); }
     // 2026-08-11 (meal logging): the Nutrition page's "↩ <title> · <time>" chip,
@@ -15619,7 +15620,7 @@
     return washType(date);
   }
   function generatedFor(date) {
-    const out = [], k = keyOf(date), hasOverride = HAIR_OVERRIDES[k] !== undefined;
+    const out = [], k = keyOf(date);
     // her edits on the Routines page (name, steps, calendar switch) are the live
     // source now — this reads the migrated routine entry, falling back to the
     // built-in HAIR.types definition only if it's somehow missing.
@@ -15628,7 +15629,15 @@
     // book33-hair on every render, so a product/step edit there can never drift.
     const stepsOf = (rt, t) => rt && rt.hairLink ? hairLinkSteps(rt.hairLink.tier)
       : rt && Array.isArray(rt.subtasks) ? rt.subtasks : HAIR.types[t].steps.map(s => ({ text: s, min: HAIR_STEP_MIN }));
-    let t = washTypeWithOverride(date);
+    // 2026-08-13 (Linh: "unlink each wash — full control"): the override popover and
+    // the "preview of the next wash on an off day" affordance are both retired along
+    // with HAIR_OVERRIDES — a wash shows ONLY on the day its own Repeats pattern
+    // says it's due (washType), same as any other routine shows only on its own
+    // days. This still isn't folded into the generic routinesOn() loop below, for
+    // two reasons that loop doesn't handle: highest-tier-wins when more than one
+    // wash's pattern lands the same day, and hairLink's live product-list steps
+    // (routinesOn() only ever reads a routine's static t.subtasks).
+    let t = washType(date);
     if (t && hairRoutineFor(t)?.calOn === false) t = null;
     if (t) {
       const rt = hairRoutineFor(t);
@@ -15643,23 +15652,6 @@
         fromRoutine: true,
         allDay: true, start: "", end: "",
       });
-    } else if (!hasOverride) {
-      // haircare should always show up, even on off-cycle days — a preview of the
-      // next wash, tickable early (same id the real scheduled day will use, so
-      // ticking here or there updates the exact same Hair Tracker entry)
-      const next = nextWashDate(date);
-      const nt = next ? washType(next) : null;
-      const rtNext = nt && hairRoutineFor(nt);
-      if (next && rtNext?.calOn !== false) {
-        out.push({
-          id: `hair-${keyOf(next)}`, generated: true, habit: nt, date: k, preview: true,
-          track: HAIR.track, category: HAIR.category,
-          title: `Next wash — ${rtNext ? rtNext.title : HAIR.types[nt].name}`, note: `${next.getDate()} ${MON_SHORT[next.getMonth()]}`,
-          locPath: HAIR.locPath, steps: stepsOf(rtNext, nt), linkInfo: linkInfo(rtNext),
-          fromRoutine: true, // see the same-day push above -- same "Also today" fix
-          allDay: true, start: "", end: "",
-        });
-      }
     }
     familyTasksOn(date).forEach(t => {
       out.push({
@@ -16666,14 +16658,24 @@
     }
     return streak;
   }
-  // the single longest-running ROUTINE_TASKS streak right now (hair wash types
-  // excluded — they already have their own dedicated tracker/streak on the Habits
-  // page; showing the same number twice under two names would just read as odd).
+  // the single longest-running ROUTINE_TASKS streak right now. 2026-08-13: hair washes
+  // used to be excluded (they had their own Habits-page tracker) — that tracker is
+  // gone now they're ordinary routines, so they count here too. They still can't use
+  // routineOccursOn as their "did it land today" check (that stays hair-gated
+  // everywhere on purpose — see its own comment — so the same wash never double-
+  // renders through both the generic routinesOn() pipeline and generatedFor's own
+  // hair branch); washType(d) === this tier is the equivalent read. Their "done" id
+  // is also a day slot (hair-${date}), not the usual per-routine rt-${id}-${date} —
+  // only one tier is ever "the day's wash", so completion is tracked per day, not
+  // per tier.
   function bestRoutineStreak() {
     let best = null;
     ROUTINE_TASKS.forEach(t => {
-      if (t.calOn === false || HAIR_TYPE_IDS.has(t.id)) return;
-      const streak = streakWithGrace(d => routineOccursOn(t, d), d => isDone(`rt-${t.id}-${keyOf(d)}`), 200);
+      if (t.calOn === false) return;
+      const tier = HAIR_TYPE_IDS.has(t.id) ? t.id.replace(/^hair-/, "") : null;
+      const occursOn = tier ? d => washType(d) === tier : d => routineOccursOn(t, d);
+      const doneOn = tier ? d => isDone(`hair-${keyOf(d)}`) : d => isDone(`rt-${t.id}-${keyOf(d)}`);
+      const streak = streakWithGrace(occursOn, doneOn, 200);
       if (streak >= 3 && (!best || streak > best.streak)) best = { title: t.title, streak };
     });
     return best;
@@ -21493,15 +21495,10 @@
       else if (goal) { inner = mRing(); title += " — light day planned"; }
       return cell(`data-wr-fit="${k}"`, k, inner, title);
     }).join("");
-    const hair = days.map(d => {
-      const k = keyOf(d), t = washTypeWithOverride(d);
-      const spec = t ? HAIR.types[t] : null;
-      const c = t ? `var(--wk-hair-${t})` : "";
-      const done = t && isDone(`hair-${k}`);
-      return cell(`data-wr-hair="${k}"`, k,
-        spec ? (done ? mDot(c, 1) : mRing(c)) : mNone,
-        spec ? `${spec.name}${done ? " — done" : ""}` : `Set hair wash for ${d.getDate()} ${MON_SHORT[d.getMonth()]}`);
-    }).join("");
+    // 2026-08-13 (Linh: "unlink each wash — full control", remove the wash-rhythm
+    // tracker): the Hair row here was driven by the retired override popover. Hair
+    // washes are ordinary routines now — tick them done from the day calendar like any
+    // routine — so this grid no longer carries a hair row.
     const mealCells = slot => days.map(d => {
       const k = keyOf(d), entry = mealEntryFor(k, slot), s = MEAL_SLOTS[slot];
       const txt = !entry ? "" : entry.type === "out" ? (entry.note || "Eating out")
@@ -21521,7 +21518,6 @@
       <div class="hab-grid">
         <div class="hab-corner"></div>${dayHead}
         ${label("💪", "Fitness")}${fit}
-        ${label(HAIR.types.regular.icon, "Hair")}${hair}
         ${label("🥪", "Lunch")}${mealCells("lunch")}
         ${label("🍲", "Dinner")}${mealCells("dinner")}
         ${label("🌃", "Late nights", "8–11pm")}${hub}
@@ -22586,18 +22582,6 @@
           `<button type="button" data-wrp-fit="${t}" aria-pressed="${logged.includes(t)}">${WR_FIT_EM[t]} ${t}</button>`).join("")}</div>
         <div class="wr-pop-foot">Tap to log / unlog · <button type="button" class="tab-link" data-wrp-fit-details>Rate &amp; time it →</button></div>`;
     }
-    if (kind === "hair") {
-      const ov = HAIR_OVERRIDES[key];
-      const auto = washType(d);
-      const opts = [
-        { v: "auto", label: `Auto — ${auto ? HAIR.types[auto].name : "no wash due"}`, on: ov === undefined },
-        ...Object.keys(HAIR.types).map(t => ({ v: t, label: `${HAIR.types[t].icon} ${HAIR.types[t].name}`, on: ov === t })),
-        { v: "none", label: "✂ Skip this day", on: ov === "none" },
-      ];
-      return `<div class="wr-pop-head">${HAIR.types.regular.icon} Hair · ${wrPopDayLabel(key)}</div>
-        <div class="wr-pop-opts wr-pop-col">${opts.map(o =>
-          `<button type="button" data-wrp-hair="${o.v}" aria-pressed="${o.on}">${esc(o.label)}</button>`).join("")}</div>`;
-    }
     if (kind === "hub") {
       const st = hubStatusFor(key);
       const usual = HUB_DEFAULT_DOW.includes(parseKey(key).getDay());
@@ -22683,14 +22667,6 @@
       state.fitSelectedDate = key;
       closeWrPop();
       state.view = "habits"; render();
-      return;
-    }
-    const hairT = e.target.closest("[data-wrp-hair]");
-    if (hairT && key) {
-      const v = hairT.dataset.wrpHair;
-      if (v === "auto") delete HAIR_OVERRIDES[key]; else HAIR_OVERRIDES[key] = v;
-      saveHairOverrides();
-      closeWrPop(); renderWeek();
       return;
     }
     const hubT = e.target.closest("[data-wrp-hub]");
@@ -26244,10 +26220,6 @@
   function rtnActDelete(id) {
     const victim = ROUTINE_TASKS.find(t => t.id === id);
     if (!victim) return;
-    if (HAIR_TYPE_IDS.has(id)) {
-      alert(`"${victim.title}" can't be deleted — the hair wash rotation always needs its 3 types. Edit its name or steps instead, or turn it off the calendar with the switch.`);
-      return;
-    }
     if (!confirm(`Delete "${victim.title}"?`)) return;
     ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== id);
     if (rtnEditId === id) closeRtnForm();
@@ -27754,8 +27726,6 @@
     }
     const fitCell = e.target.closest("[data-wr-fit]");
     if (fitCell) { openWrPop(fitCell, "fit", fitCell.dataset.wrFit); return; }
-    const hairCell = e.target.closest("[data-wr-hair]");
-    if (hairCell) { openWrPop(hairCell, "hair", hairCell.dataset.wrHair); return; }
     const mealCell = e.target.closest("[data-wr-meal]");
     if (mealCell) { openWrPop(mealCell, mealCell.dataset.wrSlot === "lunch" ? "lunch" : "meal", mealCell.dataset.wrMeal); return; }
     const hubCell = e.target.closest("[data-wr-hub]");
@@ -31145,10 +31115,6 @@
     if (!rtnEditId) return;
     const victim = ROUTINE_TASKS.find(t => t.id === rtnEditId);
     if (!victim) return;
-    if (HAIR_TYPE_IDS.has(rtnEditId)) {
-      alert(`"${victim.title}" can't be deleted — the hair wash rotation always needs its 3 types. Edit its name or steps instead, or turn it off the calendar with the switch.`);
-      return;
-    }
     if (!confirm(`Delete "${victim.title}"?`)) return;
     ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t.id !== rtnEditId);
     closeRtnForm();
