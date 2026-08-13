@@ -6953,6 +6953,18 @@
   .exp-kpi .l { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin-top: 2px; }
   .exp-kpi .sub { font-size: 10.5px; color: var(--ink-faint); margin-top: 4px; font-variant-numeric: tabular-nums; }
   .exp-kpi-strip-marriage .exp-kpi { border-top: 3px solid var(--kpi-c, var(--exp-gold)); }
+  /* 2026-08-11 (Linh: "a graph to show what percentage of bills have been paid for the
+     month"): a ring tile that lives in the KPI strip — green fills as bills get marked
+     paid this calendar month, resets when a new month starts (same rule as the pill). */
+  .exp-kpi-ring { flex: 1 1 160px; display: flex; align-items: center; gap: 12px; }
+  .exp-ring-wrap { position: relative; width: 52px; height: 52px; flex: none; }
+  .exp-ring-svg { width: 100%; height: 100%; }
+  .exp-ring-track { fill: none; stroke: var(--dot-empty); stroke-width: 6; }
+  .exp-ring-prog { fill: none; stroke: var(--exp-green); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset .35s ease; }
+  .exp-ring-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .exp-ring-center b { font-size: 14px; font-weight: 800; color: var(--exp-green-ink); font-variant-numeric: tabular-nums; }
+  .exp-ring-meta .l { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .exp-ring-count { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; font-variant-numeric: tabular-nums; }
 
   .exp-group { margin-bottom: 20px; }
   .exp-group-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 8px; flex-wrap: wrap; }
@@ -32988,9 +33000,38 @@
       <input type="number" step="0.01" min="0" inputmode="decimal" data-exp-amt-input="${bill.id}" data-exp-per="${key}" value="${val.toFixed(2)}"><b class="exp-per-suffix">${suffix}</b></span></td>`;
   }
 
+  // how many of this sub-account's bills are paid for the CURRENT calendar month --
+  // reuses expBillStatus so it obeys the exact same "paid this month" rule as the pill,
+  // and resets to 0% when a new month rolls over. Count-of-bills, not dollar-weighted.
+  function expPaidPct(sub) {
+    // 2026-08-13: expBillStatus takes (bill, cadence) and returns {state,...}, not a
+    // bare string -- the source brief was written against an older signature. Cadence
+    // comes from the bill's own group, same as expAllBillsWithCadence() reads it.
+    let total = 0, paid = 0;
+    sub.groups.forEach(g => g.bills.forEach(b => { total++; if (expBillStatus(b, g.cadence).state === "paid") paid++; }));
+    return { total, paid, pct: total ? paid / total : 0 };
+  }
+  function expRingSVG(pct) {
+    const size = 52, sw = 6, r = (size - sw) / 2, c = 2 * Math.PI * r;
+    const off = c * (1 - Math.min(Math.max(pct, 0), 1));
+    return `<svg viewBox="0 0 ${size} ${size}" class="exp-ring-svg">
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" class="exp-ring-track"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" class="exp-ring-prog"
+        transform="rotate(-90 ${size/2} ${size/2})"
+        style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/>
+    </svg>`;
+  }
+  function expPaidRingHtml(sub) {
+    const p = expPaidPct(sub);
+    return `<div class="exp-kpi exp-kpi-ring">
+      <div class="exp-ring-wrap">${expRingSVG(p.pct)}<div class="exp-ring-center"><b>${Math.round(p.pct * 100)}%</b></div></div>
+      <div class="exp-ring-meta"><div class="l">Paid this month</div><div class="exp-ring-count">${p.paid} of ${p.total} bills</div></div>
+    </div>`;
+  }
   function expKpiStripHtml(sub) {
     const t = expPageTotals(sub);
     return `<div class="exp-kpi-strip">
+      ${expPaidRingHtml(sub)}
       <div class="exp-kpi"><div class="n">${expMoney(t.weekly)}</div><div class="l">Weekly</div></div>
       <div class="exp-kpi"><div class="n">${expMoney(t.monthly)}</div><div class="l">Monthly</div></div>
       <div class="exp-kpi"><div class="n">${expMoney(t.yearly)}</div><div class="l">Yearly</div></div>
@@ -33000,6 +33041,7 @@
     const totals = expMemberTotals(sub);
     const [mA, mB] = sub.members;
     return `<div class="exp-kpi-strip exp-kpi-strip-marriage">
+      ${expPaidRingHtml(sub)}
       <div class="exp-kpi" style="--kpi-c:${esc(mA.color)}"><div class="n">${expMoney(totals.monthly.a)}/mo</div><div class="l">${esc(mA.name)} pays</div>
         <div class="sub">${expMoney(totals.weekly.a)}/wk · ${expMoney(totals.yearly.a)}/yr</div></div>
       <div class="exp-kpi" style="--kpi-c:${esc(mB.color)}"><div class="n">${expMoney(totals.monthly.b)}/mo</div><div class="l">${esc(mB.name)} pays</div>
