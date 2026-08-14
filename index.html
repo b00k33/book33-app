@@ -7605,6 +7605,181 @@
     }
   }
 
+  /* ============================================================
+     MOBILE NAVIGATION: DRAWER + TAB STRIP (§5 build, 2026-08-15) — two switchable
+     mobile-only (<1024px) navigation UIs, picked via PREFS.navMode ("drawer"
+     default | "tabs"). Neither touches renderNav()/#categoryTabs/CATEGORIES —
+     those stay exactly as they were; below 1024px #categoryTabs is just force-
+     hidden (below) and these new components take over the same job instead.
+     Desktop (≥1024px) is unaffected: the old pill row (.view-tabs base rule,
+     ~line 555) keeps rendering exactly as before, and every class below is force-
+     hidden past the gate at the end of this block.
+     Naming deliberately avoids "drawer" for the new slide-out panel — that word
+     already means the OLD #categoryTabs.drawer-open anchored dropdown elsewhere in
+     this file (no backdrop, small anchored menu — not this). It's "#navPanel"/
+     ".nav-panel" throughout instead, so a future grep for "drawer" still finds only
+     the old system, and a grep for "nav-panel" finds only the new one.
+     ============================================================ */
+  /* bridges the gap between the OLD nav's own 640px mobile breakpoint (below) and
+     this section's broader <1024px "mobile" scope — the same broadened definition
+     §1-4 already established for the multi-day calendar / all-day row / etc.
+     Without this, 641-1023px would have neither the old pill row (force-hidden
+     just below) nor a visible #navDrawerBtn to open the new panel with — a dead
+     zone with no nav at all. Duplicates (does not edit) the ≤640px button geometry
+     a few hundred lines up (search .nav-drawer-btn) at the ≤1023px gate this
+     build's own components use everywhere else. */
+  @media (min-width: 641px) and (max-width: 1023px) {
+    /* 2026-08-15 fix: display needs !important here -- this rule and the OLD base
+       .nav-drawer-btn{display:none} rule (~line 8861, unconditional, not itself in
+       any media query) have EQUAL specificity (one class selector each), and CSS
+       breaks specificity ties by SOURCE ORDER, not by which media query is narrower
+       -- the base rule sits LATER in the file than this block, so at 641-1023px it
+       was winning and silently keeping the button hidden despite this rule's
+       condition also matching, recreating the exact dead zone this block exists to
+       close. Confirmed empirically (computed display:none at 800px before this).
+       Only display is actually contested -- nothing else here has a competing
+       declaration -- so only it needs the override. */
+    .nav-drawer-btn {
+      display: flex !important; align-items: center; justify-content: center; flex: none;
+      position: static; z-index: 1;
+      width: 44px; height: 44px; padding: 0; border-radius: 50%;
+      border: none; background: none; cursor: pointer;
+    }
+    .nav-drawer-logo {
+      width: 100%; height: 100%; border-radius: 50%; display: block;
+      filter: drop-shadow(0 0 2px var(--accent-seed)) drop-shadow(0 0 7px color-mix(in oklab, var(--accent-seed) 70%, transparent));
+    }
+  }
+  /* applyNavMode() (JS) toggles this when PREFS.navMode is "tabs" -- nothing for
+     the button to open in that mode, #navTabStrip is permanently visible instead.
+     Two classes beats every single-class .nav-drawer-btn rule above on specificity
+     alone; !important is extra insurance, not load-bearing. */
+  .nav-drawer-btn.nav-drawer-btn-tabs-hide { display: none !important; }
+  /* the OLD nav's own mobile presentation (≤640px accordion) AND its 641-1023px
+     fallback (the plain desktop pill row — nothing previously hid it in that gap)
+     both retire behind this new nav below 1024px — #categoryTabs/renderNav()
+     themselves are completely untouched, just visually suppressed. !important is
+     needed here (unlike #tlAlldayRow's own plain <1024px hide, §4) because
+     #categoryTabs.view-tabs.drawer-open (~line 8769 — not !important, but higher
+     specificity than a bare #categoryTabs rule) would otherwise still be able to
+     win on a phone ≤640px if that class were ever left toggled on. */
+  @media (max-width: 1023px) {
+    #categoryTabs { display: none !important; }
+  }
+
+  /* ---- Drawer (#navPanel) ---- */
+  .nav-panel-backdrop {
+    position: fixed; inset: 0; z-index: 300;
+    background: color-mix(in oklab, black 45%, transparent);
+    backdrop-filter: blur(3px);
+  }
+  /* stays in the DOM at all times (never [hidden]) so its transform can transition
+     — [hidden] is display:none!important app-wide (~line 463), which can't be
+     animated. Off-screen via transform when closed instead; the .open class is the
+     only state toggle. No slide-in precedent exists anywhere else in this file
+     (checked) — this is a fresh, deliberately minimal transition: transform only,
+     nothing else. prefers-reduced-motion needs no extra handling here — the
+     app-wide `* { transition: none!important }` rule under that media query
+     (~line 464) already disables this transition for free. */
+  .nav-panel {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 301;
+    width: min(330px, 85vw);
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .nav-panel.open { transform: translateX(0); }
+  .nav-panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; }
+  .nav-panel-group-lbl { padding: 16px 16px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
+  .nav-panel-row {
+    position: relative; display: flex; align-items: center; gap: 12px;
+    min-height: 44px; width: 100%; padding: 0 16px; margin: 0;
+    border: none; background: none; border-radius: var(--radius-sm);
+    color: var(--ink-soft); font-size: 13px; font-family: var(--font-body);
+    text-align: left; cursor: pointer;
+  }
+  /* hover reuses --raised as-is (it IS this exact recipe already — a tint meant to
+     layer over an already-solid surface, which is exactly what a hover state is).
+     The panel's own resting surface is the solid --paper below, not --raised alone
+     — --raised is a translucent wash (color-mix ..ink 6%.. transparent) designed to
+     sit on top of something solid, never to BE the solid surface itself; used bare
+     as a fixed full-height panel's only background, the semi-transparent backdrop
+     behind it would bleed through and the panel would read as unreadable frosted
+     glass instead of a page. Solid --paper (same base .jump-box/.tl-detail-sheet
+     already use) + --raised as the hover layer gets the token's own intent right
+     AND keeps the panel legible. */
+  .nav-panel-row:hover:not(.on) { background: var(--raised); }
+  .nav-panel-row .nav-ic { flex: none; width: 20px; font-size: 16px; line-height: 1; text-align: center; color: inherit; }
+  .nav-panel-row .nav-panel-lbl { flex: 1; min-width: 0; }
+  /* active: --ink text (not gold) + gold icon + a subtle fill visibly stronger than
+     the --raised hover above (10% ink-mix vs --raised's own 6%) so all three resting/
+     hover/active states read as distinct at a glance. */
+  .nav-panel-row.on { color: var(--ink); font-weight: 700; background: color-mix(in oklab, var(--ink) 10%, transparent); }
+  .nav-panel-row.on .nav-ic { color: var(--nav-active); }
+  .nav-panel-row.on::before {
+    content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--nav-active);
+  }
+  .nav-panel-count {
+    flex: none; margin-left: auto; min-width: 20px; height: 20px; padding: 0 8px;
+    border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink-soft);
+    font-size: 11px; font-weight: 700; display: inline-flex; align-items: center;
+    justify-content: center; font-variant-numeric: tabular-nums;
+  }
+  /* Settings ("_footer" in NAV_ITEMS, JS) — same hairline "last row" treatment
+     #navSearchBtn already uses in the OLD drawer (~line 8792), same two numbers. */
+  .nav-panel-row-sep { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--note-line); }
+  .nav-panel-footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--note-line); font-size: 11px; color: var(--ink-faint); }
+  /* quiet glyphs render as plain text (inherits colour) instead of colour emoji on
+     phones — every icon in NAV_ITEMS except the calendar sheet, which stays colour
+     (see navIconHtml(), JS). */
+  .nav-ic-text { font-variant-emoji: text; }
+
+  /* ---- Tabs (#navTabStrip) ---- */
+  .nav-tab-strip {
+    display: flex; align-items: center; gap: 4px; height: 40px;
+    padding: 0 16px; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+    /* 2026-08-15 fix: #wrap (this element's flex parent) sets align-items:center, not
+       the default stretch -- so this item was never being stretched to #wrap's own
+       width in the first place, meaning min-width:0 alone (the fix that worked for
+       the all-day row's near-identical-looking overflow, a section earlier in this
+       build) does nothing here: there's no stretch force for it to unblock. Confirmed
+       empirically -- min-width:0 alone left the strip at its full ~1140px content
+       width; only an explicit width fixed it. With no stretch to rely on, the item
+       needs its own definite width to be constrained to at all, so overflow-x:auto
+       above has a fixed box to scroll the 12 nowrap .nav-tab-items WITHIN, instead of
+       growing to fit them. min-width:0 kept anyway as a harmless backstop. */
+    width: 100%;
+    min-width: 0;
+  }
+  .nav-tab-strip::-webkit-scrollbar { display: none; }
+  .nav-tab-item {
+    flex: none; display: flex; align-items: center; gap: 4px; height: 100%;
+    padding: 0 12px; margin: 0; border: none; background: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; color: var(--ink-soft); font-family: var(--font-body);
+    white-space: nowrap; border-bottom: 2px solid transparent;
+  }
+  .nav-tab-item .nav-ic { font-size: 15px; line-height: 1; color: inherit; }
+  .nav-tab-item.on { color: var(--nav-active); border-bottom-color: var(--nav-active); font-weight: 700; }
+
+  /* mobile-only scope for this whole §5 block — desktop keeps the untouched pill
+     row (.view-tabs base rule, ~line 555) and never sees any of the above. Same
+     belt-and-suspenders pattern §1's own ≥1024px gate uses (~line 7509): the .open
+     class already keeps #navPanel closed by default and #navTabStrip carries its
+     own `hidden` attribute, this is just the hard backstop for a live resize
+     crossing the boundary mid-session. */
+  @media (min-width: 1024px) {
+    .nav-panel-backdrop, .nav-panel, .nav-tab-strip { display: none !important; }
+  }
+
   /* ============ BEAUTY pages ============ */
   /* Fasting/Weight/Cycle are each a compact, narrow-by-design widget (borrowed from
      the Day-page sidebar, where they stack in a column ~300px wide) — inside the
@@ -11063,6 +11238,21 @@
            can restore the button here when leaving phone widths. -->
       <span id="themeToggleHome" hidden></span><button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">🌙</button>
     </div>
+  </div>
+
+  <!-- 2026-08-15 (§5 build): NEW mobile navigation — Drawer (#navPanel, slide-out)
+       and Tabs (#navTabStrip, always-visible horizontal strip), switched via
+       PREFS.navMode. Both mobile-only (<1024px, see the CSS gate near .nav-panel).
+       Neither replaces #categoryTabs/CATEGORIES/renderNav() above — that system is
+       untouched, just visually superseded below 1024px (see the <1024px
+       #categoryTabs hide rule, CSS). renderNavPanel()/renderNavTabStrip()/
+       applyNavMode() (JS, near renderNav()'s own click delegate) keep both in sync
+       with state.view/PREFS on every render(). -->
+  <div class="nav-tab-strip" id="navTabStrip" hidden></div>
+  <div class="nav-panel-backdrop" id="navPanelBackdrop" hidden></div>
+  <div class="nav-panel" id="navPanel" role="dialog" aria-modal="true" aria-label="Navigate" aria-hidden="true">
+    <div class="nav-panel-scroll" id="navPanelBody"></div>
+    <div class="nav-panel-footer" id="navPanelFooter"></div>
   </div>
 
   <div class="jump-overlay" id="jumpOverlay" hidden>
@@ -20907,7 +21097,11 @@
      layerTopOffset()'s mdRendering branch and renderMultiDayGrid()'s own comment for
      exactly how. ============================================================ */
   const PREFS_KEY = "book33-prefs";
-  const PREFS_DEFAULTS = { calDays: 3 };
+  // navMode added 2026-08-15 (§5 build) -- exactly the extension this comment block
+  // already anticipated (see below): ntMerge() deep-merges under these defaults, so
+  // an existing saved book33-prefs with only calDays gets navMode:"drawer" filled
+  // in for free, no migration needed.
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer" };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -28147,6 +28341,10 @@
       : state.view === "month" ? "qaSlotMonth" : "qaSlotDay");
     if (qaZone && qaSlot && qaZone.parentElement !== qaSlot) qaSlot.appendChild(qaZone);
     renderNav();
+    // §5 build: keeps #navPanel/#navTabStrip's active row + count badges + mode
+    // visibility current on every navigation — the one hook point render() already
+    // gives every other nav-adjacent thing (renderNav() itself, right above).
+    renderNavExtras();
     document.getElementById("dayPage").hidden = state.view !== "day";
     document.getElementById("weekPage").hidden = state.view !== "week";
     document.getElementById("monthPage").hidden = state.view !== "month";
@@ -28360,6 +28558,250 @@
       closeDrawer();
     });
   }
+
+  /* ============================================================
+     MOBILE NAVIGATION: DRAWER + TAB STRIP (§5 build, 2026-08-15) — see the CSS
+     block of the same name (search "MOBILE NAVIGATION: DRAWER") for the full
+     design rationale. Neither renderNav()/#categoryTabs/CATEGORIES nor their own
+     click delegate above is touched; this is a second, independent nav reading the
+     SAME CATEGORIES-backed view ids through its own small curated roster
+     (NAV_ITEMS below), sourced from CATEGORIES so a renamed/removed page is at
+     least a visible/greppable break here too, not silent drift into a second
+     competing registry. ============================================================ */
+  function routineCount() {
+    // reuses the exact same "does this occur today" filter Day/streak/etc. already
+    // share (routinesOn(), a few hundred lines up) rather than a second copy of the
+    // ROUTINE_TASKS.filter(routineOccursOn) pattern it's built from — one source of
+    // truth for "is this routine on today," not two that could drift apart.
+    return routinesOn(TODAY).length;
+  }
+  function needsBooking() {
+    return MEDICAL.checks.filter(c => { const st = medStatus(c).st; return st === "overdue" || st === "soon"; }).length;
+  }
+  const NAV_ITEMS = [
+    { viewId: "day",       label: "Today",     icon: "☀",  group: null },
+    // "Calendar" here means the month-grid overview, distinct from "Today" (the day
+    // timeline) above -- the two are complementary views of the same data, same
+    // distinction Google Calendar itself makes between its own "Today" and "Month".
+    { viewId: "month",     label: "Calendar",  icon: "🗓",  group: null },
+    { viewId: "routines",  label: "Routines",  icon: "↻",  group: null, count: () => routineCount() },
+    { viewId: "habits",    label: "Habits",    icon: "▨",  group: null },
+    // CATEGORIES' real id for this page is "health" (nav label "Fasting" there)
+    // though the page's own <h1> says "Body" -- "Body" is the more accurate
+    // umbrella label for a nav item sitting next to Nutrition/Medical, so used here
+    // instead of either existing label.
+    { viewId: "health",    label: "Body",      icon: "◐",  group: "Body & health" },
+    { viewId: "nutrition", label: "Nutrition", icon: "🍎", group: "Body & health" },
+    { viewId: "medical",   label: "Medical",   icon: "✚",  group: "Body & health", count: () => needsBooking() },
+    { viewId: "people",    label: "People",    icon: "☺",  group: "Life" },
+    { viewId: "money",     label: "Money",     icon: "$",  group: "Life" },
+    { viewId: "cbdWork",   label: "CBD Work",  icon: "⚕",  group: "Life" },
+    { viewId: "growth",    label: "Growth",    icon: "↗",  group: "Life" },
+    // no "settings" view exists -- CATEGORIES' real "notify" view is the closest
+    // analog to a general preferences home, and is where the Drawer/Tabs toggle
+    // itself lives (renderNotifyPage's Global group), so routing here is self-
+    // consistent -- "_footer" is a layout signal read by renderNavPanel() below
+    // (hairline-separated last row), not a group label that gets printed anywhere.
+    { viewId: "notify",    label: "Settings",  icon: "⚙",  group: "_footer" },
+  ];
+  // 2026-08-15 fix: the CSS property alone (.nav-ic-text's font-variant-emoji:text,
+  // above) isn't reliable enough on its own -- the master build spec's own §8 (icon
+  // language, not yet built) explicitly warns "this WILL bite otherwise" and pairs
+  // that CSS with a literal U+FE0E (VS15, text-presentation variation selector)
+  // appended straight after the glyph -- the older, more universally-supported half
+  // of the fix. Both together, not either alone. 🗓 is the one deliberate colour-
+  // emoji exception in this roster so it skips the suffix (VS15 would fight its own
+  // intended colour presentation). Still needs verifying on a real Android phone
+  // per that same spec warning -- desktop Chrome renders this differently and can't
+  // confirm it either way.
+  function navIconHtml(item) {
+    const textPresentation = item.icon !== "🗓";
+    const cls = textPresentation ? "nav-ic nav-ic-text" : "nav-ic";
+    const glyph = item.icon + (textPresentation ? "︎" : "");
+    return `<span class="${cls}" aria-hidden="true">${glyph}</span>`;
+  }
+  function navPanelRowHtml(item) {
+    const active = item.viewId === state.view;
+    const count = item.count ? item.count() : 0;
+    const badge = count > 0 ? `<span class="nav-panel-count">${count > 99 ? "99+" : count}</span>` : "";
+    const sep = item.group === "_footer" ? " nav-panel-row-sep" : "";
+    return `<button type="button" class="nav-panel-row${active ? " on" : ""}${sep}" data-view="${item.viewId}" aria-current="${active ? "page" : "false"}">`
+      + navIconHtml(item)
+      + `<span class="nav-panel-lbl">${esc(item.label)}</span>`
+      + badge
+      + `</button>`;
+  }
+  function navTabRowHtml(item) {
+    const active = item.viewId === state.view;
+    return `<button type="button" class="nav-tab-item${active ? " on" : ""}" data-view="${item.viewId}" role="tab" aria-selected="${active ? "true" : "false"}">`
+      + navIconHtml(item)
+      + `<span class="nav-tab-lbl">${esc(item.label)}</span>`
+      + `</button>`;
+  }
+  function navSyncLabel() {
+    // syncState() (a few thousand lines down, near #b33Live) is a pure read of
+    // existing sync state -- "Pure read of existing state; never mutates anything"
+    // per its own comment -- reused as-is here rather than fabricating a fake
+    // status. One-shot read on every renderNavPanel() call (i.e. every navigation,
+    // same as everything else in this panel), not a live subscription to the
+    // push-based setLive()/updateLiveBadge() pipeline #b33Live itself uses --
+    // deliberately kept simple; #b33Live remains the one live-ticking indicator,
+    // this is just a non-fake echo of the same real state for the panel footer.
+    // typeof guard: syncState lives in the SEPARATE cloud-sync <script> block below
+    // this one (confirmed live -- calling it unguarded threw "syncState is not
+    // defined" on first boot) -- that block hasn't executed yet during THIS
+    // script's own boot-time render() call, only moments later. Self-heals on the
+    // very next render() (any navigation), well before she could ever tap the
+    // panel open; empty string just means an unlabelled footer for that one instant.
+    if (typeof syncState !== "function") return "";
+    const st = syncState();
+    return st === "synced" ? "Synced" : st === "syncing" ? "Syncing…"
+      : st === "pending" ? "Waiting to sync" : st === "offline" ? "Offline" : "Sync error";
+  }
+  function renderNavPanel() {
+    const host = document.getElementById("navPanelBody");
+    if (!host) return;
+    let html = "", lastGroup;
+    NAV_ITEMS.forEach(item => {
+      if (item.group !== lastGroup && item.group && item.group !== "_footer") {
+        html += `<div class="nav-panel-group-lbl">${esc(item.group)}</div>`;
+      }
+      lastGroup = item.group;
+      html += navPanelRowHtml(item);
+    });
+    host.innerHTML = html;
+    const footer = document.getElementById("navPanelFooter");
+    if (footer) footer.textContent = navSyncLabel();
+  }
+  function renderNavTabStrip() {
+    const host = document.getElementById("navTabStrip");
+    if (!host) return;
+    host.innerHTML = NAV_ITEMS.map(navTabRowHtml).join("");
+  }
+  function navPanelIsOpen() { return document.getElementById("navPanel").classList.contains("open"); }
+  function openNavPanel() {
+    const panel = document.getElementById("navPanel");
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    document.getElementById("navPanelBackdrop").hidden = false;
+    document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "true");
+  }
+  function closeNavPanel() {
+    const panel = document.getElementById("navPanel");
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+    document.getElementById("navPanelBackdrop").hidden = true;
+    document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
+  }
+  // shows/hides #navDrawerBtn vs #navTabStrip per PREFS.navMode; called from
+  // render() (every navigation) and from the Settings toggle for instant switching.
+  function applyNavMode() {
+    const tabsMode = PREFS.navMode === "tabs";
+    document.getElementById("navDrawerBtn").classList.toggle("nav-drawer-btn-tabs-hide", tabsMode);
+    document.getElementById("navTabStrip").hidden = !tabsMode;
+    if (tabsMode) closeNavPanel();   // nothing left to keep open once its trigger is hidden
+  }
+  function renderNavExtras() {
+    renderNavPanel();
+    renderNavTabStrip();
+    applyNavMode();
+  }
+  // #navDrawerBtn is mode-aware: a SECOND listener alongside its existing
+  // drawer-open toggle above (both fire on a click — addEventListener stacks,
+  // doesn't replace; the old one now just toggles a class on an element this
+  // build's own <1024px gate keeps permanently hidden, harmless) -- opens the NEW
+  // panel only when navMode is "drawer" (in "tabs" mode the button itself is
+  // hidden by applyNavMode(), so this mostly guards a stale click mid-transition).
+  // 2026-08-15 fix: must be an actual toggle, not always-open -- the old listener's
+  // own toggle-closed write to aria-expanded (line above) would otherwise get
+  // silently overwritten back to "true" by this one firing right after it on every
+  // click, since both are bound to the same element and registration order runs
+  // this one second. Net effect without the toggle here: tapping the B33 button a
+  // second time while the panel is already open did nothing -- still fully closable
+  // via backdrop tap / swipe-left / Escape / picking an item, just not via the
+  // button itself, which is the one closer most people reach for first on a
+  // hamburger-style trigger.
+  document.getElementById("navDrawerBtn").addEventListener("click", () => {
+    if (PREFS.navMode !== "drawer" || window.innerWidth >= 1024) return;
+    if (navPanelIsOpen()) closeNavPanel(); else openNavPanel();
+  });
+  document.getElementById("navPanelBackdrop").addEventListener("click", closeNavPanel);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && navPanelIsOpen()) closeNavPanel();
+  });
+  document.getElementById("navPanelBody").addEventListener("click", e => {
+    const btn = e.target.closest("[data-view]");
+    if (!btn) return;
+    state.view = btn.dataset.view;
+    render();
+    closeNavPanel();
+  });
+  document.getElementById("navTabStrip").addEventListener("click", e => {
+    const btn = e.target.closest("[data-view]");
+    if (!btn) return;
+    state.view = btn.dataset.view;
+    render();
+  });
+  // auto-close if a live resize/rotate crosses back past the desktop boundary --
+  // the ≥1024px CSS gate already hides it regardless, this just keeps the JS .open
+  // state honest too. Same guarded matchMedia-change pattern as deskGridMq/
+  // rtnSideMq use elsewhere in this file.
+  {
+    const navMobileMq = window.matchMedia("(max-width: 1023px)");
+    if (navMobileMq.addEventListener) navMobileMq.addEventListener("change", () => { if (!navMobileMq.matches) closeNavPanel(); });
+  }
+  // swipe-left anywhere on the OPEN panel closes it -- no edge-position requirement
+  // (unlike the open gesture below), same single-touch/passive/no-preventDefault
+  // shape as the existing day-swipe skeleton (search SWIPE_MIN_PX). That skeleton
+  // declares its own SWIPE_MIN_PX/SWIPE_MAX_OFF_AXIS INSIDE its own IIFE (confirmed
+  // via grep -- NOT module-scope, despite how the build brief for this section
+  // described it), so this needs its own copy of the same two numbers, not a
+  // shared reference.
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50;
+    const panel = document.getElementById("navPanel");
+    let sx = 0, sy = 0, tracking = false;
+    panel.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1) { tracking = false; return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+    }, { passive: true });
+    panel.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > SWIPE_MAX_OFF_AXIS) return;
+      if (dx < 0) closeNavPanel();
+    }, { passive: true });
+    panel.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  // edge-swipe FROM the left screen edge opens the panel -- mobile Day/Today page
+  // only, drawer mode only, per the build brief. Bound to document.body (not the
+  // panel, which is off-screen and can't receive the initial touch) with its own
+  // start-position edge check, since the shared skeleton this is adapted from has
+  // none built in.
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    let sx = 0, sy = 0, tracking = false;
+    document.body.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1 || PREFS.navMode !== "drawer" || window.innerWidth >= 1024
+          || state.view !== "day" || navPanelIsOpen()) { tracking = false; return; }
+      const x = e.touches[0].clientX;
+      if (x > EDGE_ZONE_PX) { tracking = false; return; }
+      sx = x; sy = e.touches[0].clientY; tracking = true;
+    }, { passive: true });
+    document.body.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (dx < SWIPE_MIN_PX || Math.abs(dy) > SWIPE_MAX_OFF_AXIS) return;
+      openNavPanel();
+    }, { passive: true });
+    document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
   // legacy sub-tabs row is retired but its handler stays harmless if ever repopulated
   document.getElementById("subTabs").addEventListener("click", e => {
     const b = e.target.closest("[data-view]"); if (!b) return;
@@ -36800,6 +37242,23 @@
           <span class="nt-lbl">Vibrate</span>
           ${ntSwitch("vibrate", NOTIF.vibrate)}
         </div>
+        <!-- 2026-08-15 (§5 build): the one row on this page that reads/writes
+             PREFS.navMode + savePrefs() instead of a NOTIF field + saveNotif() —
+             book33-prefs.navMode is a general app preference (which mobile nav UI
+             renders), not a notification setting; it lives here anyway because
+             #notifyPage is this app's one general-settings home (there is no
+             separate Settings page — see the comment near #notifyPage's own
+             definition). Deliberate exception, not a miswire — its click handling
+             is its own early-return branch in the delegate below, clearly marked. -->
+        <div class="nt-row">
+          <span class="nt-lbl">Mobile navigation<span class="nt-sub">Drawer: a slide-out menu from the B33 button. Tabs: an always-visible strip under the header</span></span>
+        </div>
+        <div class="nt-row">
+          <div class="track-picker" id="navModePicker" role="group" aria-label="Mobile navigation style">
+            <button type="button" class="track-opt" data-nav-mode="drawer" aria-pressed="${PREFS.navMode === "drawer"}">Drawer</button>
+            <button type="button" class="track-opt" data-nav-mode="tabs" aria-pressed="${PREFS.navMode === "tabs"}">Tabs</button>
+          </div>
+        </div>
       </div>
 
       <div class="nt-group">
@@ -36921,6 +37380,15 @@
   }
   // one delegated listener pair — the panel re-renders wholesale on every change
   document.getElementById("notifyPage").addEventListener("click", ev => {
+    // §5 build: PREFS.navMode, not a NOTIF field -- see the HTML comment above
+    // #navModePicker for why this one row is a deliberate exception on this page.
+    const navModeBtn = ev.target.closest("[data-nav-mode]");
+    if (navModeBtn) {
+      const mode = navModeBtn.dataset.navMode;
+      if (mode !== PREFS.navMode) { PREFS.navMode = mode; savePrefs(); renderNavExtras(); }
+      renderNotifyPage();
+      return;
+    }
     const tog = ev.target.closest("[data-nt-tog]");
     if (tog) {
       const [o, k] = ntPath(tog.dataset.ntTog);
