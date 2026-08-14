@@ -7381,6 +7381,19 @@
   .md-col-head-bar { height: 3px; border-radius: 999px; background: var(--field-bg); margin: 4px 4px 0; overflow: hidden; }
   .md-col-head-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--margin-rule); }
   .md-col-head-count { display: block; margin-top: 4px; font-size: 9.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  /* 2026-08-15 (§3 build, "fasting = a whole tinted column"): per-column fasting wash +
+     ● Nh label -- reads the same fastedHoursOn(d) this file's Week-page fasting strip
+     (renderWeekFast) already sums historical + active fasts with, just a new SHAPE (a
+     whole-column background, not an edge rail -- see the single-day tint block further
+     down, near #dayFastHead, for why an edge rail was ruled out for this feature). A day
+     with nothing logged (fastedHoursOn===0 -- always true for a future day in the
+     visible window, nothing's been logged yet) gets neither the tint nor the label, same
+     no-placeholder rule .md-col-head-bar/-count above already follow. Rounds only the
+     TOP corners here -- .md-col below (the grid piece directly under this header)
+     rounds only the BOTTOM, so header+grid read as one seamless band with no
+     double-rounded seam where they meet. */
+  .md-col-head[data-fasting="true"] { background: rgba(55,175,101,.075); border-radius: 9px 9px 0 0; }
+  .md-col-head-fast { display: block; margin-top: 4px; font-size: 9.5px; font-weight: 700; color: var(--fit-workout); font-variant-numeric: tabular-nums; }
 
   .md-grid { display: flex; gap: 4px; padding-top: 0; position: relative; }
   .md-hours { width: 30px; flex: none; padding-left: 0; }
@@ -7398,6 +7411,11 @@
   .md-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
   .md-col { position: relative; flex: 1; min-width: 0; border-left: 1px solid var(--note-line); }
   .md-col:first-child { border-left: none; }
+  /* 2026-08-15 (§3 build): grid half of the header+grid fasting band -- bottom corners
+     only, see .md-col-head[data-fasting] above for the full reasoning. A plain
+     background paints BEHIND an element's own children regardless of DOM order, so this
+     never dims or recolours the actual .md-item/.md-bar event blocks stacked on top. */
+  .md-col[data-fasting="true"] { background: rgba(55,175,101,.075); border-radius: 0 0 9px 9px; }
 
   .md-item.tl-item {
     position: absolute; left: 1px; right: 1px; border-radius: var(--radius-sm);
@@ -7425,7 +7443,7 @@
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
   @media (min-width: 1024px) {
-    .cal-days-row, .md-wrap, .dcx-wrap { display: none !important; }
+    .cal-days-row, .md-wrap, .dcx-wrap, #dayFastHead { display: none !important; }
   }
 
   /* ============================================================
@@ -7480,6 +7498,42 @@
     #fastStatus { display: none; }
   }
   #dayCtxProgress, #dayCtxFasting { cursor: pointer; }
+
+  /* ============================================================
+     FASTING TINT, single-day (§3 build, 2026-08-15) — see .md-col-head[data-fasting]/
+     .md-col[data-fasting] above for the multi-day half and the full brief; this is the
+     calDays===1 counterpart, same rgba(55,175,101,.075) wash + ● Nh (var(--fit-workout))
+     label, same fastedHoursOn(d) data (renderDayFastTint(), reading state.anchor).
+     #dayFastHead is a NEW sibling element (a fixed header sitting above a scrolling
+     grid -- same shape .md-headrow/#mdTimelineScroll already use for multi-day) rather
+     than a new child inside #dayTimelineWrap: that wrap's own children are almost all
+     position:absolute, anchored to ITS OWN top-left origin (see layerTopOffset()) -- a
+     new normal-flow child ahead of .hours would push .hours down the document flow
+     without moving those absolute siblings along with it, misaligning the hour rail
+     from its own grid content. A plain OUTER sibling carries zero risk of that.
+     Deliberately NOT an edge rail (unlike #fastLine, the pre-existing right-edge accent
+     that already lives inside #dayTimelineWrap, CSS near the top of this file) -- left
+     untouched, since it marks a different fact: the live [start, goalEnd] SPAN of an
+     ACTIVE fast only, positioned in time via topForMin(), gone the moment the fast
+     stops. This tint marks the DAY, past or present, per fastedHoursOn()'s own
+     definition, regardless of whether a fast happens to be running right now -- the two
+     don't duplicate one number shown twice the way the §2 review fix's #dpHeader/
+     #fastStatus did, so #fastLine stays exactly as it was (it's a desktop feature too —
+     hiding it here would be an unrelated scope change §3 wasn't asked for).
+     #dayTimelineWrap already carries its own background/border/radius (var(--card,
+     var(--note-bg)), 14px -- see the earlier .timeline-wrap rule); the tint layers as a
+     second background IMAGE rather than replacing the `background` shorthand outright,
+     so it reads as a wash over the existing card surface instead of erasing it.
+     Explicitly <1024px-scoped here (unlike the multi-day rules above, which inherit
+     their scope for free from an already mobile-only parent) since #dayTimelineWrap
+     itself renders on desktop too. ============================================================ */
+  #dayFastHead { padding: 5px 12px; font-size: 11px; font-weight: 700; color: var(--fit-workout); font-variant-numeric: tabular-nums; background: rgba(55,175,101,.075); border-radius: 9px 9px 0 0; }
+  @media (max-width: 1023px) {
+    #dayTimelineWrap[data-fasting="true"] {
+      background: linear-gradient(rgba(55,175,101,.075), rgba(55,175,101,.075)), var(--card, var(--note-bg));
+      border-radius: 0 0 9px 9px;
+    }
+  }
 
   /* ============ BEAUTY pages ============ */
   /* Fasting/Weight/Cycle are each a compact, narrow-by-design widget (borrowed from
@@ -12843,6 +12897,14 @@
             <div id="dayCtxFasting" role="button" tabindex="0" aria-label="Fasting — tap to open fasting history"></div>
           </div>
         </div>
+        <!-- 2026-08-15 (§3 build, "fasting = a whole tinted column"): sits directly
+             above #timelineScroll, same "fixed header above a scrolling grid" shape
+             .md-headrow/#mdTimelineScroll use for multi-day -- outside #timelineScroll
+             rather than inside it so it never scrolls away with the hour grid beneath
+             it. Filled by renderDayFastTint(); hidden whenever state.anchor's date has
+             no fasted hours (fastedHoursOn===0), same no-empty-placeholder pattern as
+             #chainChips/#ocPrompts/#tlAlldayRow/.dcx-wrap above. -->
+        <div id="dayFastHead" hidden></div>
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -17593,6 +17655,27 @@
     el.style.top = `${top.toFixed(1)}px`;
     el.style.height = `${(bottom - top).toFixed(1)}px`;
   }
+  // 2026-08-15 (§3 build, "fasting = a whole tinted column"): single-day counterpart to
+  // mdColHeadHtml()/mdColumnHtml()'s per-column tint above -- same fastedHoursOn(d) data
+  // (state.anchor here: the day actually being viewed, same as renderFastLine() just
+  // above), same rgba(55,175,101,.075) wash + fastTintLabel(). Deliberately separate
+  // from renderFastLine() -- that marks a different fact (the live [start, goalEnd]
+  // SPAN of an ACTIVE fast only, positioned in time, gone the moment the fast stops)
+  // from this (the day, as a whole, HAD fasting -- past or present) -- so both keep
+  // running unchanged; see the CSS comment by #dayFastHead for the full reasoning.
+  // #dayTimelineWrap just carries the flag -- CSS (<1024px-gated there) does the actual
+  // painting.
+  function renderDayFastTint() {
+    const hrs = fastedHoursOn(state.anchor);
+    const on = hrs > 0;
+    const head = document.getElementById("dayFastHead");
+    if (head) {
+      head.hidden = !on;
+      head.textContent = on ? fastTintLabel(hrs) : "";
+    }
+    const wrap = document.getElementById("dayTimelineWrap");
+    if (wrap) wrap.dataset.fasting = on;
+  }
 
   /* the right-hand rail follows the time of day — attention cards and the task
      list hold the top; the living cards below rotate to what this hour is for */
@@ -20784,19 +20867,37 @@
     dayEvents = dayEvents.concat(chainData.items);
     return dayEvents.filter(e => !e.allDay && e.start);
   }
+  // 2026-08-15 (§3 build, "fasting = a whole tinted column"): shared by mdColHeadHtml()
+  // below and renderDayFastTint() (single-day counterpart, further down near
+  // renderFastLine()) so the two label formats never drift apart. Math.round() alone
+  // would print "0h" for a real-but-sub-1h fast (0.3h etc.) -- exactly the kind of
+  // placeholder-reading label §0 rules out -- so this floors the display at 1h whenever
+  // there's ANY real fasted time. Callers still gate on the raw hrs>0 test (whether to
+  // show the tint/label at all), not on this -- this only shapes what number shows once
+  // that's already decided.
+  function fastTintLabel(hrs) {
+    return `● ${Math.max(1, Math.round(hrs))}h`;
+  }
   // 2026-08-14 (§2 build, "progress meter shrinks into each column header"): reads
   // dayProgress(d) for THIS column's own date -- not TODAY, not a copy of whatever
   // the single-day progress meter shows -- so every visible column carries its own
   // real completion count. Same "never render an empty placeholder" rule as the
   // context chips: a day with nothing tickable (total===0) gets no bar/count row at
   // all rather than a meaningless "0/0".
+  // 2026-08-15 (§3 build): same reasoning now extends to fasting -- fastedHoursOn(d),
+  // this column's OWN date again (not state.anchor, not TODAY), reused verbatim from
+  // the Week-page fasting strip rather than a second overlap-math copy (see its own
+  // comment, further down). Zero hours omits the tint (data-fasting="false" -- see CSS)
+  // and the label both, same as the progress bar/count just above.
   function mdColHeadHtml(d) {
     const { done, total } = dayProgress(d);
-    return `<div class="md-col-head" data-today="${keyOf(d) === keyOf(TODAY)}">
+    const fastHrs = fastedHoursOn(d);
+    return `<div class="md-col-head" data-today="${keyOf(d) === keyOf(TODAY)}" data-fasting="${fastHrs > 0}">
       <span class="md-col-head-wd">${WD_MIN[dowIndex(d)]}</span>
       <span class="md-col-head-num">${d.getDate()}</span>
       ${total ? `<span class="md-col-head-bar"><span class="md-col-head-bar-fill" style="width:${(done / total * 100).toFixed(1)}%"></span></span>
       <span class="md-col-head-count">${done}/${total}</span>` : ""}
+      ${fastHrs > 0 ? `<span class="md-col-head-fast">${fastTintLabel(fastHrs)}</span>` : ""}
     </div>`;
   }
   // comfortable-mode card (1/3 days): name + time only, per §1 — deliberately NOT a
@@ -20847,7 +20948,10 @@
     });
     clusterOverlaps(placed);
     const html = placed.map(p => compact ? mdBarHtml(p) : mdItemHtml(p)).join("");
-    return `<div class="md-col" data-day-key="${esc(keyOf(d))}">${html}</div>`;
+    // 2026-08-15 (§3 build): fastedHoursOn(d) again, this column's own date -- the CSS
+    // half (.md-col[data-fasting]) is what actually paints the wash; this just carries
+    // the flag alongside the existing data-day-key attribute.
+    return `<div class="md-col" data-day-key="${esc(keyOf(d))}" data-fasting="${fastedHoursOn(d) > 0}">${html}</div>`;
   }
   // "part of life" swatch legend, compact mode only (§1: bars carry no text/dot of
   // their own at that size, so the legend is what maps colour → track instead) —
@@ -21237,6 +21341,9 @@
     renderPowerHours();
     renderElapsedFade();
     renderFastLine();
+    // 2026-08-15 (§3 build): state.anchor-driven, like renderFastLine() just above --
+    // recomputed on every renderDay() so browsing to a different day updates the tint.
+    renderDayFastTint();
     renderFastBar();
     renderBoostWidget();
     orderDayRail();
@@ -23328,6 +23435,12 @@
     // wait for the next full renderDay(). Live per-second updates while a fast is
     // actually running come from tickFastDisplays() below instead, not from here.
     renderDcxFastMeter();
+    // 2026-08-15 (§3 build): same reasoning again -- a start/stop/resume on TODAY needs
+    // the column tint to switch on/off immediately, not wait for the next full
+    // renderDay(). Safe from any page, same as renderFastLine()/renderDcxFastMeter()
+    // above -- #dayFastHead/#dayTimelineWrap are static markup regardless of which page
+    // is currently visible.
+    renderDayFastTint();
   }
   // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
   // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
@@ -23444,6 +23557,11 @@
     // ever fires while HEALTH.activeFast is truthy, which is exactly when the row
     // should be visible and ticking.
     renderDcxFastMeter();
+    // 2026-08-15 (§3 build): keeps the viewed day's tint/label live across an hour
+    // boundary while a fast runs (15h -> 16h etc.) without waiting for some unrelated
+    // action to trigger a full renderDay(). Cheap no-op re-paint the other seconds
+    // (textContent/dataset only change once a real hour ticks over).
+    renderDayFastTint();
   }
 
   /* ---- fasting summary graph: hours fasted per day, past week or month.
