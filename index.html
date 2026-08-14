@@ -502,7 +502,14 @@
      so individual children can be reordered with `order` (see #qaSlotDay, mobile below)
      with zero visible desktop change otherwise -- every child defaults to flex-basis:100%
      (its own full-width line, same as plain block stacking). */
-  .day-main { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+  .day-main { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; min-width: 0; }
+  /* min-width:0 above (2026-08-15, §4 all-day row build): .day-main is a grid item of
+     .day-layout's 1fr track below -- without it, a nowrap descendant's max-content width
+     (the new .ad-chip all-day pills) leaks upward and inflates .day-main past the 1fr
+     track's intended width, dragging every sibling in #multiDayWrap (including the
+     timed grid, via its own 100%-stretch) past the viewport with it. Found via the
+     classic grid/flex "nowrap content blows out an auto-min-width item" gotcha --
+     matches the same reasoning as .day-main > *'s own min-width:0 just below, one level up. */
   .day-main > * { flex: 1 1 100%; min-width: 0; }
   @media (max-width: 900px) {
     .day-layout { grid-template-columns: 1fr; }
@@ -7440,10 +7447,67 @@
   .md-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-soft); }
   .md-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 
+  /* ============================================================
+     ALL-DAY ROW (§4 build, 2026-08-15) — unified banner: birthdays + other all-day
+     events/tasks + "clinic-closed" once that exists (see closedDaysOn() in JS,
+     currently always empty — no such concept exists anywhere else in this app; see
+     the §4 build report) — sitting between the column-heads/date-header and the hour
+     grid, both single-day (#dayAlldayRow, inserted before #dayFastHead) and
+     multi-day (#mdAlldayRow, inserted between .md-headrow and #mdTimelineScroll).
+     Mobile-only <1024px, same gate as the rest of this build (below) — the OLD
+     #tlAlldayRow (birthdays only) is hidden on mobile now (see the <1024px gate near
+     #dpHeader, a few hundred lines down) so birthdays don't show twice; desktop
+     keeps #tlAlldayRow/renderAlldayRow() completely untouched (that call site, and
+     everything it does, is unmodified).
+     Flat per §0: chips carry the item's own real --cat-c fill, the SAME data-track/
+     data-category cascade every .tl-item already resolves through (.tl-item[data-
+     track], a few hundred lines up) — never a hardcoded fill. Text is the ONE
+     hardcoded exception the spec calls for (#12100c) — same "dark ink beats a
+     theme-flipping --cat-t on a saturated flat fill" approach .tl-block's own mobile
+     override already uses (color:#0c2417, search "dark ink on track colour" a few
+     hundred lines up) — this is that same convention, not a second one.
+     Neither row reserves empty space: both are created/inserted/removed OUTRIGHT by
+     alldayRowMount() (JS, near dayItemsFor()) — there is no static placeholder <div>
+     for either in the markup at all, so "no content" really is "not in the DOM", not
+     just display:none. ============================================================ */
+  .ad-row { display: flex; gap: 4px; margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid var(--note-line); }
+  .ad-gutter {
+    flex: none; padding-top: 2px; font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-faint); text-align: center;
+  }
+  /* single-day's gutter matches --gutter, the real hour rail's own reserved width
+     (.hours { padding-left: var(--gutter) }, up near .timeline-wrap) so chip content
+     starts exactly where a real event block starts; #dayTimelineWrap's 1px border
+     (this row sits OUTSIDE that card, as a sibling, so it has no border of its own to
+     match it) is made up with a matching transparent border rather than a guessed
+     padding number. Multi-day's gutter instead matches .md-hours' own fixed 30px
+     (mirroring .md-head-spacer, which already does exactly this for the header row
+     above it). Both verified empirically against their real rail — see the §4 build
+     report. */
+  /* 2026-08-15: gap:0 override — .ad-row's base 4px gap (needed on the multi-day row
+     to match .md-headrow/.md-grid's own inter-column gaps) has no counterpart on the
+     real single-day hour rail (.hours is a plain padding-left, no flex gap) — verified
+     empirically (getBoundingClientRect): with the base 4px gap, .ad-cols started 4px
+     right of #eventsLayer's own real content start. Zeroing it here, on top of the
+     border-left compensation below, lines the two up exactly. */
+  #dayAlldayRow { border-left: 1px solid transparent; gap: 0; }
+  #dayAlldayRow .ad-gutter { width: var(--gutter); }
+  #mdAlldayRow .ad-gutter { width: 30px; }
+  .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
+  .ad-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .ad-chip.tl-item {
+    position: static; display: block; border-radius: 6px; padding: 2px 6px; overflow: hidden;
+    font-size: 9.5px; font-weight: 700; color: #12100c; background: var(--cat-c);
+    text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  }
+  /* the following day(s) of a real multi-day span (see mdAlldayColsHtml() in JS) —
+     same colour, no title text (set by JS, not here), 50% opacity per spec. */
+  .ad-chip-cont { opacity: 0.5; }
+
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
   @media (min-width: 1024px) {
-    .cal-days-row, .md-wrap, .dcx-wrap, #dayFastHead { display: none !important; }
+    .cal-days-row, .md-wrap, .dcx-wrap, #dayFastHead, .ad-row { display: none !important; }
   }
 
   /* ============================================================
@@ -7496,6 +7560,12 @@
   @media (max-width: 1023px) {
     #dpHeader { display: none; }
     #fastStatus { display: none; }
+    /* 2026-08-15 (§4 all-day row build): #tlAlldayRow (birthdays only) is superseded
+       on mobile by the new unified #dayAlldayRow/#mdAlldayRow (birthdays + other
+       all-day items together, see the ALL-DAY ROW block above) — without this,
+       birthdays would show TWICE. Desktop keeps #tlAlldayRow exactly as it was
+       (birthdays-only banner) — untouched above this gate. */
+    #tlAlldayRow { display: none; }
   }
   #dayCtxProgress, #dayCtxFasting { cursor: pointer; }
 
@@ -12880,7 +12950,11 @@
              above the scrollable hour grid exactly like Google Calendar's all-day row,
              so it stays visible regardless of scroll position. Filled by
              renderAlldayRow(); collapses to zero height when there's nothing today,
-             same empty-is-invisible pattern as #chainChips/#ocPrompts above. -->
+             same empty-is-invisible pattern as #chainChips/#ocPrompts above.
+             2026-08-15 (§4 all-day row build): DESKTOP ONLY now (hidden <1024px, see
+             its CSS gate near #dpHeader) — mobile's birthdays+all-day-events unified
+             row is #dayAlldayRow/#mdAlldayRow instead (see the ALL-DAY ROW CSS block).
+             This element/renderAlldayRow() call are otherwise completely untouched. -->
         <div class="tl-allday-row" id="tlAlldayRow"></div>
         <!-- 2026-08-14 (§2 build, "day context lives ON the grid"): mobile-only (see
              .dcx-wrap's CSS gate), sits once above whichever grid is active below --
@@ -17870,6 +17944,11 @@
   // existing "drag onto the calendar to schedule" affordance the same chip had in
   // the To-Do's box (the drop handler lives on #dayPage, so it works from any
   // descendant with these data- attributes, no change needed there).
+  // 2026-08-15 (§4 all-day row build): this function/its #tlAlldayRow host are now
+  // DESKTOP ONLY (CSS-hidden <1024px) — mobile shows the new unified #dayAlldayRow/
+  // #mdAlldayRow instead (birthdays AND other all-day items together, see
+  // renderDayAlldayRow()/renderMdAlldayRow(), further down). Nothing below this line
+  // changed; the call site (renderDay(), `renderAlldayRow(alldayBdays)`) is untouched.
   function renderAlldayRow(items) {
     // 2026-08-13 (Linh: "make it very noticeable"): a Birthdays-category item gets the
     // loud celebration-banner look (confetti/glow, see CSS) + Message/Gift buttons that
@@ -20860,12 +20939,53 @@
   // rather than extracted out of renderDay() itself: that function is ~700 lines
   // with heavy inline DOM side effects, and a real extraction risked the untouched
   // single-day path for a section explicitly scoped to leave calDays===1 alone.
-  function dayItemsFor(d) {
+  // 2026-08-15 (§4 all-day row build): pulled the actual dayEvents assembly out of
+  // dayItemsFor() below (behaviour unchanged, still timed-only) so the new
+  // alldayItemsFor() (right after it) can build from the exact same generated+
+  // events+chain merge/suppress pass instead of a second copy — same "adapted
+  // per-day" principle §1's own dayItemsFor comment already established, just one
+  // level deeper now that two callers need the same raw list before it's filtered
+  // two different ways.
+  function dayEventsRawFor(d) {
     const chainData = chainBlocksFor(d);
     let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === keyOf(d)).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d)];
     if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
-    dayEvents = dayEvents.concat(chainData.items);
-    return dayEvents.filter(e => !e.allDay && e.start);
+    return dayEvents.concat(chainData.items);
+  }
+  function dayItemsFor(d) {
+    return dayEventsRawFor(d).filter(e => !e.allDay && e.start);
+  }
+  // 2026-08-15 (§4 build) — "clinic-closed / away days" source. Searched this file
+  // for any existing concept of this: "closed", "away", "holiday", "out of office", a
+  // Work-manual page setting, a flag on a person or date — nothing exists anywhere in
+  // the data model (confirmed by grep across the whole file). This is a genuinely new
+  // category with no source to read from; inventing a fake setting/flag/UI for it
+  // here would be real scope beyond "add a row that displays existing data" (see the
+  // §4 build report). Kept as its own function, always empty, so the all-day row is
+  // structurally ready for it — same {id,title,track,category,date} item shape as
+  // birthdays/events, folded straight into alldayItemsFor()'s own `others` below —
+  // the moment a real source exists elsewhere, this is the one place to wire it in.
+  // Until then it correctly contributes zero items on every call.
+  function closedDaysOn(d) { return []; }
+  // 2026-08-15 (§4 all-day row build, "make #tlAlldayRow show EVERY all-day item"):
+  // the all-day counterpart to dayItemsFor() above — same raw list, opposite filter,
+  // split into bdays/others the SAME way renderDay()'s own alldayBdays/allDay locals
+  // already are (see that comment further down, "birthdays... now get their own
+  // all-day banner") — this only parameterises that exact split over an arbitrary
+  // date d instead of always state.anchor, so the multi-day all-day row
+  // (renderMdAlldayRow(), below) can compute each visible column's own items, same
+  // "each column computes its own date's items" principle §1/§2/§3 already
+  // established. renderDay()'s own single-day computation is UNCHANGED and does NOT
+  // call this — it passes its own already-computed locals straight into
+  // renderDayAlldayRow() (below), zero recompute, per the brief.
+  function alldayItemsFor(d) {
+    const dayEvents = dayEventsRawFor(d);
+    const others = dayEvents.filter(e => (e.allDay || !e.start) && e.category !== "Birthdays" &&
+      (e.track === "personal" ? (!e.generated || e.fromRoutine) : true));
+    return {
+      bdays: dayEvents.filter(e => (e.allDay || !e.start) && e.category === "Birthdays"),
+      others: others.concat(closedDaysOn(d))
+    };
   }
   // 2026-08-15 (§3 build, "fasting = a whole tinted column"): shared by mdColHeadHtml()
   // below and renderDayFastTint() (single-day counterpart, further down near
@@ -20959,6 +21079,121 @@
   function mdLegendHtml() {
     return lifeCats().map(c => `<span class="md-legend-item"><span class="md-legend-dot" style="background:var(--${c.id}-seed)" aria-hidden="true"></span>${esc(c.name)}</span>`).join("");
   }
+
+  /* ============================================================
+     ALL-DAY ROW (§4 build, 2026-08-15) — see the CSS block of the same name for the
+     full brief. alldayChipHtml() is shared by both the single-day row
+     (renderDayAlldayRow()) and the multi-day row (renderMdAlldayRow()) so their
+     markup/colour-cascade/tap-wiring never drifts between the two.
+     ============================================================ */
+  // class="tl-item" + data-track/data-category is the SAME --cat-c/--cat-t cascade
+  // every other calendar chip in this build already resolves through (mdItemHtml/
+  // mdBarHtml, just above) — no colour computed in JS. Birthdays open the person
+  // profile via the existing document-level [data-bday-person] delegate, same as the
+  // Week/Month all-day chips (.wk-bd/.mo-bd) — NOT data-tl-detail, matching how the
+  // old bday-ribbon in renderAlldayRow() already treats birthdays as a different tap
+  // target from a plain event. Other items open the same detail sheet every timed
+  // calendar item already opens (renderTlDetailBody() already has its own "All day"
+  // branch for e.start === "" — checked, this isn't an untested code path). A
+  // continuation chip (cont===true — a later day of a real multi-day span, see
+  // mdAlldayColsHtml()) carries no title text and dims to 50% opacity per spec, but
+  // stays exactly as tappable as the item's own first-day chip.
+  function alldayChipHtml(e, cont) {
+    const cls = `ad-chip tl-item${cont ? " ad-chip-cont" : ""}`;
+    if (e.category === "Birthdays") {
+      const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
+      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(e.title)}">${cont ? "" : esc(e.title)}</span>`;
+    }
+    return `<span class="${cls}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${cont ? "" : esc(e.title)}</span>`;
+  }
+  // one visible day's worth of stacked chips, no continuation (that concept only
+  // exists across MULTIPLE simultaneously-visible columns — see mdAlldayColsHtml()).
+  // Used for the single-day row's one-and-only column, and for the tail end of each
+  // multi-day column (this day's own fresh items, after any continuations).
+  function alldayStackHtml(bdays, others) {
+    return [...bdays, ...others].map(e => alldayChipHtml(e, false)).join("");
+  }
+  // shared attach/detach for both all-day rows — creates the row fresh and inserts it
+  // right before `beforeEl` when there's content, removes it OUTRIGHT (a real
+  // .remove(), not display:none/hidden) when there isn't, per spec: "the whole row +
+  // its divider is removed from the DOM entirely... never reserve empty vertical
+  // space". The divider is a border-bottom ON this same element (see .ad-row CSS), so
+  // removing the row removes the divider in the same operation — nothing to keep in
+  // sync separately. `id` must be unique per row (the two callers use "dayAlldayRow"/
+  // "mdAlldayRow") so each finds only its own element next render; `beforeEl` must be
+  // a STATIC, always-present element (#dayFastHead/#mdTimelineScroll both qualify) so
+  // there's always a stable anchor to insert against regardless of whether this row
+  // currently exists.
+  function alldayRowMount(id, beforeEl, count, buildHtml) {
+    let el = document.getElementById(id);
+    if (!count) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement("div"); el.id = id; el.className = "ad-row"; }
+    el.innerHTML = buildHtml();
+    if (!el.isConnected && beforeEl && beforeEl.parentElement) beforeEl.parentElement.insertBefore(el, beforeEl);
+  }
+  // single-day all-day row — takes over #tlAlldayRow's old job on mobile (that row is
+  // now hidden <1024px, see its CSS gate) but shows EVERY all-day item, not just
+  // birthdays. bdays/others are renderDay()'s OWN already-computed locals
+  // (alldayBdays/allDay), passed straight through by its call site — zero recompute,
+  // per the brief ("reuse exactly as-is, don't recompute"). Guards against calDays>1
+  // itself (rather than making the call site conditional) so renderDay()'s existing
+  // unconditional call order never has to change: if multi-day is the active view,
+  // this row has nothing to do (renderMdAlldayRow(), below, is the one showing
+  // per-column) — without this guard #dayAlldayRow would keep showing state.anchor's
+  // own items above the hidden #timelineScroll WHILE #mdAlldayRow also shows them
+  // per-column: the exact duplicate-widget bug the §2 review fix already had to
+  // correct once, just with this section's new row instead.
+  function renderDayAlldayRow(bdays, others) {
+    if (calDaysActive() > 1) { document.getElementById("dayAlldayRow")?.remove(); return; }
+    const others2 = others.concat(closedDaysOn(state.anchor));
+    alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), bdays.length + others2.length, () =>
+      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${alldayStackHtml(bdays, others2)}</div></div>`);
+  }
+  // multi-day all-day row — one column per visible day, aligned under mdColHeadHtml()'s
+  // own headers via the identical 30px gutter + 4px gaps (.md-hours/.md-col-heads,
+  // .md-head-spacer) so nothing needs measuring at runtime to line up. perDay is built
+  // once by renderMdAlldayRow() (below) so alldayItemsFor() only ever runs once per
+  // visible day, not twice (once to count, once to build). Builds every visible
+  // column in ONE pass so a later day can look back at an EARLIER day's own spanning
+  // item (continuation chips) — the one reason this can't just be N independent
+  // per-day calls the way the timed grid's own columns are. Also seeds TL_ITEMS_BY_ID
+  // for every item it renders (mirroring renderMultiDayGrid()'s own seeding for timed
+  // items just above) so a tap on any chip — including a continuation — can resolve
+  // via openTlDetail().
+  function mdAlldayColsHtml(perDay) {
+    const activeSpans = [];   // {e, dateEnd} for spans still running into a later column
+    return perDay.map(({ dk, bdays, others }) => {
+      const continuing = activeSpans.filter(s => s.dateEnd >= dk);
+      others.forEach(e => { TL_ITEMS_BY_ID[e.id] = e; });
+      bdays.forEach(e => { TL_ITEMS_BY_ID[e.id] = e; });
+      others.forEach(e => {
+        // 2026-08-15: no path in this app (manual add, routines, or ICS import — see
+        // the §4 build report) currently ever sets dateEnd on a plain event/task, so
+        // this branch is correct-but-dormant today: every real item's own dateEnd is
+        // undefined, so nothing spans past its own single `date`. Deliberately reads
+        // a real field rather than guessing from title/date adjacency (fragile — two
+        // unrelated same-title items on consecutive days would falsely merge) so a
+        // future feature that DOES add a real date-range field is picked up here
+        // automatically, with no further change to this function.
+        if (e.dateEnd && e.dateEnd > e.date) activeSpans.push({ e, dateEnd: e.dateEnd });
+      });
+      const chips = continuing.map(s => alldayChipHtml(s.e, true)).join("") + alldayStackHtml(bdays, others);
+      return `<div class="ad-col" data-day-key="${esc(dk)}">${chips}</div>`;
+    }).join("");
+  }
+  // called from renderMultiDayGrid() once per visible window, same call pattern as
+  // mdColHeadHtml()/mdColumnHtml() just above it. dayList is the SAME array
+  // renderMultiDayGrid() already built — reads only .d (all-day items are a separate
+  // read from the timed `items` already on that object; see alldayItemsFor()).
+  // Removed from the DOM entirely (see alldayRowMount()) the moment NO visible day
+  // has any all-day item at all.
+  function renderMdAlldayRow(dayList) {
+    const perDay = dayList.map(({ d }) => ({ d, dk: keyOf(d), ...alldayItemsFor(d) }));
+    const count = perDay.reduce((n, p) => n + p.bdays.length + p.others.length, 0);
+    alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), count, () =>
+      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${mdAlldayColsHtml(perDay)}</div>`);
+  }
+
   // called once per visible window (renderCalDaysUI(), below) whenever calDays>1 on
   // mobile. Builds N days' worth of items, then resolves ONE shared compact-hours
   // set for the whole window before laying anything out.
@@ -21003,6 +21238,9 @@
     const legendHost = document.getElementById("mdLegend");
     legendHost.hidden = !compact;
     legendHost.innerHTML = compact ? mdLegendHtml() : "";
+    // 2026-08-15 (§4 all-day row build): one call per visible window, same pattern as
+    // the legend just above — see its own comment for the full brief.
+    renderMdAlldayRow(dayList);
     // scroll to 6am once (same one-time-only rule tlScrollInit follows below, for
     // the same reason — never yank the view mid-use on a later re-render)
     if (!mdScrollInit) {
@@ -21210,6 +21448,10 @@
     // personal/family timed items also stay in their sidebar lists for ticking off
     const timed = dayEvents.filter(e => !e.allDay && e.start);
     renderAlldayRow(alldayBdays);
+    // 2026-08-15 (§4 all-day row build): the new unified mobile row — shows bdays AND
+    // allDay together (renderAlldayRow() above stays birthdays-only, desktop only
+    // now, see its CSS gate) — see its own comment for the full brief.
+    renderDayAlldayRow(alldayBdays, allDay);
     // 2026-08-04 (Linh: "hours size to their content automatically"): see this
     // function's own comment near buildHours() for exactly what "compact" means here.
     computeCompactHours(timed);
