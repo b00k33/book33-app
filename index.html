@@ -7371,6 +7371,16 @@
   /* today marked by this gold circle ALONE, same idiom .mo-cell[data-today] .mo-num
      already uses elsewhere — no background wash on the column itself (item 3). */
   .md-col-head[data-today="true"] .md-col-head-num { background: var(--margin-rule); color: var(--accent-on); }
+  /* 2026-08-14 (§2 build, "progress meter shrinks into each column header"): a per-
+     column mini version of the .dcx-meter progress row below -- same dayProgress(d)
+     data, same gold fill token, collapsed to a bare bar + count since a ~22px-wide
+     (7-day) column has no room for a label. Each column computes its OWN d, so a
+     light day and a packed day never show the same count (see mdColHeadHtml). Left
+     out entirely on a day with nothing tickable -- same no-empty-placeholder rule
+     the context chips below follow. */
+  .md-col-head-bar { height: 3px; border-radius: 999px; background: var(--field-bg); margin: 4px 4px 0; overflow: hidden; }
+  .md-col-head-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--margin-rule); }
+  .md-col-head-count { display: block; margin-top: 4px; font-size: 9.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
   .md-grid { display: flex; gap: 4px; padding-top: 0; position: relative; }
   .md-hours { width: 30px; flex: none; padding-left: 0; }
@@ -7415,8 +7425,61 @@
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
   @media (min-width: 1024px) {
-    .cal-days-row, .md-wrap { display: none !important; }
+    .cal-days-row, .md-wrap, .dcx-wrap { display: none !important; }
   }
+
+  /* ============================================================
+     DAY CONTEXT STRIP + METERS (§2 build, 2026-08-14) — "day context lives ON the
+     grid": moon/zodiac(day-ruler)/cycle/birthday + task-progress/fasting move
+     directly above the hour grid on mobile, in one compact block, instead of only
+     living in the numerology dropdown (#numGroupStrip -- collapsed behind a tap on
+     phone widths, see its own CSS) or the desktop-only sidebar (#deskGlance/
+     #railCycle/#deskFastCard, untouched below the @media gate above). Nothing here
+     is a second calculation of anything -- see renderDayCtx()/renderDcxFastMeter()'s
+     own comments for exactly which existing function each chip/meter reads.
+     Flat per §0: chips sit on --raised (this file's established flat chip/tile
+     surface already used by .dp-streak-chip/.bdy-kpi/#fastStats .h-stat -- NOT
+     --note-bg, which this file uses for card/panel backgrounds, a different job);
+     meters track on --field-bg (matches the existing .med-bar track). No border/
+     bevel/gradient anywhere in this block. ============================================================ */
+  .dcx-wrap { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
+  .dcx-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .dcx-chips::-webkit-scrollbar { display: none; }
+  .dcx-chip {
+    flex: none; display: inline-flex; align-items: center; gap: 4px;
+    background: var(--raised); border-radius: 999px; padding: 4px 12px;
+    font-size: 11px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
+  }
+  .dcx-chip-ic { font-size: 13px; line-height: 1; }
+  .dcx-meters { display: flex; flex-direction: column; gap: 8px; }
+  /* the app's one label-bar-value shape -- .spend-bar-row/.sb-* (Money's spend bars,
+     and the Day page's own #fastStatus row) already carry this exact comment calling
+     them out as such. This is the same shape at this strip's own compact scale
+     (56px label, 7px bar, per the build brief) as a small self-contained class set,
+     rather than a 3rd context's worth of size overrides bolted onto .sb-* -- see
+     meterHtml(), the one place that emits this markup, shared by the progress row
+     and the fasting row below it. */
+  .dcx-meter { display: flex; align-items: center; gap: 8px; }
+  .dcx-meter-lbl { flex: none; width: 56px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
+  .dcx-meter-track { flex: 1; height: 7px; border-radius: 999px; background: var(--field-bg); overflow: hidden; }
+  .dcx-meter-fill { display: block; height: 100%; border-radius: 999px; }
+  .dcx-meter-val { flex: none; font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  /* 2026-08-15 (§2 review fix): #dayProgress's ring header and #fastStatus both
+     already sit directly above the mobile grid (confirmed by grep — #dayProgress
+     is shared with desktop via reparenting into #deskColLeft, #fastStatus is
+     ALREADY desktop-hidden the same way at #deskColLeft #fastStatus, superseded
+     there by .desk-fast-card), so without this the new dcx-meter progress/fasting
+     rows just repeated the exact same "3/5" and "Fasting" numbers a few px below
+     them — an obvious duplicate, not two different pieces of information. Hiding
+     just the RING HEADER (#dpHeader, not #dayProgress itself) keeps .dp-recap (the
+     actual tickable task list, unique functionality with no dcx equivalent) fully
+     working when expanded — see the click-forwarding wiring further down that
+     makes the new compact meter the tap target that opens it now instead. */
+  @media (max-width: 1023px) {
+    #dpHeader { display: none; }
+    #fastStatus { display: none; }
+  }
+  #dayCtxProgress, #dayCtxFasting { cursor: pointer; }
 
   /* ============ BEAUTY pages ============ */
   /* Fasting/Weight/Cycle are each a compact, narrow-by-design widget (borrowed from
@@ -12765,6 +12828,21 @@
              renderAlldayRow(); collapses to zero height when there's nothing today,
              same empty-is-invisible pattern as #chainChips/#ocPrompts above. -->
         <div class="tl-allday-row" id="tlAlldayRow"></div>
+        <!-- 2026-08-14 (§2 build, "day context lives ON the grid"): mobile-only (see
+             .dcx-wrap's CSS gate), sits once above whichever grid is active below --
+             #timelineScroll (1 day) or #multiDayWrap (3/5/7, further down) -- never
+             per-column. Filled by renderDayCtx() (chips + progress) and
+             renderDcxFastMeter() (fasting, its own container so its live per-second
+             tick -- see tickFastDisplays() -- never touches the chip strip's scroll
+             position or the progress row). Both collapse to zero height when empty,
+             same pattern as #chainChips/#ocPrompts/#tlAlldayRow above. -->
+        <div class="dcx-wrap" id="dayCtxWrap">
+          <div class="dcx-chips" id="dayCtxChips"></div>
+          <div class="dcx-meters">
+            <div id="dayCtxProgress" role="button" tabindex="0" aria-label="Today's progress — tap to show today's tasks"></div>
+            <div id="dayCtxFasting" role="button" tabindex="0" aria-label="Fasting — tap to open fasting history"></div>
+          </div>
+        </div>
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -20706,10 +20784,19 @@
     dayEvents = dayEvents.concat(chainData.items);
     return dayEvents.filter(e => !e.allDay && e.start);
   }
+  // 2026-08-14 (§2 build, "progress meter shrinks into each column header"): reads
+  // dayProgress(d) for THIS column's own date -- not TODAY, not a copy of whatever
+  // the single-day progress meter shows -- so every visible column carries its own
+  // real completion count. Same "never render an empty placeholder" rule as the
+  // context chips: a day with nothing tickable (total===0) gets no bar/count row at
+  // all rather than a meaningless "0/0".
   function mdColHeadHtml(d) {
+    const { done, total } = dayProgress(d);
     return `<div class="md-col-head" data-today="${keyOf(d) === keyOf(TODAY)}">
       <span class="md-col-head-wd">${WD_MIN[dowIndex(d)]}</span>
       <span class="md-col-head-num">${d.getDate()}</span>
+      ${total ? `<span class="md-col-head-bar"><span class="md-col-head-bar-fill" style="width:${(done / total * 100).toFixed(1)}%"></span></span>
+      <span class="md-col-head-count">${done}/${total}</span>` : ""}
     </div>`;
   }
   // comfortable-mode card (1/3 days): name + time only, per §1 — deliberately NOT a
@@ -20842,6 +20929,98 @@
       multi.hidden = true;
       single.hidden = false;
     }
+  }
+
+  /* ============================================================
+     DAY CONTEXT STRIP + METERS (§2 build, 2026-08-14) — see the CSS block of the
+     same name for the full brief. Three pieces: dcxChipsHtml() (moon/day-ruler/
+     cycle/birthday), renderDayCtx() (the chip strip + the progress row), and
+     renderDcxFastMeter() (the fasting row, refreshed separately -- see its own
+     comment for why). All three are pure re-presentations of data this app already
+     computes correctly elsewhere; nothing here duplicates a calculation. ============================================================ */
+  // the shared small "label - bar - value" meter both rows below use, so their
+  // markup isn't duplicated. pct is 0-1 (clamped here, callers don't have to);
+  // valueText is pre-formatted by the caller -- a plain "3/5" fraction and a
+  // "10h 33m / 16h" duration can't both come out of one generic value/max formatter,
+  // so formatting stays with whichever caller knows its own domain; this just lays
+  // the three pieces out. fillVar is a CSS custom-property NAME (e.g. "--margin-rule"),
+  // not a colour -- every fill still resolves through var(), never a hardcoded hex.
+  function meterHtml(label, pct, valueText, fillVar) {
+    const w = (Math.max(0, Math.min(1, pct || 0)) * 100).toFixed(1);
+    return `<div class="dcx-meter">
+      <span class="dcx-meter-lbl">${esc(label)}</span>
+      <div class="dcx-meter-track"><div class="dcx-meter-fill" style="width:${w}%;background:var(${fillVar})"></div></div>
+      <span class="dcx-meter-val">${esc(valueText)}</span>
+    </div>`;
+  }
+  // moon/day-ruler read state.anchor -- the day being VIEWED, same as renderDay()'s
+  // own header (moonBadge/weekday planet) and the desktop #deskGlance chips this
+  // strip mirrors on mobile -- so browsing to a future day to plan around shows THAT
+  // day's astro context, not always today's. Cycle is the one deliberate exception:
+  // cycleQuickInfo(TODAY), not state.anchor -- same "always today's real cycle day
+  // regardless of which day she's browsing" rule #numGrpCd already follows (see its
+  // own comment, a few hundred lines up), because a cycle day is a live fact about
+  // her body right now, not a property of whichever date happens to be on screen.
+  // Birthday reads state.anchor too, matching birthdaysOn(d)/birthdaysCardPopoverHtml(d)
+  // and #deskGlance -- planning a future day should show THAT day's birthday, not
+  // silently only ever today's. Nothing here is a new calculation: moonIndex/
+  // planetOf/cycleQuickInfo/birthdaysOn are the exact same functions renderDay()/
+  // renderDeskGlance()/renderDeskRail() already call. Cycle and birthday omit their
+  // chip entirely when there's nothing real to show (no cycle data ever logged; no
+  // birthday on the viewed day) -- moon and day-ruler always have a value, so
+  // they're never omitted.
+  function dcxChipsHtml() {
+    const d = state.anchor;
+    const chips = [];
+    const mIdx = moonIndex(d);
+    chips.push({ ic: MOON_EM[mIdx], val: MOON_NAME[mIdx] });
+    const pl = planetOf(d);
+    chips.push({ ic: pl.icon, val: pl.planet });
+    const q = cycleQuickInfo(TODAY);
+    if (q) chips.push({ ic: (q.info && q.info.icon) || "🌸", val: `CD ${q.cd}` });
+    const bdays = birthdaysOn(d);
+    if (bdays.length) chips.push({ ic: "🎂", val: bdays.length === 1 ? bdays[0].name : `${bdays[0].name} +${bdays.length - 1}` });
+    return chips.map(c => `<span class="dcx-chip"><span class="dcx-chip-ic" aria-hidden="true">${c.ic}</span><span class="dcx-chip-val">${esc(c.val)}</span></span>`).join("");
+  }
+  // fills the chip strip + the progress row (both cheap, non-ticking -- called once
+  // per renderDay()). The fasting row is deliberately a separate function/container
+  // (renderDcxFastMeter, below) so its own live per-second refresh never re-renders
+  // this strip and resets a mid-scroll finger. Progress reads dayProgress(TODAY),
+  // same as the existing ring (#dayProgress, renderDayProgress()) -- literally
+  // "Today's progress" by its own label, a live fact about her real day rather than
+  // a property of whichever date she's browsing, same reasoning as the cycle chip
+  // above. Unlike the chips/fasting row, this row is never omitted -- it's a
+  // standing feature of the strip, same as the ring it mirrors, and a bare "0/0" on
+  // a day with nothing tickable is still meaningful (matches the ring's own
+  // "Nothing tickable today" state) rather than a placeholder.
+  function renderDayCtx() {
+    const chipsEl = document.getElementById("dayCtxChips");
+    if (chipsEl) chipsEl.innerHTML = dcxChipsHtml();
+    const progEl = document.getElementById("dayCtxProgress");
+    if (!progEl) return;
+    const { done, total } = dayProgress(TODAY);
+    progEl.innerHTML = meterHtml("Progress", total ? done / total : 0, `${done}/${total}`, "--margin-rule");
+  }
+  // fasting reads widgetFastingDigest() -- the same read-only HEALTH.activeFast/
+  // fastGoalHours snapshot the home-screen-widget digest already computes (see its
+  // own comment), not a second copy of the fasting maths. Fill is --fit-workout, the
+  // app's general "Fitness" track colour (CAT_BY_ID.fitness's seed) -- the existing
+  // fasting bar (#fastStatus) reaches for the --fast alias of that exact same value
+  // instead ("fasting always tracks fitness", see --fast's own definition), so
+  // either resolves identically; --fit-workout is used here since it's literally
+  // what the build brief asked for ("the Fitness track colour"). Own container + own
+  // call sites (renderFastEverywhere() and tickFastDisplays(), both below) rather
+  // than folding into renderDayCtx() -- fasting is the one piece here that ticks
+  // live every second, and re-rendering the chip strip/progress row that often would
+  // risk resetting the chip strip's scroll position under a finger mid-swipe for no
+  // reason (they don't change second to second). Only rendered when a fast is
+  // actually active -- omitted entirely otherwise, same no-empty-placeholder rule as
+  // the birthday/cycle chips.
+  function renderDcxFastMeter() {
+    const el = document.getElementById("dayCtxFasting");
+    if (!el) return;
+    const fd = widgetFastingDigest();
+    el.innerHTML = fd.active ? meterHtml("Fasting", fd.pct, `${fd.label} / ${fd.goal}`, "--fit-workout") : "";
   }
 
   // 2026-08-02 (Linh: "the day time view shows 6am-10pm ... expandable button"): tracks
@@ -21153,6 +21332,12 @@
     placeMiniCalDesk();
     // after placeMiniCalDesk so the right column already has the calendar at its top
     placeDeskGrid();
+    // 2026-08-14 (§2 build): the context chip strip + progress/fasting meters that
+    // sit above the grid on mobile (CSS-gated off on desktop, same as calDaysRow/
+    // md-wrap below) -- cheap and independent of calDays, so just render unconditionally
+    // here rather than threading a mobile-only check through renderDay() itself.
+    renderDayCtx();
+    renderDcxFastMeter();
     // 2026-08-14 (§1 multi-day calendar): last — toggles #timelineScroll vs
     // #multiDayWrap and (mobile, calDays>1) renders the multi-day grid itself; see
     // its own comment for why this has to run after the single-day body above,
@@ -23138,6 +23323,11 @@
     // ring until the next full renderDay() -- same #numGrpFast-only-updates-here
     // reasoning as renderFastLine/renderFastBar just above.
     renderNumGrpFast(state.anchor);
+    // 2026-08-14 (§2 build): same reasoning -- a start/stop/resume/goal-change needs
+    // the day-context fasting row to flip between shown/omitted immediately, not
+    // wait for the next full renderDay(). Live per-second updates while a fast is
+    // actually running come from tickFastDisplays() below instead, not from here.
+    renderDcxFastMeter();
   }
   // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
   // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
@@ -23248,6 +23438,12 @@
     });
     document.querySelectorAll("[data-fast-encourage]").forEach(el => el.textContent = fastEncouragement(pct, over));
     renderFastBar();
+    // 2026-08-14 (§2 build): keeps the day-context fasting row's elapsed time/bar
+    // live while a fast is running, same 1s cadence as #fastBarFill/#fastBarAmt just
+    // above -- this whole function already early-returns when idle, so this only
+    // ever fires while HEALTH.activeFast is truthy, which is exactly when the row
+    // should be visible and ticking.
+    renderDcxFastMeter();
   }
 
   /* ---- fasting summary graph: hours fasted per day, past week or month.
@@ -34445,6 +34641,23 @@
   document.getElementById("fastStatus")?.addEventListener("keydown", fastTapNav);
   document.getElementById("fastLine")?.addEventListener("click", fastTapNav);
   document.getElementById("fastLine")?.addEventListener("keydown", fastTapNav);
+  // 2026-08-15 (§2 review fix): #dpHeader/#fastStatus are hidden on mobile now (see
+  // their CSS rule near .dcx-meter) since the new day-context meters just below the
+  // chips repeated the exact same numbers -- these two make the new compact meters
+  // the tap target that reaches the SAME destinations instead of the functionality
+  // just disappearing on mobile. #dayCtxProgress/#dayCtxFasting are static wrapper
+  // divs (renderDayCtx()/renderDcxFastMeter() only ever replace their innerHTML,
+  // never the wrapper itself), so one-time listeners here are safe, same reasoning
+  // as fastStatus/fastLine just above.
+  function dcxProgressTap(e) {
+    if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+    if (e.type === "keydown") e.preventDefault();
+    dpRecapOpen = !dpRecapOpen; renderDayProgress();
+  }
+  document.getElementById("dayCtxProgress")?.addEventListener("click", dcxProgressTap);
+  document.getElementById("dayCtxProgress")?.addEventListener("keydown", dcxProgressTap);
+  document.getElementById("dayCtxFasting")?.addEventListener("click", fastTapNav);
+  document.getElementById("dayCtxFasting")?.addEventListener("keydown", fastTapNav);
   document.getElementById("dayPickerBtn").addEventListener("click", () => {
     const p = document.getElementById("dayPicker");
     p.hidden = !p.hidden;
