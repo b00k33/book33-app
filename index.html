@@ -2020,12 +2020,15 @@
   }
   .tl-detail-sheet {
     width: min(460px, 100vw); max-height: 82vh; background: var(--paper); border: 1px solid var(--margin-rule);
-    border-radius: 16px 16px 0 0; box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
+    /* 2026-08-15: was a literal 16px pair — CLAUDE.md wants the radius TOKEN even
+       though the value is unchanged (var(--radius-md) is also 16px), so a future
+       radius-scale edit doesn't miss this one hardcoded holdout. */
+    border-radius: var(--radius-md) var(--radius-md) 0 0; box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
     display: flex; flex-direction: column; overflow: hidden;
   }
   @media (min-width: 641px) {
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
-    .tl-detail-sheet { border-radius: 16px; max-height: 74vh; }
+    .tl-detail-sheet { border-radius: var(--radius-md); max-height: 74vh; }
   }
   /* delete confirm (2026-08-08, design44) — every delete in the Day popup (plain
      item, routine occurrence, recurring event, fitness session) opens this same
@@ -2059,15 +2062,69 @@
     background: transparent; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer;
   }
   .tl-detail-close:hover { background: var(--note-bg); }
-  .tl-detail-head-actions { display: flex; gap: 4px; }
-  .tl-detail-head-actions button {
-    width: 34px; height: 34px; min-width: 34px; min-height: 34px; border-radius: 50%; border: none;
-    background: transparent; color: var(--ink-soft); font-size: 15px; cursor: pointer;
+  /* 2026-08-15 (§6 mobile redesign, item detail sheet restyle): #tlDetailHeadActions
+     is now Zone 3, the manage block — SAME id/element (its own click listener,
+     defined near tryTlDelete, is bound by id and keeps working wherever this div
+     sits), just relocated to after #tlDetailBody in the markup and re-skinned as
+     full-bleed labelled rows instead of a pair of small header icon buttons.
+     Unscoped/mobile-default like every other mobile-only block in this sheet
+     (.tl-detail-done-btn, .tl-detail-move-toggle) — desktop keeps hiding it via
+     the same central ≥641px list (search "desktop actions live ONLY in the desk
+     row"), untouched, still using its own independent
+     .tl-desk-actions Edit/Delete buttons. */
+  .tl-detail-manage { display: flex; flex-direction: column; border-top: 1px solid var(--note-line); flex: none; }
+  .tl-detail-manage-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; box-sizing: border-box;
+    padding: 12px 24px; border: none; border-bottom: 1px solid var(--note-line); background: var(--raised);
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
   }
-  .tl-detail-head-actions button:hover { background: var(--note-bg); }
+  .tl-detail-manage-row:last-child { border-bottom: none; }
+  .tl-detail-manage-row:hover { background: color-mix(in oklab, var(--raised) 50%, var(--note-bg)); }
+  .tl-detail-manage-row .tl-detail-em { flex: none; width: 18px; text-align: center; color: var(--ink-faint); }
+  .tl-detail-manage-danger { color: var(--danger); }
+  .tl-detail-manage-danger .tl-detail-em { color: var(--danger); }
   .tl-detail-body { padding: 4px 24px 24px; overflow-y: auto; }
   .tl-detail-icon { width: 14px; height: 14px; border-radius: 4px; display: inline-block; margin-right: 12px; vertical-align: middle; }
   .tl-detail-title { font-size: 21px; font-weight: 700; color: var(--ink); line-height: 1.25; margin: 2px 0 16px; }
+  /* 2026-08-15 (§6 mobile redesign): Zone 1, the coloured header — mobile only
+     (≤640px, this file's own established phone breakpoint). Reuses the item's own
+     --cat-c the exact same way a calendar block does (.tl-item[data-track], see
+     that cascade a couple hundred lines down — extended, not duplicated, so a
+     future colour edit never has two places to update) so tapping a block feels
+     like it expanded in place. #12100c is the one sanctioned hardcoded exception
+     this build's mobile work already uses for dark ink on a saturated flat fill
+     (search "hardcoded exception the spec calls for" near the all-day chips).
+     .tl-detail-head/.tl-detail-close's own base + desktop (≥641px) rules above are
+     untouched — everything here only ever fires under the mobile breakpoint, and
+     .tl-detail-drag/.tl-detail-hero (new elements, no prior desktop meaning) follow
+     this file's usual "mobile-default-visible, desktop explicitly hides it" pattern
+     instead (see the central ≥641px hide-list). The OLD .tl-detail-title / time /
+     track rows a few lines below keep rendering completely unchanged for desktop —
+     .tl-detail-mobile-hide (added to just those three) hides ONLY the duplicates on
+     mobile, where this new header shows the same information restyled. */
+  @media (max-width: 640px) {
+    .tl-detail-head {
+      position: relative; flex-direction: column; align-items: stretch; justify-content: flex-start;
+      background: var(--cat-c, var(--raised)); border-radius: var(--radius-md) var(--radius-md) 0 0;
+      padding: 12px 24px 16px; gap: 4px; overflow: hidden;
+    }
+    .tl-detail-head .tl-detail-close { position: absolute; top: 8px; right: 8px; background: rgba(18, 16, 12, 0.14); color: #12100c; }
+    .tl-detail-head .tl-detail-close:hover { background: rgba(18, 16, 12, 0.22); }
+  }
+  .tl-detail-drag { width: 36px; height: 4px; border-radius: 999px; background: rgba(18, 16, 12, 0.28); margin: 0 auto 8px; flex: none; }
+  .tl-detail-hero { display: flex; flex-direction: column; gap: 4px; padding-right: 44px; }
+  .tl-detail-crumb { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #12100c; opacity: 0.62; }
+  .tl-detail-hero-title { font-size: 20px; font-weight: 700; color: #12100c; line-height: 1.25; }
+  .tl-detail-when { font-size: 13px; font-weight: 500; color: #12100c; opacity: 0.85; }
+  /* the old always-on rows this new header supersedes for mobile only — see the
+     big comment above .tl-detail-head's own mobile block. No unscoped base rule on
+     purpose: desktop must keep .tl-detail-row's own display:flex (or .tl-detail-
+     title's plain block) completely untouched. The compound selector's 2-class
+     specificity (0,2,0) beats .tl-detail-row's 1 class (0,1,0) reliably once this
+     media query IS active, without needing to touch anything outside it. */
+  @media (max-width: 640px) {
+    .tl-detail-body .tl-detail-mobile-hide { display: none; }
+  }
   /* 2026-08-05 (Part 2, whole-app flat pass, "separate... with spacing, NOT... divider
      lines"): rows used to be split by a hairline border-top -- gap/padding alone is
      enough separation on a single-tone sheet, so the lines come out. */
@@ -2146,18 +2203,44 @@
     background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .tl-move-btn:hover { background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
-  /* 2026-08-08 (Linh, "Delete" action, design44): set apart from Reschedule/Duplicate/
-     Mark done -- own row, right-aligned, muted red outline, lighter weight than the
-     bold gold Mark done button. Opens the confirm sheet (#tlDelOverlay); never
-     deletes on tap alone. Hidden on desktop (≥641px) -- that width already has its
-     own Delete in .tl-desk-actions, see the display:none list near .tl-desk-actions. */
-  .tl-del-row { display: flex; justify-content: flex-end; margin-top: 4px; }
-  .tl-del-trigger {
-    border: 1px solid var(--danger); background: transparent; color: var(--danger);
-    border-radius: var(--radius-md); padding: 8px 16px; min-height: 44px; box-sizing: border-box;
-    font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+  /* 2026-08-15 (§6 mobile redesign): the old bottom "Delete" row (.tl-del-row/
+     .tl-del-trigger) is RETIRED, not just restyled — Zone 3 (.tl-detail-manage,
+     see near .tl-detail-head) now owns mobile Delete as a labelled row, wired to
+     the exact same data-*-del attributes/tryTlDelete flow this row used to trigger.
+     Keeping both would double up the same action, so renderTlDetailBody no longer
+     emits this markup at all (was already desktop-hidden, so removing it has zero
+     effect ≥641px — desktop's own Delete lives in .tl-desk-actions, untouched).
+     ---
+     Zone 2 mobile reflow: everything below stays exactly where it already was in
+     the DOM/source (so every click delegate — several are scoped to #tlDetailBody
+     itself, not a generic document-wide one — keeps firing on the exact same
+     element it always has) and only visually reorders via flex `order`, mobile-
+     only. Desktop's own .tl-detail-body never gets display:flex at all, so its
+     layout/margins are byte-for-byte what they were before this pass. */
+  @media (max-width: 640px) {
+    .tl-detail-body { display: flex; flex-direction: column; }
+    .tl-detail-body .fit-stars { order: 10; }
+    .tl-detail-body .tl-detail-done-btn { order: 20; }
+    .tl-detail-body .tl-detail-fitlink { order: 30; }
+    .tl-detail-body .phase-bands { order: 40; }
+    .tl-detail-body .tl-detail-steps { order: 50; }
+    .tl-detail-body .tl-detail-row-repeats { order: 60; }
+    .tl-detail-body .tl-detail-row-chain { order: 70; }
+    .tl-detail-body .tl-detail-row-where { order: 80; }
+    .tl-detail-body .tl-detail-row-note { order: 90; }
+    .tl-detail-body .tl-detail-row-nutrition { order: 100; }
+    .tl-detail-body .tl-remind { order: 110; }
+    .tl-detail-body .tl-detail-editfields { order: 120; }
+    .tl-detail-body .tl-detail-move-toggle { order: 130; }
+    .tl-detail-body .tl-detail-move { order: 140; }
   }
-  .tl-del-trigger:hover { background: color-mix(in oklab, var(--danger) 12%, transparent); }
+  /* new mobile-only Repeats info row (splits off the OLD combined time+freq row's
+     .tl-detail-sub, which desktop still shows unchanged — see .tl-detail-mobile-
+     hide's own comment near .tl-detail-head) — same "no unscoped base rule, only
+     the compound selector inside the mobile query" reasoning as that class. */
+  @media (max-width: 640px) {
+    .tl-detail-body .tl-detail-row-repeats { display: flex; }
+  }
   /* 2026-08-03 (Linh: "let me RATE Pilates out of 5" + "let me navigate quickly to the
      habits tracking page"): one row inside the same .tl-detail-extra divider/padding
      the move controls above use — stars left, the Habits jump-link right. */
@@ -2968,18 +3051,26 @@
      defined with the rest of the palette near the top of this stylesheet (search
      "TRACK + SUBCATEGORY") instead of its own re-typed hex — see that block's comment
      for why (this is the drift it was fixing). */
-  .tl-item[data-track]            { --cat-c: var(--track-fallback); --cat-t: var(--track-text); }  /* fallback */
-  .tl-item[data-track="work"]     { --cat-c: var(--track-work); --cat-t: var(--track-text); }
-  .tl-item[data-track="marriage"] { --cat-c: var(--track-marriage); --cat-t: var(--track-text); }
-  .tl-item[data-track="personal"] { --cat-c: var(--track-personal); --cat-t: var(--track-text); }
+  /* 2026-08-15 (§6 mobile redesign): .tl-detail-head[data-track] (the item detail
+     sheet's Zone-1 coloured header, mobile-only) joins every rule in this block —
+     same --cat-c a calendar block resolves, extended rather than duplicated with
+     fresh values so one category-colour edit never needs two places updated.
+     Extended again below in regenerateCategoryStyles() for custom life-categories/
+     sub-tints, the dynamic half of this same cascade. */
+  .tl-item[data-track],            .tl-detail-head[data-track]            { --cat-c: var(--track-fallback); --cat-t: var(--track-text); }  /* fallback */
+  .tl-item[data-track="work"],     .tl-detail-head[data-track="work"]     { --cat-c: var(--track-work); --cat-t: var(--track-text); }
+  .tl-item[data-track="marriage"], .tl-detail-head[data-track="marriage"] { --cat-c: var(--track-marriage); --cat-t: var(--track-text); }
+  .tl-item[data-track="personal"], .tl-detail-head[data-track="personal"] { --cat-c: var(--track-personal); --cat-t: var(--track-text); }
   /* 2026-08-02 (Linh: "more than 4 track colours" -- same-track routines like Pilates
      and Manage-fridge were both plain "personal" gold, indistinguishable at a glance
      on the timeline). Rather than a whole separate palette, each category gets its own
      TINT of its track's existing colour (lighter/darker via color-mix, same hue) --
      still reads as "personal" or "work" at a glance, but routines differentiate from
      each other too. Unlisted categories just keep the plain track colour above. */
-  .tl-item[data-track="personal"][data-category="Fitness"]                { --cat-c: var(--cat-personal-fitness); }
-  .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] { --cat-c: var(--cat-personal-beauty); }
+  .tl-item[data-track="personal"][data-category="Fitness"],
+  .tl-detail-head[data-track="personal"][data-category="Fitness"]                { --cat-c: var(--cat-personal-fitness); }
+  .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"],
+  .tl-detail-head[data-track="personal"][data-category="Beauty / Self Grooming"] { --cat-c: var(--cat-personal-beauty); }
   .tl-block { background: var(--cat-c); background-image: none; border-left: none; }
   /* 2026-08-06 (Linh, overlap fixes: "text uses nowrap/hidden/ellipsis so nothing is
      cut off mid-word"): block titles were free to wrap and then clip mid-LINE against
@@ -10688,9 +10779,15 @@
     .tl-desk-del { color: var(--danger); }
     .tl-desk-done { background: var(--gold-bright); color: var(--accent-on); font-weight: 700; }
     .tl-desk-done:hover { background: color-mix(in oklab, var(--gold-bright) 85%, #fff); }
-    /* desktop actions live ONLY in the desk row — the phone's header pencil/trash,
-       big Done button and toggle-pill pair hide here (✕ close stays) */
-    .tl-detail-head-actions, .tl-detail-done-btn, .tl-detail-move-toggle, .tl-del-row { display: none; }
+    /* desktop actions live ONLY in the desk row — the phone's Zone-1 drag handle/
+       hero (title/breadcrumb/when-line now live in the OLD .tl-detail-title/row
+       markup instead, restored below), Zone-3 manage block, big Done button and
+       toggle-pill pair all hide here (✕ close stays, in its own pre-existing spot) */
+    .tl-detail-drag, .tl-detail-hero, .tl-detail-manage, .tl-detail-done-btn, .tl-detail-move-toggle { display: none; }
+    /* the mobile-only header duplicates .tl-detail-title/the time+track rows for
+       Zone 1 — desktop never hides those originals (.tl-detail-mobile-hide only
+       fires ≤640px), so nothing further is needed here to keep desktop's title/
+       time/location/category exactly as they always were. */
     /* --- 5. right rail: flat cards, gold caps headings, 24px rhythm --- */
     .day-side { gap: 24px; }
     .rail-card { display: block; }
@@ -11269,11 +11366,26 @@
        rules). Same overlay+box pattern as #jumpOverlay above, just a taller sheet. -->
   <div class="tl-detail-overlay" id="tlDetailOverlay" hidden>
     <div class="tl-detail-sheet" id="tlDetailSheet">
-      <div class="tl-detail-head">
+      <!-- 2026-08-15 (§6 mobile redesign, item detail sheet restyle): Zone 1. The
+           drag handle + ✕ are static (never re-rendered, so their own bindings below
+           are rock solid); #tlDetailHero is the only piece renderTlDetailBody()
+           writes into per open/refresh (breadcrumb, title, when-line — see that
+           function). data-track/data-category go on THIS div (not #tlDetailHero)
+           since it's what actually paints the --cat-c background. Mobile only —
+           desktop hides .tl-detail-drag/.tl-detail-hero wholesale (central ≥641px
+           list near .tl-desk-actions) and keeps showing its existing plain title
+           from inside #tlDetailBody instead, completely untouched. -->
+      <div class="tl-detail-head" id="tlDetailHead">
+        <div class="tl-detail-drag" aria-hidden="true"></div>
         <button type="button" class="tl-detail-close" id="tlDetailClose" aria-label="Close">×</button>
-        <div class="tl-detail-head-actions" id="tlDetailHeadActions"></div>
+        <div class="tl-detail-hero" id="tlDetailHero"></div>
       </div>
       <div class="tl-detail-body" id="tlDetailBody"></div>
+      <!-- Zone 3, the manage block — SAME id as before (#tlDetailHeadActions), just
+           relocated from inside .tl-detail-head above to here and re-skinned as
+           full-bleed rows by renderTlDetailHeadActions() — its own click listener is
+           bound by id near tryTlDelete and keeps firing wherever this div sits. -->
+      <div class="tl-detail-manage" id="tlDetailHeadActions"></div>
     </div>
   </div>
 
@@ -13744,13 +13856,18 @@
     if (!el) { el = document.createElement("style"); el.id = "b33CatDynStyles"; document.head.appendChild(el); }
     const ORIGINAL_LIFE = { personal: 1, work: 1, marriage: 1 };
     let css = "";
+    // 2026-08-15 (§6 mobile redesign): .tl-detail-head[data-track] (item detail
+    // sheet's Zone-1 header, mobile-only) joins every generated rule here too — the
+    // dynamic half of the SAME --cat-c cascade extended near .tl-item[data-track]'s
+    // own static rules a couple thousand lines up, so a custom life-category or
+    // sub-category tint colours the header exactly like it colours the calendar block.
     lifeCats().forEach(c => {
       if (!ORIGINAL_LIFE[c.id]) {
-        css += `.tl-item[data-track="${c.id}"] { --cat-c: var(--${c.id}-seed); --cat-t: var(--track-text); }\n`;
+        css += `.tl-item[data-track="${c.id}"], .tl-detail-head[data-track="${c.id}"] { --cat-c: var(--${c.id}-seed); --cat-t: var(--track-text); }\n`;
       }
     });
     CATS.filter(c => c.type === "sub").forEach(c => {
-      css += `.tl-item[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"] { --cat-c: var(--cat-${c.parent}-${c.id}); }\n`;
+      css += `.tl-item[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"], .tl-detail-head[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"] { --cat-c: var(--cat-${c.parent}-${c.id}); }\n`;
     });
     el.textContent = css;
   }
@@ -18611,17 +18728,26 @@
      squeezed into the block itself. (The actual-time timer/minutes control that
      used to live here was removed 2026-08-03, Linh: "I don't use it".)
      ============================================================ */
+  // 2026-08-15 (§6 mobile redesign, item detail sheet restyle): SAME branches/same
+  // data-* attributes as before (every one of these still routes to the exact
+  // delegate it always did — see the big comment on #tlDetailHeadActions in the
+  // markup) — only the markup shape changed, small round icon buttons -> Zone-3
+  // full-bleed labelled rows. Edit's label matches whichever action this item type
+  // actually performs (edits the series / toggles the in-sheet panel / edits this
+  // one item) so the row never over-promises what tapping it does.
   function renderTlDetailHeadActions(e) {
+    const row = (attrs, label, icon, danger) =>
+      `<button type="button" class="tl-detail-manage-row${danger ? " tl-detail-manage-danger" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}"><span class="tl-detail-em">${icon}</span><span>${label}</span></button>`;
     const actions = [];
     if (!e.generated) {
-      actions.push(`<button type="button" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>`);
-      actions.push(`<button type="button" data-del="${e.id}" aria-label="Delete ${esc(e.title)}">🗑</button>`);
+      actions.push(row(`data-edit="${e.id}"`, "Edit", "✎"));
+      actions.push(row(`data-del="${e.id}"`, "Delete", "🗑", true));
     } else if (e.fromRecurringEvent && e.recurId) {
-      // recurring event occurrence: ✎ edits the whole series (the template — same
-      // all-occurrences semantics as editing a routine), 🗑 opens the 3-way scope
+      // recurring event occurrence: Edit edits the whole series (the template — same
+      // all-occurrences semantics as editing a routine), Delete opens the 3-way scope
       // chooser (this event / this and following / all events) instead of confirm().
-      actions.push(`<button type="button" data-edit="${e.recurId}" aria-label="Edit series ${esc(e.title)}">✎</button>`);
-      actions.push(`<button type="button" data-ev-occ-del="${e.id}" aria-label="Delete ${esc(e.title)}" title="Delete — choose how much of the series">🗑</button>`);
+      actions.push(row(`data-edit="${e.recurId}"`, "Edit series", "✎"));
+      actions.push(row(`data-ev-occ-del="${e.id}" title="Delete — choose how much of the series"`, "Delete", "🗑", true));
     } else if (e.rtTaskId) {
       // 2026-08-04 (Linh, popup declutter mockup: pencil stays in the header): this
       // pencil used to jump straight to the routine TEMPLATE editor -- SUPERSEDED, it
@@ -18632,15 +18758,15 @@
       // secondary link INSIDE that revealed panel (see renderTlDetailBody). data-rt-
       // occ-del is unchanged: writes a ROUTINE_SKIPS entry for this occId alone (see
       // its own comment near ROUTINE_TIME_OVR), every other occurrence keeps repeating.
-      actions.push(`<button type="button" data-tl-toggle-edit aria-label="Edit ${esc(e.title)}">✎</button>`);
-      actions.push(`<button type="button" data-rt-occ-del="${e.id}" aria-label="Delete this occurrence of ${esc(e.title)}" title="Delete just this occurrence">🗑</button>`);
+      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
+      actions.push(row(`data-rt-occ-del="${e.id}" title="Delete just this occurrence"`, "Delete", "🗑", true));
     } else if (e.id.indexOf("fitcal-") === 0) {
       // 2026-08-04: same toggle as the routine branch above -- reveals the inline
       // Time/Duration/Location/Notes fields (fitSessionHtml) in place instead of
       // navigating to the Habits page's fitness editor for the exact same fields.
       const sessId = e.id.slice(7);
-      actions.push(`<button type="button" data-tl-toggle-edit aria-label="Edit ${esc(e.title)} session">✎</button>`);
-      actions.push(`<button type="button" data-fitcal-del="${sessId}" aria-label="Delete ${esc(e.title)} session">🗑</button>`);
+      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
+      actions.push(row(`data-fitcal-del="${sessId}"`, "Delete", "🗑", true));
     }
     document.getElementById("tlDetailHeadActions").innerHTML = actions.join("");
   }
@@ -18697,6 +18823,11 @@
     const detailEnd = e.start ? itemEndMin(e) : null;
     const timeLabel = e.start ? `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(detailEnd))}` : "All day";
     const freqLabel = e.freq && ROUTINE_FREQ_LABEL[e.freq] ? `Repeats ${ROUTINE_FREQ_LABEL[e.freq].toLowerCase()}` : "";
+    // 2026-08-15 (§6 mobile redesign): mobile-only standalone Repeats info row —
+    // same freqLabel computed above, just split out of the old combined time+freq
+    // row into its own row per this pass's spec (desktop still sees it exactly as
+    // before, as that same row's .tl-detail-sub — see .tl-detail-mobile-hide).
+    const repeatsRowHtml = freqLabel ? `<div class="tl-detail-row tl-detail-row-repeats"><span class="tl-detail-em">↻</span><span>${esc(freqLabel)}</span></div>` : "";
     const stepsHtml = hasSteps ? `<div class="tl-detail-steps">${e.steps.map((s, i) => {
       const stepId = `${e.id}::step::${i}`;
       const sd = isDone(stepId);
@@ -18711,7 +18842,7 @@
     // CSS comment). A plain read-only note (non-routine e.note) is DISPLAY, not an
     // editable field, so it stays visible too, same as location/category above it.
     const fitLinkHtml = e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : "";
-    const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row"><span class="tl-detail-em">📝</span><span class="tl-detail-note-text">${esc(e.note)}</span></div>` : "";
+    const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row tl-detail-row-note"><span class="tl-detail-em">📝</span><span class="tl-detail-note-text">${esc(e.note)}</span></div>` : "";
     const fitResolved = resolveFitSessionFor(e);
     const fs = fitResolved && fitResolved.sess;
     // 2026-08-04 (Linh: "move ALL the editable fields -- Time, Duration, Location,
@@ -18857,19 +18988,17 @@
     // disappears while the move panel is open, same mutual exclusion as actionsHtml.
     const deskEditAttr = !e.generated ? `data-edit="${e.id}"`
       : (e.rtTaskId || e.id.indexOf("fitcal-") === 0) ? "data-tl-toggle-edit" : "";
-    // 2026-08-08 (Linh, "Delete" action, design44): shared by the desktop row AND the
-    // new mobile action-row trigger below (delRowHtml) -- was desk-only (deskDelAttr),
-    // widened to also cover recurring events (previously a desktop gap: only the
-    // header 🗑 could delete those). Every one of these opens the SAME confirm sheet
-    // now (openTlDeleteConfirm via tryTlDelete) instead of a flat confirm().
+    // 2026-08-08 (Linh, "Delete" action, design44): shared by the desktop row AND
+    // (2026-08-15: RETIRED — mobile Delete now lives in Zone 3, see
+    // renderTlDetailHeadActions/.tl-detail-manage; this const is desktop-only now)
+    // was desk-only (deskDelAttr), widened to also cover recurring events
+    // (previously a desktop gap: only the header 🗑 could delete those). Every one
+    // of these opens the SAME confirm sheet now (openTlDeleteConfirm via
+    // tryTlDelete) instead of a flat confirm().
     const delAttr = !e.generated ? `data-del="${e.id}"`
       : (e.fromRecurringEvent && e.recurId) ? `data-ev-occ-del="${e.id}"`
       : e.rtTaskId ? `data-rt-occ-del="${e.id}"`
       : e.id.indexOf("fitcal-") === 0 ? `data-fitcal-del="${e.id.slice(7)}"` : "";
-    // own row, right-aligned, muted red -- a secondary/destructive action set apart
-    // from Reschedule/Duplicate/Mark done, never full-width or gold. Desktop keeps
-    // its existing Delete inside .tl-desk-actions (CSS hides this row there).
-    const delRowHtml = delAttr ? `<div class="tl-del-row"><button type="button" class="tl-del-trigger" ${delAttr}>Delete</button></div>` : "";
     const deskActionsHtml = `<div class="tl-desk-actions">
         ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ Edit</button>` : ""}
         ${canMove && !moveOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move>🕑 Reschedule</button>
@@ -18893,13 +19022,13 @@
       const chainA = chainT.anchorTo ? chainAnchorOf(chainT) : null;
       if (chainA) {
         const after = chainT.anchorMode !== "before";
-        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span>${after ? "Starts the moment" : "Finishes right as"} <b>${esc(chainA.title)}</b> ${after ? "ends" : "starts"}
+        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain"><span class="tl-detail-em">⛓</span><span>${after ? "Starts the moment" : "Finishes right as"} <b>${esc(chainA.title)}</b> ${after ? "ends" : "starts"}
           <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
       } else if (chainT.deadline) {
-        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span>Must be done by <b>${fmtTime(chainT.deadline)}</b>${chainT.deadlineLabel ? ` (${esc(chainT.deadlineLabel)})` : ""}
+        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain"><span class="tl-detail-em">⛓</span><span>Must be done by <b>${fmtTime(chainT.deadline)}</b>${chainT.deadlineLabel ? ` (${esc(chainT.deadlineLabel)})` : ""}
           <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
       } else {
-        chainRowHtml = `<div class="tl-detail-row"><span class="tl-detail-em">⛓</span><span><button type="button" class="tab-link" data-chain-open="${chainT.id}" style="margin-left:0">Chain it — glue this to another routine, event, or a deadline →</button></span></div>`;
+        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain"><span class="tl-detail-em">⛓</span><span><button type="button" class="tab-link" data-chain-open="${chainT.id}" style="margin-left:0">Chain it — glue this to another routine, event, or a deadline →</button></span></div>`;
       }
     }
     // 2026-08-11 (Linh, screenshot of the Lunch popup: "i want to record straight to
@@ -18916,8 +19045,8 @@
     // again, same "Mark done" vs "already done" shape as everywhere else in this sheet.
     const mealLinked = isMealEvent ? resolveMealFor(e) : null;
     const nutritionRowHtml = !isMealEvent ? "" : mealLinked
-      ? `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span>✓ Logged: ${esc(mealLinked.entry.desc)}<span class="tl-detail-sub"><button type="button" class="tab-link" data-log-meal="${e.id}">Log again</button></span></span></div>`
-      : `<div class="tl-detail-row"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-log-meal="${e.id}" style="margin-left:0">Log what I ate →</button></span></div>`;
+      ? `<div class="tl-detail-row tl-detail-row-nutrition"><span class="tl-detail-em">🥗</span><span>✓ Logged: ${esc(mealLinked.entry.desc)}<span class="tl-detail-sub"><button type="button" class="tab-link" data-log-meal="${e.id}">Log again</button></span></span></div>`
+      : `<div class="tl-detail-row tl-detail-row-nutrition"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-log-meal="${e.id}" style="margin-left:0">Log what I ate →</button></span></div>`;
     // 2026-08-06 (Linh's "routine phases" mockup): the full Before/Event/After banded
     // list for this item's whole chain, under the single-line relationship row above.
     const phaseBandsHtml = chainT ? chainPhaseBandsHtml(chainT, state.anchor) : "";
@@ -18931,11 +19060,25 @@
         <button type="button" class="nt-chip" data-tl-remind="off" aria-pressed="${remMode === "off"}">Off</button>
         ${remMode === "custom" ? `<span class="tl-remind-min"><input type="number" id="tlRemindMin" min="0" step="5" value="${remV}" aria-label="Minutes before"> min before</span>` : ""}
       </div>` : "";
+    // 2026-08-15 (§6 mobile redesign): date + time-range + duration for Zone 1's
+    // when-line — reuses timeLabel/detailEnd (both already computed above for the
+    // OLD time row, which desktop still shows unchanged) and the exact same date-
+    // label recipe occDateLbl already uses a few lines up (WD_FULL/dowIndex/
+    // MON_SHORT), just generalised from "a routine occurrence's date" to "this
+    // item's own date" — same helpers, no new formatting invented. fmtDurShort is
+    // the SAME helper the calendar block's own drag/resize hover-line already
+    // shows duration with (search "fmtDurShort"), so "1h 30m" here reads exactly
+    // like it does when she's dragging the block itself.
+    const heroDateD = e.date ? parseKey(e.date) : null;
+    const heroDateLbl = heroDateD ? `${WD_FULL[dowIndex(heroDateD)]} ${heroDateD.getDate()} ${MON_SHORT[heroDateD.getMonth()]}` : "";
+    const heroDur = detailEnd != null ? fmtDurShort(Math.max(0, detailEnd - toMin(e.start))) : "";
+    const heroWhenHtml = [heroDateLbl, timeLabel, heroDur].filter(Boolean).map(esc).join(" · ");
     document.getElementById("tlDetailBody").innerHTML = `
-      <div class="tl-detail-title"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
-      <div class="tl-detail-row"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
-      ${path.length ? `<div class="tl-detail-row"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
-      ${e.track ? `<div class="tl-detail-row"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      <div class="tl-detail-title tl-detail-mobile-hide"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
+      <div class="tl-detail-row tl-detail-mobile-hide"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
+      ${path.length ? `<div class="tl-detail-row tl-detail-row-where"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
+      ${e.track ? `<div class="tl-detail-row tl-detail-mobile-hide"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      ${repeatsRowHtml}
       ${chainRowHtml}
       ${nutritionRowHtml}
       ${phaseBandsHtml}
@@ -18946,8 +19089,23 @@
       </button>
       ${fitLinkHtml}${plainNoteHtml}
       ${stepsHtml}
-      ${actionsHtml}${delRowHtml}${deskActionsHtml}
+      ${actionsHtml}${deskActionsHtml}
       ${editFieldsHtml}${moveHtml}
+    `;
+    // Zone 1 — the coloured header (mobile only; desktop hides #tlDetailHero/
+    // .tl-detail-drag wholesale and keeps the plain .tl-detail-title/row markup
+    // just above, completely untouched). data-track/data-category go on
+    // #tlDetailHead itself, extending the exact --cat-c/--cat-t cascade
+    // .tl-item[data-track] already resolves through (see that block + its
+    // regenerateCategoryStyles() dynamic half) rather than reimplementing colour
+    // resolution here — so a custom life-category or sub-tint colours this header
+    // exactly like it colours the calendar block it was tapped from.
+    document.getElementById("tlDetailHead").dataset.track = e.track || "";
+    document.getElementById("tlDetailHead").dataset.category = e.category || "";
+    document.getElementById("tlDetailHero").innerHTML = `
+      ${e.track ? `<div class="tl-detail-crumb">🏷 ${esc(trackLabel(e.track))}${e.category ? ` › ${esc(e.category)}` : ""} · ${kind === "routine" ? "↻ routine" : esc(kind)}</div>` : ""}
+      <div class="tl-detail-hero-title">${esc(e.title)}</div>
+      <div class="tl-detail-when">${heroWhenHtml}</div>
     `;
   }
   // 2026-08-04 (desktop styling spec, points 3–4): on wide screens the sheet anchors
@@ -19315,10 +19473,12 @@
   // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
   // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
   document.getElementById("tlDetailBody").addEventListener("click", e => {
-    // 2026-08-08 (Linh, "Delete" action): the new action-row trigger (delRowHtml) and
-    // the desktop row's own Delete button both live in here — tryTlDelete (defined
-    // near #tlDetailHeadActions' own listener, which the header 🗑 icons use) opens
-    // the shared confirm sheet for whichever one was tapped.
+    // 2026-08-08 (Linh, "Delete" action), updated 2026-08-15: the desktop row's own
+    // Delete button (deskActionsHtml, still rendered inside #tlDetailBody) lives in
+    // here — tryTlDelete (defined near #tlDetailHeadActions' own listener, which
+    // Zone 3's mobile Delete row uses) opens the shared confirm sheet for whichever
+    // one was tapped. Mobile's own Delete moved to Zone 3 (its own listener), but
+    // this stays — desktop still needs it.
     if (tryTlDelete(e.target)) return;
     // 2026-08-09 (Linh, screenshot: editing a plain event on desktop left the OLD detail
     // sheet floating on top of the edit form that opened behind it): the desktop row's
@@ -19541,10 +19701,10 @@
     if (tryTlDelete(e.target)) return;
   });
   /* --- delete confirm (2026-08-08, Linh: "Add a Delete action ... follow design44")
-     --- one small sheet backs every delete in this popup: header 🗑 icons, the new
-     muted-red action-row button (delRowHtml in renderTlDetailBody), and the desktop
-     row's own Delete all call tryTlDelete(e.target), which recognises whichever
-     data-*-del attribute is on the tapped element. A plain item/fitness session gets
+     --- one small sheet backs every delete in this popup: Zone 3's mobile "Delete"
+     row (renderTlDetailHeadActions), and the desktop row's own Delete, both call
+     tryTlDelete(e.target), which recognises whichever data-*-del attribute is on
+     the tapped element. A plain item/fitness session gets
      one "Delete"; a recurring routine/event occurrence gets "Just this one"
      (default-highlighted, same ROUTINE_SKIPS/EVENT_SKIPS mechanics the old flows
      used) + "Whole series" (removes the template). SUPERSEDES the old flat confirm()s
