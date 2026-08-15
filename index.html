@@ -7887,6 +7887,51 @@
     .nav-arrow.day-step { width: 28px; height: 28px; font-size: 15px; }
     .day-step-row .patients-above-day { flex: 1; margin: 0; }
   }
+  /* 2026-08-16 (mobile Day tightening, item 3 — "merge two nav rows into one"): the
+     day-nav row becomes `‹ Saturday 15 August › ⚙` and absorbs everything that used
+     to sit on its own line underneath.
+       · #dayStepDate / #dayNavGear are display:none in the base rules below and only
+         turned on here, so the ≥641px layouts (where placeDeskGrid() moves this whole
+         row into .section-head next to "The day") never render either one.
+       · "+ Add to this day" is HIDDEN, not removed — .patients-above-day and its
+         #addRowHome marker both stay in the DOM exactly where they are, because
+         placeDeskGrid() reparents that wrapper between #deskColLeft and this row and
+         a previous pass broke the return half of that cycle by deleting the marker
+         (see the warning comment on #addRowHome itself). The command bar's own + is
+         the mobile path to the same add flow now.
+       · #calDaysRow likewise stays in the DOM (renderCalDaysUI() and the delegated
+         [data-cal-days] handler still find its buttons) but is hidden in the flow —
+         the 1/3/5/7 picker is rendered inside the ⚙ sheet at this width instead.
+         641–1023px tablet keeps the inline row untouched. */
+  /* mobile-only members of the merged nav row — off everywhere else (see the ≤640px
+     block below for the whole rationale). Declared BEFORE that block, not after: a
+     media query adds no specificity, so a later single-class base rule would beat the
+     override inside it. .day-nav-gear matches the .nav-arrow.day-step pair it sits
+     beside: 28px box, 999px pill, no fill until pressed. */
+  .day-step-date { display: none; }
+  .day-nav-gear {
+    display: none; align-items: center; justify-content: center; flex: none;
+    width: 28px; height: 28px; padding: 0; border: none; border-radius: 999px;
+    background: none; color: var(--ink-soft); font: inherit; font-size: 15px; cursor: pointer;
+  }
+  .day-nav-gear:hover, .day-nav-gear[aria-expanded="true"] { color: var(--gold-bright); background: var(--raised); }
+  @media (max-width: 640px) {
+    .day-step-row { gap: 4px; }
+    .day-step-row .day-step-date {
+      display: block; flex: 1; min-width: 0; text-align: center;
+      font-size: 13px; font-weight: 700; color: var(--ink);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .day-step-row .day-nav-gear { display: inline-flex; }
+    .day-step-row .patients-above-day, .day-step-row .add-row { display: none; }
+    #dayPage .cal-days-row { display: none; }
+    /* the mockup's row is exactly `‹ date › ⚙`. #dayStepToday is hidden rather than
+       deleted (its click listener stays bound and desktop still shows it): the same
+       jump already lives on ‹ Today › inside the date dropdown, which is where Linh
+       asked for it on 2026-08-05 ("move Today and Today's Patients into the date
+       dropdown"). Hiding the duplicate here is the same de-duplication as item 1. */
+    #dayStepToday { display: none; }
+  }
 
   /* ============================================================
      MULTI-DAY CALENDAR (§1 build, 2026-08-14) — 1/3/5/7-day views on the Today
@@ -10354,6 +10399,24 @@
        each of those two boxes, not against each other or against the mascot pill. */
     .day-row2 .weekday-moon-row { display: contents; }
     .day-row2 .date-row { display: contents; }
+    /* 2026-08-16 (Day-page design review, item 1 — "day context is printed THREE times
+       on mobile; show it once", target header = "B33 · Sat 15 Aug · UD 6"): the always-
+       visible cosmic strip inside .weekday-moon-row is the FIRST of those three copies,
+       and every reading in it is already on screen twice over:
+         · #moonBadge (drawn moon + "Waxing crescent")  -> #dayCtxChips' moon chip
+         · #dayAstroBits' ♌ sun-sign glyph              -> #dayCtxChips' sun-sign chip
+                                                           (added this pass, as a NAME)
+         · #numGrpCd's CD pill                          -> #dayCtxChips' "CD n · Phase"
+         · #numGrpFast                                  -> the #dayCtxFasting meter
+       Hidden, not deleted: renderDay() still writes every one of these by id, so no JS
+       changes and the whole strip is one line from coming back. Desktop/tablet (≥641px)
+       never see this rule and keep the slim numerology line the 2026-08-05 desktop
+       declutter deliberately kept.
+       NOT duplicated anywhere else, and therefore off the mobile Day header from here:
+       #pmHover (PM), #numGrpPy/#numGrpUy (PY/UY), #dayAstroBits' solar-month animal,
+       #imprintHover. PY and PM both still read on the Numerology widget card in the
+       new "Today's widgets" block below the calendar (item 4). */
+    .day-row2 .num-group-strip { display: none; }
     /* 2026-08-02 (header cleanup, "the date and day (e.g. 'Sun 2 Aug')"): weekday now
        leads, date follows -- was date-big first then the separate weekday block second
        ("2 AUG ☀️ Sunday"), the reverse of how she wrote the example. #weekday's own
@@ -12161,11 +12224,15 @@
      clutter in the left gutter at 1 day, where every chain is a single block
      anyway — simplest fix per the spec's own stated preference order. */
   [data-desk-day1] #chainLayer { display: none; }
-  /* item 6: hour rows outside the effective visible range (computeDeskHourRange())
+  /* item 6: hour rows outside the effective visible range (computeHourRange())
      collapse to 0 height via compactH(h) already; this just drops the orphaned
      absolutely-positioned .hour-label those 0-height rows would otherwise still
-     float (position:absolute, top:-8px, so a 0-height parent alone doesn't hide it). */
-  [data-desk-day1] .hour-row[data-out-of-range="true"] .hour-label { display: none; }
+     float (position:absolute, top:-8px, so a 0-height parent alone doesn't hide it).
+     2026-08-16: un-scoped from [data-desk-day1] — mobile 1-day trims its grid the
+     same way now (hourTrimActive()), and needs the same orphan-label cleanup.
+     data-out-of-range is only ever stamped when the trim is actually running
+     (buildHoursHtml), so the attribute is the gate; no breakpoint needed here. */
+  .hour-row[data-out-of-range="true"] .hour-label { display: none; }
 
   /* ---- 5. Widget rail — 286px (1440+), 250px (1200–1439), removed <1200
      (widgets fall back to a block below the grid, .wr-fallback). ---- */
@@ -12259,6 +12326,17 @@
     background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700;
     padding: 8px 0 4px; margin-top: 4px; cursor: pointer;
   }
+  /* 2026-08-16 (item 3): the SAME popover, mounted off #dayNavGear in the merged mobile
+     nav row. Only the box needs to change at this width — it gains the "Days shown"
+     group (four 44px .cal-days-btn pills, so 200px can't hold them beside a label) and
+     has to clear the row's right edge on a 360px screen. Anchored right:0 rather than
+     right:16px because .day-step-row is already inside the page's own side padding. */
+  @media (max-width: 640px) {
+    .ddt-gear-pop { top: 32px; right: 0; width: 240px; max-width: calc(100vw - 32px); }
+    .ddt-gear-row--days { display: block; }
+    .ddt-gear-row--days .cal-days-picker { display: flex; gap: 4px; margin-top: 4px; }
+    .ddt-gear-row--days .cal-days-btn { flex: 1; min-width: 0; }
+  }
 
   /* 1024–1199px: widget rail drops out of the column layout; the same cards
      fall back to a 2-up block under the grid instead (the mobile arrangement),
@@ -12269,6 +12347,67 @@
       border-top: 1px solid var(--note-line);
     }
     [data-desk-day1] #wrFallback .wr-card:nth-child(3) { grid-column: 1 / -1; }
+  }
+
+  /* ---- 2026-08-16 (mobile Day tightening, item 4): "Today's widgets" on the phone —
+     the ≤640px member of the same one-render/several-containers set as #wrCards and
+     #wrFallback above. Reuses .wr-head/.wr-head-lbl/.wr-arrange-btn/.wr-card and every
+     per-card rule verbatim; only the container geometry is new.
+     Which cards go full width is driven by the card's OWN identity (data-wr-id) rather
+     than #wrFallback's nth-child(3) — the block is user-reorderable via the ⋮⋮ grips,
+     so a positional rule would put the wrong card wide the moment she rearranges. Per
+     the mockup: Numerology + Cycle sit 2-up (both are a single big number + a line),
+     while Patients / Piling up / Streaks are lists and take the full width. ---- */
+  #wrMobile { display: none; }
+  @media (max-width: 640px) {
+    #wrMobile { display: block; margin: 24px 0 0; }
+    /* 1-day only, matching desktop's own rail (gated on deskDay1Active()) and the §2
+       revision's existing "what hides at 3+ days" rule three thousand lines up, which
+       already drops the progress component / Routines today / Piling up at that count.
+       Same #wrap[data-cal-multi] attribute, written by renderCalDaysUI() — a display
+       gate only; nothing is emptied and it returns exactly as it was at 1 day. */
+    #wrap[data-cal-multi="true"] #wrMobile { display: none; }
+    #wrMobile .wr-head { margin-bottom: 8px; }
+    #wrMobileCards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+    #wrMobileCards > .wr-card { margin-bottom: 0; }
+    #wrMobileCards > [data-wr-id="railPatients"],
+    #wrMobileCards > [data-wr-id="pileupBox"],
+    #wrMobileCards > [data-wr-id="streaksWidget"] { grid-column: 1 / -1; }
+    /* the streak chips move INTO the block's own Streaks card here, so the copy inside
+       the merged progress component would be a second printing of the same chips —
+       same reasoning (and same one-line treatment) as [data-desk-day1] #dayCtxStreaks
+       above. Hidden, not emptied: renderDayCtx() still fills it, desktop-at-tablet
+       widths (641–1023px, no widgets block) still shows it. */
+    #dayCtxStreaks { display: none; }
+    /* the Arrange popover anchors off the mobile head's own button; keep it inside the
+       360px screen (its desktop right:12px assumes a 286px rail, not a full-width row). */
+    #wrMobile .wr-arrange-pop { top: 24px; right: 0; width: 220px; max-width: calc(100vw - 32px); }
+  }
+
+  /* ---- 2026-08-16 (mobile Day tightening, item 5): SPACING RHYTHM — "tight within a
+     group, generous between groups". The page was uniformly loose (4/16/16/8/24 down
+     the stack), so nothing read as belonging to anything. Three steps now, every value
+     on the 4/8/12/16/24/32 scale:
+        4px   INSIDE one object   — meter to meter; the all-day row to the grid it
+                                    belongs to (they are one calendar, not two things)
+        8px   INSIDE one group    — the nav row to the context strip, the chip strip to
+                                    the meters: the day's header furniture, read as a set
+       16px   BETWEEN sections    — the command bar to that whole day block; the context
+                                    block to the grid itself
+       32px   MAJOR break         — the grid to "Today's widgets"
+     Deliberately height-neutral overall (measured: the gaps it opens at the section
+     seams are paid for by the ones it closes inside the groups), so the rhythm costs
+     nothing against items 1–3's savings. Scoped to ≤640px and to #dayPage: tablet
+     (641–1023px) and desktop share several of these elements and must not move. ---- */
+  @media (max-width: 640px) {
+    #dayPage .day-step-row { margin: 16px 0 0; }
+    #dayPage .dcx-wrap { margin: 8px 0 16px; gap: 8px; }
+    #dayPage .dcx-meters { gap: 4px; }
+    /* was 2px — off the scale, and it only ever existed to keep the horizontal
+       scroller from clipping its own chips. 4px does the same job on-scale. */
+    #dayPage .dcx-chips { padding-bottom: 4px; }
+    #dayPage #dayAlldayRow { margin-bottom: 4px; }
+    #wrMobile { margin-top: 32px; }
   }
 
   /* ============================================================
@@ -14696,10 +14835,23 @@
              .section-head instead, so it lands to the right of the flex:1 .rule after
              "The day" h2. -->
         <div id="dayStepRowHome" hidden></div>
+        <!-- 2026-08-16 (mobile Day tightening, item 3 — "merge two nav rows into one",
+             target `‹  Saturday 15 August  ›  ⚙`): #dayStepDate and #dayNavGear are
+             MOBILE-ONLY additions to this existing row (both display:none until the
+             ≤640px block turns them on, so desktop/tablet — where placeDeskGrid moves
+             this whole row into .section-head — cannot see either). The row absorbs
+             what used to be a second full-width row below it (#calDaysRow, now gear-
+             sheet content on mobile) and drops "+ Add to this day" (the command bar's
+             own + opens the same #addBtn flow). -->
         <div class="day-step-row">
           <button type="button" class="day-step-today" id="dayStepToday">Today</button>
           <button type="button" class="nav-arrow day-step" id="dayStepPrev" aria-label="Previous day">‹</button>
+          <span class="day-step-date" id="dayStepDate"></span>
           <button type="button" class="nav-arrow day-step" id="dayStepNext" aria-label="Next day">›</button>
+          <!-- same #ddtGear popover, mounted off this button instead — see
+               renderDdtGearPop()/gearAnchorEl(), which pick whichever gear is on
+               screen. Not a second settings UI. -->
+          <button type="button" class="day-nav-gear" id="dayNavGear" aria-label="Day view settings" title="Day view settings">⚙</button>
           <!-- 2026-08-10 fix: placeDeskGrid()'s "off" branch (mobile/tablet) restores
                .patients-above-day via `addRowHome.after(addRowEl)` — deleting this marker
                outright (an earlier pass in this same edit) broke the RETURN half of that
@@ -14854,6 +15006,29 @@
             </div>
           </div>
           <div class="md-legend" id="mdLegend" hidden></div>
+        </div>
+        <!-- 2026-08-16 (mobile Day tightening, item 4 — the mockup's "▼ WIDGETS BELOW"
+             block; task #122's other half, which the TILE_DEFS comment on streaksWidget
+             said was still unbuilt). Sits directly below whichever grid is active, per
+             the mockup.
+             This is a THIRD CONTAINER for the existing widget rail, not a third system:
+             renderDeskWidgetRail() already writes one identical `html` string into both
+             #wrCards (≥1200px column) and #wrFallback (1024–1199px 2-up block) with CSS
+             showing exactly one — #wrMobileCards is simply the ≤640px member of that
+             same set. Everything rides along unchanged: wrCardHtml()'s five cards, the
+             shared TILE_PREFS order/hidden store, the Arrange popover, the document-
+             delegated ⋮⋮ drag-reorder, and Piling up's cap-at-5 + "+N more".
+             #wrFallback itself is deliberately NOT reused here: it is a sibling of
+             #deskGrid up at the top of #dayPage (i.e. above everything on mobile), and
+             moving it into .day-main would drag it into #deskColMain at desktop widths
+             via placeDeskGrid()'s existing dayMain reparent — a desktop change. A second
+             empty div is cheaper and safer than a fifth reparenting dance. -->
+        <div id="wrMobile">
+          <div class="wr-head">
+            <span class="wr-head-lbl">Today's widgets</span>
+            <button type="button" class="wr-arrange-btn" id="wrArrangeBtnM">Arrange</button>
+          </div>
+          <div id="wrMobileCards"></div>
         </div>
         <!-- 2026-08-06 (Linh: "the fire icon, move that to below the calendar in the
              centre"): SUPERSEDES its old spot in .topbar-right (search/star/theme-toggle
@@ -15635,6 +15810,14 @@
   }
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  // 2026-08-16 (item 3): the "Saturday 16 Aug" / "Saturday 16 August" day label, in one
+  // place. #theDayDateLbl (desktop's "The day" section head) built this inline; the
+  // merged mobile nav row needs the same thing with the month spelled out, so rather
+  // than a second template string both call this. Short is the default so the existing
+  // caller's output is byte-identical.
+  function dayDateLabel(d, longMonth) {
+    return `${WD_FULL[dowIndex(d)]} ${d.getDate()} ${(longMonth ? MONTHS : MON_SHORT)[d.getMonth()]}`;
+  }
 
   /* --- Hour animals (shí chén) — 12 two-hour blocks, and their trine (San He) colour --- */
   const HOUR_ANIMAL_ORDER = ["Rat","Ox","Tiger","Cat","Dragon","Snake","Horse","Goat","Monkey","Rooster","Dog","Pig"];
@@ -15676,13 +15859,17 @@
   const START_HOUR = 3, END_HOUR = 24;
   const START_MIN = START_HOUR * 60, END_MIN = END_HOUR * 60;
   const ANIMAL_BAND_START = START_HOUR % 2 === 0 ? START_HOUR - 1 : START_HOUR;   // keep 2h bands aligned to real shí chén boundaries (odd hours), even when the visible window starts on an even hour
-  // item 6 (2026-08-15 corrections pass): desktop-day1's own effective visible
-  // hour range — [START_HOUR,END_HOUR] until computeDeskHourRange() (near
+  // item 6 (2026-08-15 corrections pass): the 1-day view's own effective visible
+  // hour range — [START_HOUR,END_HOUR] until computeHourRange() (near
   // computeCompactHours()) narrows it for THAT render, every renderDay(). Never
-  // read outside deskDay1Active() (see compactH() below), so mobile/tablet
-  // always see the real un-narrowed START_HOUR/END_HOUR regardless of this
-  // value's current contents.
-  let deskHourRange = { start: START_HOUR, end: END_HOUR };
+  // read outside hourTrimActive() (see compactH() below), so any width/day-count
+  // the trim doesn't apply to always sees the real un-narrowed START_HOUR/END_HOUR
+  // regardless of this value's current contents.
+  // 2026-08-16: renamed deskHourRange -> hourRange (and computeDeskHourRange ->
+  // computeHourRange) now that mobile 1-day uses the same trim — the desk* prefix
+  // had become actively misleading about where this applies. Every reference
+  // updated; no behaviour rides on the name.
+  let hourRange = { start: START_HOUR, end: END_HOUR };
   const HOUR_H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour-h")) || 84;
   // her pinch-zoom level (see the touchstart/move/end IIFE far below), sticky across
   // reloads — applied before first render so the timeline never flashes at the default
@@ -15708,8 +15895,8 @@
   // range (min(22, HOUR_H())) so pinch-zooming the whole timeline can't push a compact
   // row taller than a busy one.
   // 2026-08-15 corrections pass (item 6): compactH() is now hour-aware. An hour
-  // outside desktop-day1's own effective visible range (deskHourRange, set by
-  // computeDeskHourRange() below, run every renderDay() before buildHours())
+  // outside the 1-day view's own effective visible range (hourRange, set by
+  // computeHourRange() below, run every renderDay() before buildHours())
   // collapses to a literal 0 instead of the normal 22px compact row — this is
   // the ENTIRE "skip emitting rows before/after the Hours-shown setting"
   // mechanism, deliberately built on top of the EXISTING compact-hour system
@@ -15724,8 +15911,13 @@
   // as before). `h` is optional for legacy callers that truly don't have an
   // hour in scope; they only ever get the OLD un-trimmed behaviour, which is a
   // no-op everywhere that never runs at desktop-day1's own breakpoint anyway.
+  // 2026-08-16 (mobile Day tightening, item 2): the gate is hourTrimActive(), not
+  // deskDay1Active() — mobile 1-day now trims its grid to the same "Hours shown"
+  // range, for the same reason and through this same single function. Everything
+  // else about this mechanism, including which consumers route through it, is
+  // untouched; it was already built to work anywhere, just never switched on here.
   function compactH(h) {
-    if (deskDay1Active() && typeof h === "number" && (h < deskHourRange.start || h >= deskHourRange.end)) return 0;
+    if (hourTrimActive() && typeof h === "number" && (h < hourRange.start || h >= hourRange.end)) return 0;
     return Math.min(22, HOUR_H());
   }
   const isBlockStartHour = h => (h - ANIMAL_BAND_START) % 2 === 0;
@@ -19691,33 +19883,36 @@
     const el = document.getElementById("sleepBand");
     if (!el) return;
     let html = "";
-    if (SLEEP_START_MIN > START_MIN && SLEEP_START_MIN < END_MIN) {
+    // 2026-08-16 (mobile Day tightening, item 2 — Linh's "Mobile day — tightened"
+    // mockup shows ONE "☾ Slept until 6am" line where four empty pre-6am rows and two
+    // separate sleep labels used to be): on mobile 1-day the grid now opens at the
+    // "Hours shown" start (see hourRange/compactH), so the 10pm "Sleep from" label
+    // sits past the trimmed end of the grid and the 6am one lands above its top edge.
+    // One clamped line says the whole thing. Desktop/tablet keep BOTH labels in their
+    // exact previous form and position — the clamp is applied only on the mobile path.
+    const oneLine = mobileDay1Active();
+    if (!oneLine && SLEEP_START_MIN > START_MIN && SLEEP_START_MIN < END_MIN) {
       const top = topForMin(SLEEP_START_MIN) - 16;
       html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep from ${esc(fmtTime(minToTime(SLEEP_START_MIN)))}</span>`;
     }
     if (SLEEP_END_MIN > START_MIN && SLEEP_END_MIN < END_MIN) {
-      const top = topForMin(SLEEP_END_MIN) - 16;
-      html += `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
+      const raw = topForMin(SLEEP_END_MIN) - 16;
+      const top = oneLine ? Math.max(0, raw) : raw;
+      html += oneLine
+        ? `<span class="lbl" style="top:${top}px"><span class="kind-glyph">☾</span> Slept until ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`
+        : `<span class="lbl" style="top:${top}px"><span class="kind-glyph">⬦</span> 😴 Sleep → ${esc(fmtTime(minToTime(SLEEP_END_MIN)))}</span>`;
     }
-    // 2026-08-06 (Linh: "the marker must show the REAL cycle day number, calculated
-    // from the cycle/period data I record in CH5 ... show it at 5am each day --
-    // not an event. Tapping it opens CH5"): own 5am slot, pointer-events re-enabled
-    // against #sleepBand's own pointer-events:none (same "poke a hole" pattern
-    // .animal-band .em.num-hover-trigger already uses), data-jump-view="cycle"
-    // reuses the app's existing global click delegate. No fallback number is shown
-    // when nothing's logged yet -- Book33CD.info() returns null and the marker
-    // stays absent, same as the numerology-bar chip.
-    // 2026-08-04 (Linh, CD pill consolidation): wears .cd-pill -- the coloured-dot/
-    // outlined-pill design that used to belong only to #periodBadge (now removed) --
-    // instead of plain bold text.
-    const cdMin = 5 * 60;
-    if (cdMin > START_MIN && cdMin < END_MIN) {
-      const cdInfo = Book33CD.info(state.anchor);
-      if (cdInfo) {
-        const top = topForMin(cdMin) - 16;
-        html += `<span class="lbl cd-mark cd-pill" style="top:${top}px;--pb-dot:var(${cdInfo.dotVar})" role="button" tabindex="0" data-cd-log title="Log this day">${esc(cdInfo.text)}</span>`;
-      }
-    }
+    // 2026-08-06 (Linh: "the marker must show the REAL cycle day number ... show it at
+    // 5am each day -- not an event. Tapping it opens CH5") built the 5am .cd-pill that
+    // used to be emitted here.
+    // 2026-08-16 (Day-page design review, item 1 — "day context is printed THREE times"):
+    // the marker is RETIRED, at every width, because every width already prints the same
+    // CD elsewhere on the same screen: mobile/tablet in #dayCtxChips (dcxChipsHtml, a
+    // "CD 10 · Luteal" chip) and desktop-day1 in #ddhChips (renderDeskDayHeader, the same
+    // chip). This removes a duplicate PRESENTATION, not the feature — the CD number, its
+    // phase, its flow-coloured dot and, crucially, the tap-to-open-CH5 affordance all
+    // survive on the chip, which now carries the same data-cd-log attribute this marker
+    // did and is handled by the same global delegate. Reverting is re-adding this block.
     el.innerHTML = html;
   }
 
@@ -20105,7 +20300,7 @@
     return compact;
   }
   // item 6 (2026-08-15 corrections pass): "Hours shown" — desktop-day1's own
-  // effective visible hour range, into module-level deskHourRange (declared
+  // effective visible hour range, into module-level hourRange (declared
   // near START_HOUR/END_HOUR). effective start = the EARLIER of
   // PREFS.dayStart (default 6) or the day's earliest scheduled item's hour;
   // effective end = the LATER of PREFS.dayEnd (default 22) or the latest
@@ -20115,8 +20310,8 @@
   // mobile/tablet never see a narrowed grid. Must run before buildHours()
   // (same ordering requirement as computeCompactHours, which every call site
   // already calls it alongside — see renderDay()).
-  function computeDeskHourRange(items) {
-    if (!deskDay1Active()) { deskHourRange = { start: START_HOUR, end: END_HOUR }; return; }
+  function computeHourRange(items) {
+    if (!hourTrimActive()) { hourRange = { start: START_HOUR, end: END_HOUR }; return; }
     const clampH = h => Math.max(START_HOUR, Math.min(END_HOUR, h));
     const dayStartPref = clampH(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6);
     const dayEndPref = Math.max(dayStartPref + 1, clampH(Number.isFinite(PREFS.dayEnd) ? PREFS.dayEnd : 22));
@@ -20131,7 +20326,7 @@
       if (sh < start) start = sh;
       if (eh > end) end = eh;
     });
-    deskHourRange = { start: clampH(start), end: Math.max(clampH(end), clampH(start) + 1) };
+    hourRange = { start: clampH(start), end: Math.max(clampH(end), clampH(start) + 1) };
   }
   // 2026-08-11 (Linh: "i want to see the birthday in day calendar as an all day
   // event"): the banner strip above the hour grid (#tlAlldayRow, sits outside
@@ -20192,12 +20387,18 @@
       // row alone still leaves that absolutely-positioned label floating, see
       // [data-desk-day1] .hour-row[data-out-of-range] CSS) — only ever true
       // for an hour that's ALSO compact (busy hours always fall inside
-      // deskHourRange by construction, see computeDeskHourRange), so this
+      // hourRange by construction, see computeHourRange), so this
       // never needs to fight a "has" row's real height.
-      const outOfRange = deskDay1Active() && (h < deskHourRange.start || h >= deskHourRange.end);
+      const outOfRange = hourTrimActive() && (h < hourRange.start || h >= hourRange.end);
       html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
     }
-    html += `<div class="hour-row" style="height:0"><span class="hour-label">${hourLabel(END_HOUR)}</span></div>`;
+    // the closing boundary label under the last row. 2026-08-16 (item 2): when the grid
+    // is trimmed this has to read the trim's own end, not a hardcoded midnight — a grid
+    // that stops at 9pm was printing "12am" beneath it. MOBILE-ONLY on purpose: the same
+    // wrong label is already live on desktop-day1 (it arrived with the 2026-08-15 "Hours
+    // shown" pass), and this task's brief is explicit that desktop must not move. Flagged
+    // for a desktop pass rather than silently fixed here.
+    html += `<div class="hour-row" style="height:0"><span class="hour-label">${hourLabel(mobileDay1Active() ? hourRange.end : END_HOUR)}</span></div>`;
     return html;
   }
   function buildHours() {
@@ -23795,9 +23996,10 @@
   // existing saved book33-prefs with only {calDays,navMode} gets all of them filled
   // in, same as navMode's own arrival did -- no second migration path.
   // dayStart/dayEnd (item 6, 2026-08-15 corrections pass): "Hours shown" —
-  // desktop-day1's own grid-row trim only (see computeDeskHourRange/compactH
-  // below), read/written by the #ddtGear popover. Defaults match the spec's
-  // "6am"/"10pm".
+  // the 1-day grid-row trim (see computeHourRange/compactH below), read/written by
+  // the #ddtGear popover (desktop) and the #dayNavGear sheet (mobile) — one pref
+  // pair, both surfaces. Defaults match the spec's "6am"/"10pm".
+  // 2026-08-16: was desktop-day1 only; mobile 1-day honours it now too.
   // 2026-08-16 (Linh: "remove hide names, doesn't serve a purpose"): the hideNames
   // key is GONE, along with its top-bar button and the widget-rail substitution it
   // drove. A stale `hideNames` left in an already-saved book33-prefs is harmless —
@@ -23838,6 +24040,18 @@
   // bare deskGridMq.matches so this self-corrects the moment that companion build
   // lands and calDaysActive() starts returning real multi-day values on desktop.
   function deskDay1Active() { return deskGridMq.matches && calDaysActive() === 1; }
+  // 2026-08-16 (mobile Day tightening): deskDay1Active()'s phone twin — the ≤640px
+  // 1-day view. Same shape, same calDaysActive() routing, so 3/5/7-day (which renders
+  // through renderMultiDayGrid's own column path) is excluded exactly as it is on
+  // desktop. mobileDayMq is declared beside deskGridMq; both are only ever read inside
+  // function bodies that run at render time, well after that declaration executes.
+  function mobileDay1Active() { return mobileDayMq.matches && calDaysActive() === 1; }
+  // 2026-08-16: the ONE gate the "Hours shown" grid trim checks. Item 6 of the
+  // 2026-08-15 desktop corrections pass built the whole mechanism (computeHourRange +
+  // compactH's literal 0) but gated it on deskDay1Active(), so a phone still rendered
+  // four dead rows from 3am. Widening the gate here is the entire mobile half of the
+  // feature — nothing about START_HOUR/END_HOUR, topForMin() or any consumer changes.
+  function hourTrimActive() { return deskDay1Active() || mobileDay1Active(); }
   // the narrower of the two 1-day-only breakpoints (§6): wide enough to show the
   // widget rail as its own column. Below this (1024–1199px) the rail is dropped
   // and its cards fall back to a block under the grid instead (see
@@ -24295,13 +24509,35 @@
     const chips = [];
     const mIdx = moonIndex(d);
     chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx] });
+    // 2026-08-16 (mobile Day tightening, item 1): SUN SIGN joins the strip. It used to
+    // print only in the header's own #numGroupStrip (#dayAstroBits' bare ♌ glyph) —
+    // that whole strip is hidden on mobile now (see its CSS gate), so the strip carries
+    // the reading instead, and as a NAME rather than a tap-only glyph. Same astroFor(d)
+    // call renderDay()'s header and #ddhChips already make; no new calculation, and the
+    // strip now matches the desktop day header chip-for-chip.
+    const a = astroFor(d);
+    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name });
     const pl = planetOf(d);
     chips.push({ ic: glyphHtml(pl.icon, "dcx-chip-ic"), val: pl.planet });
     const q = cycleQuickInfo(TODAY);
-    if (q) chips.push({ ic: `<span class="dcx-chip-ic" aria-hidden="true">${(q.info && q.info.icon) || "🌸"}</span>`, val: `CD ${q.cd}` });
+    // 2026-08-16 (item 1): two changes, both so this ONE chip can replace the retired
+    // 5am grid marker (renderSleepBand) outright.
+    //  · the phase word is merged in — "CD 10 · Luteal", the same label/casing
+    //    #ddhChips and the Cycle widget card already build from q.phase.
+    //  · data-cd-log/role/tabindex/title are the marker's own attributes, moved here
+    //    verbatim, so "tapping it opens CH5" is preserved by the same global click
+    //    delegate that served the marker (and #numGrpCd, and the week/month CD cells).
+    if (q) {
+      const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
+      chips.push({
+        ic: `<span class="dcx-chip-ic" aria-hidden="true">${(q.info && q.info.icon) || "🌸"}</span>`,
+        val: `CD ${q.cd}${phaseLbl ? ` · ${phaseLbl}` : ""}`,
+        tap: true,
+      });
+    }
     const bdays = birthdaysOn(d);
     if (bdays.length) chips.push({ ic: `<span class="dcx-chip-ic" aria-hidden="true">🎂</span>`, val: bdays.length === 1 ? bdays[0].name : `${bdays[0].name} +${bdays.length - 1}` });
-    return chips.map(c => `<span class="dcx-chip">${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span></span>`).join("");
+    return chips.map(c => `<span class="dcx-chip"${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span></span>`).join("");
   }
   // fills the chip strip + the progress row (both cheap, non-ticking -- called once
   // per renderDay()). The fasting row is deliberately a separate function/container
@@ -24417,7 +24653,12 @@
     // as — see layerTopOffset()'s own comment for why this matters.
     mdRendering = false;
     const d = state.anchor, k = keyOf(d);
-    document.getElementById("theDayDateLbl").textContent = `${WD_FULL[dowIndex(d)]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+    document.getElementById("theDayDateLbl").textContent = dayDateLabel(d);
+    // 2026-08-16 (item 3): the merged mobile nav row's own centre label — the SAME
+    // formatter, long-month variant, so there is one date-formatting function for
+    // both rather than a second hand-rolled template string. Hidden ≥641px.
+    const stepDateEl = document.getElementById("dayStepDate");
+    if (stepDateEl) stepDateEl.textContent = dayDateLabel(d, true);
     // 2026-08-04: moved up from further below (where `timed` used to live right before
     // renderTimeline(timed) consumed it) — computeCompactHours() needs the day's real
     // item list BEFORE buildHours() runs, since buildHours() is what actually reads
@@ -24492,9 +24733,9 @@
     const timed = dayEvents.filter(e => !e.allDay && e.start);
     renderAlldayRow(alldayBdays);
     // item 6 (2026-08-15 corrections pass): must run BEFORE computeCompactHours,
-    // which is what actually turns deskHourRange into real 0-height rows via
+    // which is what actually turns hourRange into real 0-height rows via
     // compactH(h) — see its own comment.
-    computeDeskHourRange(timed);
+    computeHourRange(timed);
     // 2026-08-04 (Linh: "hours size to their content automatically"): see this
     // function's own comment near buildHours() for exactly what "compact" means here.
     computeCompactHours(timed);
@@ -24767,6 +25008,12 @@
     // its own comment for why this has to run after the single-day body above,
     // not interleaved with it.
     renderCalDaysUI();
+    // 2026-08-16 (item 4): the widget rail's only caller was placeDeskGrid()'s
+    // DESKTOP branch, which never runs on a phone — so the mobile "Today's widgets"
+    // block needs its own once-per-render call. Width-gated rather than unconditional
+    // so desktop's render path is byte-for-byte what it was (placeDeskGrid still owns
+    // it there, and a second call would rebuild an open Arrange popover mid-tap).
+    if (mobileDayMq.matches) renderDeskWidgetRail();
   }
 
   // quick-jump mini month calendar, toggled from the month pill in the Day page header
@@ -31982,7 +32229,12 @@
   // 2026-08-14 (§1 multi-day calendar): the 1/3/5/7 picker next to the day-nav —
   // writes book33-prefs.calDays and re-renders; renderCalDaysUI() (end of
   // renderDay()) does the actual show/hide + column build.
-  document.getElementById("calDaysPicker").addEventListener("click", e => {
+  // 2026-08-16 (item 3): promoted from a #calDaysPicker-scoped listener to a document
+  // delegate, so the identical picker rendered inside the mobile ⚙ sheet
+  // (renderDdtGearPop) is driven by this one handler rather than a second copy. Both
+  // sets of buttons carry data-cal-days + .cal-days-btn, so renderCalDaysUI() already
+  // paints both; this makes the click side match.
+  document.addEventListener("click", e => {
     const btn = e.target.closest("[data-cal-days]");
     if (!btn) return;
     const n = parseInt(btn.dataset.calDays, 10);
@@ -32875,6 +33127,12 @@
        top   ← the B33 logo + icon toolbar join .nav-tiers; #deskHead hides
      ============================================================ */
   const deskGridMq = window.matchMedia("(min-width: 1024px)");
+  // 2026-08-16 (mobile Day tightening): the phone breakpoint as a live MediaQueryList,
+  // read by mobileDay1Active(). Same 640px cutoff MOBILE_MQ/isMobile() use in the
+  // sync-module closure below — that one isn't reachable from this closure (see
+  // placeMiniCalDesk()'s own note about exactly this), hence a second declaration
+  // rather than a cross-closure call.
+  const mobileDayMq = window.matchMedia("(max-width: 640px)");
   function placeDeskGrid() {
     const grid = document.getElementById("deskGrid");
     const dayLayout = document.querySelector("#dayPage .day-layout");
@@ -33028,7 +33286,18 @@
       // branch's home for it above) back to its true default spot in #dayRow2 — same
       // marker-return pattern as railHome just above. placeMiniCalDesk() (its own,
       // older resize listener) then takes over from here for the 641-1023px band.
-      if (dsbSideHome && miniCalWrap && dsbSideHome.nextElementSibling !== miniCalWrap) dsbSideHome.after(miniCalWrap);
+      // 2026-08-16 REGRESSION FIX (found while measuring mobile header chrome): this
+      // was unconditional, so it fired on EVERY renderDay()/resize below 1024px and
+      // yanked the mini calendar out of the mobile date dropdown — where
+      // placeDateLine()'s own mobile branch deliberately puts it — straight back into
+      // #dayRow2. #dayRow2 is itself reparented into the 30px header slot on mobile,
+      // so the result was a permanently-expanded 232px month grid wedged into the
+      // header, on every phone load, pushing the hour grid that much further down.
+      // The two placers were fighting exactly the way placeMiniCalDesk()'s own
+      // 2026-08-06 comment describes, just via a newer third party. Scoped to the ONE
+      // case Bug 1 was actually about — the calendar genuinely stranded inside the
+      // (now hidden) desktop sidebar slot — so the dropdown keeps ownership on mobile.
+      if (dsbSideHome && miniCalWrap && miniCalWrap.parentElement === dsbMiniSlot) dsbSideHome.after(miniCalWrap);
       if (dayStepRowHome && dayStepRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow);
       // STEP 5: return each piece to its own home anchor inside .day-main —
       // independent of dayMain's own move below, same as every other anchor pair here.
@@ -33154,39 +33423,62 @@
      heavier system built for a different job, and "just the two hour fields"
      is explicitly the spec's own scope here. */
   let ddtGearOpen = false;
+  // 2026-08-16 (mobile Day tightening, item 3): ONE gear popover, two mount points.
+  // Whichever gear button is actually on screen at this width anchors it — #ddtGear in
+  // the desktop top bar, #dayNavGear in the merged mobile nav row. offsetParent is null
+  // whenever an ancestor is display:none, so this reads REAL visibility instead of
+  // re-deriving the breakpoint (and can never disagree with the CSS). Deliberately not
+  // a second settings UI: same flag, same markup, same change/outside-click handlers.
+  function gearAnchorEl() {
+    const mob = document.getElementById("dayNavGear");
+    if (mob && mob.offsetParent) return mob;
+    const desk = document.getElementById("ddtGear");
+    return desk && desk.offsetParent ? desk : null;
+  }
   function renderDdtGearPop() {
-    const btn = document.getElementById("ddtGear");
+    const btn = gearAnchorEl();
     document.getElementById("ddtGearPop")?.remove();
+    document.querySelectorAll("#ddtGear, #dayNavGear").forEach(b => b.setAttribute("aria-expanded", String(!!(ddtGearOpen && b === btn))));
     if (!btn || !ddtGearOpen) return;
     const hourOpts = sel => {
       let html = "";
       for (let h = START_HOUR; h <= END_HOUR; h++) html += `<option value="${h}"${h === sel ? " selected" : ""}>${hourLabel(h)}</option>`;
       return html;
     };
+    // the 1/3/5/7 picker only appears in the sheet where its own inline row is hidden
+    // (≤640px, item 3) — desktop's top bar has #ddtDays for this and must not grow a
+    // second copy. These buttons carry the SAME data-cal-days attribute and .cal-days-btn
+    // class as the inline row, so renderCalDaysUI() paints their pressed state and the
+    // delegated [data-cal-days] handler drives them — no duplicated logic or state.
+    const showDays = btn.id === "dayNavGear";
     const pop = document.createElement("div");
     pop.className = "ddt-gear-pop";
     pop.id = "ddtGearPop";
     pop.innerHTML = `
+      ${showDays ? `<div class="ddt-gear-row ddt-gear-row--days"><span>Days shown</span>
+        <span class="cal-days-picker" role="group" aria-label="Days shown">${[1, 3, 5, 7].map(n => `<button type="button" class="cal-days-btn" data-cal-days="${n}" aria-label="${n} day${n === 1 ? "" : "s"}">${n}</button>`).join("")}</span></div>` : ""}
       <div class="ddt-gear-row"><span>Day starts at</span><select id="ddtDayStartSel">${hourOpts(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6)}</select></div>
       <div class="ddt-gear-row"><span>Day ends at</span><select id="ddtDayEndSel">${hourOpts(Number.isFinite(PREFS.dayEnd) ? PREFS.dayEnd : 22)}</select></div>
       <button type="button" class="ddt-gear-link" id="ddtGearNotify">Notification settings →</button>`;
     btn.parentElement.style.position = "relative";
     btn.parentElement.appendChild(pop);
+    if (showDays) renderCalDaysUI();
   }
-  document.getElementById("ddtGear")?.addEventListener("click", () => {
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#ddtGear, #dayNavGear")) return;
     ddtGearOpen = !ddtGearOpen;
     renderDdtGearPop();
   });
   document.addEventListener("click", e => {
     if (e.target.closest("#ddtGearNotify")) {
       ddtGearOpen = false;
-      document.getElementById("ddtGearPop")?.remove();
+      renderDdtGearPop();
       state.view = "notify"; render();
       return;
     }
-    if (ddtGearOpen && !e.target.closest(".ddt-gear-pop") && !e.target.closest("#ddtGear")) {
+    if (ddtGearOpen && !e.target.closest(".ddt-gear-pop") && !e.target.closest("#ddtGear, #dayNavGear")) {
       ddtGearOpen = false;
-      document.getElementById("ddtGearPop")?.remove();
+      renderDdtGearPop();
     }
   });
   document.addEventListener("change", e => {
@@ -33228,7 +33520,11 @@
     if (q) {
       const cdi = Book33CD.info(TODAY);
       const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
-      chips.push(`<span class="ddh-chip"><span class="ddh-cycle-dot" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span>CD ${q.cd}${phaseLbl ? " · " + esc(phaseLbl) : ""}</span></span>`);
+      // 2026-08-16 (item 1): data-cd-log moved here from the retired 5am grid marker
+      // (renderSleepBand) — desktop-day1 hides #dayCtxChips, so this is the chip that
+      // has to carry "tapping the CD opens CH5" at this breakpoint. Same attribute,
+      // same global delegate, no new handler.
+      chips.push(`<span class="ddh-chip" role="button" tabindex="0" data-cd-log title="Log this day"><span class="ddh-cycle-dot" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span>CD ${q.cd}${phaseLbl ? " · " + esc(phaseLbl) : ""}</span></span>`);
     }
     chipsEl.innerHTML = chips.join("");
   }
@@ -33403,16 +33699,19 @@
     }
     return "";
   }
+  // 2026-08-16 (item 4): #wrMobileCards joins #wrCards/#wrFallback as a third mount for
+  // the SAME html — the ≤640px "Today's widgets" block under the calendar. Exactly the
+  // existing "one render, several containers, CSS shows one" shape; no branch, no second
+  // ordering/visibility path, no recomputation. streaksWidget finally has a real DOM
+  // element at mobile widths through this, which is what the TILE_DEFS note asked for.
   function renderDeskWidgetRail() {
-    const cardsEl = document.getElementById("wrCards");
-    const fallbackEl = document.getElementById("wrFallback");
-    if (!cardsEl && !fallbackEl) return;
+    const mounts = ["wrCards", "wrFallback", "wrMobileCards"].map(id => document.getElementById(id)).filter(Boolean);
+    if (!mounts.length) return;
     const ordered = WR_WIDGET_IDS.slice()
       .sort((a, b) => ((TILE_PREFS[a] || {}).ord ?? 99) - ((TILE_PREFS[b] || {}).ord ?? 99))
       .filter(id => !(TILE_PREFS[id] || {}).hidden);
     const html = ordered.map(wrCardHtml).join("");
-    if (cardsEl) cardsEl.innerHTML = html;
-    if (fallbackEl) fallbackEl.innerHTML = html;
+    mounts.forEach(el => { el.innerHTML = html; });
     renderWrArrangePop();
   }
   // Arrange popover — scoped to this rail, a visibility checkbox per widget
@@ -33420,8 +33719,18 @@
   // in-code "task #132" comment describes — only what this rail's own
   // acceptance bullet needs.
   let wrArrangeOpen = false;
+  // 2026-08-16 (item 4): same "whichever button is actually on screen" resolution
+  // gearAnchorEl() uses for the ⚙ sheet — #wrArrangeBtn in the desktop rail head,
+  // #wrArrangeBtnM in the mobile block's head. offsetParent is null under any
+  // display:none ancestor, so this reads real visibility rather than the breakpoint.
+  function wrArrangeAnchorEl() {
+    const mob = document.getElementById("wrArrangeBtnM");
+    if (mob && mob.offsetParent) return mob;
+    const desk = document.getElementById("wrArrangeBtn");
+    return desk && desk.offsetParent ? desk : null;
+  }
   function renderWrArrangePop() {
-    const btn = document.getElementById("wrArrangeBtn");
+    const btn = wrArrangeAnchorEl();
     document.getElementById("wrArrangePop")?.remove();
     if (!btn || !wrArrangeOpen) return;
     const pop = document.createElement("div");
@@ -33434,7 +33743,9 @@
     btn.parentElement.style.position = "relative";
     btn.parentElement.appendChild(pop);
   }
-  document.getElementById("wrArrangeBtn")?.addEventListener("click", () => {
+  // delegated (2026-08-16, item 4) so both Arrange buttons drive the one popover
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#wrArrangeBtn, #wrArrangeBtnM")) return;
     wrArrangeOpen = !wrArrangeOpen;
     renderWrArrangePop();
   });
@@ -33447,7 +33758,7 @@
     renderDeskWidgetRail();
   });
   document.addEventListener("click", e => {
-    if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn")) {
+    if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn, #wrArrangeBtnM")) {
       wrArrangeOpen = false;
       document.getElementById("wrArrangePop")?.remove();
     }
@@ -38927,7 +39238,19 @@
     e.preventDefault();
     const input = document.getElementById("quickAddInput");
     const raw = input.value;
-    if (!raw.trim()) return;
+    // 2026-08-16 (mobile Day tightening, item 3): an EMPTY submit used to be a dead
+    // no-op. On phone widths the submit button isn't the word "Add" — CSS turns it into
+    // a bare round "+" (see .quick-add .qa-btn:not(.qa-secondary)::after in the ≤640px
+    // block) — and item 3 retires the separate "+ Add to this day" row on the promise
+    // that "the command bar's + already does it". Checked before relying on it: it did
+    // NOT; it only ever submitted typed text. This is what makes that true. Mobile-only,
+    // so pressing Enter on an empty field at desktop widths still does exactly nothing,
+    // and it opens the SAME openForm(null) #addBtn's own listener calls — no second
+    // add flow. #addBtn itself is only hidden, so desktop is untouched either way.
+    if (!raw.trim()) {
+      if (mobileDayMq.matches && state.view === "day") openForm(null);
+      return;
+    }
     // explicit search wording goes straight to results
     if (/^(?:find|search(?: for)?|look for)\s+/i.test(raw)) { qaSearch(raw); return; }
     if (qaTryNavigate(raw)) { input.value = ""; return; }
@@ -42504,6 +42827,17 @@
   // and the toggle must follow width changes even on a signed-out/offline session.
   // (addEventListener with the same fn+type is idempotent, so go()'s add is harmless.)
   window.addEventListener("resize", placeThemeToggle);
+  // 2026-08-16 REGRESSION FIX (found verifying the desktop->mobile resize return path):
+  // placeDateLine's OWN resize listener lives only inside go(), which never runs on a
+  // signed-out/offline session — exactly the caveat the comment above already flags for
+  // placeThemeToggle. The boot-time call covers a page LOADED at phone width, but coming
+  // DOWN from desktop, placeDeskGrid()'s "off" branch returns #miniCalWrap to #dayRow2
+  // and nothing was left to hand it on to the date dropdown, so the mini calendar stayed
+  // wedged (expanded, ~230px tall) in the 30px header slot until the next reload.
+  // Registering here closes that half of the cycle. Order is right by construction:
+  // placeDeskGrid's listener is registered in the main IIFE further up the file, so it
+  // always fires BEFORE this one and this one gets the last word.
+  window.addEventListener("resize", placeDateLine);
   // 2026-08-06 (Linh: "move the online button to bottom right of mobile screen page"):
   // SUPERSEDES the mobile-only early-return + every earlier "live inside the header row"
   // placement this dot has cycled through (.nav-tiers, .topbar-right, .toprow) — now a
