@@ -13,8 +13,83 @@
 <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
 <link rel="icon" href="./icon-512.png" sizes="512x512" type="image/png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<!-- 2026-08-15 (Day mode, Phase 1) — THEME RESOLUTION, BEFORE FIRST PAINT.
+     This must stay here: above the splash <style> and above the app's own <style>, and
+     synchronous, so data-theme is on <html> before anything renders. Doing it in the main
+     app IIFE (where it used to live, ~14k lines down) is far too late to prevent a
+     flash of the wrong theme.
+
+     VOCABULARY: the Day-mode spec calls the two themes "Night" and "Day". This codebase
+     has always called them data-theme="dark" and data-theme="light", and those values are
+     deliberately NOT renamed — ~23 existing CSS rules and every stored preference key off
+     them. So: spec "Night" === "dark", spec "Day" === "light". Day mode REPLACES the old
+     warm-cream light theme (Linh, 2026-08-15, after a live side-by-side) — two themes
+     total, not three, and ONE storage key.
+
+     STORAGE: "book33-theme" holds "dark" | "light" | "auto". Default "dark" — an existing
+     stored "dark"/"light" keeps working untouched. "auto" follows prefers-color-scheme and
+     updates live (the matchMedia listener at the bottom). The spec's suggested second store
+     `book33-prefs.theme` is deliberately NOT introduced: two theme stores would mean two
+     sources of truth and conflicting data-theme values. -->
+<script>
+(function () {
+  var KEY = "book33-theme";
+  var VALID = { dark: 1, light: 1, auto: 1 };
+  function read() {
+    try {
+      var v = localStorage.getItem(KEY);
+      // the daybook- -> book33- key migration runs much later in the app script; read the
+      // legacy key here too so a first boot on an old profile doesn't flash the default.
+      if (v == null) v = localStorage.getItem("daybook-theme");
+      return VALID[v] ? v : "dark";
+    } catch (e) { return "dark"; }
+  }
+  var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function resolve(p) { return p === "auto" ? (mq && mq.matches ? "dark" : "light") : p; }
+  function apply(p) {
+    var t = resolve(p);
+    document.documentElement.dataset.theme = t;
+    // the PWA/status-bar colour is chrome too — without this the standalone app keeps a
+    // near-black status bar behind a white page in Day mode.
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute("content", t === "dark" ? "#0B0D12" : "#F2F2F2");
+  }
+  apply(read());
+  window.B33Theme = {
+    KEY: KEY,
+    // the live prefers-color-scheme query "auto" resolves against. Exposed so nothing else
+    // has to build a second MediaQueryList to ask the same question (a second one would
+    // have its own listeners and its own lifetime), and so the auto path is testable.
+    sys: mq,
+    // the stored PREFERENCE ("dark" | "light" | "auto")
+    pref: read,
+    // the RESOLVED theme actually on screen ("dark" | "light") — what the header icon shows
+    resolved: function () { return document.documentElement.dataset.theme === "light" ? "light" : "dark"; },
+    set: function (p) {
+      if (!VALID[p]) p = "dark";
+      try { localStorage.setItem(KEY, p); } catch (e) {}
+      apply(p);
+      if (typeof window.__b33ThemeChanged === "function") window.__b33ThemeChanged();
+    }
+  };
+  if (mq) {
+    var onSysChange = function () {
+      if (read() !== "auto") return;
+      apply("auto");
+      if (typeof window.__b33ThemeChanged === "function") window.__b33ThemeChanged();
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onSysChange);
+    else if (mq.addListener) mq.addListener(onSysChange);   // Safari < 14
+  }
+})();
+</script>
 <!-- ONLINE SYNCED BOOK33 BUILD - generated from Book33.html by build-book33-synced.ps1; do not hand-edit -->
-<style id="book33-splash">html{background:#17131f}body{visibility:hidden}html::before{content:"Book33";position:fixed;inset:0;z-index:2147483500;background:#17131f;color:#d8b979;display:flex;align-items:center;justify-content:center;font-family:Georgia,"Cormorant Garamond",serif;font-size:34px;font-weight:600;letter-spacing:.01em}</style>
+<!-- 2026-08-15 (Day mode, Phase 1): the splash was a fixed dark-purple panel regardless of
+     theme. That is itself a flash of the wrong theme in Day mode (dark purple -> white the
+     instant the app renders), so it takes a Day pair: --desk's #F2F2F2 ground with near-black
+     ink, so the handover is invisible. Night is byte-for-byte unchanged. The data-theme
+     attribute is already on <html> by the time this parses (see the script above). -->
+<style id="book33-splash">html{background:#17131f}body{visibility:hidden}html::before{content:"Book33";position:fixed;inset:0;z-index:2147483500;background:#17131f;color:#d8b979;display:flex;align-items:center;justify-content:center;font-family:Georgia,"Cormorant Garamond",serif;font-size:34px;font-weight:600;letter-spacing:.01em}html[data-theme="light"]{background:#F2F2F2}html[data-theme="light"]::before{background:#F2F2F2;color:#111111}</style>
 <script>/* hard fail-safe only -- the real splash-clear happens the instant the app finishes
    its first render from localStorage (see the end of the main app script). This timer
    is just a backstop in case that never runs (a JS error before it, etc.) so the splash
@@ -252,6 +327,18 @@
     --radius-sm: 10px;
     --radius-md: 16px;
     --radius-lg: 22px;
+    /* 2026-08-15 (Day mode, Phase 1) — the one genuinely NEW token this pass adds, because
+       nothing existing could express it: a calendar-block corner radius that differs PER
+       THEME. Every other radius in the app is theme-independent, so --radius-sm/md/lg can't
+       carry it. CLAUDE.md's rule is "radii come from tokens, never a literal px in a
+       component" — this is that token, which is why Day's value (3px, per the Day-mode spec:
+       square-ish reads correctly in a light clinical layout, 8px pills look soft and out of
+       place) is allowed to sit off the 4/8/12/16/24/32 SPACING scale. That scale governs
+       margins/padding/gaps, not radii.
+       Night deliberately keeps the app's CURRENT values (10px desktop, --radius-md on phone,
+       via the max-width:640px override further down) rather than the spec's suggested 8px:
+       the standing rule is that nothing changes in her default theme until she chooses Day. */
+    --blk-radius: var(--radius-sm);
   }
 
   /* ---- Ink & Brass — Night pair (OS prefers dark, no explicit toggle yet) ---- */
@@ -328,21 +415,81 @@
     --sky-day: rgba(217, 169, 63, 0.07);
     --dl-num: #EAC24E; --dl-day: #EFE7D6; --dl-small: #9C8F79; --dl-sep: #5F5645;
   }
-  /* 2026-08-03 (Linh: "yes i want light mode back"): restored from the last state it
-     was in before the 2026-08-02 dark-only removal (recovered via `git show 9323dfa`
-     on Book33.html, the commit that deleted it) -- these are the SAME values, already
-     the flat-neutral GCal-clean palette from her own "keep light, go neutral" pass, not
-     the earlier ornate gold-wash version. Restored as-is rather than redesigned, since
-     this was the last approved state, not a fresh design decision. */
+  /* ══════════════════════════════════════════════════════════════════════════════
+     DAY MODE — 2026-08-15, Phase 1 (architecture + tokens).
+     SUPERSEDES the 2026-08-03 "warm cream light mode" that used to live in this block.
+     Linh decided on 2026-08-15, after being shown a live side-by-side, that Day mode
+     REPLACES the light theme rather than joining it: two themes total, not three, one
+     storage key (book33-theme), and the attribute values stay "dark"/"light" (the
+     Day-mode spec's "Night"/"Day" are the same two things under different names —
+     renaming them would orphan every data-theme= rule in this file and every stored
+     preference).
+
+     GOVERNING IDEA — chrome is black, content is white, colour is only ever her data.
+     That single rule replaces gold's STRUCTURAL job. In Night, --margin-rule (gold)
+     carries headings, active states and primary actions; in Day, BLACK does that work,
+     which is why --margin-rule resolves to near-black here and --accent-on flips to
+     white. Gold survives in exactly one place — the BOOK33 wordmark on the black band
+     (Phase 2) — because without it the theme reads as a generic admin tool.
+     This is NOT the dark palette inverted: the two themes distribute colour differently
+     on purpose.
+
+     TOKEN MAP (Day-mode spec's invented names -> the real token that already does that
+     job here; the spec's vocabulary does not exist in this codebase and is deliberately
+     not introduced as a parallel set):
+        spec --bg          -> --desk        #F2F2F2
+        spec --surface     -> --paper       #FFFFFF
+        spec --raised      -> --note-bg     #F7F7F7   (the app's own --raised is a derived
+                                                       6%-of-ink overlay and re-resolves
+                                                       by itself — left untouched)
+        spec --field       -> --field-bg    #EDEDED
+        spec --ink         -> --ink         #333333
+        spec --muted       -> --ink-soft    #6B6B6B
+        spec --faint       -> --ink-faint   #8D8D8D
+        spec --accent      -> --margin-rule #111111   <- THE structural change
+        spec --accent-text -> --accent-on   #FFFFFF
+        spec --line        -> --note-line   #DCDCDC
+        spec --grid        -> --paper-line  #EFEFEF
+        spec --danger      -> --danger      #B3364A
+        spec --blk-ink     -> --track-text  (already #FFFFFF in both themes — no change)
+        spec --blk-radius  -> --blk-radius  (genuinely new; see its note in :root)
+        spec --band/--band-ink, --chip-ok-*  -> NOT added: they belong to the header band
+                                                and status chips, which are Phase 2
+                                                component work, not tokens anything
+                                                currently consumes.
+     ══════════════════════════════════════════════════════════════════════════════ */
   :root[data-theme="light"] {
-    --desk: #EFE3CC; --paper: #FBF6EC; --note-bg: #F5EEDD; --field-bg: #F7F1E2;
-    --ink: #2A2015; --ink-soft: #5C4F3C; --ink-faint: #8A7D68; --ink-bright: #15100A;
+    --desk: #F2F2F2; --paper: #FFFFFF; --note-bg: #F7F7F7; --field-bg: #EDEDED;
+    --ink: #333333; --ink-soft: #6B6B6B; --ink-faint: #8D8D8D; --ink-bright: #111111;
     --jewel-mix: 14%;
     --tone-mix: var(--ink);
-    --shadow: 0 1px 2px rgba(14,22,33,0.05), 0 4px 16px -6px rgba(14,22,33,0.12);
-    --page-shadow: 0 1px 3px rgba(14,22,33,0.06), 0 18px 48px -24px rgba(14,22,33,0.32);
-    --mochi-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 -8px 18px rgba(14,22,33,0.05) inset, 0 12px 28px -14px rgba(14,22,33,0.18);
-    --accent-on: #1A1508;  /* gold accent needs dark text for contrast, even in light theme where --paper is white */
+    /* neutral-grey shadows — the old ones were mixed off a blue-grey (14,22,33); on a
+       pure-white surface that reads as a faint blue cast rather than a shadow. */
+    --shadow: 0 1px 2px rgba(0,0,0,0.05), 0 4px 16px -6px rgba(0,0,0,0.12);
+    --page-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 18px 48px -24px rgba(0,0,0,0.28);
+    --mochi-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 -8px 18px rgba(0,0,0,0.04) inset, 0 12px 28px -14px rgba(0,0,0,0.16);
+    /* THE structural repoint. Overrides the derived gold formula in :root — every
+       var(--margin-rule) consumer in the file (headings, active states, primary
+       actions, rules, the routine ↻, the header date number) turns near-black in Day
+       with no per-component change anywhere. --accent-on is "text ON an accent fill",
+       so it flips from near-black to white to match: #FFFFFF on #111111 = 18.9:1. */
+    --margin-rule: #111111;
+    --accent-on: #FFFFFF;
+    /* separation on white has to come from LINES, not tone — a tonal step that reads
+       fine on a dark ground disappears entirely against #FFFFFF. */
+    --note-line: #DCDCDC;
+    --paper-line: #EFEFEF;
+    /* Day's crimson, per the spec. This is a deliberate, scoped exception to the
+       2026-08-08 "one fixed --danger for the whole app, not re-themed per light/dark"
+       decision: #DB4B4B was picked against a near-black ground and goes shrill on
+       white. Night's #DB4B4B is untouched. */
+    --danger: #B3364A;
+    /* square-ish calendar blocks — see --blk-radius' own note in :root */
+    --blk-radius: 3px;
+    /* an unassigned/custom track's fill needs the same >=4.5:1-on-white treatment every
+       category colour gets (see colorDay in the script) — the raw #6B6152 is a Night
+       value chosen against a near-black grid. */
+    --track-fallback: #564E42;
     /* explicit light toggle must also beat @media(prefers-color-scheme:dark)'s own
        --dl-* -- same reasoning as every other token above: without this, a device
        whose OS prefers dark but is manually toggled to light here would still show
@@ -441,10 +588,18 @@
      decoration on Book33 mobile" order, and this file only ever renders at phone
      widths, so it would have been inert dead weight either way. Flag if desktop should
      get it back too. */
+  /* 2026-08-15 (Day mode, Phase 1): the phone-width light override that used to sit here
+     (--desk #F1F0EE / --paper #FFFFFF / --note-bg #F6F6F5 / --field-bg #FBFBFA) is GONE.
+     It existed only to neutralise the old warm-cream light palette on phones; the Day-mode
+     block above is already flat neutral at every width, and its --field-bg #EDEDED (a real
+     inset field tone) was being overwritten with a near-white #FBFBFA at exactly the widths
+     that matter most, flattening every input back into its card.
+     What DOES still vary by width is the calendar-block radius: Night keeps the app's
+     existing phone value (--radius-md) so nothing changes in her default theme, while Day's
+     3px comes from the higher-specificity :root[data-theme="light"] block above and wins at
+     every width regardless of source order. */
   @media (max-width: 640px) {
-    :root[data-theme="light"] {
-      --desk: #F1F0EE; --paper: #FFFFFF; --note-bg: #F6F6F5; --field-bg: #FBFBFA;
-    }
+    :root { --blk-radius: var(--radius-md); }
   }
   /* the quick-add bar was hardcoded dark (#1D1710 etc.) regardless of theme -- correct
      visually while light mode itself was warm/dark-adjacent gold, wrong now light mode
@@ -3092,8 +3247,12 @@
   }
   .events-layer { position: absolute; top: 0; left: var(--gutter); right: 0; bottom: 0; z-index: 2; cursor: copy; }
   .events-layer .tl-item { cursor: default; }
+  /* 2026-08-15 (Day mode, Phase 1): the radius is a TOKEN now (--blk-radius), not a literal
+     — it is the one value the Day-mode spec needs to differ per theme. Resolves to the
+     app's existing 10px in Night (and --radius-md at phone widths, see the media block near
+     :root), 3px in Day. */
   .tl-item {
-    position: absolute; left: 4px; right: 4px; border-radius: 10px;
+    position: absolute; left: 4px; right: 4px; border-radius: var(--blk-radius);
     padding: 8px 12px; overflow: hidden; display: flex; flex-direction: column; gap: 1px;
     /* 2026-07-31: the 2026-07-26 "raised/3D" drop-shadow + rim-light was more of the same
        depth-language the mockup doesn't use — solid flat fill, no shadow, matching every
@@ -3125,7 +3284,10 @@
      one tap deeper. The done-tick stays on the card itself since ticking things off
      while glancing at the day is real daily use, not decoration. */
   @media (max-width: 640px) {
-    .tl-item, .tl-item[data-kind="event"] { border-radius: var(--radius-md); padding: 8px 12px; gap: 2px; }
+    /* 2026-08-15: the phone radius moved onto --blk-radius itself (see the media block
+       near :root) so it can differ per theme — the value at this width is unchanged in
+       Night (--radius-md); only padding/gap are set here now. */
+    .tl-item, .tl-item[data-kind="event"] { padding: 8px 12px; gap: 2px; }
     .tl-item .tl-title { font-size: 15px; line-height: 1.3; }
     .tl-item .tl-meta { font-size: 11.5px; font-weight: 500; opacity: 0.85; }
     .tl-point { flex-direction: column; align-items: stretch; min-height: 0; padding: 8px 12px; gap: 2px; }
@@ -3621,7 +3783,10 @@
      "every box soft-cornered, no exceptions" rule) and, since 2026-07-27, tick off the
      same as the other two -- "no tick" was never true past that point, just a stale
      line in this comment that outlived the code it described. */
-  .tl-item[data-kind="event"] { border-radius: 10px; }
+  /* 2026-08-15: same --blk-radius token as .tl-item's base rule. This selector is one step
+     more specific than .tl-item, so it has to read the token too or it would pin events to
+     10px in Day and at phone widths, where the base rule has moved on. */
+  .tl-item[data-kind="event"] { border-radius: var(--blk-radius); }
   .tl-item[data-kind="routine"] .recur { color: var(--margin-rule); }
   /* 2026-08-02 (Linh's GCal reference — "use this when i select event"): tapping ANY
      timeline item now opens the #tlDetailOverlay sheet (see its markup/CSS near
@@ -13123,6 +13288,25 @@
       <h1>🎨 Categories</h1>
     </div>
     <p class="nt-intro">Rename, recolour, add or remove a part of life or its sub-categories — every block, chip, dot and legend in Book33 reads its colour from here.</p>
+    <!-- 2026-08-15 (Day mode, Phase 1): the Night / Day / Auto choice. This page is the
+         app's settings home for anything to do with colour ("One source of truth for every
+         colour"), and there is no other global Settings page in this file — so the theme
+         preference lives with the palette rather than in a new page of its own.
+         Built from the pattern the file's ONE existing settings row already uses (the Cycle
+         page's "What counts as day 1"): .section-head + .cyc-settings + .cyc-settings-label
+         + a .track-picker / .track-opt segmented control driven by aria-pressed. No new
+         control type invented; .track-opt already carries the 44px mobile tap target. -->
+    <div class="section-head"><h2>Appearance</h2><span class="rule"></span></div>
+    <div class="cyc-settings" id="themeModeRow">
+      <span class="cyc-settings-label">Theme</span>
+      <div class="track-picker" id="themeModePicker" role="group" aria-label="Theme">
+        <button type="button" class="track-opt" data-theme-mode="dark" aria-pressed="false">Night</button>
+        <button type="button" class="track-opt" data-theme-mode="light" aria-pressed="false">Day</button>
+        <button type="button" class="track-opt" data-theme-mode="auto" aria-pressed="false">Auto</button>
+      </div>
+      <span class="footnote" id="themeModeNote" style="text-align:left;max-width:none;margin:0">Auto follows your phone or computer's own light/dark setting, and changes with it.</span>
+    </div>
+    <div class="section-head" style="margin-top:24px"><h2>Categories &amp; colours</h2><span class="rule"></span></div>
     <div id="catBody"></div>
   </div>
 
@@ -14087,9 +14271,12 @@
 
   // 2026-08-03 (Linh: "yes i want light mode back"): restored -- dark, high-contrast
   // by default, a manually saved preference (the toggle button) wins over that default.
-  const THEME_KEY = "book33-theme";
-  const savedTheme = localStorage.getItem(THEME_KEY);
-  document.documentElement.dataset.theme = savedTheme || document.documentElement.dataset.theme || "dark";
+  // 2026-08-15 (Day mode, Phase 1): the READ + APPLY that used to happen here has moved
+  // into the synchronous inline script in <head> — running it this far down the file was
+  // guaranteed to paint at least once with the wrong theme. This is now just the alias the
+  // rest of the app script already refers to; window.B33Theme (defined up there) owns
+  // reading, resolving "auto", writing, and the live prefers-color-scheme listener.
+  const THEME_KEY = window.B33Theme ? window.B33Theme.KEY : "book33-theme";
 
   // every save in this file goes `try { localStorage.setItem(…) } catch (e) {}` —
   // if storage fills up (or private browsing blocks it) her logging would vanish
@@ -14118,26 +14305,98 @@
      built in regenerateCategoryStyles()) is DERIVED from this array, never hand-edited
      in parallel — that duplication is exactly what let colours drift before. */
   const CATS_KEY = "book33-categories";
+  /* 2026-08-15 (Day mode, Phase 1) — `colorDay`.
+     Night paints a block as solid track colour with light text. Day inverts that: the fill
+     carries WHITE text (--track-text), and the failing case is the 9.5px time line, not the
+     title — so every fill has to reach >=4.5:1 against white, which none of her Night seeds
+     do (Personal #B98D36 is 2.75:1, Fitness #37AF65 is 2.53:1). Hence a second stored value
+     per category rather than one colour used in both themes.
+     It lives HERE, in book33-categories, exactly so the Categories table stays the single
+     source of truth and recolouring still can't drift — same reason --*-seed does.
+     Measured ratios vs #FFFFFF for the seeded set:
+        personal #8A6626 5.24 · work #2C6A3E 6.48 · marriage #187293 5.43
+        fitness  #2A854D 4.60 · beauty #A43A49 6.40 · family #933756 7.19
+     The Day-mode spec's own table is used verbatim where it passes. Two do not and are
+     replaced by the derivation below: its Fitness #2C8C51 measures 4.22:1 and its
+     Busy/unavailable #9A9A9A measures 2.81:1. (Its Health #4C8E97 is 3.73:1 — no Health
+     category exists here, noted in case one is ever added.) */
   const DEFAULT_CATS = [
-    { id: "personal", name: "Personal",      type: "life", parent: null,       color: "#B98D36" },
-    { id: "work",     name: "Work / Clinic", type: "life", parent: null,       color: "#37844D" },
-    { id: "marriage", name: "Marriage",      type: "life", parent: null,       color: "#1E8FB8" },
-    { id: "fitness",  name: "Fitness",       type: "sub",  parent: "personal", color: "#37AF65" },
-    { id: "beauty",   name: "Beauty",        type: "sub",  parent: "personal", color: "#CD495B" },
+    { id: "personal", name: "Personal",      type: "life", parent: null,       color: "#B98D36", colorDay: "#8A6626" },
+    { id: "work",     name: "Work / Clinic", type: "life", parent: null,       color: "#37844D", colorDay: "#2C6A3E" },
+    { id: "marriage", name: "Marriage",      type: "life", parent: null,       color: "#1E8FB8", colorDay: "#187293" },
+    { id: "fitness",  name: "Fitness",       type: "sub",  parent: "personal", color: "#37AF65", colorDay: "#2A854D" },
+    { id: "beauty",   name: "Beauty",        type: "sub",  parent: "personal", color: "#CD495B", colorDay: "#A43A49" },
   ];
   let CATS = [];
   let CAT_BY_ID = {};
   let TRACK_INK = {};
   let TRACK_LABEL = {};
+  /* WCAG relative luminance / contrast against pure white. Deliberately the strict text
+     formula, not the loose "does this read on the calendar surface" check catContrastOk()
+     uses down in the Categories UI — that one is grading a background chip, this one is
+     grading real 9.5px text sitting ON the fill. */
+  function catRelLum(rgb) {
+    const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+  }
+  function catContrastOnWhite(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || ""));
+    if (!m) return 21;
+    const lum = catRelLum([parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]);
+    return 1.05 / (lum + 0.05);
+  }
+  /* Derives a category's Day fill from its Night colour. Multiplicative RGB scaling, which
+     holds the hue and the channel ratios (a "darker version of the same colour"), rather
+     than mixing toward black in a perceptual space, which shifts hue on the warm seeds.
+     Starts at x0.80 — the uniform darkening the Day-mode spec itself used for 5 of its 6
+     tracks, so this reproduces its table exactly for Work/Marriage/Beauty — then keeps
+     stepping down until the result clears 4.6:1 on white. 4.6, not 4.5, is headroom: a
+     value that lands exactly on 4.5 can be knocked under it by 8-bit rounding.
+     No manual-override escape hatch yet because there is no UI to set one; if a colorDay
+     picker is ever added, this needs a `colorDayLocked` flag to stop it overwriting her. */
+  function catDeriveColorDay(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || ""));
+    if (!m) return "#564E42";
+    const src = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+    for (let f = 80; f >= 0; f--) {
+      const s = f / 100;
+      const out = src.map(c => Math.round(c * s));
+      if (1.05 / (catRelLum(out) + 0.05) >= 4.6) {
+        return "#" + out.map(c => c.toString(16).padStart(2, "0")).join("").toUpperCase();
+      }
+    }
+    return "#000000";
+  }
+  /* Fills in colorDay for any row that predates this field — which is EVERY stored
+     book33-categories, since the field is new today — or has had it corrupted.
+     A row whose `color` is still the shipped seed takes DEFAULT_CATS' hand-checked
+     colorDay rather than the derivation, so an existing install ends up byte-identical to
+     a fresh one instead of quietly running a slightly different Personal (the derivation
+     gives #926F2B where the spec's own table gives the deeper #8A6626 — both pass, but
+     two installs disagreeing is the drift this whole table exists to prevent).
+     Anything she has recoloured herself derives, since there is no approved value for it.
+     Returns true if anything changed, so the caller can persist it. */
+  function catNormaliseDay(arr) {
+    let touched = false;
+    arr.forEach(c => {
+      if (/^#[0-9a-f]{6}$/i.test(String(c.colorDay || ""))) return;
+      const seed = DEFAULT_CATS.find(d => d.id === c.id && String(d.color).toUpperCase() === String(c.color).toUpperCase());
+      c.colorDay = seed ? seed.colorDay : catDeriveColorDay(c.color);
+      touched = true;
+    });
+    return touched;
+  }
+  let catsDayBackfilled = false;   // set by loadCategories(), persisted once at boot
   function loadCategories() {
     try {
       const raw = localStorage.getItem(CATS_KEY);
-      if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
+      if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) { catsDayBackfilled = catNormaliseDay(arr); return arr; } }
     } catch (e) {}
-    return DEFAULT_CATS.slice();
+    return DEFAULT_CATS.map(c => Object.assign({}, c));
   }
   function saveCategories(arr) {
     CATS = arr;
+    catNormaliseDay(arr);
     try { localStorage.setItem(CATS_KEY, JSON.stringify(arr)); } catch (e) {}
     rebuildCatIndex();
     applyCategoryColours();
@@ -14195,6 +14454,15 @@
     CATS.filter(c => c.type === "sub").forEach(c => {
       root.setProperty(`--cat-${c.parent}-${c.id}`, c.color);
     });
+    // 2026-08-15 (Day mode, Phase 1): the Day twin of every seed/sub property above, under
+    // a "-day" suffix. Plain values only — nothing here knows or asks which theme is
+    // active; the CHOOSING is done in CSS, by the :root[data-theme="light"]-scoped rules
+    // regenerateCategoryStyles() emits. That keeps the spec's "no component may branch on
+    // theme in JavaScript" rule intact.
+    lifeCats().forEach(c => root.setProperty(`--${c.id}-seed-day`, c.colorDay || catDeriveColorDay(c.color)));
+    CATS.filter(c => c.type === "sub").forEach(c => {
+      root.setProperty(`--cat-${c.parent}-${c.id}-day`, c.colorDay || catDeriveColorDay(c.color));
+    });
     regenerateCategoryStyles();
   }
   // Handles what a plain custom-property override can't: (a) a brand-new life
@@ -14229,6 +14497,30 @@
     CATS.filter(c => c.type === "sub").forEach(c => {
       css += `.tl-item[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"], .tl-detail-head[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"] { --cat-c: var(--cat-${c.parent}-${c.id}); }\n`;
     });
+    /* 2026-08-15 (Day mode, Phase 1): the Day fills. Emitted HERE, from this same
+       generator, and NOT as static per-track rules in the stylesheet — a static set was
+       written once already and had to be torn out in §7, because it silently stopped
+       covering any category she added or renamed. Everything about the cascade is
+       deliberate:
+         · every life category, including the original three, unlike the Night loop above
+           (which only emits for non-original ids). The originals DO have static Night
+           rules to inherit through; they have no Day ones, and adding a static Day set
+           would reintroduce exactly the drift §7 removed.
+         · scoped to :root[data-theme="light"], so Night is untouched and no JS is
+           involved in picking.
+         · lifes first, then subs, matching the static block's own order — the sub
+           selector carries one extra attribute, so it outranks the life rule at the same
+           theme scope and a green Fitness block keeps its own Day fill instead of
+           inheriting Personal's.
+       --cat-t is deliberately NOT set here: --track-text is already #FFFFFF in both
+       themes, which is what Day wants. (Two per-width overrides currently defeat that —
+       see the Phase 2 list.) */
+    lifeCats().forEach(c => {
+      css += `:root[data-theme="light"] .tl-item[data-track="${c.id}"], :root[data-theme="light"] .tl-detail-head[data-track="${c.id}"] { --cat-c: var(--${c.id}-seed-day); }\n`;
+    });
+    CATS.filter(c => c.type === "sub").forEach(c => {
+      css += `:root[data-theme="light"] .tl-item[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"], :root[data-theme="light"] .tl-detail-head[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"] { --cat-c: var(--cat-${c.parent}-${c.id}-day); }\n`;
+    });
     el.textContent = css;
   }
   CATS = loadCategories();
@@ -14240,9 +14532,15 @@
   // for any life category that isn't one of the original hand-authored three), not a
   // new parallel system.
   if (!CATS.some(c => c.type === "life" && c.id === "family")) {
-    CATS.push({ id: "family", name: "Family", type: "life", parent: null, color: "#B8456B" });
+    // colorDay derived, not typed — #933756, 7.19:1 on white (2026-08-15, Day mode Phase 1)
+    CATS.push({ id: "family", name: "Family", type: "life", parent: null, color: "#B8456B", colorDay: catDeriveColorDay("#B8456B") });
     saveCategories(CATS);
   }
+  // 2026-08-15 (Day mode, Phase 1): persist the one-time colorDay backfill, so
+  // book33-categories really IS the stored source of truth for both fills rather than the
+  // Day half being re-derived on every boot. Idempotent — the flag can only be true on the
+  // first load after this field shipped.
+  else if (catsDayBackfilled) saveCategories(CATS);
   rebuildCatIndex();
   applyCategoryColours();
   /* ---- two-person system (2026-07-27, Linh: "a section where I want to designate or
@@ -30665,16 +30963,41 @@
       HEALTH[id] = isFinite(v) ? v : null;
       saveHealth(); renderHealth();
     }));
-  // 2026-08-03: restored with the rest of light mode.
+  /* 2026-08-03: restored with the rest of light mode.
+     2026-08-15 (Day mode, Phase 1) — THREE states, TWO controls, and why.
+     The stored preference is now Night | Day | Auto, but this header button stays a plain
+     two-state toggle: one tap always gives you the opposite of what is currently ON SCREEN,
+     and writes that as an explicit choice. Auto lives in Settings instead.
+     Rejected: cycling all three on this one button. It is an unlabelled icon in the header
+     — there is no glyph that reads as "follow the system", so the middle state would be
+     invisible, and worse, tapping into it produces a result that depends on the OS rather
+     than on the tap. A control whose outcome you can't predict from its face is not a
+     toggle. Splitting it (instant switch here, preference there) is also exactly what the
+     Day-mode spec asks for: a sun/moon icon in the band plus Night/Day/Auto in Settings.
+     The icon shows the RESOLVED theme, so under Auto it tracks whatever the system is
+     currently giving her rather than showing a third, ambiguous state. */
   const themeToggleBtn = document.getElementById("themeToggle");
-  const syncThemeToggleIcon = () => { themeToggleBtn.textContent = document.documentElement.dataset.theme === "dark" ? "🌙" : "☀️"; };
-  syncThemeToggleIcon();
+  const syncThemeToggleIcon = () => {
+    const resolved = window.B33Theme.resolved();
+    themeToggleBtn.textContent = resolved === "dark" ? "🌙" : "☀️";
+    themeToggleBtn.setAttribute("aria-label", resolved === "dark"
+      ? "Night mode is on — switch to Day"
+      : "Day mode is on — switch to Night");
+  };
   themeToggleBtn.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem(THEME_KEY, next);
-    syncThemeToggleIcon();
+    window.B33Theme.set(window.B33Theme.resolved() === "dark" ? "light" : "dark");
   });
+  // single place every theme change lands, whoever caused it — this button, the Settings
+  // segmented control, or the OS flipping under an "auto" preference.
+  window.__b33ThemeChanged = () => {
+    syncThemeToggleIcon();
+    const picker = document.getElementById("themeModePicker");
+    if (picker) {
+      const pref = window.B33Theme.pref();
+      picker.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.themeMode === pref)));
+    }
+  };
+  window.__b33ThemeChanged();
   // 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view"
   // job, Linh: keep the compact text-strip style but always show it): SUPERSEDES
   // the #udBadge/#numStarBtn tap-to-toggle pair that used to live here --
@@ -38618,6 +38941,11 @@
       </div>`;
   }
   document.getElementById("categoriesPage").addEventListener("click", ev => {
+    // 2026-08-15 (Day mode, Phase 1): Night / Day / Auto. Writes the preference and lets
+    // window.B33Theme apply it — this handler never touches data-theme itself, so there is
+    // still exactly one place that resolves a preference into a theme.
+    const themeOpt = ev.target.closest("[data-theme-mode]");
+    if (themeOpt) { window.B33Theme.set(themeOpt.dataset.themeMode); return; }
     const del = ev.target.closest("[data-cat-del]");
     if (del) {
       const c = CAT_BY_ID[del.dataset.catDel]; if (!c) return;
@@ -38649,7 +38977,7 @@
     if (ev.target.closest("#catAddLifeBtn")) {
       const color = CAT_PALETTE[CATS.length % CAT_PALETTE.length];
       const id = catSlug("New part of life");
-      CATS.push({ id, name: "New part of life", type: "life", parent: null, color });
+      CATS.push({ id, name: "New part of life", type: "life", parent: null, color, colorDay: catDeriveColorDay(color) });
       saveCategories(CATS);
       renderCategories();
       const inp = document.querySelector(`[data-cat-name="${id}"]`);
@@ -38661,7 +38989,7 @@
       if (!parent) { alert("Add a part of life first — a sub-category needs one to nest under."); return; }
       const color = CAT_PALETTE[CATS.length % CAT_PALETTE.length];
       const id = catSlug("New category");
-      CATS.push({ id, name: "New category", type: "sub", parent: parent.id, color });
+      CATS.push({ id, name: "New category", type: "sub", parent: parent.id, color, colorDay: catDeriveColorDay(color) });
       saveCategories(CATS);
       renderCategories();
       const inp = document.querySelector(`[data-cat-name="${id}"]`);
@@ -38685,6 +39013,9 @@
       const hex = t.value.trim();
       if (!/^#[0-9a-f]{6}$/i.test(hex)) { t.value = c.color; return; }
       c.color = hex.toUpperCase();
+      // 2026-08-15 (Day mode): the Day fill re-derives from the new colour on every edit,
+      // so the two can never drift and she only ever picks ONE colour per category.
+      c.colorDay = catDeriveColorDay(c.color);
       saveCategories(CATS);
       renderCategories();
       return;
@@ -38692,6 +39023,7 @@
     if (t.dataset.catColorPicker != null) {
       const c = CAT_BY_ID[t.dataset.catColorPicker]; if (!c) return;
       c.color = t.value.toUpperCase();
+      c.colorDay = catDeriveColorDay(c.color);
       saveCategories(CATS);
       renderCategories();
       return;
