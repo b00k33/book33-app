@@ -11359,6 +11359,149 @@
     border-radius: 8px; color: var(--ink); font-family: var(--font-body); font-size: 12px; padding: 4px 8px;
     font-variant-numeric: tabular-nums;
   }
+
+  /* ============================================================
+     §7 MONTH PICKER — ONE date-selection component (2026-08-15)
+     ------------------------------------------------------------
+     Deliberately NOT a second sheet language: the markup carries
+     .tl-detail-overlay + .tl-detail-sheet as well, so backdrop, --paper fill,
+     ≤82vh + internal scroll, and the existing ≥641px bottom-sheet→centred-dialog
+     split all come from the component that already ships. Everything below only
+     adds what a month grid needs on top.
+
+     The spec's own pixel numbers (45px cells, 31px circle, 36px arrow pads) are
+     OFF CLAUDE.md's scale and two of them are under the 44px tap-target minimum.
+     CLAUDE.md wins, so:
+       • cell 45px  -> 44px tall (the tap-target minimum, the nearest legal value)
+                       and 1fr wide, so seven columns divide 360px exactly with no
+                       off-scale gap arithmetic. Measures ~46.9px wide at 360px.
+       • circle 31px -> 32px (on the 4/8/12/16/24/32 scale).
+       • arrow pad 36px -> 44px. They are tap targets; 36 was never allowed.
+       • dots stay 4px (already on-scale), max 3.
+     Type is the four declared steps only: 20px month/title, 13px cell numbers,
+     11px weekday row + hint. Radius via the tokens / 999px for pills. Every
+     colour is a token — the selected circle pairs --margin-rule with --accent-on,
+     the app's existing "readable ink on the gold accent" pairing (dark in BOTH
+     themes: #1A1508 under data-theme=light, --paper #251D13 under dark).
+     ------------------------------------------------------------ */
+  /* above .ev-scope-overlay (320) — this can open from inside the item sheet's
+     Move panel, so it must stack over it */
+  .b33mp-overlay { z-index: 340; }
+  /* hard guarantee that desktop keeps its native pickers: even if state somehow
+     survived a resize past the mobile cutoff, there is nothing to see.
+     2026-08-15 review (B1): 1024 -> 641, the SAME number b33mpIsMobile() now tests
+     (<=640) and the same one the desktop shell and .tl-detail-sheet already split on.
+     A guard that disagrees with the JS test is its own bug — at 641-1023px the old
+     pair let the phone sheet open on top of the desktop layout. */
+  @media (min-width: 641px) { .b33mp-overlay { display: none !important; } }
+  /* .tl-detail-drag's own fill is dark ink, tuned for §6's coloured header — on
+     this sheet's plain --paper it needs the neutral hairline token instead */
+  .b33mp-sheet .tl-detail-drag { background: var(--note-line); margin: 0 auto 12px; }
+  .b33mp-head { flex: none; padding: 12px 16px 0; }
+  .b33mp-title { font-size: 20px; font-family: var(--font-display); font-weight: 400; color: var(--ink); }
+  /* --ink-soft, not --ink-faint: CLAUDE.md allows either for an 11px caption, and
+     measured on this sheet's --paper the faint token only reaches 4.03:1 while soft
+     reaches 7.6:1 — the Medical "Opened at 6 months from today" line is instruction,
+     not decoration, so it takes the readable one */
+  .b33mp-hint { font-size: 11px; color: var(--ink-soft); line-height: 1.45; margin-top: 4px; }
+  .b33mp-hint:empty { display: none; }
+  /* §7 asks for a full-width gold Today button at the top, calendar context only.
+     §0 allows exactly ONE gold PRIMARY per surface and §9 puts the way forward in
+     the lower thumb zone, so the solid gold belongs to Confirm at the bottom and
+     this is a flat gold TINT: full width, at the top, unmistakably gold, and
+     unmistakably the quieter of the two. No outline, per §0.
+     2026-08-15 review (E2): the tint was 18%, which measured 1.17:1 light / 1.43:1
+     dark AGAINST THE SHEET — i.e. the control had no perceivable edge at all. (The
+     original build measured only the label's 13.63:1 and missed that.) Re-measured
+     live via canvas (oklab/color-mix must be resolved by the engine, never parsed by
+     hand) and raised to 80%, with the label moving from --ink to --accent-on — the
+     "readable ink on gold" token, dark in BOTH themes, which is what lets the fill
+     go strong without the dark theme flipping to light-ink-on-light-gold:
+       light: surface 2.19:1 vs the sheet, label 8.31:1 on the button
+       dark:  surface 5.51:1 vs the sheet, label 5.51:1 on the button
+     The light figure is short of 3:1 and that is a ceiling, not a shortcut: on this
+     theme's white --paper even 100% --margin-rule only reaches 2.73:1, and 2.73 is
+     the SOLID Confirm. Anything at 3:1 here would have to be darker than the sheet's
+     one gold primary, inverting the hierarchy §0 asks for. So Today sits deliberately
+     below Confirm (2.19 vs 2.73 light, 5.51 vs 7.90 dark) — clearly present, still
+     clearly the quieter of the two. */
+  .b33mp-today {
+    display: block; width: 100%; min-height: 44px; margin-top: 12px; padding: 8px 16px;
+    border: none; border-radius: 999px; color: var(--accent-on);
+    background: color-mix(in oklab, var(--margin-rule) 80%, transparent);
+    font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .b33mp-body { flex: 1 1 auto; overflow-y: auto; padding: 0 16px; }
+  .b33mp-nav { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin: 12px 0 4px; }
+  .b33mp-arrow {
+    width: 44px; height: 44px; padding: 0; border: none; border-radius: 999px; background: none;
+    color: var(--ink-soft); font-family: var(--font-body); font-size: 20px; line-height: 1; cursor: pointer;
+  }
+  .b33mp-arrow:hover { color: var(--margin-rule); }
+  .b33mp-month { text-align: center; font-size: 20px; font-family: var(--font-display); font-weight: 400; color: var(--ink); }
+  .b33mp-dow {
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+    font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); padding-bottom: 4px;
+  }
+  .b33mp-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .b33mp-cell {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-height: 44px; padding: 0; border: none; border-radius: var(--radius-sm); background: none;
+    font-family: var(--font-body); color: var(--ink); cursor: pointer;
+  }
+  .b33mp-num {
+    display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+    border-radius: 999px; font-size: 13px; font-variant-numeric: tabular-nums;
+  }
+  /* fixed-height rail even when empty, so every circle sits on one baseline */
+  .b33mp-dots { display: flex; align-items: center; justify-content: center; gap: 4px; height: 4px; }
+  /* --track-fallback is the default for a genuinely unknown track ONLY. The real
+     per-track colours are generated by regenerateCategoryStyles() for EVERY life
+     category, exactly the way .tl-item[data-track] already gets its --cat-c.
+     2026-08-15 review (C1): three static rules used to live here (work/marriage/
+     personal), so the fourth seeded category (family) and every category she adds
+     herself fell through to grey — a dot that actively misreported the part-of-life,
+     and a breach of CLAUDE.md's "track colours come only from --*-seed". */
+  .b33mp-dot { width: 4px; height: 4px; border-radius: 999px; background: var(--track-fallback); }
+  /* leading/trailing days: --ink-faint alone, NOT .mini-cal-cell's extra opacity:0.5.
+     That opacity was tuned for a 9.5px decorative cell; on a 44px cell you actually
+     tap it composited to ~2:1 against --paper. Colour alone still reads clearly
+     dimmer (measured 4.03:1 faint vs 15.96:1 ink) while staying legible. */
+  .b33mp-cell[data-out="true"] { color: var(--ink-faint); }
+  .b33mp-cell[data-today="true"] .b33mp-num { box-shadow: inset 0 0 0 2px var(--margin-rule); font-weight: 700; }
+  .b33mp-cell[data-selected="true"] .b33mp-num {
+    background: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 700;
+  }
+  .b33mp-cell:disabled { opacity: 0.3; cursor: default; }
+  .b33mp-foot { flex: none; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .b33mp-confirm {
+    display: block; width: 100%; min-height: 44px; padding: 8px 16px; border: none; border-radius: 999px;
+    background: var(--margin-rule); color: var(--accent-on);
+    font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .b33mp-confirm:hover { filter: brightness(1.06); }
+  /* 2026-08-15 review (E1): this was `opacity: 0.45`, which faded the WHOLE button —
+     gold fill and near-black label together — toward the sheet, so its label measured
+     1.96:1 light / 1.61:1 dark. That label is the sheet's only instruction when
+     nothing is picked yet ("Pick a date"), so it was the one thing on the surface
+     that had to be readable and was the least readable thing on it.
+     Opacity is gone. The disabled state is now its own flat, token-only skin: no
+     gold at all (the accent means "ready" and belongs to the live button), a neutral
+     ink-in-paper slab, and full --ink for the label. Measured live:
+       light: label 7.43:1 on the button, surface 2.15:1 vs the sheet
+       dark:  label 5.83:1 on the button, surface 2.31:1 vs the sheet
+     Surface deliberately stays under the enabled button's own 2.73:1 (light) so a
+     disabled control never out-shouts a live one — the disabled read comes from
+     losing the gold, not from being unreadable. */
+  .b33mp-confirm:disabled {
+    opacity: 1; filter: none; cursor: not-allowed;
+    background: color-mix(in oklab, var(--ink) 32%, var(--paper));
+    color: var(--ink);
+  }
+  .b33mp-arrow:focus-visible, .b33mp-cell:focus-visible,
+  .b33mp-today:focus-visible, .b33mp-confirm:focus-visible {
+    outline: 2px solid var(--margin-rule); outline-offset: 2px;
+  }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -11471,6 +11614,38 @@
            full-bleed rows by renderTlDetailHeadActions() — its own click listener is
            bound by id near tryTlDelete and keeps firing wherever this div sits. -->
       <div class="tl-detail-manage" id="tlDetailHeadActions"></div>
+    </div>
+  </div>
+
+  <!-- 2026-08-15 (§7): THE month picker — one date-selection sheet for the whole
+       app on mobile. Static markup like every other overlay in this file; only the
+       month grid, the labels and the confirm caption are rewritten per open (see
+       openMonthPicker / b33mpRenderGrid in the script). It carries .tl-detail-
+       overlay/.tl-detail-sheet as well as its own classes on purpose, so backdrop,
+       sheet chrome, ≤82vh + internal scroll and the ≥641px presentation split are
+       the SAME component the item sheet above uses, not a second one that can
+       drift. Sits at z-index 340 because it can be opened from inside that
+       sheet's own Move panel (#tlMoveDate). -->
+  <div class="tl-detail-overlay b33mp-overlay" id="b33mpOverlay" hidden>
+    <div class="tl-detail-sheet b33mp-sheet" id="b33mpSheet" role="dialog" aria-modal="true" aria-labelledby="b33mpTitle">
+      <div class="b33mp-head">
+        <div class="tl-detail-drag" aria-hidden="true"></div>
+        <div class="b33mp-title" id="b33mpTitle">Choose a date</div>
+        <div class="b33mp-hint" id="b33mpHint"></div>
+        <button type="button" class="b33mp-today" id="b33mpToday" hidden>Today</button>
+      </div>
+      <div class="b33mp-body">
+        <div class="b33mp-nav">
+          <button type="button" class="b33mp-arrow" id="b33mpPrev" aria-label="Previous month">&lsaquo;</button>
+          <div class="b33mp-month" id="b33mpMonth" aria-live="polite"></div>
+          <button type="button" class="b33mp-arrow" id="b33mpNext" aria-label="Next month">&rsaquo;</button>
+        </div>
+        <div class="b33mp-dow" aria-hidden="true"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+        <div class="b33mp-grid" id="b33mpGrid" role="group" aria-label="Days"></div>
+      </div>
+      <div class="b33mp-foot">
+        <button type="button" class="b33mp-confirm" id="b33mpConfirm"></button>
+      </div>
     </div>
   </div>
 
@@ -13969,6 +14144,13 @@
       if (!ORIGINAL_LIFE[c.id]) {
         css += `.tl-item[data-track="${c.id}"], .tl-detail-head[data-track="${c.id}"] { --cat-c: var(--${c.id}-seed); --cat-t: var(--track-text); }\n`;
       }
+      // 2026-08-15 (§7 month-picker review, C1): the track dot on a month-picker day
+      // cell. EVERY life category including the original three, because unlike
+      // .tl-item[data-track] the dot is a flat fill with no static rule to inherit
+      // through — it used to have three hand-written rules in the stylesheet, so
+      // "family" (seeded on boot) and any category she adds drew grey. Generated
+      // here it can never drift from CATS when one is added or renamed.
+      css += `.b33mp-dot[data-track="${c.id}"] { background: var(--${c.id}-seed); }\n`;
     });
     CATS.filter(c => c.type === "sub").forEach(c => {
       css += `.tl-item[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"], .tl-detail-head[data-track="${c.parent}"][data-category*="${cssAttrEsc(c.name)}"] { --cat-c: var(--cat-${c.parent}-${c.id}); }\n`;
@@ -17141,7 +17323,7 @@
           <button type="button" class="pileup-act pileup-edit" data-edit="${it.evId}" title="Edit this task" aria-label="Edit ${esc(it.title)}">✎</button>
           <button type="button" class="pileup-act" data-pile-today="${it.evId}" title="Move it onto today — the card remembers how many times it's moved">→ Today</button>
           <button type="button" class="pileup-act" data-pile-resched-btn="${it.evId}" title="Move it to a specific day">📅</button>
-          <input type="date" class="pileup-resched-input" data-pile-resched="${it.evId}" hidden aria-label="Move ${esc(it.title)} to a day">
+          <input type="date" class="pileup-resched-input" data-pile-resched="${it.evId}" hidden aria-label="Move ${esc(it.title)} to a day" data-mp-today="1">
           <button type="button" class="pileup-act pileup-letgo" data-pile-letgo="${it.evId}" title="Release it — a conscious decision, not a quiet slip">Let go</button>
         </span>` : "";
       return `<div class="pileup-item">
@@ -19252,7 +19434,7 @@
           <button type="button" class="tab-link" data-tl-toggle-move>Cancel</button>
         </div>
         <div class="tl-detail-move-row">
-          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date">
+          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date" data-mp-today="1">
           <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
         </div>
         <div class="tl-detail-move-actions">
@@ -19591,7 +19773,7 @@
       ${ocMoveOpen ? `<div class="oc-move">
         <div class="oc-move-lbl">New date &amp; time</div>
         <div class="oc-move-row">
-          <input type="date" id="ocMoveDate" value="${esc(e.date || keyOf(state.anchor))}" aria-label="New date">
+          <input type="date" id="ocMoveDate" value="${esc(e.date || keyOf(state.anchor))}" aria-label="New date" data-mp-today="1">
           <input type="time" id="ocMoveTime" value="${esc(e.start || "09:00")}" aria-label="New time">
           <button type="button" class="btn-save" data-oc-resched-go>Confirm</button>
         </div>
@@ -25669,9 +25851,15 @@
         return `<div class="med-item" data-on="${on}" data-med-tick="${c.id}:${kind}:${i}" role="button" tabindex="0">
           <span class="ring">${on ? "✓" : ""}</span>${esc(t)}</div>`;
       }).join("") || `<div class="fam-empty" style="font-size:12px">Nothing listed.</div>`;
+      // 2026-08-15 (§7 review, H2): the "done" branch used to seed this field with
+      // `c.nextAppt || today` — i.e. with the FUTURE appointment date. "Mark done"
+      // records a visit that has already happened, so a date months ahead is never
+      // the right default; it just invited a tap-tap that filed the visit as done in
+      // February. Today, always. (The month picker's own context branches the same
+      // way — see b33mpMedicalContextFor — so the two paths now agree.)
       const dateRow = medDateFor && medDateFor.id === c.id ? `
         <div class="med-daterow">
-          <input type="date" id="medDateInput" value="${medDateFor.kind === "book" ? (c.nextAppt || "") : (c.nextAppt || keyOf(TODAY))}">
+          <input type="date" id="medDateInput" value="${medDateFor.kind === "book" ? (c.nextAppt || "") : keyOf(TODAY)}">
           ${medDateFor.kind === "book" ? `<input type="time" id="medTimeInput" value="${c.nextApptTime || ""}">` : ""}
           <button type="button" class="add-btn" data-med-date-save="${c.id}">${medDateFor.kind === "book" ? "Save appointment" : "Save — done that day"}</button>
           <button type="button" class="add-btn" data-med-date-cancel>Cancel</button>
@@ -34049,7 +34237,11 @@
       const input = pileReschedBtn.nextElementSibling;
       if (input) {
         input.hidden = false;
-        if (input.showPicker) { try { input.showPicker(); } catch (err) { input.focus(); } }
+        // 2026-08-15 (§7): this is the one place in the file that opens a native
+        // date picker EXPLICITLY, so the delegated interception can't catch it --
+        // route it through the same month picker on mobile. Desktop is unchanged.
+        if (b33mpIsMobile()) b33mpOpenForInput(input);
+        else if (input.showPicker) { try { input.showPicker(); } catch (err) { input.focus(); } }
         else input.focus();
       }
       return;
@@ -38386,6 +38578,503 @@
   const _ntSvOvr = saveEvTimeOvr;       saveEvTimeOvr = function () { _ntSvOvr(); Book33Notify.rescheduleSoon(); };
   const _ntSvSk = saveEvSkips;          saveEvSkips = function () { _ntSvSk(); Book33Notify.rescheduleSoon(); };
   const _ntSvExp = saveExpenses;        saveExpenses = function () { _ntSvExp(); Book33Notify.rescheduleSoon(); };
+
+  /* ============================================================
+     §7 — MONTH PICKER: one date-selection component, used everywhere
+     (2026-08-15)
+     ------------------------------------------------------------
+     There are ~40 input[type="date"] elements in this file, every one of them
+     already wired to a working change/input handler. Replacing them one at a time
+     would be a huge diff for no behavioural gain, so this does the opposite: ONE
+     delegated interception takes over the activation of any eligible date input on
+     mobile, opens this sheet instead of the native control, and writes the answer
+     straight back with input.value + real bubbling "input" and "change" events —
+     so every existing handler keeps running completely untouched. That is what
+     makes "one picker everywhere" true without touching the inputs' markup.
+
+     Visual/structural language is the existing .tl-detail-overlay/.tl-detail-sheet
+     (see the markup and the CSS block, both commented). The month grid is modelled
+     directly on renderMiniCal() above — same startOfWeek() 42-cell walk, same
+     data-out/data-today/data-selected attribute convention — rather than a second,
+     divergent month implementation. renderMiniCal() itself is NOT touched.
+
+     Explicitly NOT built, per the spec: "Skip ahead" interval chips (2/4/6 weeks ·
+     3/6/12 months). The Medical interval works invisibly instead — see
+     b33mpMedicalContextFor().
+     ============================================================ */
+  /* Mobile = <=640px. 2026-08-15 review (B1) CORRECTS this: it used to be <1024px,
+     borrowed from calDaysFor()/the nav-drawer guard and the spec's "Scope: mobile
+     (< 1024px)". Those two are FEATURE switches (how many days the calendar shows,
+     whether nav is a drawer) — they are not where the app changes LAYOUT. The app
+     puts on its desktop face at `@media (min-width: 641px)` (#deskHead and the whole
+     desktop shell), and .tl-detail-sheet — this sheet's own chrome — splits at the
+     same 641px. So <1024 opened a 641-1023px dead zone: desktop layout on screen,
+     phone bottom-sheet hijacking every date field in it, including desktop-only
+     controls like #deskDatePick that only exist above 640px.
+     641px is therefore the one boundary the surrounding UI actually uses, and the
+     CSS kill-switch below is written from the SAME number so the JS test and the
+     CSS guard can never disagree. Consequence, deliberately: on a tablet the native
+     picker is used, and .b33mp-sheet's own >=641px centred-dialog presentation is
+     now unreachable — no width can get one without the other. */
+  function b33mpIsMobile() { return window.innerWidth <= 640; }
+
+  const b33mpEl = id => document.getElementById(id);
+  // { value, month, onPick, onCancel, onClose, min, max, confirmVerb, returnFocus }
+  let b33mpState = null;
+  // one open session's worth of "what's already on this day" — see b33mpTracksOn
+  const b33mpDotCache = new Map();
+
+  // "Sunday 14 February" — weekday + day + month, the spec's own confirm wording
+  function b33mpLongDate(k) {
+    const d = parseKey(k);
+    return `${WD_FULL[dowIndex(d)]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  }
+
+  /* Track dots — up to 3 per date, coloured by part-of-life, from the app's own
+     generatedFor(date) (the same source the Day timeline reads; each item carries
+     .track). DISTINCT tracks rather than one dot per item: most days are several
+     Personal routines, so per-item dots would paint an identical ●●● on every
+     weekday and say nothing, while distinct tracks answer the question §0 asks a
+     dot to answer ("a small dot always shows the part-of-life").
+     generatedFor() is not free, so a month's 42 cells go through this per-open
+     cache and the whole grid build is timed into #b33mpGrid[data-render-ms].
+     Dots are decoration: if generatedFor throws for a date, that date simply gets
+     no dots — the date itself is never wrong. */
+  function b33mpTracksOn(k) {
+    if (b33mpDotCache.has(k)) return b33mpDotCache.get(k);
+    let tracks = [];
+    try {
+      const d = parseKey(k);
+      /* 2026-08-15 review (C2): generatedFor() ALONE was wrong — it covers routines,
+         family tasks, birthdays and the rest of the generated layer, but NOT the flat
+         EVENTS array (every plain one-off event and task she types in) and not the
+         fitness-log sessions. A day whose only entry was a hand-added event drew no
+         dot at all. Same three sources dayEventsRawFor() composes for the calendar
+         itself, and the same !preview && !isGhostItem() filter the Day timeline,
+         dayTickables() and the .ics export already use (isGhostItem is §6's shared
+         helper — a ghost is a skipped or moved-away occurrence, i.e. nothing is
+         actually on that day). Chain blocks are deliberately not composed in: a
+         chained block is a routine that generatedFor() already returned, so it can
+         only ever repeat a track that is counted, at the cost of a second pass. */
+      const items = [...generatedFor(d), ...EVENTS.filter(e => e && e.date === k), ...fitCalendarEventsFor(d)];
+      for (let i = 0; i < items.length && tracks.length < 3; i++) {
+        const it = items[i];
+        if (!it || it.preview || isGhostItem(it)) continue;
+        const t = it.track ? String(it.track) : "";
+        if (t && tracks.indexOf(t) === -1) tracks.push(t);
+      }
+    } catch (err) { tracks = []; }
+    b33mpDotCache.set(k, tracks);
+    return tracks;
+  }
+
+  function b33mpSyncConfirm() {
+    const st = b33mpState, btn = b33mpEl("b33mpConfirm");
+    if (!st || !btn) return;
+    btn.disabled = !st.value;
+    btn.textContent = st.value ? `${st.confirmVerb} ${b33mpLongDate(st.value)}` : "Pick a date";
+  }
+
+  function b33mpRenderGrid() {
+    const st = b33mpState;
+    if (!st) return;
+    const t0 = performance.now();
+    const y = st.month.getFullYear(), m = st.month.getMonth();
+    b33mpEl("b33mpMonth").textContent = `${MONTHS[m]} ${y}`;
+    // same leading/trailing-day walk renderMiniCal() uses — one month arithmetic
+    const gridStart = startOfWeek(new Date(y, m, 1));
+    const todayKey = keyOf(TODAY);
+    let html = "";
+    for (let i = 0; i < 42; i++) {
+      const d = addDays(gridStart, i), k = keyOf(d);
+      const blocked = (st.min && k < st.min) || (st.max && k > st.max);
+      const dots = b33mpTracksOn(k).map(t => `<span class="b33mp-dot" data-track="${esc(t)}"></span>`).join("");
+      html += `<button type="button" class="b33mp-cell" data-mp-key="${k}"
+        data-out="${d.getMonth() !== m}" data-today="${k === todayKey}" data-selected="${k === st.value}"
+        aria-pressed="${k === st.value}"${blocked ? " disabled" : ""}
+        aria-label="${esc(`${b33mpLongDate(k)} ${d.getFullYear()}`)}"><span
+        class="b33mp-num">${d.getDate()}</span><span class="b33mp-dots">${dots}</span></button>`;
+    }
+    const grid = b33mpEl("b33mpGrid");
+    grid.innerHTML = html;
+    // measured, not assumed — read it with document.getElementById("b33mpGrid").dataset.renderMs
+    grid.dataset.renderMs = String(Math.round((performance.now() - t0) * 100) / 100);
+    b33mpSyncConfirm();
+  }
+
+  function b33mpSelect(k) {
+    const st = b33mpState;
+    if (!st) return;
+    st.value = k;
+    const d = parseKey(k);
+    // tapping a leading/trailing day (or Today from another month) follows it
+    if (d.getMonth() !== st.month.getMonth() || d.getFullYear() !== st.month.getFullYear()) {
+      st.month = new Date(d.getFullYear(), d.getMonth(), 1);
+    }
+    b33mpRenderGrid();
+  }
+
+  /* openMonthPicker({ value, onPick, showToday, title, hint, confirmLabel, min, max })
+     — the one public entry point. confirmLabel is the verb the confirm button leads
+     with ("Book for" -> "Book for Sunday 14 February"); it defaults to "Use". */
+  function openMonthPicker(opts) {
+    const o = opts || {};
+    b33mpDotCache.clear();
+    const min = o.min || "", max = o.max || "";
+    const raw = /^\d{4}-\d{2}-\d{2}$/.test(o.value || "") ? o.value : "";
+    /* 2026-08-15 review (F): the grid already draws out-of-range days disabled, but
+       the PRE-SELECTED value skipped that same test — so an input whose own min/max
+       excluded its incoming value opened with that value selected and Confirm live,
+       and one tap wrote back a date the picker itself had rendered un-tappable
+       (#cbPushDateInput, min="today", is the real case). Reject the selection, but
+       still CLAMP the opening month into range so the user lands where the legal
+       days are rather than on an empty month. Confirm stays disabled ("Pick a date")
+       until a legal day is chosen. */
+    const legal = v => !!v && !(min && v < min) && !(max && v > max);
+    const val = legal(raw) ? raw : "";
+    const openKey = val || (raw && min && raw < min ? min : (raw && max && raw > max ? max : ""));
+    const base = openKey ? parseKey(openKey) : (raw ? parseKey(raw) : TODAY);
+    b33mpState = {
+      value: val,
+      month: new Date(base.getFullYear(), base.getMonth(), 1),
+      onPick: typeof o.onPick === "function" ? o.onPick : null,
+      onCancel: typeof o.onCancel === "function" ? o.onCancel : null,
+      onClose: typeof o.onClose === "function" ? o.onClose : null,
+      min, max,
+      confirmVerb: o.confirmLabel || "Use",
+      returnFocus: o.returnFocus || null,
+    };
+    b33mpEl("b33mpTitle").textContent = o.title || "Choose a date";
+    b33mpEl("b33mpHint").textContent = o.hint || "";
+    b33mpEl("b33mpToday").hidden = !o.showToday;
+    b33mpEl("b33mpOverlay").hidden = false;
+    b33mpRenderGrid();
+    // land focus inside the sheet so keyboard/screen-reader users aren't stranded
+    // on the input behind it; b33mpClose puts focus back where it came from
+    const g = b33mpEl("b33mpGrid");
+    const focusTarget = g.querySelector('.b33mp-cell[data-selected="true"]:not(:disabled)')
+      || g.querySelector(".b33mp-cell:not(:disabled)");
+    if (focusTarget) focusTarget.focus({ preventScroll: true });
+  }
+
+  /* ---- A1/A2/A3 (2026-08-15 review): the readOnly failsafe ----
+     The interception flips the date input readOnly for the life of the sheet (that
+     is what stops Chromium's own picker: showPicker() on a readonly date input
+     throws "cannot be used on immutable controls"). Originally that was undone in
+     exactly ONE place — an onClose callback that closed over a local — with nothing
+     between the flip and an unguarded open path to catch a throw. Since every entry
+     point below is gated on b33mpState being null, one stuck input meant EVERY date
+     input in the whole app stopped opening anything, permanently, with no recovery.
+     Now: (A2) the flip is STAMPED on the element itself (data-b33mp-ro), so it can
+     be undone by anything that can see the DOM, not only by live module state; and
+     (A1) release runs from one unconditional teardown that the close path, the throw
+     path and the resize path all call. */
+  function b33mpReleaseInput(input) {
+    if (!input || input.dataset.b33mpRo !== "1") return;
+    delete input.dataset.b33mpRo;
+    input.readOnly = false;
+  }
+  // teardown with NO callbacks: the shared "put everything back" step. Sweeps every
+  // stamped input rather than just the one this session thinks it owns — a second
+  // stamp can only exist if something already went wrong, and this is the code that
+  // is meant to survive that.
+  function b33mpTeardown() {
+    b33mpState = null;
+    const ov = b33mpEl("b33mpOverlay"); if (ov) ov.hidden = true;
+    const g = b33mpEl("b33mpGrid"); if (g) g.innerHTML = "";
+    b33mpDotCache.clear();
+    document.querySelectorAll('input[type="date"][data-b33mp-ro]').forEach(b33mpReleaseInput);
+  }
+
+  function b33mpClose(pickedKey) {
+    const st = b33mpState;
+    if (!st) return;
+    // teardown FIRST, callbacks second — so a throw inside onPick (which re-renders
+    // whole pages) can no longer leave the guard on
+    b33mpTeardown();
+    if (st.onClose) st.onClose();
+    if (pickedKey && st.onPick) st.onPick(pickedKey);
+    else if (!pickedKey && st.onCancel) st.onCancel();
+    // onPick often re-renders the page the input lived on, so only restore focus
+    // if that element actually survived
+    if (st.returnFocus && document.contains(st.returnFocus)) {
+      try { st.returnFocus.focus({ preventScroll: true }); } catch (err) {}
+    }
+  }
+
+  /* A4: "we are above the cutoff now — give the field back to the native control."
+     Declared here (not down with the listeners) because the interception delegates
+     call it too: every one of them is gated on b33mpState being null, so if a resize
+     event were ever MISSED the stale session would block them all while the CSS
+     kill-switch hid it. Calling this first means the very next tap anywhere recovers,
+     with no dependence on an event having fired. */
+  function b33mpHandBackToNative() { if (b33mpState && !b33mpIsMobile()) b33mpClose(null); }
+
+  /* ---- which date inputs this takes over ---- */
+  function b33mpTargetInput(node) {
+    const el = node && node.closest ? node.closest('input[type="date"]') : null;
+    if (!el || el.disabled || el.hidden) return null;
+    // LCM Pharmacy shares this file's origin and has its own conventions — the
+    // same carve-out the global input CSS already makes with :where(:not(#pharmacyPage *))
+    if (el.closest("#pharmacyPage")) return null;
+    if (el.closest(".b33mp-sheet")) return null;
+    if (el.dataset.mpSkip === "1") return null;                  // per-input opt-out hatch
+    if (!el.offsetParent && getComputedStyle(el).position !== "fixed") return null;   // display:none
+    return el;
+  }
+
+  /* Medical "Book next" (§7's worked example). No new state, no duplicated write
+     path: the picker fills the SAME #medDateInput and clicks the SAME
+     [data-med-date-save] button, so the appointment is written by exactly the code
+     that already writes it. The interval works invisibly — it only chooses which
+     month opens; the date itself stays freely movable.
+     NOTE on "sets both the appointment and the next due date": there is no separate
+     stored next-due field to set. medStatus() DERIVES nextDue from lastDone +
+     intervalMonths, so booking an appointment cannot and must not write one — the
+     due date rolls when the visit is marked done. Adding a field would change the
+     data model, which §0 forbids. */
+  function b33mpMedicalContextFor(input) {
+    if (input.id !== "medDateInput") return null;
+    if (!medDateFor) return null;
+    const c = MEDICAL.checks.find(x => x.id === medDateFor.id);
+    if (!c) return null;
+    const commit = () => {
+      const save = document.querySelector(`[data-med-date-save="${c.id}"]`);
+      if (save) save.click();
+    };
+    /* 2026-08-15 review (H2): "Mark done" shares #medDateInput with "Book next" and
+       used to fall through to the book branch's context — so it opened pre-selected
+       on the FUTURE appointment date and offered no Today shortcut, even though
+       "mark done" means "I had the visit", which is today or a day already past.
+       Branch on medDateFor.kind, and give this one the Today button (it is the
+       single most likely answer here). */
+    if (medDateFor.kind === "done") {
+      return {
+        title: `Mark ${c.name} done`,
+        value: keyOf(TODAY),
+        hint: "The day you actually had it — this rolls the next due date.",
+        confirmLabel: "Done on",
+        showToday: true,
+        commit,
+      };
+    }
+    if (medDateFor.kind !== "book") return null;
+    const months = Math.max(1, parseInt(c.intervalMonths, 10) || 1);
+    const already = input.value || c.nextAppt || "";
+    /* 2026-08-15 review (H1): medStatus()'s own overdue test, copied exactly — no
+       lastDone means nextDue is null means "due right now", and TODAY past nextDue
+       is the same thing. Opening the picker `months` ahead in that state made two
+       taps book the visit up to a year out and silenced the overdue reminder, while
+       the hint claimed that was deliberate. Due now = open on today; the interval
+       jump is only right for a check that is genuinely still on track. */
+    const nextDue = c.lastDone ? medAddMonths(c.lastDone, c.intervalMonths) : null;
+    const dueNow = !nextDue || TODAY > nextDue;
+    return {
+      title: `Book ${c.name}`,
+      value: already || (dueNow ? keyOf(TODAY) : keyOf(medAddMonths(keyOf(TODAY), months))),
+      // derived from the check's real intervalMonths, never a hardcoded 6
+      hint: already ? ""
+        : dueNow
+          ? `${c.lastDone ? "Overdue" : "No visit recorded yet"} — this one is due now. Opened on today; move it to the day you can get in.`
+          : `Opened at ${months} month${months === 1 ? "" : "s"} from today — change it if you like.`,
+      confirmLabel: "Book for",
+      // the Today shortcut belongs here too when the answer really is "as soon as
+      // possible" — same calendar-context reasoning as the Move fields (see b33mpShowToday)
+      showToday: dueNow && !already,
+      commit,
+    };
+  }
+
+  function b33mpLabelFor(input) {
+    const al = input.getAttribute("aria-label");
+    if (al) return al;
+    const lbl = input.id ? document.querySelector(`label[for="${CSS.escape(input.id)}"]`) : null;
+    if (!lbl) return "";
+    /* 2026-08-15 review (D): a bare .textContent swallowed the .field-hint caption
+       that lives INSIDE the same <label> — six date fields have one, and the sheet's
+       headline came out as "Day change to move it", "Starts optional", "Anchor date
+       interval counts from here". Clone (never touch the live label), drop the hint
+       nodes, then read the label's own words. */
+    const clone = lbl.cloneNode(true);
+    clone.querySelectorAll(".field-hint, .hint").forEach(n => n.remove());
+    return clone.textContent.replace(/\s+/g, " ").trim();
+  }
+
+  /* §7: "Today" is calendar context ONLY, not every context — moving a block onto a
+     day of the calendar is that context; a form field is not. 2026-08-15 review (I):
+     this was hardcoded to input.id === "tlMoveDate", which missed the two OTHER
+     places the app asks exactly the same question — the outcome sheet's Move
+     (#ocMoveDate) and the pile-up's reschedule (.pileup-resched-input). All three are
+     one gesture in three surfaces, and "today" is a top answer in all three. Scoped
+     by a data-mp-today="1" attribute on the field instead of by id, so a fourth Move
+     control opts in by saying so and this never grows another hardcoded name. It
+     stays OFF for #fDate (a form field on the event editor, not a move control),
+     #deskDatePick (desktop-only — above this build's 640px cutoff it never sees this
+     picker at all), birth date, CPD year start, due dates and the rest. */
+  function b33mpShowToday(input) { return input.dataset.mpToday === "1"; }
+
+  function b33mpOpenForInput(input) {
+    if (b33mpState || !input) return;
+    /* Suppressing the native control, belt AND braces:
+       1. the activating event is preventDefault()ed (see the delegates below),
+          which cancels Chromium's own show-the-picker default action, and
+       2. the input is flipped readOnly for the life of the sheet, which makes it
+          an "immutable control" — verified in this browser: showPicker() on a
+          readonly date input throws InvalidStateError "cannot be used on immutable
+          controls". Restored on close, so nothing about the input persists. */
+    // A2: stamped, so the flip is visible in the DOM and undoable without this
+    // module's state. An input that was ALREADY readOnly is left completely alone.
+    if (!input.readOnly) { input.readOnly = true; input.dataset.b33mpRo = "1"; }
+    // A1: everything that can throw is inside the try. If any of it does, the guard
+    // comes straight back off and the state is cleared, so the next tap still works.
+    try {
+      const med = b33mpMedicalContextFor(input);
+      openMonthPicker({
+        value: med ? med.value : (input.value || ""),
+        min: input.getAttribute("min") || "",
+        max: input.getAttribute("max") || "",
+        title: med ? med.title : (b33mpLabelFor(input) || "Choose a date"),
+        hint: med ? med.hint : "",
+        confirmLabel: med ? med.confirmLabel : "Use",
+        showToday: med ? !!med.showToday : b33mpShowToday(input),
+        returnFocus: input,
+        onPick(k) {
+          input.value = k;
+          // real bubbling events, so every existing handler on these ~40 inputs
+          // keeps working with no change to its own code (both types: this file
+          // listens for "change" in ~40 places and "input" in ~20)
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          if (med) med.commit();
+        },
+      });
+    } catch (err) {
+      b33mpTeardown();
+      throw err;   // cleaned up, but never silently — a real fault stays visible
+    }
+  }
+
+  /* ---- ONE delegated interception, mobile only ----
+     2026-08-15 review (G): this used to open (and preventDefault()) on POINTERDOWN.
+     pointerdown fires before the browser knows a tap from a drag, so cancelling it
+     killed any touch-scroll that merely BEGAN on a date input — and two of them live
+     inside horizontally scrolling tables (.rtg-tbl on Routines, .exp-table-wrap on
+     Expenses, whose .exp-table is min-width:1262px), where that made those cells
+     dead spots you could not scroll the table from.
+     Now: ARM on pointerdown (no preventDefault, so the gesture stays the browser's),
+     DISARM on movement past a small threshold or on pointercancel, COMMIT on
+     pointerup. Same arm/threshold/commit shape — and the same 12px budget — the
+     .num-hover-trigger handler further up already uses for exactly this problem.
+     The native control is still fully suppressed: mousedown (which arrives AFTER the
+     gesture is resolved, so cancelling it costs no scroll) is preventDefault()ed, the
+     click belt below preventDefault()s too, and by then the readOnly guard is on. */
+  let b33mpArmInput = null, b33mpArmXY = null;
+  const b33mpDisarm = () => { b33mpArmInput = null; b33mpArmXY = null; };
+  const b33mpMoved = e => b33mpArmXY && (Math.abs(e.clientX - b33mpArmXY[0]) + Math.abs(e.clientY - b33mpArmXY[1]) > 12);
+  document.addEventListener("pointerdown", e => {
+    b33mpDisarm();
+    b33mpHandBackToNative();     // A4 belt: never let a stale desktop-width session block this
+    if (!b33mpIsMobile() || b33mpState) return;
+    const input = b33mpTargetInput(e.target);
+    if (!input) return;
+    b33mpArmInput = input; b33mpArmXY = [e.clientX, e.clientY];
+  }, true);
+  document.addEventListener("pointermove", e => {
+    if (b33mpArmInput && b33mpMoved(e)) b33mpDisarm();   // a scroll, not a tap
+  }, true);
+  document.addEventListener("pointercancel", b33mpDisarm, true);
+  document.addEventListener("pointerup", e => {
+    const input = b33mpArmInput, moved = b33mpMoved(e);
+    b33mpDisarm();
+    if (!input || moved || !b33mpIsMobile() || b33mpState) return;
+    if (b33mpTargetInput(e.target) !== input) return;    // finger lifted off the field
+    e.preventDefault();
+    b33mpOpenForInput(input);
+  }, true);
+  // the native picker's own trigger. For touch this fires only once the browser has
+  // already decided the gesture was a tap, so it can be cancelled freely.
+  document.addEventListener("mousedown", e => {
+    if (!b33mpIsMobile()) return;
+    if (b33mpTargetInput(e.target)) e.preventDefault();
+  }, true);
+  // belt: a click with no pointerdown behind it (keyboard activation, a <label>,
+  // a synthesized tap) must not fall through to the native control either
+  document.addEventListener("click", e => {
+    b33mpHandBackToNative();
+    if (!b33mpIsMobile()) return;
+    const input = b33mpTargetInput(e.target);
+    if (!input) return;
+    e.preventDefault();
+    if (!b33mpState) b33mpOpenForInput(input);
+  }, true);
+  // the input stays focusable and keyboard-operable — it just opens this instead
+  document.addEventListener("keydown", e => {
+    b33mpHandBackToNative();
+    if (!b33mpIsMobile() || b33mpState) return;
+    if (e.key !== "Enter" && e.key !== " " && !(e.key === "ArrowDown" && e.altKey)) return;
+    const input = b33mpTargetInput(e.target);
+    if (!input) return;
+    e.preventDefault();
+    b33mpOpenForInput(input);
+  }, true);
+  // capture, so Escape closes THIS and never the item sheet underneath it
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !b33mpState) return;
+    e.preventDefault(); e.stopPropagation();
+    b33mpClose(null);
+  }, true);
+  /* crossing to desktop mid-pick hands the field back to the native control.
+     2026-08-15 review (A4): this is the ONLY recovery from the CSS kill-switch, which
+     hides .b33mp-overlay outright above the cutoff — a session that was hidden but
+     still open would leave its input readOnly with nothing on screen to dismiss, i.e.
+     invisible AND unrecoverable. So it is now armed twice, both from the SAME 640px
+     number b33mpIsMobile() and the CSS guard use: resize (window resize + orientation
+     change) and a matchMedia change (fires even where a resize event is coalesced
+     away — a DevTools device swap, a discrete window snap). b33mpClose() runs the
+     full teardown, so readOnly comes back on this path exactly as it does on pick,
+     backdrop tap and Escape. Third belt: the pointerdown/click/keydown delegates call
+     b33mpHandBackToNative() themselves (see above), so even an environment that never
+     dispatches either event recovers on the next tap. */
+  window.addEventListener("resize", b33mpHandBackToNative);
+  const b33mpDesktopMQ = window.matchMedia("(min-width: 641px)");
+  if (b33mpDesktopMQ.addEventListener) b33mpDesktopMQ.addEventListener("change", b33mpHandBackToNative);
+  else if (b33mpDesktopMQ.addListener) b33mpDesktopMQ.addListener(b33mpHandBackToNative);
+  /* A3: self-healing boot sweep. If a previous session died mid-pick (a throw, a
+     crash, a tab closed with the sheet open), a date input could come back stamped
+     and readOnly with no module state left to undo it — and because every entry
+     point above is gated on b33mpState being null, ONE stranded input silently
+     disables every date input in the app. One querySelectorAll on boot, and the
+     failure repairs itself instead of needing localStorage cleared. */
+  document.querySelectorAll('input[type="date"][data-b33mp-ro]').forEach(b33mpReleaseInput);
+
+  /* ---- the sheet's own controls ---- */
+  // §9: dismiss by backdrop tap. Tested as "the event landed on the overlay ITSELF"
+  // rather than !e.target.closest(".b33mp-sheet") -- picking a day re-renders the
+  // grid inside this same click, which orphans e.target, and closest() on a node
+  // with no parent then reads as an outside click. That exact trap is already
+  // documented against the item sheet's own outside-click handler (see the
+  // "orphaned node" comment near closeTlDetail); this handler must not repeat it.
+  b33mpEl("b33mpOverlay").addEventListener("click", e => {
+    if (e.target === e.currentTarget) b33mpClose(null);
+  });
+  b33mpEl("b33mpGrid").addEventListener("click", e => {
+    const cell = e.target.closest(".b33mp-cell");
+    if (cell && !cell.disabled) b33mpSelect(cell.dataset.mpKey);
+  });
+  b33mpEl("b33mpPrev").addEventListener("click", () => {
+    if (!b33mpState) return;
+    b33mpState.month = new Date(b33mpState.month.getFullYear(), b33mpState.month.getMonth() - 1, 1);
+    b33mpRenderGrid();
+  });
+  b33mpEl("b33mpNext").addEventListener("click", () => {
+    if (!b33mpState) return;
+    b33mpState.month = new Date(b33mpState.month.getFullYear(), b33mpState.month.getMonth() + 1, 1);
+    b33mpRenderGrid();
+  });
+  b33mpEl("b33mpToday").addEventListener("click", () => b33mpSelect(keyOf(TODAY)));
+  b33mpEl("b33mpConfirm").addEventListener("click", () => {
+    if (b33mpState && b33mpState.value) b33mpClose(b33mpState.value);
+  });
 
   buildHours();
   syncTrack();
