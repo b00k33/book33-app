@@ -20399,7 +20399,23 @@
         while (colEnds[c] !== undefined && colEnds[c] > p.top) c++;
         p.col = c; colEnds[c] = p.top + p.h;
       });
-      cluster.forEach(p => { p.cols = colEnds.length; });
+      // 2026-08-16 (shared-bug fix, "same defect on mobile and desktop"): each
+      // item's OWN column count must come from what genuinely overlaps ITS
+      // OWN [top, top+h) span, not from colEnds.length -- that counted every
+      // column used ANYWHERE in the whole transitively-connected cluster, so
+      // a 9-10am item and an unrelated 2-3pm item both got narrowed to (say)
+      // a third of the width just because some THIRD item elsewhere in the
+      // same cluster genuinely needed a second column. Real pairwise overlap
+      // per item, not a cluster-wide total.
+      cluster.forEach(p => {
+        let maxCol = p.col;
+        cluster.forEach(o => {
+          if (o === p) return;
+          const overlaps = o.top < p.top + p.h && p.top < o.top + o.h;
+          if (overlaps && o.col > maxCol) maxCol = o.col;
+        });
+        p.cols = maxCol + 1;
+      });
       cluster = [];
     };
     placed.forEach(p => {
