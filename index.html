@@ -4995,6 +4995,13 @@
     padding: 8px 12px 12px; border-left: 1px solid var(--note-line);
     display: flex; flex-direction: column; gap: 8px; min-height: 44px;
   }
+  /* 2026-08-16 (Linh, mockup "Routines — mobile, dark"): items live in their own
+     wrapper now instead of as direct siblings of the label -- same column+gap
+     rhythm the label's own flex gap used to give them (no visual change here,
+     desktop or mobile-table), but it lets #rtnChains flip .rtb-cell to a ROW at
+     <640px (label left, items stacked right) without disturbing this shared
+     class, which the Board view (#rtnTable) still uses unchanged. */
+  .rtb-cell-items { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* a column flashes gold while a dragged routine hovers over it (mouse drag between
      columns rewrites the chain — see the #rtnTable pointer controller) */
   .rtb-cell.rtb-drop-over { background: color-mix(in oklab, var(--accent-seed) 8%, transparent); box-shadow: inset 0 0 0 1.5px var(--accent-seed); border-radius: var(--radius-sm); }
@@ -5061,39 +5068,39 @@
      already stacks multiple .rtb-band groups top-to-bottom (border-top between
      them, same as the Board view's own single-.rtb-tbl pattern). */
   /* 2026-08-09 (Linh: "i want the chains view to be horizontal in the routines
-     page"): Before/Event/After stay three side-by-side columns at every width,
-     never stack -- #rtnChains scoping leaves the Board view's own shared
-     .rtb-grid (renderRtnTable(), same classes) stacking as before, since that's
-     a different feature nobody asked to change. .rtb-gridwrap wraps just each
-     row's own 3-col grid -- .rtb-band's title row is a sibling, so it never
-     scrolls away -- same scroll-fallback pattern already shipped for the Chains
-     page and the Routine Library table. */
+     page"): Before/Event/After stay three side-by-side columns at DESKTOP width
+     (below 640px this was later re-overridden to stack again -- see the
+     2026-08-16 comment right below) -- #rtnChains scoping leaves the Board
+     view's own shared .rtb-grid (renderRtnTable(), same classes) stacking as
+     before, since that's a different feature nobody asked to change. .rtb-gridwrap
+     wraps just each row's own 3-col grid -- .rtb-band's title row is a sibling,
+     so it never scrolls away -- same scroll-fallback pattern already shipped for
+     the Chains page and the Routine Library table. */
   #rtnChains .rtb-gridwrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   #rtnChains .rtb-grid { grid-template-columns: repeat(3, 1fr); }
-  /* 2026-08-09 (Linh: "compact ... portrait mode, allow expansion in landscape"):
-     the 3-column override right above stays UNCONDITIONAL (it has to keep beating
-     the bare .rtb-grid stack-to-1fr rule above at any orientation under 640px, or
-     a landscape phone would fall back to stacking) -- only the min-width floor and
-     cell padding/border squeeze are portrait-only, same reasoning as the Chains
-     page's own pass. No min-width at all outside portrait: the grid just fills
-     whatever width its container (the shared table, full page width) actually
-     has, which is always plenty on a landscape phone or desktop. */
-  @media (max-width: 640px) and (orientation: portrait) {
-    /* 2026-08-09 pt 3 (Linh, screenshot: "the chains table needs to fit the
-       mobile" -- the 480px floor above left ~2.2 of 3 columns visible on a real
-       360-390px phone, same problem the Routine Library table had). Unlike that
-       table's Track/Phase columns, every field here (.rtb-nm the task name,
-       .chain-h-time the time) is plain text that already wraps -- no single
-       badge/word needs an explicit px floor -- so a straight min-width cut is
-       enough. chain-h-root (new, see the chip() closure in renderChains()):
-       the root/Event chip never gets an unlink button, but .chain-h-item's
-       padding-right:40px button reserve was still eating a third of that
-       column's width for nothing -- zeroed here since portrait is exactly
-       where every pixel counts. */
-    #rtnChains .rtb-grid { min-width: 330px; }
+  /* 2026-08-16 (Linh, mockup "Routines — mobile, dark"): below 640px, each chain's
+     Before/Event/After now stacks as its own full-width ROW instead — phase dot +
+     label on the left, item(s) on the right, matching how the mockup draws every
+     chain card. This re-overrides the 08-09 pt2 "stay horizontal at every width"
+     rule directly above for ONLY this one breakpoint (the orientation-gated
+     min-width/scroll rules that rule needed are gone entirely, since a stacked
+     1-column grid never needs a min-width floor to avoid squeezing 3 columns).
+     It does NOT touch the 08-09 pt4 "one shared table, chains as rows" decision
+     (chainTableHtml() below still builds one .rtb-tbl, one .rtb-band per chain,
+     unchanged) and does NOT touch the Board view's own .rtb-grid (#rtnTable,
+     renderRtnTable()) — that one already stacked via the bare .rtb-grid rule at
+     the top of this comment block and was never part of the 08-09 horizontal
+     lock to begin with. */
+  @media (max-width: 640px) {
+    #rtnChains .rtb-grid { grid-template-columns: 1fr; }
     #rtnChains .chain-h-root { padding-right: 0; }
-    #rtnChains .rtb-cell { border-left: 1px solid var(--note-line); border-top: none; padding: 4px 8px 8px; }
-    #rtnChains .rtb-cell-first { border-left: none; }
+    #rtnChains .rtb-cell {
+      flex-direction: row; align-items: flex-start; gap: 8px;
+      border-left: none; border-top: 1px solid var(--note-line); padding: 8px 4px;
+    }
+    #rtnChains .rtb-cell-first { border-top: none; }
+    #rtnChains .rtb-cell-lab { flex: 0 0 60px; white-space: nowrap; padding-top: 2px; }
+    #rtnChains .rtb-cell-items { flex: 1; }
   }
   /* ============ ROUTINE TABLE (grid view) ============
      2026-08-06 (Linh pasted a "Routine Library (table)" mock): sortable/groupable
@@ -5312,6 +5319,53 @@
     .rn-cal { order: 5; margin-left: auto; }
     .rn-acts { flex: 0 0 100%; order: 6; justify-content: flex-start; }
   }
+  /* ============ ROUTINE LIBRARY "CARDS" VIEW ============
+     2026-08-16 (Linh, mockup "Routines — mobile, dark"): the picker's List option
+     (relabelled "Cards") used to show #rtnManage's older day-dots view -- this is
+     what it shows now instead, rendered by renderRtnGridCards()/
+     renderRtnGridCardsNested()/rtcCardHtml(). Reuses the exact Track ▸ Category
+     grouping data .rn-trk/.rn-sub already carry (byTrack/cm, catSubFor) -- .rtc-trk
+     is always a GOLD left edge regardless of the track's own colour (only the count
+     differs, per the mockup); .rtc-sub keeps the sub-category's own resolved colour,
+     same --cc custom prop .rn-sub/.rn-row already use. .rtg-phase/.rtg-auto-switch/
+     .rtg-ic are reused as-is (see rtcCardHtml) so phase pills, the Auto switch, and
+     hover colours all match the rest of the page exactly. */
+  .rtc-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .rtc-trk {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px; margin-top: 8px;
+    font-weight: 800; font-size: 12.5px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ink); background: color-mix(in oklab, var(--accent-seed) 14%, transparent);
+    border-left: 4px solid var(--accent-seed); border-radius: var(--radius-sm);
+  }
+  .rtc-wrap > .rtc-trk:first-child { margin-top: 0; }
+  .rtc-sub {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px; margin: 0 0 0 12px;
+    background: color-mix(in oklab, var(--cc) 12%, transparent); border-left: 3px solid var(--cc);
+    border-radius: var(--radius-sm); font-size: 10.5px; font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--cc);
+  }
+  .rtc-seg-head {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px; margin-top: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint);
+  }
+  .rtc-wrap > .rtc-seg-head:first-child { margin-top: 0; }
+  .rtc-n { margin-left: auto; color: var(--ink-faint); font-weight: 700; font-size: 11px; }
+  .rtc-card { background: var(--note-bg); border-radius: var(--radius-md); padding: 16px; cursor: pointer; }
+  .rtc-card-indent { margin-left: 12px; }
+  .rtc-top { display: flex; align-items: center; gap: 8px; }
+  .rtc-name { flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rtc-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--ink-soft); }
+  .rtc-freq { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rtc-time { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rtc-acts { display: flex; gap: 8px; margin-top: 12px; }
+  .rtc-act {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px;
+    min-height: 44px; border: none; border-radius: var(--radius-sm); background: var(--field-bg);
+    color: var(--ink-soft); font-size: 12.5px; font-family: var(--font-body); cursor: pointer;
+  }
+  .rtc-act:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); color: var(--accent-seed); }
+  .rtc-act-del { flex: 0 0 44px; }
+  .rtc-act-del:hover { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn); }
   /* 2026-08-09 (Linh, "do the same on the routines page" -- keep the horizontal
      chain view on mobile, applied here too): SUPERSEDES the table -> cards swap a
      same-day commit introduced for this exact overflow problem (names cut to
@@ -13911,7 +13965,11 @@
         <option value="month">Group by: Month</option>
       </select>
       <div class="track-picker" id="rtnViewPicker" role="group" aria-label="Routines view">
-        <button type="button" class="track-opt" data-rtnview="list" aria-pressed="false">List</button>
+        <!-- 2026-08-16 (Linh, mockup "Routines — mobile, dark"): relabelled List -> Cards
+             -- the internal "list" value stays as-is (still what rtnListMode/renderRtnGrid
+             branch on, see renderRtnGridCards) so every existing reader of that value
+             keeps working; only the visible label changed. -->
+        <button type="button" class="track-opt" data-rtnview="list" aria-pressed="false">Cards</button>
         <button type="button" class="track-opt" data-rtnview="table" aria-pressed="true">Table</button>
       </div>
     </div>
@@ -29451,17 +29509,28 @@
           ${isRoot ? "" : `<button type="button" class="chain-unlink" data-chain-unlink="${esc(n.id)}" aria-label="Unchain ${esc(n.title)}" title="Unchain — it keeps its own saved time">×</button>`}
         </div>`;
       };
+      // 2026-08-16 (Linh, mockup "Routines — mobile, dark"): items now live in
+      // their own .rtb-cell-items wrapper (see the CSS comment by .rtb-cell)
+      // instead of as direct siblings of the label -- lets the <640px CSS flip
+      // .rtb-cell into a row (label left, items right) with no desktop change.
+      // "— nothing yet" replaces the bare em dash so an empty phase (e.g. a
+      // chain with nothing Before) reads as an intentional empty state, not a
+      // rendering glitch -- .rtb-empty is scoped to this closure alone (grep-
+      // verified 2026-08-16, no other renderer uses the class), so widening its
+      // text here can't affect the Board view or any other empty state.
       const cellH = (rows, cls, label) => `<div class="rtb-cell${cls === "before" ? " rtb-cell-first" : ""}">
           <span class="rtb-cell-lab rtb-cell-lab-${cls}">${label}</span>
-          ${rows.length ? rows.join("") : `<span class="rtb-empty">—</span>`}
+          <div class="rtb-cell-items">${rows.length ? rows.join("") : `<span class="rtb-empty">— nothing yet</span>`}</div>
         </div>`;
       // 2026-08-09 pt 4 (Linh, code44: "One shared table, chains as rows"):
       // REVERTS the 2026-08-07 one-card-per-chain grid — back to a single shared
       // .rtb-tbl, each chain its own band (title+schedule) + Before/Event/After
       // row underneath, stacked like the Routine Library table she praised.
-      // .rtb-gridwrap keeps each row's own 3-col strip horizontal (never stacks)
-      // even on phone, scrolling independently if it doesn't fit — band stays
-      // put since it's a sibling, not inside the scrolling grid.
+      // .rtb-gridwrap keeps each row's own 3-col strip horizontal at desktop width,
+      // scrolling independently if it doesn't fit (2026-08-16: below 640px the
+      // strip stacks to one column per phase instead — see the CSS by
+      // #rtnChains .rtb-cell) — band stays put either way since it's a sibling,
+      // not inside the scrolling grid.
       let bandsHtml = "";
       roots.forEach(root => {
         let previewDate = TODAY;
@@ -29493,12 +29562,26 @@
   }
 
   let rtnListMode = "table";
+  // 2026-08-16 (Cards view, mockup "Routines — mobile, dark"): which single card
+  // (if any) currently has its Edit/Add/Delete row open -- one at a time, same
+  // "toggle-close on a second tap" shape as openRtnMoreMenu/openRtnFormInline
+  // already use elsewhere on this page. Reset whenever the picker or Group-by
+  // changes so a stale open id from a routine that's since scrolled out of view
+  // doesn't linger (see the #rtnViewPicker/#rtgGroupBy listeners below).
+  let rtnCardOpenId = null;
   function renderRoutines() {
     renderRtnArchive();
     renderChains();
-    document.getElementById("rtnManage").hidden = rtnListMode !== "list";
+    // 2026-08-16 (Linh, mockup "Routines — mobile, dark"): "list" now renders the
+    // Cards view into #rtnGrid (see renderRtnGridCards) instead of showing
+    // #rtnManage's older day-dots/grouped-panel view -- #rtnManage keeps being
+    // fully rendered below (unconditional, same as always) but is unreachable
+    // from the picker now, same "kept but hidden, not deleted" treatment the
+    // Board view/#rtnTable already got in the 2026-08-07 rebuild (see the
+    // Routine Library toolbar comment above #rtnViewPicker).
+    document.getElementById("rtnManage").hidden = true;
     document.getElementById("rtnTable").hidden = rtnListMode !== "board";
-    document.getElementById("rtnGrid").hidden = rtnListMode !== "table";
+    document.getElementById("rtnGrid").hidden = rtnListMode !== "table" && rtnListMode !== "list";
     renderRtnTable();
     renderRtnGrid();
     // shared Routine Library toolbar (rtgSearch/rtgGroupBy live in static markup
@@ -29877,14 +29960,24 @@
     rows.forEach(t => { const k = groupKeyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
     return [...groups.entries()].map(([label, items]) => ({ label, items }));
   }
+  // 2026-08-16 (Cards view, mockup "Routines — mobile, dark"): dispatcher now
+  // branches on rtnListMode -- "list" (relabelled "Cards" on the picker, see
+  // #rtnViewPicker markup) renders renderRtnGridCards() into the same #rtnGrid
+  // host Table uses, instead of leaving it untouched (which is what made the
+  // old List option render nothing -- renderRtnGridTable() below early-returns
+  // for any mode but "table"). Both guard calls that used to live at the top of
+  // renderRtnGridTable() moved up here so Cards gets them too.
   function renderRtnGrid() {
+    const host = document.getElementById("rtnGrid");
+    if (!host) return;
+    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
+    closeRtnMoreMenu();  // its anchor button is about to be destroyed too
+    if (rtnListMode === "list") { renderRtnGridCards(host); return; }
     renderRtnGridTable();
   }
   function renderRtnGridTable() {
     const host = document.getElementById("rtnGrid");
     if (!host || rtnListMode !== "table") return;
-    rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
-    closeRtnMoreMenu();  // its anchor button is about to be destroyed too
     // 2026-08-11 (Linh: grouped Track ▸ sub-category redesign): a distinct banded layout
     // — Track headers, sub-category sub-bands, rows tinted by sub-category colour, Track/
     // Category dropped as columns (they're the headers now). Its own renderer so the
@@ -29976,6 +30069,19 @@
   // Track & Category are the headers, so rows drop those columns — each row shows only
   // name · repeats · time · phase · cal + the same ✎/🗑/⋯ actions the table uses (same
   // data-rtg-* hooks, so the one #rtnGrid click delegate handles both layouts).
+  // Shared by both Track ▸ Category lenses on the Routine Library -- the classic
+  // nested rows below AND the Cards view further down (renderRtnGridCardsNested/
+  // rtcCardHtml). Hoisted out of renderRtnGridNested 2026-08-16 (Cards view,
+  // mockup "Routines — mobile, dark") so Cards calls the exact same phase/time/
+  // tile logic instead of forking a second copy.
+  const rtnPhasePillOf = t => { const p = rtnGridPhaseOf(t); return `<span class="rtg-phase phase-lbl-${p}">${p === "during" ? "event" : p}</span>`; };
+  const rtnTimeLabelOf = t => { const m = rtnGridTimeMin(t); return m == null ? "—" : fmtTime(minToTime(m)); };
+  const rtnTileOf = t => {
+    const lm = t.title.match(RTN_LETTER_RE);
+    if (lm) return { ic: `<span class="rn-tile" style="color:var(--${t.track}-seed)">${lm[1]}</span>`, name: lm[2] };
+    const em = t.title.match(RTN_EMOJI_RE);
+    return { ic: em ? `<span class="rn-tile">${em[1]}</span>` : `<span class="rn-tile"></span>`, name: em ? t.title.slice(em[0].length) : t.title };
+  };
   function renderRtnGridNested(host) {
     const q = rtnGridSearch.trim().toLowerCase();
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
@@ -29994,21 +30100,13 @@
       cm.get(cat).push(t);
     });
     const tracks = [...byTrack.keys()].sort((a, b) => trackRank(a) - trackRank(b) || (trackLabel(a) || "").localeCompare(trackLabel(b) || ""));
-    const phasePill = t => { const p = rtnGridPhaseOf(t); return `<span class="rtg-phase phase-lbl-${p}">${p === "during" ? "event" : p}</span>`; };
-    const timeLabel = t => { const m = rtnGridTimeMin(t); return m == null ? "—" : fmtTime(minToTime(m)); };
-    const tileOf = t => {
-      const lm = t.title.match(RTN_LETTER_RE);
-      if (lm) return { ic: `<span class="rn-tile" style="color:var(--${t.track}-seed)">${lm[1]}</span>`, name: lm[2] };
-      const em = t.title.match(RTN_EMOJI_RE);
-      return { ic: em ? `<span class="rn-tile">${em[1]}</span>` : `<span class="rn-tile"></span>`, name: em ? t.title.slice(em[0].length) : t.title };
-    };
     const rowHtml = (t, cc) => {
-      const calOn = t.calOn !== false, tl = tileOf(t);
+      const calOn = t.calOn !== false, tl = rtnTileOf(t);
       return `<div class="rn-row" data-rtg-row="${esc(t.id)}" style="--cc:${cc}">
           <div class="rn-name">${tl.ic}<span class="rn-txt">${esc(tl.name)}</span></div>
           <div class="rn-rep">${esc(routineFreqLabel(t))}</div>
-          <div class="rn-time">${timeLabel(t)}</div>
-          <div>${phasePill(t)}</div>
+          <div class="rn-time">${rtnTimeLabelOf(t)}</div>
+          <div>${rtnPhasePillOf(t)}</div>
           <div class="rn-cal"><button type="button" class="rtg-auto-switch${calOn ? " on" : ""}" data-rtg-cal="${esc(t.id)}" role="switch" aria-checked="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button></div>
           <div class="rn-acts">
             ${normTitle(t.title) === "cbd work" ? `<button type="button" class="rtg-ic" data-rtg-board title="Open ops board" aria-label="Open CBD Work ops board">🩺</button>` : ""}
@@ -30036,6 +30134,102 @@
     html += `</div>`;
     host.innerHTML = html;
     rtnInlineRedock("table");
+  }
+  // ============ ROUTINE LIBRARY "CARDS" VIEW ============
+  // 2026-08-16 (Linh, mockup "Routines — mobile, dark"): the picker's List option
+  // (relabelled "Cards" on the button itself, #rtnViewPicker markup) used to show
+  // #rtnManage, an older day-dots/grouped-panel view -- that stays fully rendered
+  // (renderRoutines() still populates it every render) but is now unreachable
+  // from the picker, the same "kept but hidden, not deleted" treatment the Board
+  // view/#rtnTable already got in the 2026-08-07 rebuild. This renders into
+  // #rtnGrid instead, same host Table uses. Only wired for the trackcat grouping
+  // for its own Track/Sub-category banding (the mockup's own default, and the
+  // exact byTrack/cm data renderRtnGridNested() already computes just above) --
+  // every other Group-by value falls back to a flat card list over the same
+  // rtnGridRows() segments the classic sortable table renders, so switching
+  // Group-by away from Track ▸ Category never leaves Cards blank.
+  function renderRtnGridCards(host) {
+    if (rtnGridGroupBy === "trackcat") { renderRtnGridCardsNested(host); return; }
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
+    const segments = rtnGridRows();
+    if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; rtnInlineRedock("table"); return; }
+    let html = `<div class="rtc-wrap">`;
+    segments.forEach(({ label, items }) => {
+      if (label != null) html += `<div class="rtc-seg-head">${esc(label)}<span class="rtc-n">${items.length}</span></div>`;
+      html += items.map(t => rtcCardHtml(t, `var(--${t.track}-seed, var(--ink-faint))`, false)).join("");
+    });
+    html += `</div>`;
+    host.innerHTML = html;
+    rtnInlineRedock("table");
+  }
+  // Same Track -> Category -> [routines] grouping renderRtnGridNested() builds two
+  // functions up (byTrack/cm, trackOrder/trackRank, catSubFor for the sub-band's
+  // own colour) -- handed to rtcCardHtml() below instead of that function's flat
+  // .rn-row template. Track band is ALWAYS a gold left edge regardless of the
+  // track's own colour, only the count differs (per the mockup); the sub-category
+  // band nested under it keeps its own resolved colour, same as .rn-sub already does.
+  function renderRtnGridCardsNested(host) {
+    const q = rtnGridSearch.trim().toLowerCase();
+    if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
+    const rows = ROUTINE_TASKS.filter(t => !q || t.title.toLowerCase().includes(q));
+    if (!rows.length) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; rtnInlineRedock("table"); return; }
+    const trackOrder = lifeCats().map(c => c.id);
+    const trackRank = tk => { const i = trackOrder.indexOf(tk); return i === -1 ? 99 : i; };
+    const byTrack = new Map();
+    rows.forEach(t => {
+      const tk = t.track || "other";
+      const cat = (t.category && t.category.trim()) || "No category";
+      if (!byTrack.has(tk)) byTrack.set(tk, new Map());
+      const cm = byTrack.get(tk);
+      if (!cm.has(cat)) cm.set(cat, []);
+      cm.get(cat).push(t);
+    });
+    const tracks = [...byTrack.keys()].sort((a, b) => trackRank(a) - trackRank(b) || (trackLabel(a) || "").localeCompare(trackLabel(b) || ""));
+    let html = `<div class="rtc-wrap">`;
+    tracks.forEach(tk => {
+      const cm = byTrack.get(tk);
+      const tcount = [...cm.values()].reduce((a, arr) => a + arr.length, 0);
+      html += `<div class="rtc-trk">${esc(trackLabel(tk) || "Other")}<span class="rtc-n">${tcount}</span></div>`;
+      const cats = [...cm.keys()].sort((a, b) => (a === "No category") - (b === "No category") || a.localeCompare(b));
+      cats.forEach(cat => {
+        const arr = cm.get(cat);
+        const sub = cat === "No category" ? null : catSubFor(tk, cat);
+        const cc = sub ? `var(--cat-${sub.parent}-${sub.id})` : `var(--${tk}-seed, var(--ink-faint))`;
+        html += `<div class="rtc-sub" style="--cc:${cc}">${esc(cat)}<span class="rtc-n">${arr.length}</span></div>`;
+        html += arr.map(t => rtcCardHtml(t, cc, true)).join("");
+      });
+    });
+    html += `</div>`;
+    host.innerHTML = html;
+    rtnInlineRedock("table");
+  }
+  // One routine card -- icon/name/Auto switch on top, schedule/time/phase pill
+  // below, Edit/Add-once/Delete hidden until the card itself is tapped open (see
+  // the #rtnGrid click delegate's data-rtc-toggle branch + rtnCardOpenId, both
+  // above). Every action reuses the routine table's own functions verbatim --
+  // rtnActEdit/rtnActCal/rtnActDelete fire off the exact same data-rtg-edit/
+  // data-rtg-onceadd/data-rtg-del hooks the click delegate already knows, and the
+  // Auto switch is the identical .rtg-auto-switch/data-rtg-cal pill every other
+  // view uses -- nothing here re-implements what those already do.
+  function rtcCardHtml(t, cc, indent) {
+    const calOn = t.calOn !== false, tl = rtnTileOf(t);
+    const open = rtnCardOpenId === t.id;
+    return `<div class="rtc-card${indent ? " rtc-card-indent" : ""}" data-rtg-row="${esc(t.id)}" data-rtc-toggle="${esc(t.id)}" style="--cc:${cc}" role="button" tabindex="0" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} actions for ${esc(t.title)}">
+        <div class="rtc-top">
+          ${tl.ic}<span class="rtc-name">${esc(tl.name)}</span>
+          <button type="button" class="rtg-auto-switch${calOn ? " on" : ""}" data-rtg-cal="${esc(t.id)}" role="switch" aria-checked="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button>
+        </div>
+        <div class="rtc-meta">
+          <span class="rtc-freq">${esc(routineFreqLabel(t))}</span>
+          <span class="rtc-time">${rtnTimeLabelOf(t)}</span>
+          ${rtnPhasePillOf(t)}
+        </div>
+        <div class="rtc-acts"${open ? "" : " hidden"}>
+          <button type="button" class="rtc-act" data-rtg-edit="${esc(t.id)}"><span aria-hidden="true">✎</span> Edit</button>
+          <button type="button" class="rtc-act" data-rtg-onceadd="${esc(t.id)}"><span aria-hidden="true">📅</span> Add</button>
+          <button type="button" class="rtc-act rtc-act-del" data-rtg-del="${esc(t.id)}" aria-label="Delete ${esc(t.title)}"><span aria-hidden="true">🗑</span></button>
+        </div>
+      </div>`;
   }
   // Extracted so both the row's quick-tap icons AND the ⋯ menu's own click
   // handlers (openRtnMoreMenu below -- it's mounted on document.body, past
@@ -30152,11 +30346,28 @@
     if (editIcon) { rtnActEdit(editIcon.dataset.rtgEdit); return; }
     const delIcon = e.target.closest("[data-rtg-del]");
     if (delIcon) { rtnActDelete(delIcon.dataset.rtgDel); return; }
+    // Cards view's "📅 Add" action (2026-08-16) -- the same one-off/no-editor
+    // rtnActCal() flow the ⋯ menu's "Add one-off" item already calls, just its
+    // own hook since data-rtg-cal is already taken by the Auto switch above.
+    const onceBtn = e.target.closest("[data-rtg-onceadd]");
+    if (onceBtn) { rtnActCal(onceBtn.dataset.rtgOnceadd); return; }
     const cell = e.target.closest("[data-rtg-cell]");
     if (cell) {
       const cellRow = cell.closest("[data-rtg-row]");
       const ct = cellRow && ROUTINE_TASKS.find(x => x.id === cellRow.dataset.rtgRow);
       if (ct) rtgEditCell(cell, ct);
+      return;
+    }
+    // Cards view (2026-08-16): tapping the card itself (anywhere but the Auto
+    // switch or an already-open action button, both caught above) opens/closes
+    // its Edit/Add/Delete row -- one at a time, same shape as openRtnMoreMenu's
+    // own toggle-close-on-second-tap. Checked before the generic row fallback
+    // below so a closed card never falls through to that table-only behaviour.
+    const cardToggle = e.target.closest("[data-rtc-toggle]");
+    if (cardToggle) {
+      const id = cardToggle.dataset.rtcToggle;
+      rtnCardOpenId = rtnCardOpenId === id ? null : id;
+      renderRtnGrid();
       return;
     }
     // clicking elsewhere in the row (not an editable cell -- e.g. the Phase pill,
@@ -30447,12 +30658,14 @@
   });
   document.getElementById("rtgGroupBy").addEventListener("change", e => {
     rtnGridGroupBy = e.target.value;
+    rtnCardOpenId = null;   // a card open under the old grouping may not exist under the new one
     renderRtnGrid();
   });
 
   document.getElementById("rtnViewPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-rtnview]");
     if (!b) return;
+    rtnCardOpenId = null;   // leaving/entering Cards -- start collapsed, don't carry over stale state
     rtnListMode = b.dataset.rtnview;
     document.querySelectorAll("#rtnViewPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.rtnview === rtnListMode)));
     renderRoutines();
