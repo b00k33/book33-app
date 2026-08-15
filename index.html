@@ -13717,15 +13717,34 @@
   // whole app this old name still needs to appear, since neither can find what
   // it's not literally looking for.
   (function migrateLegacyKeyPrefix() {
+    // 2026-08-15 — ROOT CAUSE of Linh's repeated pharmacy data losses, found and
+    // reproduced today. LCM Pharmacy is served from this SAME origin
+    // (b00k33.github.io/lcm-pharmacy) and still stores its live data under exactly
+    // the "daybook-" prefix this loop sweeps. So every single Book33 boot moved
+    // daybook-pharmacy / daybook-prescriptions under book33-* and DELETED the
+    // originals — and once a book33-* copy existed, the `getItem(newKey) === null`
+    // guard skipped the copy while removeItem ran anyway, so later boots deleted
+    // her freshly re-synced stock and prescriptions outright, with no copy kept
+    // anywhere. Opening the calendar was silently wiping the dispensary.
+    // Three guards, any one of which would have prevented it:
+    //   1. run ONCE — the "book33-migrated" flag it always set is finally read;
+    //   2. never touch a key the pharmacy owns, whatever the prefix says;
+    //   3. only delete an old key once its copy has actually succeeded.
+    if (localStorage.getItem("book33-migrated")) return;
+    var ownedByPharmacy = function (k) {
+      return k === "daybook-pharmacy" || k === "daybook-prescriptions" || k.indexOf("daybook-ph-") === 0;
+    };
     var stale = [];
     for (var i = 0; i < localStorage.length; i++) {
       var k = localStorage.key(i);
-      if (k && k.indexOf("daybook-") === 0) stale.push(k);
+      if (k && k.indexOf("daybook-") === 0 && !ownedByPharmacy(k)) stale.push(k);
     }
     stale.forEach(function (k) {
       var newKey = "book33-" + k.slice("daybook-".length);
       try {
-        if (localStorage.getItem(newKey) === null) localStorage.setItem(newKey, localStorage.getItem(k));
+        var old = localStorage.getItem(k), cur = localStorage.getItem(newKey);
+        if (cur === null) localStorage.setItem(newKey, old);
+        else if (cur !== old) return;   // a real, different book33-* copy already won — keep the old key rather than destroy it
         localStorage.removeItem(k);
       } catch (e) {}
     });
@@ -17018,7 +17037,13 @@
     const box = document.getElementById("herbAlertBox");
     if (!box) return;
     let ph = null;
-    try { ph = JSON.parse(localStorage.getItem("book33-pharmacy")); } catch (e) {}
+    // 2026-08-15: reads the pharmacy's OWN live key. It used to read "book33-pharmacy",
+    // which only ever existed because the legacy-key migration above was stealing the
+    // pharmacy's data (see the root-cause note there) — so this card was showing a
+    // stale snapshot of a copy that shouldn't have existed. Read-only, always: Book33
+    // must never write to a key LCM Pharmacy owns. Falls back to the old name so the
+    // card still says something on a device that hasn't opened the pharmacy since.
+    try { ph = JSON.parse(localStorage.getItem("daybook-pharmacy") || localStorage.getItem("book33-pharmacy")); } catch (e) {}
     const herbs = ph && Array.isArray(ph.herbs) ? ph.herbs : [];
     let zero = 0, low = 0, toOrder = 0;
     for (const h of herbs) {
@@ -38047,7 +38072,14 @@
     suppress = true;
     try {
       Object.keys(obj).forEach(function (k) {
-        if (EXCLUDE[k]) return;
+        // 2026-08-15: only ever write Book33's OWN namespace. gather() has only
+        // collected "book33-" keys since the rename, but a cloud row written before
+        // the pharmacy was split out of this app (July 2026) could still carry a
+        // "daybook-pharmacy" blob — and LCM Pharmacy stores its LIVE data under that
+        // exact name on this same origin. Without this filter, one boot could restore
+        // a months-old snapshot straight over her current stock and prescriptions.
+        // Companion to the same rule in migrateLegacyKeyPrefix() at the top of the app.
+        if (k.indexOf("book33-") !== 0 || EXCLUDE[k]) return;
         if (localStorage.getItem(k) !== obj[k]) localStorage.setItem(k, obj[k]);
       });
     } finally { suppress = false; }
