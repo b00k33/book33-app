@@ -2257,6 +2257,16 @@
   }
   .tl-detail-manage-row:last-child { border-bottom: none; }
   .tl-detail-manage-row:hover { background: color-mix(in oklab, var(--raised) 50%, var(--note-bg)); }
+  /* 2026-08-15 (§6 Zone 3 review): "Centred rows: ＋ Add to another day (gold) · Move
+     this day · Edit · Delete". They were left-aligned, and the first row was not the
+     primary. justify-content centres the icon+label pair as one group, so the 20px icon
+     slot still keeps them aligned with each other down the stack. Gold = --margin-rule,
+     the app's one accent token (near-black in Day mode, which is exactly where the Day
+     palette puts primary actions — see the TOKEN MAP near :root). Zone 3 is mobile-only
+     (.tl-detail-manage is in the >=641px hide list), so desktop is untouched. */
+  .tl-detail-manage-row { justify-content: center; text-align: center; }
+  .tl-detail-manage-gold { color: var(--margin-rule); }
+  .tl-detail-manage-gold .tl-detail-em { color: var(--margin-rule); }
   /* 2026-08-15 (§8): 18px -> 20px, matching .nav-panel-row .nav-ic's slot so labels
      line up down a column at the SAME width everywhere. §8 asks for "a fixed ~19-20px
      centred slot"; 20px was already the app's existing answer in the nav, so this
@@ -2499,6 +2509,32 @@
   /* the focus ring the field law would otherwise have given these two — same
      2px --margin-rule / 1px offset pair #addForm .field-bare already uses. */
   .tl-detail-move-row input:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
+  /* 2026-08-15 (§6 "Move / Reschedule — scope first"): the move/copy panel's own pieces.
+     .ovr-scope / .ovr-scope-opt are REUSED from the edit panel's scope toggle (see the
+     ROUTINE OCCURRENCE OVERRIDES block) rather than restyled here — one segmented
+     control, one look, and the gold "This day only" selected state comes with it.
+     .tl-move-hint is the plain-language line under it ("Only Friday's Pilates moves.
+     Mon & Wed stay where they are.") — quiet, not a warning box: .ovr-note's tinted
+     panels are for the edit panel's destructive-scope warning, and this is guidance. */
+  /* --ink-soft, not --ink-faint: this is a sentence she has to READ to decide what the
+     move will do, not decorative meta. Measured on white, --ink-faint gave 3.06:1 at
+     11px; --ink-soft gives 5.74:1. CLAUDE.md sanctions either token for this size. */
+  .tl-move-hint { font-size: 11px; line-height: 1.5; color: var(--ink-soft); margin: 0 0 8px; }
+  /* labelled fields — the panel asks for a date and then Starts / Ends, so each needs to
+     say which it is. The inputs keep .tl-detail-move-row input's existing flat skin (a
+     descendant selector, so wrapping them in a label changes nothing about it). */
+  .tl-move-fld { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .tl-move-fld-lbl { font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+  /* the single gold confirm — §0's "one primary action per surface, gold". Same recipe
+     as .b33mp-confirm, the month picker's own confirm, so the two buttons she meets one
+     after the other in this flow are literally the same button. */
+  .tl-move-confirm {
+    display: block; width: 100%; min-height: 44px; padding: 8px 16px; border: none; border-radius: 999px;
+    background: var(--margin-rule); color: var(--accent-on);
+    font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .tl-move-confirm:hover { filter: brightness(1.06); }
+  .tl-move-confirm:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
   .tl-detail-move-actions { display: flex; gap: 8px; }
   .tl-move-btn {
     flex: 1; min-height: 44px; padding: 8px 12px; border: none; border-radius: var(--radius-md);
@@ -7994,7 +8030,7 @@
      multi-day (#mdAlldayRow, inserted between .md-headrow and #mdTimelineScroll).
      Mobile-only <1024px, same gate as the rest of this build (below) — the OLD
      #tlAlldayRow (birthdays only) is hidden on mobile now (see the <1024px gate near
-     #dpHeader, a few hundred lines down) so birthdays don't show twice; desktop
+     #dayProgress, a few hundred lines down) so birthdays don't show twice; desktop
      keeps #tlAlldayRow/renderAlldayRow() completely untouched (that call site, and
      everything it does, is unmodified).
      Flat per §0: chips carry the item's own real --cat-c fill, the SAME data-track/
@@ -8117,19 +8153,50 @@
   .dcx-meter-track { flex: 1; height: 7px; border-radius: 999px; background: var(--field-bg); overflow: hidden; }
   .dcx-meter-fill { display: block; height: 100%; border-radius: 999px; }
   .dcx-meter-val { flex: none; font-size: 11px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  /* 2026-08-15 (§2 REVISION): the collapsed progress row's own affordance — › when
+     shut, ⌄ when open, exactly the chevron the retired .dp-card carried. Fixed 16px
+     slot so the bar's right edge doesn't jump by a glyph width when it flips. Emitted
+     by meterHtml() only when a caller passes one, so the fasting row is untouched. */
+  .dcx-meter-chev { flex: none; width: 16px; text-align: center; font-size: 11px; color: var(--ink-faint); }
+  /* ---- the merged progress component (§2 REVISION, "the meter IS the collapsed
+     progress card — merge them, don't ship both") ----
+     One component, two states, replacing the ring-card + bar pair that used to show the
+     same 6/9 twice. The open state takes --note-bg: the app's card/panel surface, and
+     the exact token the retired .dp-card itself used, so the expanded panel keeps the
+     progress card's own tone rather than inventing a third one. (The build spec calls
+     this "--surface"; that name does not exist in this codebase — see the Day-mode
+     TOKEN MAP near :root, which maps the same invented vocabulary onto real tokens.)
+     Padding on open is VERTICAL ONLY, deliberately: .day-main already runs flush to the
+     page's own 4px gutter at 360px (measured live), so there is no room to bleed a
+     horizontal pad outward with a negative margin, and adding one inward would shift the
+     label and bar 12px sideways every time she expands it — a visible jump on a row
+     whose whole job is to sit still and grow downward. The 16px corner curve costs the
+     label ~0.3px of inset at its own baseline, i.e. nothing on screen. */
+  .dcx-prog { display: flex; flex-direction: column; border-radius: var(--radius-md); }
+  .dcx-prog[data-open="true"] { background: var(--note-bg); padding: 8px 0; }
+  /* streak chips lifted out of the retired .dp-card (.dp-info > .dp-streaks) — same
+     .dp-streak-chip class, so there is ONE chip style, not a mobile copy of it. Empty on
+     most days; :not(:empty) keeps it from reserving a gap then (§0's no-empty-placeholder
+     rule, same reason #dayCtxFasting renders nothing when no fast is running). */
+  .dcx-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .dcx-streaks:not(:empty) { margin-top: 8px; }
+  .dcx-recap { padding: 4px 0 0; }
   /* 2026-08-15 (§2 review fix): #dayProgress's ring header and #fastStatus both
      already sit directly above the mobile grid (confirmed by grep — #dayProgress
      is shared with desktop via reparenting into #deskColLeft, #fastStatus is
      ALREADY desktop-hidden the same way at #deskColLeft #fastStatus, superseded
      there by .desk-fast-card), so without this the new dcx-meter progress/fasting
      rows just repeated the exact same "3/5" and "Fasting" numbers a few px below
-     them — an obvious duplicate, not two different pieces of information. Hiding
-     just the RING HEADER (#dpHeader, not #dayProgress itself) keeps .dp-recap (the
-     actual tickable task list, unique functionality with no dcx equivalent) fully
-     working when expanded — see the click-forwarding wiring further down that
-     makes the new compact meter the tap target that opens it now instead. */
+     them — an obvious duplicate, not two different pieces of information.
+     2026-08-15 (§2 REVISION) — SUPERSEDES the "hide just #dpHeader, keep .dp-recap"
+     half of that fix. .dp-recap opened 480px ABOVE the meter that opened it (measured:
+     recap at y=123, meter at y=600), i.e. off-screen, because #dayProgress sits above
+     the quick-add bar while the meter sits directly on the grid. The recap now renders
+     inside the merged component itself (#dayCtxRecap), so the WHOLE ring card retires
+     here rather than just its header — one rule, no half-hidden widget left behind.
+     Mobile-only: desktop keeps #dayProgress exactly as it was, ring and all. */
   @media (max-width: 1023px) {
-    #dpHeader { display: none; }
+    #dayProgress { display: none; }
     #fastStatus { display: none; }
     /* 2026-08-15 (§4 all-day row build): #tlAlldayRow (birthdays only) is superseded
        on mobile by the new unified #dayAlldayRow/#mdAlldayRow (birthdays + other
@@ -8149,6 +8216,33 @@
   #dayCtxProgress, #dayCtxFasting { cursor: pointer; }
   #dayCtxProgress:not(:empty), #dayCtxFasting:not(:empty) { display: flex; align-items: center; min-height: 44px; }
   #dayCtxProgress:not(:empty) > *, #dayCtxFasting:not(:empty) > * { flex: 1; min-width: 0; }
+  /* the chevron must NOT be stretched by the flex:1 rule above — it is a fixed slot,
+     and without this it takes an equal share of the row alongside the bar. */
+  #dayCtxProgress .dcx-meter-chev { flex: none; }
+  /* 2026-08-15 (§2 REVISION, "what hides at 3+ days"): the three pieces that only ever
+     describe a SINGLE day — the merged progress component, "Routines today"
+     (#chainChips) and "Piling up" (#pileupBox) — collapse once the grid shows more than
+     one day. COLLAPSE, NOT DELETE, and deliberately a pure display gate keyed off ONE
+     attribute (data-cal-multi, written by renderCalDaysUI): no JS state is touched,
+     nothing is emptied, so all three come back exactly as they were — including an
+     already-expanded progress recap — the moment the count returns to 1.
+     Hung off #wrap, not #dayPage, for one specific reason: #pileupBox is a MOVABLE tile.
+     applyDayTiles()/TILE_SHELF park it on whichever shelf she chose, and its default
+     home (#tilesDate, inside .nav-tiers) is NOT inside #dayPage at all — a #dayPage-
+     rooted selector silently misses it there (verified live: pileupBox.closest("#dayPage")
+     === null). #wrap is an ancestor of every shelf. The [data-view="day"] half is what
+     keeps that from over-reaching: that shelf is global chrome, visible on Routines/
+     Money/etc. too (also verified live), and the Day page's day-count must not hide a
+     tile on some other page. render() already maintains #wrap's data-view on every
+     page switch, so no new bookkeeping is introduced.
+     Mobile-scoped because calDaysActive() always answers 1 at >=1024px, so desktop can
+     never reach this state; the gate is here purely so a stale attribute can't leak
+     across the 1024px boundary. */
+  @media (max-width: 1023px) {
+    #wrap[data-view="day"][data-cal-multi="true"] .dcx-prog,
+    #wrap[data-view="day"][data-cal-multi="true"] #chainChips,
+    #wrap[data-view="day"][data-cal-multi="true"] #pileupBox { display: none !important; }
+  }
 
   /* ============================================================
      FASTING TINT, single-day (§3 build, 2026-08-15) — see .md-col-head[data-fasting]/
@@ -11444,7 +11538,13 @@
     border-color: var(--cosmic-gold); color: var(--cosmic-gold);
     box-shadow: inset 0 0 0 1px var(--cosmic-gold);
   }
-  .ovr-scope-opt[data-ovr-scope="routine"][aria-pressed="true"] {
+  /* 2026-08-15 (§6): the move panel's scope toggle reuses this same component
+     (data-move-scope, see renderTlDetailBody's moveHtml), so it gets the same
+     "the wider-reaching option looks different" treatment — one component, one
+     behaviour, rather than a segmented control that turns red in one panel and
+     gold in the other for the identical choice. */
+  .ovr-scope-opt[data-ovr-scope="routine"][aria-pressed="true"],
+  .ovr-scope-opt[data-move-scope="routine"][aria-pressed="true"] {
     border-color: var(--power-bad); color: var(--power-bad);
     box-shadow: inset 0 0 0 1px var(--power-bad);
   }
@@ -14071,7 +14171,7 @@
              renderAlldayRow(); collapses to zero height when there's nothing today,
              same empty-is-invisible pattern as #chainChips/#ocPrompts above.
              2026-08-15 (§4 all-day row build): DESKTOP ONLY now (hidden <1024px, see
-             its CSS gate near #dpHeader) — mobile's birthdays+all-day-events unified
+             its CSS gate near #dayProgress) — mobile's birthdays+all-day-events unified
              row is #dayAlldayRow/#mdAlldayRow instead (see the ALL-DAY ROW CSS block).
              This element/renderAlldayRow() call are otherwise completely untouched. -->
         <div class="tl-allday-row" id="tlAlldayRow"></div>
@@ -14086,7 +14186,25 @@
         <div class="dcx-wrap" id="dayCtxWrap">
           <div class="dcx-chips" id="dayCtxChips"></div>
           <div class="dcx-meters">
-            <div id="dayCtxProgress" role="button" tabindex="0" aria-label="Today's progress — tap to show today's tasks"></div>
+            <!-- 2026-08-15 (§2 REVISION, "the meter IS the collapsed progress card —
+                 merge them, don't ship both"): #dayCtxProg is the MERGED progress
+                 component. Collapsed it is just the meter row (#dayCtxProgress:
+                 TODAY · bar · 6/9 done · ›). Tapping it expands IN PLACE, pushing the
+                 page down: the wrapper takes a surface fill, the chevron flips to ⌄,
+                 and #dayCtxRecap fills with the SAME dayRecapHTML() the old ring card
+                 used (Done/Still-to-do rows + the "N left for today" footer line),
+                 unchanged. The ring-only card (#dayProgress/.dp-card) is retired on
+                 mobile only — desktop still renders it, reparented into #deskColLeft
+                 (see placeDeskGrid) — so its CSS/JS stay exactly as they were and only
+                 a <1024px display:none retires it here. #dayCtxStreaks carries the
+                 streak chips that used to live inside .dp-card's own .dp-info: without
+                 it, hiding the card on mobile would silently delete a Today-page
+                 element the revision explicitly says must be kept. -->
+            <div class="dcx-prog" id="dayCtxProg" data-open="false">
+              <div id="dayCtxProgress" role="button" tabindex="0" aria-expanded="false" aria-label="Today's progress — tap to show today's tasks"></div>
+              <div class="dcx-streaks" id="dayCtxStreaks"></div>
+              <div class="dcx-recap" id="dayCtxRecap" hidden></div>
+            </div>
             <div id="dayCtxFasting" role="button" tabindex="0" aria-label="Fasting — tap to open fasting history"></div>
           </div>
         </div>
@@ -18437,6 +18555,26 @@
   // goal-gradient ring (her ask: "seeing it near full pulls me to finish") — tap
   // it to open the recap in place, same widget doing double duty rather than two.
   let dpRecapOpen = false;
+  // 2026-08-15 (§2 REVISION): pulled straight out of renderDayProgress() below, byte for
+  // byte, so the merged mobile progress component (#dayCtxStreaks, see renderDayCtx) and
+  // the desktop ring card render the SAME chips from one place. The card is display:none
+  // below 1024px now, so without this the streak chips — one of the Today-page elements
+  // the revision explicitly lists as "must be preserved" — would have vanished on phones.
+  // 2026-08-10 (Day page redesign, "streaks as chips that don't wrap mid-word"): each
+  // streak is its own nowrap chip in a flex-wrap row instead of one joined string — a
+  // long line used to wrap character-by-character mid-phrase; wrapping now only ever
+  // happens BETWEEN whole chips.
+  // 2026-08-15 fix (C1): "N days" was an occurrence-vs-day mislabel — see the note at
+  // checkRewardMilestones' own bestRoutineStreak line. The Fitness chip is real weeks
+  // (fitnessWeekStreak) and is left alone.
+  function dayStreakChipsHtml() {
+    const bits = [];
+    const fitWeeks = fitnessWeekStreak();
+    if (fitWeeks >= 2) bits.push(`🔥 Fitness · ${fitWeeks} wk${fitWeeks === 1 ? "" : "s"}`);
+    const bestRtn = bestRoutineStreak();
+    if (bestRtn) bits.push(`🔥 ${esc(bestRtn.title)} · ${bestRtn.streak} in a row`);
+    return bits.map(b => `<span class="dp-streak-chip">${b}</span>`).join("");
+  }
   function renderDayProgress() {
     const host = document.getElementById("dayProgress");
     if (!host) return;
@@ -18445,18 +18583,10 @@
     const size = 52, sw = 5, r = (size - sw) / 2, c = 2 * Math.PI * r;
     const off = (c * (1 - pct)).toFixed(1);
     const complete = total > 0 && done >= total;
-    // 2026-08-10 (Day page redesign, "streaks as chips that don't wrap mid-word"):
-    // each streak is now its own nowrap chip (.dp-streak-chip) in a flex-wrap row,
-    // instead of one joined string — a long line used to wrap character-by-character
-    // mid-phrase; wrapping now only ever happens BETWEEN whole chips.
-    const streakBits = [];
-    const fitWeeks = fitnessWeekStreak();
-    if (fitWeeks >= 2) streakBits.push(`🔥 Fitness · ${fitWeeks} wk${fitWeeks === 1 ? "" : "s"}`);
-    const bestRtn = bestRoutineStreak();
-    // 2026-08-15 fix (C1): "N days" was the same occurrence-vs-day mislabel — see the
-    // note at checkRewardMilestones' own bestRoutineStreak line. The Fitness chip above
-    // is real weeks (fitnessWeekStreak) and is left alone.
-    if (bestRtn) streakBits.push(`🔥 ${esc(bestRtn.title)} · ${bestRtn.streak} in a row`);
+    // 2026-08-15 (§2 REVISION): the chip-building lines moved up into
+    // dayStreakChipsHtml() so mobile's merged progress component can render the exact
+    // same chips — see that function. Nothing about what this card draws changed.
+    const streakHtml = dayStreakChipsHtml();
     host.innerHTML = `<div class="dp-card" id="dpHeader" role="button" tabindex="0" aria-expanded="${dpRecapOpen}"
       aria-label="Today's progress — tap to ${dpRecapOpen ? "hide" : "show"} today's tasks">
       <span class="dp-ring-btn">
@@ -18469,7 +18599,7 @@
       </span>
       <div class="dp-info">
         <div class="dp-label">${complete ? "Today — all done" : total ? "Today's progress" : "Nothing tickable today"}</div>
-        ${streakBits.length ? `<div class="dp-streaks">${streakBits.map(b => `<span class="dp-streak-chip">${b}</span>`).join("")}</div>` : ""}
+        ${streakHtml ? `<div class="dp-streaks">${streakHtml}</div>` : ""}
       </div>
       <button type="button" class="dp-sound-toggle" id="dpSoundToggle" aria-pressed="${rewardSoundOn}"
         aria-label="${rewardSoundOn ? "Turn off completion sound" : "Turn on completion sound"}"
@@ -18492,7 +18622,10 @@
     if (e.target.closest("#dpSoundToggle")) { setRewardSound(!rewardSoundOn); renderDayProgress(); return; }
     // 2026-08-06 (Linh: "expand on tap of the card header"): the WHOLE header row
     // toggles now, not just the ring — chevron is the affordance
-    if (e.target.closest("#dpHeader")) { dpRecapOpen = !dpRecapOpen; renderDayProgress(); return; }
+    // 2026-08-15 (§2 REVISION): renderDayCtx() too — dpRecapOpen is now shared with the
+    // merged mobile component, and this is the desktop half of the same flag. One call
+    // keeps the two surfaces in lockstep across a resize without waiting for a renderDay().
+    if (e.target.closest("#dpHeader")) { dpRecapOpen = !dpRecapOpen; renderDayProgress(); renderDayCtx(); return; }
   });
 
   // staged tasks — for the ones she finishes in pieces: the task carries follow-up
@@ -19128,16 +19261,34 @@
   // running unchanged; see the CSS comment by #dayFastHead for the full reasoning.
   // #dayTimelineWrap just carries the flag -- CSS (<1024px-gated there) does the actual
   // painting.
+  // 2026-08-15 (§3 REVISION, "do NOT tint the column at 1 day"): her correction to the
+  // shipped §3 build — "there's only one column, so tinting the whole grid is heavy-
+  // handed and the fasting meter already says it. Column tinting applies at 2+ days
+  // only, where it distinguishes which day." Repeated in the revised acceptance list:
+  // "Fasting tints the entire column at 2+ days only (header + grid); no tint at 1 day."
+  // (The mockup caption says the opposite; the spec text wins — it is explicit, gives a
+  // reason, is repeated in acceptance, and the mockup image itself shows no tint at one
+  // day. Confirmed with her.)
+  // Both of these surfaces are now cleared UNCONDITIONALLY, which is what the rule adds
+  // up to once you follow it through:
+  //   · at 1 day  — the revision says no tint, full stop.
+  //   · at 2+ days — these are the SINGLE-day surfaces. renderMultiDayGrid()'s own
+  //     .md-col-head[data-fasting] / .md-col[data-fasting] (+ #mdAlldayRow
+  //     .ad-col[data-fasting]) paint the continuous per-column band there, and
+  //     #timelineScroll is hidden outright. #dayFastHead, however, is an outer SIBLING of
+  //     #timelineScroll, so it was NOT hidden with it: verified live at 360px/3 days, it
+  //     drew a 25px "● 16h" band straight above the multi-day grid, duplicating the
+  //     label the tinted column header two rows below already carries. That was true
+  //     before this revision too (the old condition was a bare hrs > 0) — a pre-existing
+  //     leak the same fix closes.
+  // The element, the CSS and all three call sites stay put rather than being deleted —
+  // this file's reversible-disable convention, and the one-line way back if she ever
+  // wants the single-day tint again.
   function renderDayFastTint() {
-    const hrs = fastedHoursOn(state.anchor);
-    const on = hrs > 0;
     const head = document.getElementById("dayFastHead");
-    if (head) {
-      head.hidden = !on;
-      head.textContent = on ? fastTintLabel(hrs) : "";
-    }
+    if (head) { head.hidden = true; head.textContent = ""; }
     const wrap = document.getElementById("dayTimelineWrap");
-    if (wrap) wrap.dataset.fasting = on;
+    if (wrap) wrap.dataset.fasting = "false";
   }
 
   /* the right-hand rail follows the time of day — attention cards and the task
@@ -19449,9 +19600,16 @@
   // routine). Both now move/duplicate the real FIT_LOG session, not just a calendar
   // decoration, so an extra logged Pilates class actually counts toward her fitness
   // tracking (streaks/Growth page) the same way ticking the routine itself does.
-  function rescheduleItem(e, dateKey, timeStr) {
+  // 2026-08-15 (§6 "Move / Reschedule — scope first"): optional endStr. The move panel
+  // now offers real Starts / Ends fields, so a move can change the length as well as the
+  // slot. Omitted (or nonsensical — an end at or before the start) falls straight back to
+  // itemDurationMin(e), i.e. the exact "keep its original length" behaviour every
+  // existing caller (the drag handler, Skip-to-tomorrow, the outcome sheet) still gets
+  // with no change to its own call.
+  function rescheduleItem(e, dateKey, timeStr, endStr) {
     if (!e) return;
-    const dur = itemDurationMin(e);
+    const typedDur = endStr && toMin(endStr) != null && toMin(timeStr) != null ? toMin(endStr) - toMin(timeStr) : null;
+    const dur = typedDur && typedDur > 0 ? typedDur : itemDurationMin(e);
     const end = minToTime(Math.min(toMin(timeStr) + dur, 1439));
     if (e.id.indexOf("fitcal-") === 0) {
       if (!moveFitLogSession(e.id.slice(7), e.date, dateKey, timeStr, dur)) return;
@@ -19491,9 +19649,12 @@
     closeTlDetail();
     render();
   }
-  function duplicateItem(e, dateKey, timeStr) {
+  // same optional endStr as rescheduleItem above, for the same reason and with the same
+  // fall-back — "Add to another day" and "Move this day" share one field set.
+  function duplicateItem(e, dateKey, timeStr, endStr) {
     if (!e) return;
-    const dur = itemDurationMin(e);
+    const typedDur = endStr && toMin(endStr) != null && toMin(timeStr) != null ? toMin(endStr) - toMin(timeStr) : null;
+    const dur = typedDur && typedDur > 0 ? typedDur : itemDurationMin(e);
     if (e.id.indexOf("fitcal-") === 0 || (e.fromRoutine && e.fitLink)) {
       // "book another [Pilates] like it" should log a real second session, not a
       // decorative calendar-only copy — same FIT_PRESETS defaults addFitSession uses,
@@ -19849,13 +20010,73 @@
   function tlItemCanMove(e) {
     return !e.generated || (e.fromRoutine && !!e.rtTaskId) || (e.fromRecurringEvent && !!e.recurId) || e.id.indexOf("fitcal-") === 0;
   }
+  /* ---- §6 "Move / Reschedule — scope first" (2026-08-15) ----
+     The three small pieces the move panel needs. Kept out of renderTlDetailBody so the
+     confirm label can be recomputed live (refreshTlMoveConfirm, below) from the same
+     function that rendered it, instead of a second copy of the wording. */
+  // "Mon & Wed" — the routine's OTHER scheduled weekdays, read off its real schedule
+  // layers (schedulesOf, the same source routineFreqLabel uses), never hardcoded and
+  // never guessed from the occurrence. Null when there is no second day to name.
+  function rtnOtherDaysPhrase(t, occDateD) {
+    if (!t || t.freq !== "weekly") return null;
+    const mine = occDateD ? dowIndex(occDateD) : -1;
+    const days = [...new Set(schedulesOf(t).flatMap(l => Array.isArray(l.weekdays) ? l.weekdays : []))]
+      .filter(i => i !== mine).sort((a, b) => a - b);
+    if (!days.length) return null;
+    const names = days.map(i => WD_FULL[i].slice(0, 3));
+    return names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+  }
+  // the plain-language line under the scope toggle, in her own voice — the spec's
+  // "Only Friday's Pilates moves. Mon & Wed stay where they are." with every part
+  // derived: the weekday from the occurrence, the title from the routine template, the
+  // other days from its schedule. The fallbacks matter as much as the main case: a
+  // once-a-week routine has no other weekday to name, and a daily one has no weekday
+  // list at all, so each says the true thing for its own cadence rather than printing an
+  // empty list. The routine-scope line deliberately echoes the EDIT panel's own
+  // "past single-day overrides stay put" wording — same promise, same words.
+  function moveScopeHint(e, t, occDateD, dayScope) {
+    const title = (t && t.title) || e.title || "it";
+    const thisDay = occDateD ? WD_FULL[dowIndex(occDateD)] : "this day";
+    if (!dayScope) return `Every ${title} changes, on all its days. Past single-day changes stay put.`;
+    const others = rtnOtherDaysPhrase(t, occDateD);
+    const rest = others ? `${others} stay where they are.`
+      : t && t.freq === "daily" ? "Every other day stays where it is."
+      : t && t.freq === "weekly" ? `Every other ${thisDay} stays where it is.`
+      : "The rest of the routine stays where it is.";
+    return `Only ${thisDay}'s ${title} moves. ${rest}`;
+  }
+  // the gold confirm's label. "Move to Tuesday 18 August" / "Add to Tuesday 18 August"
+  // for a per-day move or a copy; under "The routine" scope there is no single target
+  // date to name (a repeating template keeps its own days — see commitTlMove), so it
+  // names the new TIME instead rather than promising a date it isn't going to set.
+  function tlMoveConfirmText(dateKey, timeStr, isCopy, dayScope) {
+    if (!dayScope) return timeStr ? `Move the routine to ${fmtTime(timeStr)}` : "Move the routine";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey || "")) return "Pick a date";
+    const d = parseKey(dateKey);
+    return `${isCopy ? "Add to" : "Move to"} ${WD_FULL[dowIndex(d)]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  }
+  // live update as she picks — the month picker (§7) writes #tlMoveDate.value and fires
+  // real bubbling input+change events (see b33mpOpenForInput's onPick), so the two
+  // listeners on #tlDetailBody catch a pick from the sheet and a typed/stepped native
+  // change alike. Text only: re-rendering the body here would tear the open sheet down
+  // mid-interaction, which is the exact detach bug the star handler documents.
+  function refreshTlMoveConfirm() {
+    const btn = document.getElementById("tlMoveConfirm");
+    if (!btn) return;
+    const dEl = document.getElementById("tlMoveDate");
+    const tEl = document.getElementById("tlMoveTime");
+    btn.textContent = tlMoveConfirmText(dEl ? dEl.value : "", tEl ? tEl.value : "", tlDetailPanel === "copy", !!dEl);
+  }
   function renderTlDetailHeadActions(e) {
-    const row = (attrs, label, icon, danger) =>
+    // 2026-08-15 (§6 Zone 3 review): `gold` is the fifth argument, for the ONE primary
+    // action per §0 ("One primary action per surface, gold") — "＋ Add to another day",
+    // exactly as the spec's Zone 3 list marks it. Everything else stays quiet.
+    const row = (attrs, label, icon, danger, gold) =>
       // 2026-08-15 (§8): the button face goes through glyphHtml -- ＋/🕑/✎/🗑 are
       // app chrome, not her data, and 🕑/🗑 both default to colour-emoji presentation.
       // Each already sits beside a real word ("Move this day", "Delete"), which is
       // §8's other rule.
-      `<button type="button" class="tl-detail-manage-row${danger ? " tl-detail-manage-danger" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}">${glyphHtml(icon, "tl-detail-em")}<span>${label}</span></button>`;
+      `<button type="button" class="tl-detail-manage-row${danger ? " tl-detail-manage-danger" : ""}${gold ? " tl-detail-manage-gold" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}">${glyphHtml(icon, "tl-detail-em")}<span>${label}</span></button>`;
     const actions = [];
     // 2026-08-15 (§6 mobile redesign, Pass B, Zone 3): "+ Add to another day" and
     // "Move this day" relocated here alongside Edit/Delete — the actual date/time
@@ -19868,9 +20089,15 @@
     // (data-tl-duplicate) already IS "copy this item to a new date/time", so this
     // needed no new mechanism, just a second doorway into the one that already
     // exists (confirmed against duplicateItem, ~line 18412).
+    // 2026-08-15 (§6 review): the two rows carried the SAME bare data-tl-toggle-move and
+    // opened the SAME panel, which then made her choose Reschedule-or-Duplicate all over
+    // again at the bottom — copying was literally indistinguishable from moving, and
+    // whichever row she tapped the panel said "New date & time". Each row now declares
+    // its own intent, the panel renders for that intent, and its single gold confirm
+    // does what the tapped row promised. "＋ Add to another day" is the gold one.
     if (tlItemCanMove(e)) {
-      actions.push(row(`data-tl-toggle-move`, "Add to another day", "＋"));
-      actions.push(row(`data-tl-toggle-move`, "Move this day", "🕑"));
+      actions.push(row(`data-tl-toggle-move="copy"`, "Add to another day", "＋", false, true));
+      actions.push(row(`data-tl-toggle-move="move"`, "Move this day", "🕑"));
     }
     if (!e.generated) {
       actions.push(row(`data-edit="${e.id}"`, "Edit", "✎"));
@@ -19944,6 +20171,15 @@
   // for the same survive-refresh reason as tlDetailPanel above; openTlDetail() resets
   // it to "day" so every freshly-opened occurrence starts on the safe scope.
   let tlOvrScope = "day";
+  // 2026-08-15 (§6 "Move / Reschedule — scope first"): the MOVE panel's own scope, kept
+  // deliberately SEPARATE from tlOvrScope above rather than reusing it. They are shared
+  // in appearance only: tlOvrScope is the EDIT panel's, and it persists for the life of
+  // the open sheet, so switching Edit to "The routine" and then tapping "Move this day"
+  // would have opened the move flow already set to "The routine" — while the spec is
+  // explicit that Move opens on "This day only (default, gold)" every time. Its own
+  // variable makes that impossible, and each panel keeps its own answer if she flips
+  // between them. Reset in openTlDetail() AND on every open of the move panel.
+  let tlMoveScope = "day";
   function renderTlDetailBody(e) {
     const kind = eventKind(e);
     const done = isDone(e.id);
@@ -20150,33 +20386,65 @@
     // silently re-saved the same slot." Now the panel only appears once you've tapped
     // an action, so there's a visible open-then-fill-then-confirm sequence instead of
     // a button that can look like a no-op.
-    // 2026-08-06 (Linh, "too busy"): moveOpen makes this panel and the toggle pills
-    // below (actionsHtml) mutually exclusive -- previously both rendered at once once
+    // 2026-08-06 (Linh, "too busy"): an open panel and the toggle pills below
+    // (actionsHtml) are mutually exclusive -- previously both rendered at once once
     // open, showing two rows of identically-labelled "Reschedule"/"Book another" pills.
-    // Cancel here (data-tl-toggle-move, same handler as the toggle pills) collapses
-    // back to actionsHtml without confirming.
+    // Cancel here collapses back to actionsHtml without confirming.
+    //
+    // 2026-08-15 (§6 "Move / Reschedule — scope first" + the Zone 3 review): SUPERSEDES
+    // the single shared "New date & time" panel with the two Reschedule/Duplicate
+    // buttons at the bottom. Two problems that fixes:
+    //  · "Add to another day" and "Move this day" opened the IDENTICAL panel, so
+    //    copying was indistinguishable from moving — whichever row she tapped, she then
+    //    had to pick the verb again at the bottom, and the panel's own heading said
+    //    "New date & time" either way. The panel now has an INTENT (tlDetailPanel is
+    //    "move" or "copy"), the heading names it, and ONE gold confirm does exactly what
+    //    the row she tapped promised.
+    //  · Move went straight to the date fields, with no scope question anywhere — the
+    //    scope toggle only ever existed in the EDIT panel. Scope is now the FIRST step,
+    //    in the spec's own order: scope → date (§7's month picker, via the existing
+    //    #tlMoveDate — data-mp-today makes the global interception open the sheet, no
+    //    second date UI is built) → Starts/Ends → gold confirm naming the real target
+    //    date, live-updating as she changes it.
     const canMove = tlItemCanMove(e);
     const moveOpen = tlDetailPanel === "move";
-    const moveHtml = canMove && moveOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
+    const copyOpen = tlDetailPanel === "copy";
+    const movePanelOpen = moveOpen || copyOpen;
+    // The scope step only appears where there is a genuine second option, per the brief's
+    // "for a NON-routine item there is no 'the routine' to choose": a real routine
+    // occurrence, and only when MOVING. Copying is never scoped — duplicateItem detaches
+    // a standalone EVENT/FIT_LOG row whatever the source was (see its own comment), so
+    // "copy the routine" isn't a thing this app can do, and a segmented control with one
+    // meaningful option is exactly the empty affordance §0 rules out.
+    const moveScopeable = moveOpen && isRtnOcc && !!rtnT;
+    const moveDayScope = !moveScopeable || tlMoveScope !== "routine";
+    const moveVerb = copyOpen ? "Add to" : "Move to";
+    const moveField = (id, cls, type, label, value, extra) => `<label class="tl-move-fld">
+          <span class="tl-move-fld-lbl">${esc(label)}</span>
+          <!-- .field-bare is the ONE FIELD LANGUAGE law's own documented escape hatch (see
+               its comment near input:is(...):not(.field-bare)). That law paints every field
+               a 1px --note-line border with !important, which no plain border:none can
+               outrank; §0 of this build forbids outlined fields outright, so the hatch is
+               the only correct way out. Their flat look is defined by .tl-detail-move-row
+               input, which supplies ink, radius, padding and focus ring as well as fill. -->
+          <input type="${type}" class="${cls} field-bare" id="${id}" value="${esc(value || "")}" aria-label="${esc(label)}"${extra || ""}>
+        </label>`;
+    const moveHtml = canMove && movePanelOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
         <div class="tl-detail-move-head">
-          <span>New date &amp; time</span>
-          <button type="button" class="tab-link" data-tl-toggle-move>Cancel</button>
+          <span>${copyOpen ? "Add to another day" : "Move this day"}</span>
+          <button type="button" class="tab-link" data-tl-move-cancel>Cancel</button>
         </div>
+        ${moveScopeable ? `<div class="ovr-scope" role="group" aria-label="What should this move change?">
+          <button type="button" class="ovr-scope-opt" data-move-scope="day" aria-pressed="${moveDayScope}">This day only<span class="sub">${esc(occDateLbl)}</span></button>
+          <button type="button" class="ovr-scope-opt" data-move-scope="routine" aria-pressed="${!moveDayScope}">The routine<span class="sub">${esc(schedLbl)}</span></button>
+        </div>
+        <div class="tl-move-hint">${esc(moveScopeHint(e, rtnT, occDateD, moveDayScope))}</div>` : ""}
+        ${moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
         <div class="tl-detail-move-row">
-          <!-- 2026-08-15 fix (B2): .field-bare is the ONE FIELD LANGUAGE law's own
-               documented escape hatch (see its comment near input:is(...):not(.field-bare)).
-               That law paints every field a 1px --note-line border with !important, which
-               no plain border:none can outrank; §0 of this build forbids outlined fields
-               outright, so the hatch is the only correct way out. Their flat look is
-               defined by .tl-detail-move-row input, which now supplies everything the law
-               was providing (ink, radius, padding, focus ring) as well as the flat fill. -->
-          <input type="date" class="tl-move-date field-bare" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date" data-mp-today="1">
-          <input type="time" class="tl-move-time field-bare" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
+          ${moveField("tlMoveTime", "tl-move-time", "time", "Starts", moveDayScope ? e.start : (rtnT && rtnT.start) || e.start)}
+          ${moveField("tlMoveEnd", "tl-move-time", "time", "Ends", moveDayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : ((rtnT && rtnT.end) || e.end || ""))}
         </div>
-        <div class="tl-detail-move-actions">
-          <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
-          <button type="button" class="tl-move-btn" data-tl-duplicate="${e.id}">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
-        </div>
+        <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
       </div>` : "";
     // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
     // only renders once a real FIT_LOG session exists for this item (resolveFitSessionFor)
@@ -20277,9 +20545,13 @@
     // adding .tl-detail-mobile-hide (hides ≤640px, same class Zone 1's markup-
     // supersession already uses) retires it at every width without deleting the
     // markup outright.
-    const actionsHtml = canMove && !moveOpen ? `<div class="tl-detail-move-actions tl-detail-move-toggle tl-detail-mobile-hide">
-        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">Reschedule</button>
-        <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
+    // 2026-08-15 (§6 review): each pill now declares which intent it opens, same as
+    // Zone 3's rows — previously both carried a bare data-tl-toggle-move and opened the
+    // identical panel. (This row is hidden at every width; the attributes are kept
+    // correct anyway so the markup can't ship a lie if it is ever un-hidden.)
+    const actionsHtml = canMove && !movePanelOpen ? `<div class="tl-detail-move-actions tl-detail-move-toggle tl-detail-mobile-hide">
+        <button type="button" class="tl-move-btn" data-tl-toggle-move="move" aria-expanded="false">Reschedule</button>
+        <button type="button" class="tl-move-btn" data-tl-toggle-move="copy" aria-expanded="false">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
       </div>` : "";
     // 2026-08-04 (desktop styling spec, point 4): on wide screens ALL actions live in
     // ONE wrapping row — Edit / Reschedule / Book another / Delete / Done — replacing
@@ -20302,8 +20574,8 @@
       : e.id.indexOf("fitcal-") === 0 ? `data-fitcal-del="${e.id.slice(7)}"` : "";
     const deskActionsHtml = `<div class="tl-desk-actions">
         ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ Edit</button>` : ""}
-        ${canMove && !moveOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move>🕑 Reschedule</button>
-        <button type="button" class="tl-desk-btn" data-tl-toggle-move>⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>` : ""}
+        ${canMove && !movePanelOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move="move">🕑 Reschedule</button>
+        <button type="button" class="tl-desk-btn" data-tl-toggle-move="copy">⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>` : ""}
         ${delAttr ? `<button type="button" class="tl-desk-btn tl-desk-del" ${delAttr}>🗑 Delete</button>` : ""}
         <button type="button" class="tl-desk-btn tl-desk-done" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>✓ ${done ? "Done" : "Mark done"}</button>
       </div>`;
@@ -20441,6 +20713,7 @@
     if (!e) return;
     tlDetailPanel = null;
     tlOvrScope = "day";
+    tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
     document.getElementById("tlDetailOverlay").hidden = false;
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
     renderTlDetailHeadActions(e);
@@ -20970,12 +21243,36 @@
     // outside-click listener. Same stopPropagation() fix.
     const editToggle = e.target.closest("[data-tl-toggle-edit]");
     if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
-    // "Reschedule" and "Book another like it" are two entry points into the SAME
-    // collapsed date/time panel (they already share one date+time pair, see moveHtml) —
-    // fixes "Reschedule does nothing": tapping it now visibly opens a panel to fill in
-    // rather than silently re-saving whatever the pre-filled current date/time already was.
+    // 2026-08-15 (§6 review): the toggle carries an INTENT now — "move" or "copy" — so
+    // "Move this day" and "Add to another day" open two different panels with two
+    // different confirms, instead of the one shared "New date & time" panel that made
+    // them indistinguishable. Every open resets tlMoveScope, so Move always starts on
+    // "This day only" no matter what the Edit panel's own scope was last set to.
     const moveToggle = e.target.closest("[data-tl-toggle-move]");
-    if (moveToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "move" ? null : "move"; refreshOpenTlDetail(); return; }
+    if (moveToggle) {
+      e.stopPropagation();
+      const want = moveToggle.dataset.tlToggleMove === "copy" ? "copy" : "move";
+      tlDetailPanel = tlDetailPanel === want ? null : want;
+      tlMoveScope = "day";
+      refreshOpenTlDetail();
+      return;
+    }
+    // the panel's own Cancel — its own attribute, not data-tl-toggle-move: a bare toggle
+    // read as "open move", so cancelling out of the COPY panel silently switched to the
+    // move panel instead of closing.
+    if (e.target.closest("[data-tl-move-cancel]")) { e.stopPropagation(); tlDetailPanel = null; refreshOpenTlDetail(); return; }
+    // §6 "scope first" — the move panel's own scope toggle. Same stopPropagation-before-
+    // rerender discipline as the edit panel's [data-ovr-scope] handler; deliberately its
+    // own attribute and its own variable (see tlMoveScope's declaration).
+    const mvScope = e.target.closest("[data-move-scope]");
+    if (mvScope) {
+      e.stopPropagation();
+      tlMoveScope = mvScope.dataset.moveScope === "routine" ? "routine" : "day";
+      refreshOpenTlDetail();
+      return;
+    }
+    const moveGo = e.target.closest("[data-tl-move-go]");
+    if (moveGo) { e.stopPropagation(); commitTlMove(moveGo.dataset.tlMoveGo); return; }
     // the routine-template deep-edit link inside the edit panel (see editFieldsHtml) —
     // same "close this sheet first" courtesy the header's old data-rt-open case used,
     // the global document click delegate (near ROUTINE_TASKS.find) does the actual
@@ -21016,21 +21313,65 @@
       }
       return;
     }
-    const btn = e.target.closest("[data-tl-reschedule], [data-tl-duplicate]");
-    if (!btn) return;
-    const id = btn.dataset.tlReschedule || btn.dataset.tlDuplicate;
+  });
+  /* 2026-08-15 (§6 "Move / Reschedule — scope first"): the one commit path for both
+     intents, replacing the old pair of Reschedule/Duplicate buttons at the foot of a
+     shared panel (data-tl-reschedule / data-tl-duplicate — no markup emits either any
+     more, so their handler is gone with them).
+     Three outcomes, and the difference between them is the whole point of the scope step:
+      · COPY  -> duplicateItem: a standalone booking on the target day. The original day
+                is untouched, so there is deliberately no ghost.
+      · MOVE, "This day only" (the default) -> rescheduleItem, whose routine branch writes
+                setRtnOvr(..., { movedTo }) — which is what leaves the restorable ghost on
+                the origin day (generatedFor's ghostMoved / isGhostItem / the
+                data-rt-restore handler, all built in §6 Pass B and untouched here).
+      · MOVE, "The routine" -> the TEMPLATE changes, exactly the way the edit panel's own
+                [data-ovr-save] routine branch does it (title left alone; end only when
+                the routine has no subtasks driving its length). Nothing per-date is
+                written, so there is no movedTo and no ghost — which is precisely the
+                behaviour the spec asks for.
+     DEVIATION, stated plainly: under "The routine" there is no date step and the confirm
+     names a TIME, not a date. A repeating template has no single date to be moved to —
+     "move Pilates to Tuesday 18 August" would have to rewrite the routine's weekday set
+     (and for interval/monthly/yearly cadences, mean nothing at all), which is a schedule
+     edit, not a move, and belongs in the routine editor this sheet already links to.
+     So routine scope moves the TIME, on all its days, and says so in both the hint and
+     the button. Everything else about the scope step matches the spec. */
+  function commitTlMove(id) {
     const ev = TL_ITEMS_BY_ID[id];
     if (!ev) return;
-    const dateVal = document.getElementById("tlMoveDate")?.value;
-    const timeVal = document.getElementById("tlMoveTime")?.value;
-    if (!dateVal || !timeVal) return;
-    if (btn.dataset.tlReschedule) rescheduleItem(ev, dateVal, timeVal);
-    else duplicateItem(ev, dateVal, timeVal);
-  });
+    const copy = tlDetailPanel === "copy";
+    const startVal = document.getElementById("tlMoveTime")?.value || "";
+    const endVal = document.getElementById("tlMoveEnd")?.value || "";
+    if (!startVal) return;
+    const p = parseOccId(ev.id);
+    const rt = ev.rtTaskId ? ROUTINE_TASKS.find(x => x.id === ev.rtTaskId) : null;
+    if (!copy && tlMoveScope === "routine" && rt && p) {
+      rt.start = startVal;
+      const subs = Array.isArray(rt.subtasks) ? rt.subtasks.filter(s => s && s.text) : [];
+      if (!subs.length && endVal) rt.end = endVal;
+      saveRoutines();
+      tlDetailPanel = null;
+      closeTlDetail();
+      renderDay();
+      return;
+    }
+    const dateVal = document.getElementById("tlMoveDate")?.value || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return;
+    tlDetailPanel = null;
+    if (copy) duplicateItem(ev, dateVal, startVal, endVal);
+    else rescheduleItem(ev, dateVal, startVal, endVal);
+  }
   // 2026-08-06: time/duration/location/notes fields for a routine-linked fitness
   // session, inline on the Day timeline's own detail sheet (see fitSessionHtml
   // above) — same setSessionField()/setSessionNotes() writers the old Habits
   // page editor used, just a new home for the inputs.
+  // §6: the gold confirm names the real target and follows it live. Both event types:
+  // the §7 month picker fires input AND change on #tlMoveDate when a day is picked, and
+  // a native time/date control fires them as she steps through values.
+  ["input", "change"].forEach(evt => document.getElementById("tlDetailBody").addEventListener(evt, e => {
+    if (e.target.id === "tlMoveDate" || e.target.id === "tlMoveTime") refreshTlMoveConfirm();
+  }));
   document.getElementById("tlDetailBody").addEventListener("change", e => {
     const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
     // 2026-08-05 ("B33 Notification" Step 4): custom minutes-before for this event
@@ -21078,8 +21419,18 @@
     // state as the body's own data-tl-toggle-move pills — dual-bound across both
     // click listeners exactly like data-tl-toggle-edit just above, since
     // #tlDetailBody and #tlDetailHeadActions are two separate elements/listeners.
+    // 2026-08-15 (§6 review): intent-carrying now — "copy" from "＋ Add to another day",
+    // "move" from "Move this day" — so the two rows stop opening the identical panel.
+    // Kept byte-identical to the body listener's own copy of this branch.
     const moveToggle = e.target.closest("[data-tl-toggle-move]");
-    if (moveToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "move" ? null : "move"; refreshOpenTlDetail(); return; }
+    if (moveToggle) {
+      e.stopPropagation();
+      const want = moveToggle.dataset.tlToggleMove === "copy" ? "copy" : "move";
+      tlDetailPanel = tlDetailPanel === want ? null : want;
+      tlMoveScope = "day";
+      refreshOpenTlDetail();
+      return;
+    }
     if (e.target.closest("[data-edit]")) closeTlDetail();
     if (tryTlDelete(e.target)) return;
   });
@@ -23037,6 +23388,18 @@
     const multi = document.getElementById("multiDayWrap");
     if (!single || !multi) return;
     const active = calDaysActive();
+    // 2026-08-15 (§2 REVISION, "what hides at 3+ days"): one attribute drives the whole
+    // single-day-only collapse — the merged progress component, "Routines today"
+    // (#chainChips) and "Piling up" (#pileupBox). CSS does the hiding (see
+    // #dayPage[data-cal-multi] near .dcx-prog), so this is a display gate and nothing
+    // more: no render is skipped, no state is cleared, and all three return exactly as
+    // they were — including an expanded progress recap — when the count goes back to 1.
+    // Deliberately NOT `hidden` on each element: #pileupBox is a user-arrangeable tile
+    // whose own visibility is already owned by applyDayTiles()/TILE_PREFS, and writing
+    // `hidden` here would fight that system on the next re-render. On #wrap rather than
+    // #dayPage because that tile's default shelf sits outside #dayPage — see the CSS
+    // rule's own note for the full reasoning and the [data-view="day"] guard.
+    document.getElementById("wrap")?.setAttribute("data-cal-multi", String(active > 1));
     if (active > 1) {
       single.hidden = true;
       multi.hidden = false;
@@ -23061,12 +23424,16 @@
   // so formatting stays with whichever caller knows its own domain; this just lays
   // the three pieces out. fillVar is a CSS custom-property NAME (e.g. "--margin-rule"),
   // not a colour -- every fill still resolves through var(), never a hardcoded hex.
-  function meterHtml(label, pct, valueText, fillVar) {
+  // 2026-08-15 (§2 REVISION): optional trailing `chev` glyph — passed only by the merged
+  // progress row, which is a disclosure control now; omitted by the fasting row, which is
+  // a plain jump, so that row's markup is byte-for-byte what it was.
+  function meterHtml(label, pct, valueText, fillVar, chev) {
     const w = (Math.max(0, Math.min(1, pct || 0)) * 100).toFixed(1);
     return `<div class="dcx-meter">
       <span class="dcx-meter-lbl">${esc(label)}</span>
       <div class="dcx-meter-track"><div class="dcx-meter-fill" style="width:${w}%;background:var(${fillVar})"></div></div>
       <span class="dcx-meter-val">${esc(valueText)}</span>
+      ${chev ? `<span class="dcx-meter-chev" aria-hidden="true">${chev}</span>` : ""}
     </div>`;
   }
   // moon/day-ruler read state.anchor -- the day being VIEWED, same as renderDay()'s
@@ -23130,15 +23497,52 @@
   // strip above stays at every day count, per spec ("The context chip strip stays once at
   // the top"), and the fasting meter is untouched -- it is part of a separate, already
   // tracked spec revision.
+  // 2026-08-15 (§2 REVISION, "the meter IS the collapsed progress card — merge them,
+  // don't ship both"): this row is no longer a second widget repeating the ring card's
+  // 6/9 — it IS the progress card now, collapsed. Tapping it (dcxProgressTap, further
+  // down) flips the SAME dpRecapOpen flag the ring card always used and re-renders here,
+  // so the expansion opens directly underneath the row that was tapped instead of 480px
+  // up the page where #dayProgress physically sits (measured before this fix: recap at
+  // y=123, its own tap target at y=600 — off screen).
+  // Nothing about the recap is rewritten: dayRecapHTML(items) is called verbatim, its
+  // rows still carry data-tick-ev and are still ticked by the app-wide document delegate,
+  // and the ● / ○ / strike-through language is the existing .dp-t-row/.dp-dot CSS.
+  // The streak chips move with it (dayStreakChipsHtml, shared with the desktop card) —
+  // they lived inside .dp-card, which is display:none on mobile now, so leaving them
+  // there would have quietly deleted a Today-page element the revision says to keep.
+  // 2026-08-15 fix (G2), still true: the full-width progress meter is a 1-day-only
+  // piece — at 3+ days every visible column carries its own mini bar + count
+  // (mdColHeadHtml) and this row could only ever show ONE day's number. Emptied AND
+  // hidden so it reserves no space; the recap's OPEN/SHUT state (dpRecapOpen) is
+  // deliberately NOT reset, so a trip to 3 days and back returns it exactly as it was
+  // (the revision's "they return unchanged at 1 day"). The chip strip above stays at
+  // every day count, per spec.
   function renderDayCtx() {
     const chipsEl = document.getElementById("dayCtxChips");
     if (chipsEl) chipsEl.innerHTML = dcxChipsHtml();
     const progEl = document.getElementById("dayCtxProgress");
+    const wrapEl = document.getElementById("dayCtxProg");
+    const streakEl = document.getElementById("dayCtxStreaks");
+    const recapEl = document.getElementById("dayCtxRecap");
     if (!progEl) return;
-    if (calDaysActive() > 1) { progEl.innerHTML = ""; progEl.hidden = true; return; }
+    if (calDaysActive() > 1) {
+      progEl.innerHTML = "";
+      progEl.hidden = true;
+      if (streakEl) streakEl.innerHTML = "";
+      if (recapEl) { recapEl.innerHTML = ""; recapEl.hidden = true; }
+      return;
+    }
     progEl.hidden = false;
-    const { done, total } = dayProgress(TODAY);
-    progEl.innerHTML = meterHtml("Progress", total ? done / total : 0, `${done}/${total}`, "--margin-rule");
+    const { done, total, items } = dayProgress(TODAY);
+    progEl.innerHTML = meterHtml("Today", total ? done / total : 0, `${done}/${total} done`, "--margin-rule", dpRecapOpen ? "⌄" : "›");
+    progEl.setAttribute("aria-expanded", String(dpRecapOpen));
+    progEl.setAttribute("aria-label", `Today's progress — tap to ${dpRecapOpen ? "hide" : "show"} today's tasks`);
+    if (streakEl) streakEl.innerHTML = dayStreakChipsHtml();
+    if (wrapEl) wrapEl.dataset.open = String(dpRecapOpen);
+    if (recapEl) {
+      recapEl.innerHTML = dpRecapOpen ? dayRecapHTML(items) : "";
+      recapEl.hidden = !dpRecapOpen;
+    }
   }
   // fasting reads widgetFastingDigest() -- the same read-only HEALTH.activeFast/
   // fastGoalHours snapshot the home-screen-widget digest already computes (see its
@@ -37174,13 +37578,25 @@
   // divs (renderDayCtx()/renderDcxFastMeter() only ever replace their innerHTML,
   // never the wrapper itself), so one-time listeners here are safe, same reasoning
   // as fastStatus/fastLine just above.
+  // 2026-08-15 (§2 REVISION): the tap now re-renders the MERGED component too — that is
+  // where the recap actually appears (#dayCtxRecap, directly under this row) since the
+  // ring card is retired below 1024px. renderDayProgress() is still called so the
+  // desktop card stays in step with the shared dpRecapOpen flag across a resize.
   function dcxProgressTap(e) {
     if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
     if (e.type === "keydown") e.preventDefault();
-    dpRecapOpen = !dpRecapOpen; renderDayProgress();
+    dpRecapOpen = !dpRecapOpen; renderDayProgress(); renderDayCtx();
   }
   document.getElementById("dayCtxProgress")?.addEventListener("click", dcxProgressTap);
   document.getElementById("dayCtxProgress")?.addEventListener("keydown", dcxProgressTap);
+  // the ↻ linked badge sits INSIDE a recap row's own data-tick-ev button, so every
+  // surface that draws one has to check it before the click reaches the app-wide tick
+  // delegate (see handleLinkBadgeClick's own comment — it stopPropagation()s, which is
+  // what stops the row ticking at the same time the explainer opens). #dayProgress's own
+  // listener already does this for the desktop card; this is the same guard for the
+  // merged mobile component's copy of those rows. The rows themselves need no listener:
+  // they bubble to the document-level [data-tick-ev] delegate exactly as they always did.
+  document.getElementById("dayCtxRecap")?.addEventListener("click", handleLinkBadgeClick);
   document.getElementById("dayCtxFasting")?.addEventListener("click", fastTapNav);
   document.getElementById("dayCtxFasting")?.addEventListener("keydown", fastTapNav);
   document.getElementById("dayPickerBtn").addEventListener("click", () => {
