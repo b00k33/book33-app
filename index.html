@@ -2174,8 +2174,17 @@
   /* 2026-08-02 (Linh's GCal reference — "use this when i select event"): tap-to-view
      detail sheet for any Day-timeline item, same overlay+centred-box language as
      .jump-overlay/.jump-box above. */
+  /* 2026-08-15 fix (D1): 45% -> 68%. §9 sets every backdrop in this build at
+     rgba(6,4,3,.6-.72) and 45% sat well under the floor, leaving the page behind
+     the sheet still fully readable and the sheet reading as a floating card rather
+     than a modal layer. Expressed as a color-mix of the `black` KEYWORD (the idiom
+     this file already used here) rather than the spec's literal rgba(6,4,3,…), so
+     no new hardcoded colour enters a component — 6,4,3 is black to within one step
+     of 8-bit rounding anyway. Inherited by .b33mp-overlay (§7 month picker), which
+     carries this same class, so all three backdrops move together.
+     .nav-panel-backdrop (§5) is the third and takes the spec's own .72 — see it. */
   .tl-detail-overlay {
-    position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 45%, transparent);
+    position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 68%, transparent);
     backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center;
   }
   .tl-detail-sheet {
@@ -2232,10 +2241,18 @@
      the same central ≥641px list (search "desktop actions live ONLY in the desk
      row"), untouched, still using its own independent
      .tl-desk-actions Edit/Delete buttons. */
-  .tl-detail-manage { display: flex; flex-direction: column; border-top: 1px solid var(--note-line); flex: none; }
+  /* 2026-08-15 fix (B4): divider weight. --note-line is color-mix(--ink 26%) in Night —
+     roughly 4x the weight §0/§6 specify for this build's own new surfaces (--line
+     .10 for a structural edge, and Zone 3's row separators are named exactly:
+     rgba(216,185,121,.06)). At 26% the manage block read as a stack of outlined boxes,
+     which is the one thing §0 rules out ("group by tone and spacing, never by boxes,
+     borders or bevels"). Both are now ink-derived mixes at the spec's own weights, so
+     they re-resolve per theme like every other derived token and add no new literal.
+     Dividers on PRE-EXISTING surfaces are deliberately untouched. */
+  .tl-detail-manage { display: flex; flex-direction: column; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); flex: none; }
   .tl-detail-manage-row {
     display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; box-sizing: border-box;
-    padding: 12px 24px; border: none; border-bottom: 1px solid var(--note-line); background: var(--raised);
+    padding: 12px 24px; border: none; border-bottom: 1px solid color-mix(in oklab, var(--ink) 6%, transparent); background: var(--raised);
     color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
   }
   .tl-detail-manage-row:last-child { border-bottom: none; }
@@ -2274,6 +2291,13 @@
     }
     .tl-detail-head .tl-detail-close { position: absolute; top: 8px; right: 8px; background: rgba(18, 16, 12, 0.14); color: #12100c; }
     .tl-detail-head .tl-detail-close:hover { background: rgba(18, 16, 12, 0.22); }
+    /* 2026-08-15 fix (A2): the ✕ pad measured 34x34 — under CLAUDE.md's binding 44px
+       minimum, and it is the ONLY visible dismiss control on the sheet (swipe-down and
+       backdrop-tap are both invisible affordances). Phone-scoped so desktop keeps the
+       denser 34px circle its own ≥641px layout was tuned around — the same split the
+       .view-tabs/.track-opt 44px bumps a few thousand lines down already use. Covers
+       #tlDetailClose (same element, id-addressed elsewhere) and .oc-head's reuse. */
+    .tl-detail-close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   }
   .tl-detail-drag { width: 36px; height: 4px; border-radius: 999px; background: rgba(18, 16, 12, 0.28); margin: 0 auto 8px; flex: none; }
   .tl-detail-hero { display: flex; flex-direction: column; gap: 4px; padding-right: 44px; }
@@ -2385,6 +2409,16 @@
   .tl-detail-steps { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
   /* 2026-08-15 fix (B5): 13.5px -> 13px — half-pixel sizes are explicitly banned. */
   .tl-detail-step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--ink); }
+  /* 2026-08-15 fix (A2): min-height 44px on a phone. The row is already a <label>
+     wrapping its own checkbox (see stepsHtml in renderTlDetailBody), so the WHOLE row is
+     the toggle's real tap target — giving the row the 44px makes that target legal
+     without touching the native checkbox itself (a native input ignores padding and
+     stretches its own control when given min-height, so growing the box there would
+     distort the tick). §9 names this case explicitly: "checkbox rows 44px", and it is a
+     touch rule — phone-scoped so a desktop step list keeps its current density. */
+  @media (max-width: 640px) {
+    .tl-detail-step { min-height: 44px; }
+  }
   .tl-detail-step input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: var(--margin-rule); cursor: pointer; }
   .tl-detail-step .tl-step-t { flex: 1; min-width: 120px; }
   .tl-detail-step.done .tl-step-t { text-decoration: line-through; opacity: 0.55; }
@@ -2434,16 +2468,44 @@
   .tl-detail-move-head { display: flex; align-items: center; gap: 12px; }
   .tl-detail-move-head span { font-size: 11px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
   .tl-detail-move-row { display: flex; gap: 8px; }
+  /* 2026-08-15 fix (B2 + A2): the Move/Reschedule panel's field and its two buttons
+     were the last OUTLINED controls in the §6 sheet, which §0 forbids outright ("No
+     outlined pills, fields or buttons anywhere in this build") — the buttons in
+     particular drew a 1px gold ring around a transparent ground, i.e. the exact
+     "bordered pill" language the flat pass removed everywhere else.
+     Both now take the sheet's OWN established quiet fill —
+     color-mix(in oklab, var(--ink) 12%, var(--paper)), the recipe .tl-detail-skip-btn
+     a few rules up already uses for "interactive, but not the primary" — rather than a
+     third treatment invented here. Neither is the surface's gold primary (they are an
+     equal pair: Reschedule / Duplicate), so neither takes gold; the hover step to 18%
+     mirrors .tl-detail-skip-btn:hover exactly.
+     min-height:44px is the A2 half: both measured ~35px, under CLAUDE.md's binding
+     minimum. min-height (not extra padding) keeps every number on the 4/8/12/16/24/32
+     scale, the same ~50-use pattern the rest of this sheet already follows.
+     SCOPE NOTE — deliberately NOT phone-scoped, unlike .tl-detail-step/.tl-detail-close
+     just above. Those are density/touch tweaks with a desktop counterpart worth keeping;
+     this is one shared control's LOOK, and the date/time fields have to carry
+     .field-bare in the markup to escape the app-wide field law at all — a class cannot
+     be applied per media query, so splitting the styling by width would leave desktop
+     with a field that has neither a border nor a fill. Desktop therefore picks this panel
+     up too (flat fills, 44px instead of outlined pills at ~35px), which is what the build
+     spec's own acceptance line allows: "Desktop unaffected except the removed gold column
+     wash AND THE SHARED COMPONENTS." */
   .tl-detail-move-row input {
-    flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 8px 12px;
-    border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
+    flex: 1; min-width: 0; min-height: 44px; font: inherit; font-size: 13px; padding: 8px 12px;
+    border: none; border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--ink) 12%, var(--paper)); color: var(--ink);
   }
+  /* the focus ring the field law would otherwise have given these two — same
+     2px --margin-rule / 1px offset pair #addForm .field-bare already uses. */
+  .tl-detail-move-row input:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
   .tl-detail-move-actions { display: flex; gap: 8px; }
   .tl-move-btn {
-    flex: 1; padding: 8px 12px; border: 1px solid var(--margin-rule); border-radius: var(--radius-md);
-    background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    flex: 1; min-height: 44px; padding: 8px 12px; border: none; border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--ink) 12%, var(--paper));
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
-  .tl-move-btn:hover { background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
+  .tl-move-btn:hover { background: color-mix(in oklab, var(--ink) 18%, var(--paper)); }
   /* 2026-08-15 (§6 mobile redesign): the old bottom "Delete" row (.tl-del-row/
      .tl-del-trigger) is RETIRED, not just restyled — Zone 3 (.tl-detail-manage,
      see near .tl-detail-head) now owns mobile Delete as a labelled row, wired to
@@ -3366,15 +3428,32 @@
      time, never the name"). */
   .tl-block.tl-tight .tl-meta { display: none; }
   /* 2026-08-10 (Day page redesign, "event block = dark ink on track colour, gradient
-     into a calm green, fixes grey-on-green contrast"): mobile only — --cat-c is
-     already "this event's own colour" (track, or its category tint), so the gradient
-     runs from THAT into a fixed dark green, reading as one calm family instead of the
-     desktop's flatter per-track fill. Dark ink text (#0c2417) replaces --cat-t here
-     since a light --cat-t (built for flat mid-tone fills) loses contrast against the
-     darker green tail of the gradient. */
+     into a calm green, fixes grey-on-green contrast"): mobile only — the gradient ran
+     from --cat-c into a fixed dark green with dark ink (#0c2417) on top.
+     2026-08-15 fix (B1): REMOVED. Three separate problems, all of them §0/Do-NOT/
+     CLAUDE.md breaches rather than taste:
+       · two hardcoded hexes in a component ("a hardcoded hex outside :root is always
+         a bug"), and #2c8a52 is Fitness green frozen at a value nothing owns — recolour
+         Fitness in book33-categories and every block on the phone keeps this green tail;
+       · a GRADIENT on a control, which §0's flat rule and the Do-NOT list both forbid;
+       · the SAME item rendered three different colours depending on width — gradient at
+         1 day (≤640px), flat var(--cat-c) + white ink in the 3/5/7-day grid (.md-item/
+         .md-bar, which never had this override), and the desktop --*-ink-onwhite pairing
+         at ≥641px.
+     It also silently blocked Day mode: :root[data-theme="light"]'s generated --cat-c
+     (the colorDay fills, see regenerateCategoryStyles) only reached the gradient's TOP
+     stop, and Day's white --track-text ink never landed at all because #0c2417 overrode
+     it. With the override gone, .tl-block falls through to its own base rules a few
+     lines up — flat `background: var(--cat-c)`, title/meta `color: var(--cat-t)` — which
+     is exactly what .md-item/.md-bar already do at every other day count, in both
+     themes. No replacement literal: --cat-t is the existing "ink for this fill" token.
+     The one line kept is `color`, NOT the background: the removed rule set it on the
+     block itself, so anything inside a block that doesn't name its own colour (the
+     override dot, chips, the tick button's label) was inheriting #0c2417. Pointing that
+     inheritance at --cat-t keeps those pieces on the item's own ink instead of falling
+     back to the page's --ink, which would be near-black text on a saturated fill in Day. */
   @media (max-width: 640px) {
-    .tl-block { background: linear-gradient(var(--cat-c), #2c8a52); color: #0c2417; }
-    .tl-block .tl-title, .tl-block .tl-meta, .tl-block .tl-meta .loc { color: #0c2417; }
+    .tl-block { color: var(--cat-t); }
   }
   /* 2026-08-10 (Desktop Day page cleanup, "event blocks are grey strikethrough on
      green (unreadable)... fill each block with its track colour and use dark ink
@@ -5470,6 +5549,27 @@
   .track-opt[data-track="marriage"] { color: var(--marriage-ink); }
   .track-opt[data-track="personal"] { color: var(--ink); }
   .track-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px currentColor; font-weight: 600; }
+  /* 2026-08-15 fix (B2): Settings → Navigation, §5's own Drawer/Tabs switch. §0 forbids
+     outlined controls outright ("No outlined pills, fields or buttons anywhere in this
+     build") and the selected state here was drawing a 1.5px inset ring INSIDE the shared
+     1px border — two concentric rings, the exact "double box" §6 calls out by name.
+     SCOPED to #navModePicker, not fixed on .track-opt itself: that base class backs ~30
+     pickers across Goals/People/Family/Routines/the event form, and restyling it globally
+     would ripple far outside this build — the same containment reasoning (and the same
+     precedent) as the #rtnAddForm .track-opt block a few rules below.
+     Both states become the quiet ink-into-paper fills the §6/§7 sheets already use
+     (.tl-detail-skip-btn, .tl-move-btn), so selection reads as tone + weight rather than
+     as an outline. The ::before dot is dropped here only: it exists to carry a TRACK
+     colour, and "Drawer"/"Tabs" have no track. */
+  #navModePicker .track-opt {
+    border: none; border-radius: var(--radius-sm); font-size: 12.5px;
+    background: color-mix(in oklab, var(--ink) 10%, var(--paper)); color: var(--ink);
+  }
+  #navModePicker .track-opt::before { display: none; }
+  #navModePicker .track-opt[aria-pressed="true"] {
+    box-shadow: none; font-weight: 700;
+    background: color-mix(in oklab, var(--ink) 32%, var(--paper));
+  }
   /* 2026-08-06 (Linh: "redesign my routine form... remove the heavy outlines on every
      field; separate with spacing and subtle tone... compact colour chips... no big
      outlined pills; selected clearly highlighted"): CLAUDE.md's own "flat: colour and
@@ -7710,8 +7810,15 @@
   .cal-days-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; }
   .cal-days-lbl { font-size: 11px; color: var(--ink-faint); }
   .cal-days-picker { display: flex; gap: 4px; }
+  /* 2026-08-15 fix (A2): measured 27 x 23px — the switch that drives this whole build's
+     1/3/5/7 view and it was half CLAUDE.md's binding 44px minimum. min-height/min-width
+     (the app's ~50-use pattern) rather than extra padding, so nothing lands off the
+     4/8/12/16/24/32 scale; min-WIDTH too because the pressed state is a 999px pill and a
+     27x44 pill reads as a lozenge, not a button. Four 44px pills + the label still fit
+     one row at 360px (measured). */
   .cal-days-btn {
     border: none; background: none; padding: 4px 10px; border-radius: 999px;
+    min-height: 44px; min-width: 44px;
     font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-faint); cursor: pointer;
   }
   .cal-days-btn:hover { color: var(--margin-rule); }
@@ -7752,8 +7859,36 @@
      TOP corners here -- .md-col below (the grid piece directly under this header)
      rounds only the BOTTOM, so header+grid read as one seamless band with no
      double-rounded seam where they meet. */
-  .md-col-head[data-fasting="true"] { background: rgba(55,175,101,.075); border-radius: 9px 9px 0 0; }
+  /* 2026-08-15 fix (B3): the wash was a literal rgba(55,175,101,.075) — Fitness green
+     frozen as a hex in a component. Recolouring Fitness in book33-categories moved every
+     other fitness surface and left this one behind. It now mixes the SAME --fast token
+     the rest of the fasting UI reads ("fasting always tracks fitness", see --fast's own
+     definition, which points at --cat-personal-fitness), at the identical 7.5%.
+     2026-08-15 fix (G1): margin/padding -4px/+4px is not spacing — it is the band
+     closing the 4px gap .md-headrow's own padding-bottom leaves between this header and
+     whatever sits below it, so the tint paints as ONE continuous column instead of
+     stopping short. Layout is byte-identical (the negative margin gives back exactly
+     what the padding takes). */
+  .md-col-head[data-fasting="true"] {
+    background: color-mix(in oklab, var(--fast) 7.5%, transparent);
+    border-radius: 9px 9px 0 0; padding-bottom: 4px; margin-bottom: -4px;
+  }
+  /* 2026-08-15 fix (C2): --fit-workout is the raw Night seed (#37AF65). Over this
+     column's own near-white ground in Day it measured ~2.3:1 — the hour count was
+     effectively unreadable in the theme that shipped an hour ago. The Day twin of that
+     exact seed already exists and is generated from HER category row, not typed here:
+     applyCategoryColours() emits --cat-{parent}-{id}-day for every sub-category
+     (--cat-personal-fitness-day), derived to clear 4.6:1 on white by catDeriveColorDay().
+     So this still follows a Fitness recolour, in both themes, with no hex added.
+     The extra 20%-of-ink step is measured, not decorative: catDeriveColorDay() grades
+     against PURE white, and this label never sits on pure white — it sits on the 7.5%
+     fasting wash (composed rgb(239,248,243)), where the raw Day value lands at 4.25:1,
+     just under AA for 9.5px text. 80/20 toward --ink measures 5.21:1 on that exact
+     composed ground while still reading as Fitness green, and follows the same
+     "darker variant of this colour for text on a light fill" shape as the existing
+     --*-ink-onwhite tokens. Night is untouched at 5.63:1. */
   .md-col-head-fast { display: block; margin-top: 4px; font-size: 9.5px; font-weight: 700; color: var(--fit-workout); font-variant-numeric: tabular-nums; }
+  :root[data-theme="light"] .md-col-head-fast { color: color-mix(in oklab, var(--cat-personal-fitness-day) 80%, var(--ink)); }
 
   .md-grid { display: flex; gap: 4px; padding-top: 0; position: relative; }
   .md-hours { width: 30px; flex: none; padding-left: 0; }
@@ -7769,13 +7904,32 @@
      .md-hours has no reserved gutter for it to borrow — so it's dropped for this rail. */
   .md-hours .hour-row::after { content: none; }
   .md-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
-  .md-col { position: relative; flex: 1; min-width: 0; border-left: 1px solid var(--note-line); }
+  /* 2026-08-15 fix (B4): the column rule was --note-line (color-mix --ink 26% in Night),
+     ~2.6x §0's own --line weight — seven of them side by side turned the grid into a row
+     of outlined boxes, which is precisely what "group by tone and spacing, never by
+     boxes, borders or bevels" rules out. Down to the spec's .10, still ink-derived so it
+     re-resolves per theme. Pre-existing grids elsewhere are untouched.
+     2026-08-15 fix (A1): z-index:0 makes each column its own stacking context, which is
+     what lets .md-bar's 44px hit pad (below) sit in a layer BENEATH every bar box — see
+     that rule for the full reasoning. Columns never overlap each other, so giving each
+     one a context changes nothing about how they paint.
+     pointer-events:none is the other half, and it is required, not tidiness: the pads
+     paint at negative z, i.e. BELOW this column's own box, so with the column hit-testable
+     the column swallowed every tap outside a bar's own 8px and the pads were unreachable
+     (measured: effective hit height stayed at the visual height). The column is not a tap
+     target for anything — nothing in the app reads .md-col/[data-day-key] on click,
+     checked — and the scroll container above it still receives touch, so scrolling is
+     unaffected. The two real targets opt back in explicitly below (pointer-events
+     inherits, so they have to). */
+  .md-col { position: relative; z-index: 0; flex: 1; min-width: 0; pointer-events: none; border-left: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); }
   .md-col:first-child { border-left: none; }
+  .md-col > .tl-item { pointer-events: auto; }
   /* 2026-08-15 (§3 build): grid half of the header+grid fasting band -- bottom corners
      only, see .md-col-head[data-fasting] above for the full reasoning. A plain
      background paints BEHIND an element's own children regardless of DOM order, so this
      never dims or recolours the actual .md-item/.md-bar event blocks stacked on top. */
-  .md-col[data-fasting="true"] { background: rgba(55,175,101,.075); border-radius: 0 0 9px 9px; }
+  /* 2026-08-15 fix (B3): same literal -> --fast mix as the header half above. */
+  .md-col[data-fasting="true"] { background: color-mix(in oklab, var(--fast) 7.5%, transparent); border-radius: 0 0 9px 9px; }
 
   .md-item.tl-item {
     position: absolute; left: 1px; right: 1px; border-radius: var(--radius-sm);
@@ -7791,9 +7945,40 @@
   }
   .md-item-time { font-size: 9px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* 2026-08-15 fix (A1, severe): in compact mode (5/7 days) tapping a bar is the ONLY
+     way to open an item, and the bars measured 38.6 x 8-13px — a third of CLAUDE.md's
+     binding 44px minimum, i.e. the feature was unusable on a phone.
+     The bar itself is untouched: it still paints exactly its own 8px+ colour strip, still
+     positions off the shared topForMin()/HOUR_H() pass, still stacks and lane-packs the
+     same way. The target is a TRANSPARENT ::after pad, 44px tall, centred on the bar and
+     exactly as wide as it (left:0/right:0 — never wider, so a pad can never reach into a
+     neighbouring column).
+     THE ORDERING PROBLEM, and why the pad is z-index:-1 rather than a plain overlay: at
+     this scale adjacent bars are often only ~12px apart, so 44px pads necessarily
+     overlap, and a naive pad would let a LATER bar's pad swallow an EARLIER bar's own
+     visible strip — tapping a bar would open the wrong item, which is worse than the bug
+     being fixed. Because .md-bar itself is z-index:auto, the pad (negative z-index) is
+     painted in its column's stacking context at step 2 — below EVERY bar box, which are
+     all positioned z-index:auto/0 and paint at step 6. Hit-testing walks that order in
+     reverse, so a tap anywhere on a real bar always resolves to THAT bar first, and the
+     pads only ever catch taps landing in genuinely empty grid space. (This is why
+     .md-col above needs z-index:0: without a stacking context on the column there is no
+     defined layer for the pads to sit under.)
+     Verified live at 5 and 7 days with elementFromPoint + real clicks on adjacent bars —
+     see the fix report. */
   .md-bar.tl-item {
     position: absolute; left: 1px; right: 1px; border-radius: 4px; padding: 0; cursor: pointer;
     background: var(--cat-c);
+    /* overflow:visible is load-bearing: .tl-item's base rule sets overflow:hidden (it has
+       to — a titled card clips its own text), and that clipped the hit pad below to the
+       bar's own 8px box, so the first attempt at this fix measured exactly zero
+       improvement. A bar has no content to clip. Found by probing elementFromPoint above
+       and below a real bar, not by reading the cascade. */
+    overflow: visible;
+  }
+  .md-bar.tl-item::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%); z-index: -1;
   }
 
   .md-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 4px 0; }
@@ -7823,7 +8008,10 @@
      alldayRowMount() (JS, near dayItemsFor()) — there is no static placeholder <div>
      for either in the markup at all, so "no content" really is "not in the DOM", not
      just display:none. ============================================================ */
-  .ad-row { display: flex; gap: 4px; margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid var(--note-line); }
+  /* 2026-08-15 fix (B4): --note-line -> the spec's own --line weight (.10), ink-derived
+     so it still re-resolves per theme. At 26% this hairline read as the bottom edge of a
+     box drawn around the all-day strip rather than a quiet separation of two groups. */
+  .ad-row { display: flex; gap: 4px; margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); }
   .ad-gutter {
     flex: none; padding-top: 2px; font-size: 8px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink-faint); text-align: center;
@@ -7848,11 +8036,41 @@
   #mdAlldayRow .ad-gutter { width: 30px; }
   .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
   .ad-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .ad-chip.tl-item {
-    position: static; display: block; border-radius: 6px; padding: 2px 6px; overflow: hidden;
-    font-size: 9.5px; font-weight: 700; color: #12100c; background: var(--cat-c);
-    text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  /* 2026-08-15 fix (G1): §3 asks for ONE continuous tinted band down a fasting day —
+     header AND grid, top to bottom. §4 then landed this row BETWEEN those two elements
+     and left it untinted, so at 3/5/7 days the band read as two disconnected pieces with
+     a pale stripe through the middle. The all-day row's own column cell now carries the
+     same wash, square-cornered (it is the MIDDLE of the band: .md-col-head above still
+     rounds only the top, .md-col below still rounds only the bottom).
+     padding-bottom/margin-bottom +16/-16 is not spacing — it is the tint reaching across
+     .ad-row's own 8px padding-bottom and 8px margin-bottom so no pale gap survives above
+     the grid. Layout is unchanged (the negative margin returns exactly what the padding
+     takes) and the 7.5%-alpha wash leaves the row's divider hairline visible through it.
+     Single-day (calDays===1) needs nothing: #dayAlldayRow is inserted BEFORE #dayFastHead,
+     i.e. above the band rather than inside it. */
+  #mdAlldayRow .ad-col[data-fasting="true"] {
+    background: color-mix(in oklab, var(--fast) 7.5%, transparent);
+    padding-bottom: 16px; margin-bottom: -16px;
   }
+  /* 2026-08-15 fix (A2): the chips measured 16px tall and are a real tap target (they
+     open the same §6 sheet every other block does — see E1). min-height:44px, the
+     app-wide pattern, rather than padding, so every number stays on the 4/8/12/16/24/32
+     scale. display:flex is what lets a 9.5px label sit centred in a 44px box; the label
+     moved into its own .ad-chip-t span because text-overflow:ellipsis does not apply to
+     a flex container's anonymous text item. */
+  .ad-chip.tl-item {
+    position: static; display: flex; align-items: center; border-radius: 6px;
+    min-height: 44px; padding: 0 8px; overflow: hidden;
+    font-size: 9.5px; font-weight: 700; color: #12100c; background: var(--cat-c);
+    cursor: pointer;
+  }
+  /* max-width:100% is load-bearing, not belt-and-braces: the chip is itself a stretched
+     flex item of the column above it, so at the moment this item is sized the chip's own
+     width is not yet definite and `flex:1 1 0%` + min-width:0 alone did NOT shrink it —
+     measured live, a 41px chip held a 140px child and the title hard-clipped mid-word
+     with no ellipsis. Capping against the chip's real content box restores the ellipsis.
+     (Verified by measuring offsetWidth/scrollWidth on a real chip, not by reasoning.) */
+  .ad-chip-t { flex: 1; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* the following day(s) of a real multi-day span (see mdAlldayColsHtml() in JS) —
      same colour, no title text (set by JS, not here), 50% opacity per spec. */
   .ad-chip-cont { opacity: 0.5; }
@@ -7920,12 +8138,22 @@
        (birthdays-only banner) — untouched above this gate. */
     #tlAlldayRow { display: none; }
   }
+  /* 2026-08-15 fix (A2): both are role="button" wrappers (progress opens the day's task
+     list, fasting opens the Fasting page) and measured 14px tall. min-height:44px +
+     centring, the app-wide pattern. :not(:empty) matters on the fasting one — it is
+     rendered empty whenever no fast is running (renderDcxFastMeter), and an
+     unconditional min-height would reserve 44px of dead air on every ordinary day,
+     which is exactly the empty-placeholder rule §0 rules out. #dayCtxProgress is hidden
+     outright at 3+ days now (see renderDayCtx, fix G2), so it never reserves space
+     there either. */
   #dayCtxProgress, #dayCtxFasting { cursor: pointer; }
+  #dayCtxProgress:not(:empty), #dayCtxFasting:not(:empty) { display: flex; align-items: center; min-height: 44px; }
+  #dayCtxProgress:not(:empty) > *, #dayCtxFasting:not(:empty) > * { flex: 1; min-width: 0; }
 
   /* ============================================================
      FASTING TINT, single-day (§3 build, 2026-08-15) — see .md-col-head[data-fasting]/
      .md-col[data-fasting] above for the multi-day half and the full brief; this is the
-     calDays===1 counterpart, same rgba(55,175,101,.075) wash + ● Nh (var(--fit-workout))
+     calDays===1 counterpart, same 7.5%-of---fast wash + ● Nh (var(--fit-workout))
      label, same fastedHoursOn(d) data (renderDayFastTint(), reading state.anchor).
      #dayFastHead is a NEW sibling element (a fixed header sitting above a scrolling
      grid -- same shape .md-headrow/#mdTimelineScroll already use for multi-day) rather
@@ -7950,10 +8178,22 @@
      Explicitly <1024px-scoped here (unlike the multi-day rules above, which inherit
      their scope for free from an already mobile-only parent) since #dayTimelineWrap
      itself renders on desktop too. ============================================================ */
-  #dayFastHead { padding: 5px 12px; font-size: 11px; font-weight: 700; color: var(--fit-workout); font-variant-numeric: tabular-nums; background: rgba(55,175,101,.075); border-radius: 9px 9px 0 0; }
+  /* 2026-08-15 fix (B3 + C2): the literal rgba(55,175,101,.075) becomes a 7.5% mix of
+     --fast (the token that already means "fasting = Fitness", so a recolour in
+     book33-categories follows here too), and the hour label's --fit-workout gets its Day
+     twin in light — see .md-col-head-fast above for the full reasoning; both halves of
+     the §3 tint are fixed the same way so the single-day and multi-day surfaces can't
+     drift. The flat-colour layer stays a two-stop linear-gradient ONLY because it has to
+     compose over #dayTimelineWrap's own existing card background rather than replace it
+     (a `background-image` layer, not a decorative gradient — both stops are identical,
+     so nothing on screen is graded). */
+  #dayFastHead { padding: 5px 12px; font-size: 11px; font-weight: 700; color: var(--fit-workout); font-variant-numeric: tabular-nums; background: color-mix(in oklab, var(--fast) 7.5%, transparent); border-radius: 9px 9px 0 0; }
+  :root[data-theme="light"] #dayFastHead { color: color-mix(in oklab, var(--cat-personal-fitness-day) 80%, var(--ink)); }
   @media (max-width: 1023px) {
     #dayTimelineWrap[data-fasting="true"] {
-      background: linear-gradient(rgba(55,175,101,.075), rgba(55,175,101,.075)), var(--card, var(--note-bg));
+      background:
+        linear-gradient(color-mix(in oklab, var(--fast) 7.5%, transparent), color-mix(in oklab, var(--fast) 7.5%, transparent)),
+        var(--card, var(--note-bg));
       border-radius: 0 0 9px 9px;
     }
   }
@@ -8021,9 +8261,14 @@
   }
 
   /* ---- Drawer (#navPanel) ---- */
+  /* 2026-08-15 fix (D1): 45% -> 72%, §5's own stated backdrop for this panel
+     ("Backdrop rgba(6,4,3,.72)") and the top of §9's .6-.72 band. The dimmed strip
+     to the right of the panel IS the close target, so it has to read as "the page,
+     switched off" rather than "the page, slightly tinted". Same black-keyword
+     color-mix idiom as .tl-detail-overlay above — no new hardcoded colour. */
   .nav-panel-backdrop {
     position: fixed; inset: 0; z-index: 300;
-    background: color-mix(in oklab, black 45%, transparent);
+    background: color-mix(in oklab, black 72%, transparent);
     backdrop-filter: blur(3px);
   }
   /* stays in the DOM at all times (never [hidden]) so its transform can transition
@@ -8076,11 +8321,19 @@
   /* active: --ink text (not gold) + gold icon + a subtle fill visibly stronger than
      the --raised hover above (10% ink-mix vs --raised's own 6%) so all three resting/
      hover/active states read as distinct at a glance. */
+  /* 2026-08-15 fix (C1): --nav-active is a FIXED #FFD34D in :root with no light-theme
+     override — a bright yellow chosen against black. Day mode shipped 2026-08-15 and
+     turned this panel's ground white, where the gold rail and gold icon measured ~1.3:1
+     against --paper: the active chapter was invisible in light, in BOTH nav modes.
+     Repointed at --margin-rule, THE structural accent token — gold (--accent-seed) in
+     Night, #111111 in Day — so the active row reads in both themes with no per-theme
+     rule and no new colour. --nav-active's ~100 other uses are untouched: this is the
+     §5 surface only, which is the surface Day mode broke. */
   .nav-panel-row.on { color: var(--ink); font-weight: 700; background: color-mix(in oklab, var(--ink) 10%, transparent); }
-  .nav-panel-row.on .nav-ic { color: var(--nav-active); }
+  .nav-panel-row.on .nav-ic { color: var(--margin-rule); }
   .nav-panel-row.on::before {
     content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
-    border-radius: 0 3px 3px 0; background: var(--nav-active);
+    border-radius: 0 3px 3px 0; background: var(--margin-rule);
   }
   .nav-panel-count {
     flex: none; margin-left: auto; min-width: 20px; height: 20px; padding: 0 8px;
@@ -8090,8 +8343,11 @@
   }
   /* Settings ("_footer" in NAV_ITEMS, JS) — same hairline "last row" treatment
      #navSearchBtn already uses in the OLD drawer (~line 8792), same two numbers. */
-  .nav-panel-row-sep { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--note-line); }
-  .nav-panel-footer { flex: none; padding: 12px 16px; border-top: 1px solid var(--note-line); font-size: 11px; color: var(--ink-faint); }
+  /* 2026-08-15 fix (B4): both hairlines were --note-line (--ink 26% in Night), ~2.6x
+     §0's --line weight — inside a panel whose whole language is tone and spacing, a rule
+     that strong reads as a box edge. Down to the spec's .10, still ink-derived. */
+  .nav-panel-row-sep { margin-top: 4px; padding-top: 12px; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); }
+  .nav-panel-footer { flex: none; padding: 12px 16px; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); font-size: 11px; color: var(--ink-faint); }
   /* ============================================================
      §8 ICON LANGUAGE — 2026-08-15
      ONE shared class for every quiet glyph the app itself hardcodes as UI
@@ -8106,6 +8362,21 @@
      literal U+FE0E (VS15) appended after the glyph — see glyphHtml() in JS,
      which is the only thing that should ever emit this class. */
   .glyph { font-variant-emoji: text; }
+  /* 2026-08-15 fix (F1): ♌ — the exact character §8's spec warns about BY NAME. U+264C
+     (and its ♈-♓ siblings) carry Emoji_Presentation=Yes, so they default to a colour
+     picture; §8's own sweep never reached the two surfaces that print one (the astro line
+     and the Day header's #dayAstroBits), and both were still emitting a bare <span
+     class="gl">. They now go through glyphHtml() — the same .glyph + U+FE0E pair §8
+     already established, not a second mechanism.
+     The class alone is not enough HERE, which is why this rule exists: .astro-line .gl /
+     .day-astro-bits .gl both pin font-family to --font-emoji, a colour-emoji-FIRST stack,
+     and a family that explicit outranks a presentation request — the glyph would keep
+     resolving to Segoe UI Emoji's colour form regardless of the selector. Compound (0,3,0)
+     so it beats both of those rules from anywhere in the file, and scoped to .gl.glyph so
+     the ANIMAL emoji sharing the .gl class (🐴/🐒 — Chinese-zodiac mascots, real
+     pictographs with no text form, and colour IS their meaning per §8's leave-list) keep
+     their emoji font untouched. */
+  .astro-line .gl.glyph, .day-astro-bits .gl.glyph { font-family: var(--font-body); }
 
   /* §8 "Moon phase — draw it, don't type it". 🌑…🌘 are fixed pictures: they
      ignore the palette and can't go gold on an active row. This can.
@@ -8173,8 +8444,12 @@
      language across BOTH nav modes, which is the whole point of them rendering from
      one NAV_ITEMS array. .on still inherits gold from .nav-tab-item.on below. */
   .nav-tab-item .nav-ic { font-size: 15px; line-height: 1; color: var(--ink-faint); }
-  .nav-tab-item.on { color: var(--nav-active); border-bottom-color: var(--nav-active); font-weight: 700; }
-  .nav-tab-item.on .nav-ic { color: var(--nav-active); }
+  /* 2026-08-15 fix (C1): same repoint as the drawer row above, for the same reason —
+     one active-state colour across BOTH nav modes, which is the point of them rendering
+     from one NAV_ITEMS array. In light this was #FFD34D text AND a #FFD34D underline on
+     white: the active tab was completely unreadable. */
+  .nav-tab-item.on { color: var(--margin-rule); border-bottom-color: var(--margin-rule); font-weight: 700; }
+  .nav-tab-item.on .nav-ic { color: var(--margin-rule); }
 
   /* mobile-only scope for this whole §5 block — desktop keeps the untouched pill
      row (.view-tabs base rule, ~line 555) and never sees any of the above. Same
@@ -9260,6 +9535,16 @@
     .theme-toggle { width: 44px; height: 44px; }
     .fast-goal-chip { padding: 12px 16px; min-height: 44px; }
     .track-opt { min-height: 44px; }
+    /* 2026-08-15 fix (A2): .tab-link (the shared "open the full tab" link, ~15px tall,
+       on every tile header and inside the item sheet) measured well under CLAUDE.md's
+       binding 44px on a phone. min-height, not padding, keeps it on the 4/8/12/16/24/32
+       scale; inline-flex + centring is what stops a 10.5px label sitting at the top of a
+       44px box. Phone-scoped, so desktop keeps its dense tile-header links as they are.
+       .tl-ghost-restore gets the same treatment NEXT TO ITS OWN RULE rather than here —
+       its base declaration sets min-height:28px and sits ~2000 lines LATER in the file,
+       and a media query adds no specificity, so a copy placed here would silently lose
+       the source-order tie. (Measured: it was still 28px until the rule moved.) */
+    .tab-link { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
     /* jump-btn moves fixed top-left of the theme-toggle (see bottom-nav block below —
        its old absolute-in-.nav-tiers position stops working once #categoryTabs leaves
        the flow), same 44px target. */
@@ -11181,6 +11466,16 @@
     font-family: var(--font-body); font-size: 11px; font-weight: 600; flex: none;
   }
   .tl-ghost-restore:hover { border-color: var(--cosmic-gold); color: var(--cosmic-gold); }
+  /* 2026-08-15 fix (A2): 28px -> 44px on a phone. This is the ONE control that un-skips a
+     skipped occurrence — there is no other route to that action — so it has to clear
+     CLAUDE.md's binding minimum. It lives HERE, immediately after the base rule, not in
+     the shared ≤640px 44px block a couple of thousand lines up: a media query carries no
+     specificity, both selectors are one class, and the base min-height:28px above would
+     have won the source-order tie from there (measured — the first attempt still read
+     28px). Desktop keeps the compact pill. */
+  @media (max-width: 640px) {
+    .tl-ghost-restore { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  }
   /* edited-day marker: a small gold dot beside the title */
   .tl-ovr-dot { color: var(--cosmic-gold); font-size: 14px; line-height: 1; margin-right: 2px; flex: none; }
   /* part-of-life dot (Categories & colours brief) -- always the parent's own colour,
@@ -12025,7 +12320,7 @@
     <div class="section-head" style="margin-top:28px"><h2>My recipes</h2><span class="rule"></span></div>
     <div class="span-note" style="display:block;margin-bottom:14px">Recipes you actually like — the suggestion above is picked from this list, ranked by what's already in the fridge.</div>
     <div class="add-row" id="recipeAddRow">
-      <button class="add-btn" id="recipeAddBtn">✎ Add a recipe</button>
+      <button class="add-btn" id="recipeAddBtn">+ Add a recipe</button>
       <button class="add-btn" id="recipeWebBtn">🔍 Find one on the internet</button>
     </div>
     <div class="add-form" id="recipeWebPanel" hidden>
@@ -12411,7 +12706,7 @@
     <div id="goalsBody"></div>
 
     <div class="add-row" id="goalAddRow">
-      <button class="add-btn" id="goalAddBtn">✎ Set a goal</button>
+      <button class="add-btn" id="goalAddBtn">+ Set a goal</button>
     </div>
     <form class="add-form" id="goalAddForm" hidden>
       <div class="addform-head-saveonly full">
@@ -12466,7 +12761,7 @@
     </p>
 
     <div class="add-row" id="pplAddRow">
-      <button class="add-btn" id="pplAddBtn">✎ Add a person</button>
+      <button class="add-btn" id="pplAddBtn">+ Add a person</button>
     </div>
     <form class="add-form" id="pplAddForm" hidden>
       <div class="addform-head-saveonly full">
@@ -12601,7 +12896,7 @@
     <div id="famUndated"></div>
 
     <div class="add-row" id="famAddRow">
-      <button class="add-btn" id="famAddBtn">✎ Add a task</button>
+      <button class="add-btn" id="famAddBtn">+ Add a task</button>
     </div>
     <form class="add-form" id="famAddForm" hidden>
       <div class="addform-head-saveonly full">
@@ -13089,7 +13384,7 @@
     </div>
     <div id="wmSections"></div>
     <div class="add-row" style="margin-top:8px">
-      <button class="add-btn" id="wmAddSectionBtn" type="button">✎ Add a section</button>
+      <button class="add-btn" id="wmAddSectionBtn" type="button">+ Add a section</button>
     </div>
     <form class="add-form" id="wmAddSectionForm" hidden>
       <div class="addform-head-saveonly full">
@@ -13174,7 +13469,7 @@
     <div id="shopLuxList"></div>
 
     <div class="add-row" id="shopLuxAddRow">
-      <button class="add-btn shop-lux-btn" id="shopLuxAddBtn">✎ Add an item</button>
+      <button class="add-btn shop-lux-btn" id="shopLuxAddBtn">+ Add an item</button>
     </div>
     <form class="add-form shop-lux-form" id="shopLuxAddForm" hidden>
       <div class="addform-head-saveonly full">
@@ -13735,7 +14030,11 @@
           <div id="addRowHome" hidden></div>
           <div class="patients-above-day">
             <div class="add-row" id="addRow">
-              <button class="add-btn" id="addBtn">✎ Add to this day</button>
+              <!-- 2026-08-15 fix (F2): ✎ -> +. CLAUDE.md is explicit that .add-btn always
+                   carries the + glyph and never a pencil ("a pencil means 'edit an existing
+                   thing,' not 'create a new one'"). Same change on the other six primary Add
+                   buttons (Recipe/Goal/Person/Family task/Work-manual section/Shopping item). -->
+              <button class="add-btn" id="addBtn">+ Add to this day</button>
             </div>
           </div>
         </div>
@@ -15436,7 +15735,7 @@
       <span class="sep">·</span>
       <span class="bit"><span class="gl">${mi.em}</span><span class="cnm">${mi.cn}</span></span>
       <span class="sep">·</span>
-      <span class="bit"><span class="gl">${a.sign.gl}</span>${a.sign.name}</span>
+      <span class="bit">${glyphHtml(a.sign.gl, "gl")}${a.sign.name}</span>
       <span class="sep">·</span>
       <span class="bit">${moonHtml(mIdx)}${MOON_NAME[mIdx]}</span>`;
 
@@ -18822,7 +19121,7 @@
   // 2026-08-15 (§3 build, "fasting = a whole tinted column"): single-day counterpart to
   // mdColHeadHtml()/mdColumnHtml()'s per-column tint above -- same fastedHoursOn(d) data
   // (state.anchor here: the day actually being viewed, same as renderFastLine() just
-  // above), same rgba(55,175,101,.075) wash + fastTintLabel(). Deliberately separate
+  // above), same 7.5%-of---fast wash + fastTintLabel(). Deliberately separate
   // from renderFastLine() -- that marks a different fact (the live [start, goalEnd]
   // SPAN of an ACTIVE fast only, positioned in time, gone the moment the fast stops)
   // from this (the day, as a whole, HAD fasting -- past or present) -- so both keep
@@ -19339,9 +19638,13 @@
       // shows its actual end time instead of a blank dash.
       // 2026-08-10 (Day page redesign, "time+track subline"): mobile-only, block-kind
       // items only — same window.innerWidth gate the width-equalising pass below
-      // already uses for its own mobile/desktop split. Track is now named in text
-      // since the block's own colour reads as one calm green family, not per-track,
-      // on mobile (see .tl-block's gradient override).
+      // already uses for its own mobile/desktop split. Track was named in text because
+      // the block's own colour used to read as one calm green family, not per-track, on
+      // mobile. 2026-08-15 (fix B1): that gradient is gone and blocks carry their real
+      // per-track --cat-c again at every width, so the label is now a redundancy rather
+      // than the only way to tell tracks apart — left in place deliberately (removing a
+      // visible label is a behaviour change, not part of this fix), note kept accurate so
+      // the next reader doesn't go looking for a rule that no longer exists.
       const trackLbl = trackLabel(e.track);
       const metaTrack = window.innerWidth <= 640 && isBlock && trackLbl ? ` · ${esc(trackLbl)}` : "";
       const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
@@ -19860,8 +20163,15 @@
           <button type="button" class="tab-link" data-tl-toggle-move>Cancel</button>
         </div>
         <div class="tl-detail-move-row">
-          <input type="date" class="tl-move-date" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date" data-mp-today="1">
-          <input type="time" class="tl-move-time" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
+          <!-- 2026-08-15 fix (B2): .field-bare is the ONE FIELD LANGUAGE law's own
+               documented escape hatch (see its comment near input:is(...):not(.field-bare)).
+               That law paints every field a 1px --note-line border with !important, which
+               no plain border:none can outrank; §0 of this build forbids outlined fields
+               outright, so the hatch is the only correct way out. Their flat look is
+               defined by .tl-detail-move-row input, which now supplies everything the law
+               was providing (ink, radius, padding, focus ring) as well as the flat fill. -->
+          <input type="date" class="tl-move-date field-bare" id="tlMoveDate" value="${esc(e.date || "")}" aria-label="New date" data-mp-today="1">
+          <input type="time" class="tl-move-time field-bare" id="tlMoveTime" value="${esc(e.start || "")}" aria-label="New time">
         </div>
         <div class="tl-detail-move-actions">
           <button type="button" class="tl-move-btn" data-tl-reschedule="${e.id}">Reschedule</button>
@@ -22534,13 +22844,18 @@
   // continuation chip (cont===true — a later day of a real multi-day span, see
   // mdAlldayColsHtml()) carries no title text and dims to 50% opacity per spec, but
   // stays exactly as tappable as the item's own first-day chip.
+  // 2026-08-15 fix (A2): the label is wrapped in .ad-chip-t rather than sitting bare in
+  // the chip — the chip is now a 44px flex box (tap target), and text-overflow:ellipsis
+  // does not apply to a flex container's anonymous text item, so without the wrapper a
+  // long title would hard-clip mid-word instead of ellipsising.
   function alldayChipHtml(e, cont) {
     const cls = `ad-chip tl-item${cont ? " ad-chip-cont" : ""}`;
+    const label = cont ? "" : `<span class="ad-chip-t">${esc(e.title)}</span>`;
     if (e.category === "Birthdays") {
       const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
-      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(e.title)}">${cont ? "" : esc(e.title)}</span>`;
+      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(e.title)}">${label}</span>`;
     }
-    return `<span class="${cls}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${cont ? "" : esc(e.title)}</span>`;
+    return `<span class="${cls}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
   }
   // one visible day's worth of stacked chips, no continuation (that concept only
   // exists across MULTIPLE simultaneously-visible columns — see mdAlldayColsHtml()).
@@ -22579,9 +22894,19 @@
   // own items above the hidden #timelineScroll WHILE #mdAlldayRow also shows them
   // per-column: the exact duplicate-widget bug the §2 review fix already had to
   // correct once, just with this section's new row instead.
+  // 2026-08-15 fix (E1): the chips already carried data-tl-detail — what was missing was
+  // the OTHER half of the wiring the multi-day row has. openTlDetail() resolves an id
+  // through TL_ITEMS_BY_ID, mdAlldayColsHtml() seeds every chip it renders into that map,
+  // and this function never did — so on the 1-day view an all-day chip looked exactly as
+  // tappable as every other block and silently did nothing. (Seeding here also has to
+  // happen AFTER renderTimeline(), which resets the map wholesale; hence the call site
+  // moved down to sit just after it — see renderDay(). #dayFastHead, the insertion
+  // anchor, is static markup, so the row lands in the same place either way.)
+  // Same isGhostItem guard as every other seeding site, for the same reason.
   function renderDayAlldayRow(bdays, others) {
     if (calDaysActive() > 1) { document.getElementById("dayAlldayRow")?.remove(); return; }
     const others2 = others.concat(closedDaysOn(state.anchor));
+    [...bdays, ...others2].forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
     alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), bdays.length + others2.length, () =>
       `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${alldayStackHtml(bdays, others2)}</div></div>`);
   }
@@ -22598,7 +22923,7 @@
   // via openTlDetail().
   function mdAlldayColsHtml(perDay) {
     const activeSpans = [];   // {e, dateEnd} for spans still running into a later column
-    return perDay.map(({ dk, bdays, others }) => {
+    return perDay.map(({ d, dk, bdays, others }) => {
       const continuing = activeSpans.filter(s => s.dateEnd >= dk);
       // 2026-08-15 fix (A7): same never-let-a-ghost-clobber-a-real guard as the
       // single-day seeding site (search isGhostItem) — applied at every seeding site so
@@ -22618,7 +22943,12 @@
         if (e.dateEnd && e.dateEnd > e.date) activeSpans.push({ e, dateEnd: e.dateEnd });
       });
       const chips = continuing.map(s => alldayChipHtml(s.e, true)).join("") + alldayStackHtml(bdays, others);
-      return `<div class="ad-col" data-day-key="${esc(dk)}">${chips}</div>`;
+      // 2026-08-15 fix (G1): the same fastedHoursOn(d) flag mdColHeadHtml()/mdColumnHtml()
+      // already carry, on the third element of the band — this row sits BETWEEN those two,
+      // so without it §3's "one continuous tinted column, header and grid, top to bottom"
+      // was visibly cut in half whenever an all-day item existed. Same read, same date,
+      // no new calculation; the CSS (#mdAlldayRow .ad-col[data-fasting]) paints it.
+      return `<div class="ad-col" data-day-key="${esc(dk)}" data-fasting="${fastedHoursOn(d) > 0}">${chips}</div>`;
     }).join("");
   }
   // called from renderMultiDayGrid() once per visible window, same call pattern as
@@ -22789,11 +23119,24 @@
   // standing feature of the strip, same as the ring it mirrors, and a bare "0/0" on
   // a day with nothing tickable is still meaningful (matches the ring's own
   // "Nothing tickable today" state) rather than a placeholder.
+  // 2026-08-15 fix (G2): the full-width PROGRESS meter is a 1-day-only piece. §2 splits
+  // this deliberately -- "At 1 day... progress meter [above the grid]" vs "At 3+ days the
+  // progress meter shrinks INTO each column header" -- because at 3+ days every visible
+  // column already carries its own mini bar + count (mdColHeadHtml), and the full-width
+  // row can only ever show ONE day's number, so it sat there repeating whichever column's
+  // count it happened to match. That is the same duplicate-widget bug the §2 review fix
+  // already had to correct once for #dpHeader/#fastStatus. Hidden, not emptied, so it
+  // reserves no space either (`hidden` is display:none!important app-wide). The chip
+  // strip above stays at every day count, per spec ("The context chip strip stays once at
+  // the top"), and the fasting meter is untouched -- it is part of a separate, already
+  // tracked spec revision.
   function renderDayCtx() {
     const chipsEl = document.getElementById("dayCtxChips");
     if (chipsEl) chipsEl.innerHTML = dcxChipsHtml();
     const progEl = document.getElementById("dayCtxProgress");
     if (!progEl) return;
+    if (calDaysActive() > 1) { progEl.innerHTML = ""; progEl.hidden = true; return; }
+    progEl.hidden = false;
     const { done, total } = dayProgress(TODAY);
     progEl.innerHTML = meterHtml("Progress", total ? done / total : 0, `${done}/${total}`, "--margin-rule");
   }
@@ -22902,10 +23245,6 @@
     // personal/family timed items also stay in their sidebar lists for ticking off
     const timed = dayEvents.filter(e => !e.allDay && e.start);
     renderAlldayRow(alldayBdays);
-    // 2026-08-15 (§4 all-day row build): the new unified mobile row — shows bdays AND
-    // allDay together (renderAlldayRow() above stays birthdays-only, desktop only
-    // now, see its CSS gate) — see its own comment for the full brief.
-    renderDayAlldayRow(alldayBdays, allDay);
     // 2026-08-04 (Linh: "hours size to their content automatically"): see this
     // function's own comment near buildHours() for exactly what "compact" means here.
     computeCompactHours(timed);
@@ -22966,7 +23305,7 @@
     // still reachable via the existing tap popover (sunSignPopoverHtml/
     // solarMonthPopoverHtml), same as birthday/imprint's icon-only treatment.
     document.getElementById("dayAstroBits").innerHTML =
-      `<span class="num-hover-trigger" tabindex="0"><span class="gl">${astroBits.sign.gl}</span>${sunSignPopoverHtml(astroBits.sign)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
+      `<span class="num-hover-trigger" tabindex="0">${glyphHtml(astroBits.sign.gl, "gl")}${sunSignPopoverHtml(astroBits.sign)}</span> · <span class="num-hover-trigger" tabindex="0"><span class="gl">${cmInfo.em}</span>${solarMonthPopoverHtml(astroBits.cm.animal)}</span>`;
 
     renderMiniCal();
     const mPhase = moonIndex(d);
@@ -23064,6 +23403,18 @@
     renderBoostWidget();
     orderDayRail();
     renderTimeline(timed);
+    // 2026-08-15 (§4 all-day row build): the new unified mobile row — shows bdays AND
+    // allDay together (renderAlldayRow() further up stays birthdays-only, desktop only
+    // now, see its CSS gate) — see its own comment for the full brief.
+    // 2026-08-15 fix (E1): moved from just after renderAlldayRow() to HERE, immediately
+    // after renderTimeline(). renderTimeline() opens with `TL_ITEMS_BY_ID = {}`, so any
+    // all-day item seeded before it was wiped again a few lines later and every all-day
+    // chip's tap resolved to nothing. Same "after renderTimeline — reads the
+    // TL_ITEMS_BY_ID it just filled" ordering renderOcPrompts() below already depends on.
+    // Purely an ordering move: the row's insertion anchor (#dayFastHead) is static markup
+    // and every absolute element in #dayTimelineWrap is positioned against that wrap's own
+    // origin, so nothing about the layout depends on which side of renderTimeline this sits.
+    renderDayAlldayRow(alldayBdays, allDay);
     // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
     // renderTimeline so compact-hour heights are settled and topForMin() is final.
     // 2026-08-06 (Linh's "routine phases" mockup): renderChainChips's own book33-chains
@@ -29940,14 +30291,18 @@
     // push-based setLive()/updateLiveBadge() pipeline #b33Live itself uses --
     // deliberately kept simple; #b33Live remains the one live-ticking indicator,
     // this is just a non-fake echo of the same real state for the panel footer.
-    // typeof guard: syncState lives in the SEPARATE cloud-sync <script> block below
-    // this one (confirmed live -- calling it unguarded threw "syncState is not
-    // defined" on first boot) -- that block hasn't executed yet during THIS
-    // script's own boot-time render() call, only moments later. Self-heals on the
-    // very next render() (any navigation), well before she could ever tap the
-    // panel open; empty string just means an unlabelled footer for that one instant.
-    if (typeof syncState !== "function") return "";
-    const st = syncState();
+    // 2026-08-15 fix (E2): reads window.b33SyncState, the explicit export that block now
+    // makes (search "the ONE deliberate export"). The old `typeof syncState === "function"`
+    // guard was never a boot-timing guard at all: the cloud-sync block is an IIFE, so
+    // `syncState` is a local binding of that closure and is NEVER visible from here, at
+    // any point in the page's life. The guard therefore returned "" on every single call
+    // and the footer shipped permanently blank -- a dead ~25px strip that still drew its
+    // own top border. The guard stays (the export genuinely does land a moment after this
+    // script's own boot-time render(), and self-heals on the next render), but it now
+    // guards a name that really does appear; renderNavPanel() below hides the footer
+    // outright for that one instant rather than showing an empty bordered strip.
+    if (typeof window.b33SyncState !== "function") return "";
+    const st = window.b33SyncState();
     return st === "synced" ? "Synced" : st === "syncing" ? "Syncing…"
       : st === "pending" ? "Waiting to sync" : st === "offline" ? "Offline" : "Sync error";
   }
@@ -29963,8 +30318,24 @@
       html += navPanelRowHtml(item);
     });
     host.innerHTML = html;
+    // 2026-08-15 fix (E2): no label -> no footer. An empty <div> here still painted its
+    // own border-top and 12px/12px padding, i.e. a ~25px bordered strip with nothing in
+    // it -- the "never reserve empty space / no placeholder" rule the all-day row and the
+    // context chips both already follow. `hidden` is display:none!important app-wide.
+    renderNavSyncFooter();
+  }
+  // 2026-08-15 fix (E2): its own function so it can also run on OPEN, not only on
+  // render. The export it reads (window.b33SyncState) lands a moment after this script's
+  // boot-time render(), so on a cold load with no navigation yet the panel would still
+  // have shown nothing; refreshing at open time means the very first tap on ☰ already
+  // shows the real status. Cheap enough to run on every open -- syncState() is four
+  // boolean reads and one localStorage lookup.
+  function renderNavSyncFooter() {
     const footer = document.getElementById("navPanelFooter");
-    if (footer) footer.textContent = navSyncLabel();
+    if (!footer) return;
+    const label = navSyncLabel();
+    footer.textContent = label;
+    footer.hidden = !label;
   }
   function renderNavTabStrip() {
     const host = document.getElementById("navTabStrip");
@@ -29974,6 +30345,7 @@
   function navPanelIsOpen() { return document.getElementById("navPanel").classList.contains("open"); }
   function openNavPanel() {
     const panel = document.getElementById("navPanel");
+    renderNavSyncFooter();   // 2026-08-15 fix (E2) — see that function
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
     document.getElementById("navPanelBackdrop").hidden = false;
@@ -40221,6 +40593,16 @@
     if (localStorage.getItem(DIRTY)) return "pending";
     return "synced";
   }
+  // 2026-08-15 fix (E2): the ONE deliberate export out of this IIFE. §5's drawer footer
+  // (navSyncLabel(), in the main app script) was written against a bare `syncState` with a
+  // `typeof` guard, on the assumption the guard would only miss during the boot instant.
+  // It misses ALWAYS: this whole module is an IIFE, so `function syncState` is a local
+  // binding, never a global — the guard silently returned "" on every call and the footer
+  // shipped as a permanently blank 25px bordered strip. Exported by an explicit,
+  // namespaced name rather than by un-wrapping the module or duplicating the state test,
+  // so the module boundary stays real and there is still exactly ONE definition of what
+  // "synced" means. Read-only by contract: syncState() mutates nothing (see its comment).
+  window.b33SyncState = syncState;
   // Self-contained relative-time formatter -- this IIFE doesn't share scope with
   // the main app's fmtTime/MON_SHORT helpers, and pulling those in would mean
   // reaching across the module boundary for a one-line label.
