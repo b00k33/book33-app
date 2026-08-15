@@ -10401,6 +10401,15 @@
     .day-main > .section-head { display: none; }
     #qaSlotDay { order: -200; }
   }
+  /* 2026-08-15 corrections pass (item 1): the SAME "The day <date>" restate is
+     redundant a third time at the desktop-day1 breakpoint too — #deskDayTopbar's
+     .ddt-word/.ddt-date and #deskDayHeader's .ddh-date already state the date
+     twice (top bar + day-header row, both kept, see the build's own spec).
+     Reuses the exact selector renderDeskGrid()'s own JS already addresses this
+     element by (`#dayPage .day-main > .section-head`, see placeDeskGrid()) — a
+     scoped hide, not a markup delete, since the 641–1023px tablet band (the
+     dormant old 3-column path) still needs this row. */
+  [data-desk-day1] #dayPage .day-main > .section-head { display: none; }
   /* 2026-08-02 (Linh code44: "cant read" -> "colour contrast poor"): .mini-cal-wrap
      and .num-group-strip re-scope --ink/--ink-soft/--ink-faint/--paper etc to a
      light-on-BLACK palette (line ~540, ~627) -- correct back when .page itself was
@@ -11801,6 +11810,34 @@
      track/fill is 999px (matching .dcx-meter-track, already exactly that).
      ============================================================ */
 
+  /* ---- 0. Outer shell — 2026-08-15 corrections pass (item 0). Zero the
+     page-shell's own padding/card chrome so the 4-zone layout fills the
+     viewport edge-to-edge. Two separate decorative layers were found live
+     (computed-style, not guessed):
+       · .wrap's own safe-area padding (34px 28px 64px, base rule far above)
+         — insets the WHOLE 4-zone layout from the window edge for no reason;
+         the zones already carry their own hairline borders/padding.
+       · #dayPage (class="page", the ACTUAL wrapper deskGrid renders inside,
+         a different element than #wrap) carries the shared .page card
+         treatment — padding 34px 40px 44px, --radius-lg corners, and
+         var(--page-shadow)+var(--mochi-shadow) which layers in a genuine
+         gold glow (color(srgb 1 .827 .302 / .55) 0 0 30px -8px, confirmed via
+         getComputedStyle). That card look is right for every OTHER page's
+         single floating card; stacked OUTSIDE the 4 zones here it just
+         re-adds the padding this fix removes one level up, plus a frame/glow
+         behind chrome that already has its own borders. #dayPage's own id
+         beats .page's class specificity, so this needs no !important.
+     Also found: .astro (the "Book 33" wordmark + flanking gold dash rules,
+     only hidden ≤640px) was rendering as a live extra row above
+     #deskDayTopbar at every desktop width, duplicating .ddt-word's own
+     "BOOK33" mark one row down — same "date/title appears twice" shape as
+     item 1's fix, so it's hidden here too, same reasoning.
+     Scoped to [data-desk-day1] only — every other desktop page (multi-day,
+     Today, etc.) keeps the normal .wrap/.page/.astro look untouched. */
+  [data-desk-day1] .wrap { padding: 0; }
+  [data-desk-day1] .astro { display: none; }
+  [data-desk-day1] #dayPage { padding: 0; box-shadow: none; border-radius: 0; background: none; }
+
   /* ---- 1. Chapters rail — 52px, fixed, EVERY desktop page (not gated on
      [data-desk-day1]: this is global nav chrome, the ≥1024px replacement for
      #categoryTabs' chapter-tab row). 3 states: collapsed (default) / collapsed
@@ -11963,6 +12000,17 @@
   }
   .dsb-quick-row:hover { background: color-mix(in oklab, var(--raised) 60%, var(--gold-bright) 6%); }
   .dsb-quick-plus { color: var(--gold-bright); font-weight: 800; flex: none; }
+  /* 2026-08-15 corrections pass (item 5): #miniCalWrap (mini-month + this PY/UY/
+     animal-motif/CD-pill row, .num-grp-mascot) reparents INTO the 214px sidebar
+     at this breakpoint (placeDeskGrid()) — it was never designed for that width
+     (measured live: its natural content width sits right at the sidebar's own
+     190px content box, 214px minus 2×12px padding, so any slightly longer CD
+     phase label overflows past the sidebar's own edge). Preferred fix per spec:
+     drop it here rather than patch the overflow — the same PY/UY/CD info is
+     already in the day-header context chips (renderDeskDayHeader), so this was
+     a 4th copy. Scoped to the sidebar only; #miniCalWrap keeps this row
+     everywhere else it lives (day-row2, the date dropdown on mobile). */
+  [data-desk-day1] #deskSidebar .num-grp-mascot { display: none; }
 
   /* ---- 4. Day header (date + context chip strip) — new, sits at the top of
      .day-main so it travels for free with placeDeskGrid()'s existing dayMain
@@ -12016,6 +12064,55 @@
   [data-desk-day1] { --hour-h: 60px !important; }
   [data-desk-day1] #dayTimelineWrap[data-desk-fasting="true"] { background: color-mix(in oklab, var(--fast) 7%, transparent); }
   [data-desk-day1] .hour-rail, [data-desk-day1] .ad-gutter { width: 46px; }
+  /* ---- 4.5 Calendar blocks — 2026-08-15 corrections pass (items 0/2/3/4).
+     Desktop-day1-only overrides of the shared .tl-item rules a few thousand
+     lines up (left:4px;right:4px;padding:8px 12px;border-radius:var(--blk-radius)),
+     scoped so mobile/the old 3-column desktop path (dormant, see
+     deskDay1Active()'s own comment) are untouched.
+       · radius: a literal 3px, BOTH themes, per this task's own item 0 — NOT
+         a retoken of --blk-radius (that stays Night 10px/16px vs Day 3px for
+         every other consumer, mobile included).
+       · left/right 6px/6px (full column width), width:auto;max-width:none —
+         the width/max-width are load-bearing, not decoration: the OLD desktop
+         "mockup chip" rule a few thousand lines up (@media min-width:641px
+         .tl-item[data-kind="event"|"routine"] { width:fit-content;
+         max-width:calc(100% - 10px) }) still applies at THIS breakpoint too
+         (it was never scoped away from desktop-day1) and sets a DIFFERENT
+         property than left/right — CSS resolves each property independently,
+         so a higher-specificity left/right here doesn't cancel their width,
+         and an over-constrained left+width+right silently drops right and
+         shrink-wraps anyway (confirmed live: blocks stayed ~200-260px on a
+         791px column even after removing the soloBlocks equalise JS below).
+         Explicit width:auto/max-width:none is what actually closes item 3.
+         colStyle's own inline left/width (renderTimeline(), only ever written
+         for a REAL time overlap) still wins over all of this via inline-style
+         specificity, so a genuinely overlapping block still narrows to its
+         lane; only a merely-adjacent (no time overlap) block is affected.
+       · padding 5px 9px — frees enough of a 27px 30-min block's height (at
+         --hour-h:60px, minus the 3px/26px-floor block-height formula) for its
+         one-line title to stop clipping; .tl-item .tl-title's own
+         line-height:1.25 already gives a ≥15px line box, unchanged. */
+  [data-desk-day1] #dayTimelineWrap .tl-item {
+    left: 6px; right: 6px; width: auto; max-width: none; padding: 5px 9px; border-radius: 3px;
+  }
+  /* item 4: dark ink on the block's own saturated fill, not a theme token that
+     flips with dark/light — #12100c is this codebase's OWN established
+     sanctioned hardcoded exception for exactly this ("dark ink beats a
+     theme-flipping --cat-t on a saturated flat fill"), already used by
+     .tl-detail-head's mobile header and the all-day chips (search
+     "sanctioned hardcoded exception" a few thousand lines up) — reusing it
+     here, not inventing a second convention. */
+  [data-desk-day1] #dayTimelineWrap .tl-item .tl-title { color: #12100c; font-weight: 800; }
+  [data-desk-day1] #dayTimelineWrap .tl-item .tl-meta { color: #12100c; opacity: .72; }
+  /* item 11: chain anchor/pin dots (renderChainLayer -> #chainLayer) read as
+     clutter in the left gutter at 1 day, where every chain is a single block
+     anyway — simplest fix per the spec's own stated preference order. */
+  [data-desk-day1] #chainLayer { display: none; }
+  /* item 6: hour rows outside the effective visible range (computeDeskHourRange())
+     collapse to 0 height via compactH(h) already; this just drops the orphaned
+     absolutely-positioned .hour-label those 0-height rows would otherwise still
+     float (position:absolute, top:-8px, so a 0-height parent alone doesn't hide it). */
+  [data-desk-day1] .hour-row[data-out-of-range="true"] .hour-label { display: none; }
 
   /* ---- 5. Widget rail — 286px (1440+), 250px (1200–1439), removed <1200
      (widgets fall back to a block below the grid, .wr-fallback). ---- */
@@ -12041,7 +12138,7 @@
   .wr-head-lbl { font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); }
   .wr-arrange-btn { margin-left: auto; border: none; background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
   .wr-card { position: relative; background: var(--raised); border-radius: var(--radius-md); padding: 12px 12px; margin-bottom: 8px; }
-  .wr-grip { position: absolute; top: 8px; right: 8px; font-size: 9px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
+  .wr-grip { position: absolute; top: 9px; right: 9px; font-size: 9px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
   .wr-grip:active { cursor: grabbing; }
   .wr-label { display: block; font-size: 9px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
   .wr-dragging { opacity: .45; }
@@ -12068,6 +12165,15 @@
   .wr-pile-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
   .wr-pile-name { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wr-pile-age { flex: none; font-size: 9.5px; font-weight: 800; color: var(--danger); }
+  /* item 9: "+N more" — caps the rendered rows so Numerology/Cycle/Patients/
+     Streaks aren't pushed below the fold by a long pileup; toggles the SAME
+     card's own full list in place (reuses pileUpItems(), the exact data source
+     #pileupList already reads) rather than opening a second view. */
+  .wr-pile-more {
+    display: block; width: 100%; text-align: center; border: none; background: none;
+    color: var(--gold-bright); font: inherit; font-size: 10.5px; font-weight: 700;
+    padding: 6px 0 0; cursor: pointer;
+  }
   /* Streaks */
   .wr-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
 
@@ -12079,6 +12185,27 @@
   }
   .wr-arrange-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 4px; font-size: 12px; color: var(--ink); }
   .wr-arrange-row input { accent-color: var(--gold-bright); }
+
+  /* item 6: "Hours shown" settings popover, anchored off #ddtGear — same small
+     anchored-popover idiom as .wr-arrange-pop just above (not the full-screen
+     b33mp date-picker overlay, which is a heavier system built for a different
+     job). #ddtGear already opened Notification settings before this pass; that
+     stays reachable via the link at the bottom rather than silently dropping it. */
+  .ddt-gear-pop {
+    position: absolute; top: 40px; right: 16px; z-index: 80; width: 200px;
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 8px;
+  }
+  .ddt-gear-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 4px 4px; font-size: 12px; color: var(--ink); }
+  .ddt-gear-row select {
+    font: inherit; font-size: 12px; color: var(--ink); background: var(--field-bg);
+    border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 4px 8px;
+  }
+  .ddt-gear-link {
+    display: block; width: 100%; text-align: center; border: none; border-top: 1px solid var(--note-line);
+    background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700;
+    padding: 8px 0 4px; margin-top: 4px; cursor: pointer;
+  }
 
   /* 1024–1199px: widget rail drops out of the column layout; the same cards
      fall back to a 2-up block under the grid instead (the mobile arrangement),
@@ -15493,6 +15620,13 @@
   const START_HOUR = 3, END_HOUR = 24;
   const START_MIN = START_HOUR * 60, END_MIN = END_HOUR * 60;
   const ANIMAL_BAND_START = START_HOUR % 2 === 0 ? START_HOUR - 1 : START_HOUR;   // keep 2h bands aligned to real shí chén boundaries (odd hours), even when the visible window starts on an even hour
+  // item 6 (2026-08-15 corrections pass): desktop-day1's own effective visible
+  // hour range — [START_HOUR,END_HOUR] until computeDeskHourRange() (near
+  // computeCompactHours()) narrows it for THAT render, every renderDay(). Never
+  // read outside deskDay1Active() (see compactH() below), so mobile/tablet
+  // always see the real un-narrowed START_HOUR/END_HOUR regardless of this
+  // value's current contents.
+  let deskHourRange = { start: START_HOUR, end: END_HOUR };
   const HOUR_H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour-h")) || 84;
   // her pinch-zoom level (see the touchstart/move/end IIFE far below), sticky across
   // reloads — applied before first render so the timeline never flashes at the default
@@ -15517,7 +15651,27 @@
   // events at all. compactH() is deliberately independent of HOUR_H() at the top of its
   // range (min(22, HOUR_H())) so pinch-zooming the whole timeline can't push a compact
   // row taller than a busy one.
-  const compactH = () => Math.min(22, HOUR_H());
+  // 2026-08-15 corrections pass (item 6): compactH() is now hour-aware. An hour
+  // outside desktop-day1's own effective visible range (deskHourRange, set by
+  // computeDeskHourRange() below, run every renderDay() before buildHours())
+  // collapses to a literal 0 instead of the normal 22px compact row — this is
+  // the ENTIRE "skip emitting rows before/after the Hours-shown setting"
+  // mechanism, deliberately built on top of the EXISTING compact-hour system
+  // rather than a second one: every consumer (bonusBeforeHour, minForTop,
+  // buildHoursHtml, the pinch-zoom live-resize IIFE) already goes through this
+  // one function, so a 0-height out-of-range hour correctly shifts every other
+  // topForMin()-driven layer (events, animal bands, sky, sleep band, now-line)
+  // up to compensate, with ZERO changes to START_HOUR/END_HOUR/topForMin's own
+  // formula — exactly the "don't touch the underlying positioning math" the
+  // brief asked for. Mobile/tablet (deskDay1Active() false) and every hour
+  // still inside the range are completely unaffected (same Math.min(22,HOUR_H())
+  // as before). `h` is optional for legacy callers that truly don't have an
+  // hour in scope; they only ever get the OLD un-trimmed behaviour, which is a
+  // no-op everywhere that never runs at desktop-day1's own breakpoint anyway.
+  function compactH(h) {
+    if (deskDay1Active() && typeof h === "number" && (h < deskHourRange.start || h >= deskHourRange.end)) return 0;
+    return Math.min(22, HOUR_H());
+  }
   const isBlockStartHour = h => (h - ANIMAL_BAND_START) % 2 === 0;
   // pixel adjustment already "banked" strictly BEFORE this hour (i.e. from hours that
   // have fully finished by the time this hour begins) — a compact hour doesn't affect
@@ -15527,7 +15681,7 @@
   function bonusBeforeHour(hour) {
     let sum = 0;
     for (let h = START_HOUR; h + 1 <= hour && h < END_HOUR; h++) {
-      if (state.compactHours.has(h)) sum += compactH() - HOUR_H();
+      if (state.compactHours.has(h)) sum += compactH(h) - HOUR_H();
     }
     return sum;
   }
@@ -15576,10 +15730,10 @@
   // inverse of topForMin — walks the same row boundaries so a click/drag at pixel `y`
   // maps back to the right minute even inside/after a compact hour
   function minForTop(y) {
-    const H = HOUR_H(), C = compactH();
+    const H = HOUR_H();
     let mins = START_MIN, pxSoFar = layerTopOffset();
     for (let h = START_HOUR; h < END_HOUR; h++) {
-      const rowH = state.compactHours.has(h) ? C : H;
+      const rowH = state.compactHours.has(h) ? compactH(h) : H;
       if (y < pxSoFar + rowH || h === END_HOUR - 1) {
         return mins + (y - pxSoFar) / rowH * 60;
       }
@@ -19894,6 +20048,35 @@
     // (see its own big comment) without a second copy of this busy/compact scan.
     return compact;
   }
+  // item 6 (2026-08-15 corrections pass): "Hours shown" — desktop-day1's own
+  // effective visible hour range, into module-level deskHourRange (declared
+  // near START_HOUR/END_HOUR). effective start = the EARLIER of
+  // PREFS.dayStart (default 6) or the day's earliest scheduled item's hour;
+  // effective end = the LATER of PREFS.dayEnd (default 22) or the latest
+  // item's hour — an early/late item always extends the visible range to
+  // cover it, floored/ceilinged to never step outside the real
+  // START_HOUR/END_HOUR window. A no-op (full range) off desktop-day1, so
+  // mobile/tablet never see a narrowed grid. Must run before buildHours()
+  // (same ordering requirement as computeCompactHours, which every call site
+  // already calls it alongside — see renderDay()).
+  function computeDeskHourRange(items) {
+    if (!deskDay1Active()) { deskHourRange = { start: START_HOUR, end: END_HOUR }; return; }
+    const clampH = h => Math.max(START_HOUR, Math.min(END_HOUR, h));
+    const dayStartPref = clampH(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6);
+    const dayEndPref = Math.max(dayStartPref + 1, clampH(Number.isFinite(PREFS.dayEnd) ? PREFS.dayEnd : 22));
+    let start = dayStartPref, end = dayEndPref;
+    items.forEach(e => {
+      const s = toMin(e.start);
+      if (s === null) return;
+      const eEnd = itemEndMin(e);
+      if (eEnd === null || eEnd <= START_MIN || s >= END_MIN) return;
+      const cs = Math.max(s, START_MIN), ce = Math.max(Math.min(eEnd, END_MIN), cs + 1);
+      const sh = Math.floor(cs / 60), eh = Math.ceil(ce / 60);
+      if (sh < start) start = sh;
+      if (eh > end) end = eh;
+    });
+    deskHourRange = { start: clampH(start), end: Math.max(clampH(end), clampH(start) + 1) };
+  }
   // 2026-08-11 (Linh: "i want to see the birthday in day calendar as an all day
   // event"): the banner strip above the hour grid (#tlAlldayRow, sits outside
   // #timelineScroll so it never scrolls away) — same track-tinted chip look as the
@@ -19948,8 +20131,15 @@
       // plain lookup against the Set computeCompactHours() just built, no dragging,
       // no per-hour user state at all. "has"/"empty" per her own reference wording.
       const compact = state.compactHours.has(h);
-      const style = compact ? ` style="height:${compactH().toFixed(0)}px"` : "";
-      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
+      const style = compact ? ` style="height:${compactH(h).toFixed(0)}px"` : "";
+      // item 6: marks the row so CSS can drop its own .hour-label (a 0-height
+      // row alone still leaves that absolutely-positioned label floating, see
+      // [data-desk-day1] .hour-row[data-out-of-range] CSS) — only ever true
+      // for an hour that's ALSO compact (busy hours always fall inside
+      // deskHourRange by construction, see computeDeskHourRange), so this
+      // never needs to fight a "has" row's real height.
+      const outOfRange = deskDay1Active() && (h < deskHourRange.start || h >= deskHourRange.end);
+      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
     }
     html += `<div class="hour-row" style="height:0"><span class="hour-label">${hourLabel(END_HOUR)}</span></div>`;
     return html;
@@ -20161,16 +20351,42 @@
     });
     if (cluster.length) closeCluster();
   }
-  // count OTHER "work"-track items whose start falls inside this block's own
-  // [cs,ce) span — the "3 patients" a CBD Work block's second line names at the
-  // desktop 1-day breakpoint (§4.4: "for a work/clinic block, count same-block
-  // bookings"). Reads the same day's already-computed item list, no second data
-  // source — same reuse rule renderDeskRail()'s own "pats" filter follows.
-  function deskBlockPatientCount(e, all, cs, ce) {
-    return all.filter(o => o !== e && o.track === "work" && o.start != null).filter(o => {
+  // 2026-08-15 corrections pass (items 7/11): the real "is this a patient" signal.
+  // track==="work" alone isn't it — a commute block ("Train to work") is track
+  // "work" too, so counting/listing on that signal alone produced "0 patients" on
+  // commute blocks (item 7) and listed commutes AS patients in the widget rail's
+  // "Today's patients" card (item 11's last bullet). There's no dedicated
+  // data field for "this is a clinic booking" (checked: no subcategory exists
+  // under the "work" life-category, see book33-categories seed) — the one real
+  // structural signal this app already has is the "CBD Work" routine itself
+  // (findCbdWorkRoutine/normTitle, its own ops-board feature a few thousand
+  // lines up): it's the single construct that represents clinic HOURS as a
+  // block. A patient is any OTHER work-track item whose start falls inside
+  // that block's own [cs,ce) span — a commute happening before/after clinic
+  // hours naturally falls outside it and is excluded with zero new data model.
+  // Shared by the block's own "N patients" second line (called only on the CBD
+  // Work block itself, see metaDesk below) and the widget rail's "Today's
+  // patients" card (wrCardHtml) and the legacy renderDeskRail() rail — one
+  // signal, every reader.
+  function clinicApptItems(all, cs, ce, exclude) {
+    return all.filter(o => o !== exclude && o.track === "work" && o.start != null).filter(o => {
       const s = toMin(o.start);
       return s !== null && s >= cs && s < ce;
-    }).length;
+    });
+  }
+  function deskBlockPatientCount(e, all, cs, ce) {
+    return clinicApptItems(all, cs, ce, e).length;
+  }
+  // finds today's CBD Work occurrence (if any) in an already-computed item list
+  // and returns the patients within its own span — the shared read behind the
+  // widget rail's patients card and the legacy rail, so neither invents a
+  // second definition of "is this a patient".
+  function clinicPatientsIn(all) {
+    const cbd = all.find(o => o.track === "work" && o.start != null && normTitle(o.title) === "cbd work");
+    if (!cbd) return [];
+    const cs = toMin(cbd.start), ce = itemEndMin(cbd);
+    if (cs === null || ce === null) return [];
+    return clinicApptItems(all, cs, ce, cbd);
   }
   function renderTimeline(items) {
     const layer = document.getElementById("eventsLayer");
@@ -20250,8 +20466,17 @@
       // rail itself uses) so a narrower desktop window keeps the plain time range,
       // and .tl-tight (CSS) still drops this line entirely on a short block either
       // way — untouched, per §4.4's own "don't fight that" instruction.
+      // 2026-08-15 corrections pass (item 7): was firing on EVERY track:"work"
+      // block, so a commute ("Train to work") showed "0 patients" — no other
+      // work-track item starts inside its own few-minute span, so the count is
+      // always 0 there. Gated to the CBD Work block itself (isClinicBlock, the
+      // real "this is clinic hours" signal — see clinicApptItems' own comment)
+      // AND a real count ≥1, so a clinic day with nothing booked yet still falls
+      // back to the plain trackLbl reading instead of a bare "0 patients".
+      const isClinicBlock = e.track === "work" && normTitle(e.title) === "cbd work";
+      const patCount = isClinicBlock ? deskBlockPatientCount(e, items, p.cs, p.ce) : 0;
       const metaDesk = deskWidgetsActive() && isBlock
-        ? (e.track === "work" ? ` · ${deskBlockPatientCount(e, items, p.cs, p.ce)} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
+        ? (isClinicBlock && patCount >= 1 ? ` · ${patCount} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
         : "";
       const metaTrack = metaDesk || (window.innerWidth <= 640 && isBlock && trackLbl ? ` · ${esc(trackLbl)}` : "");
       const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
@@ -20270,7 +20495,16 @@
       // folded in above) — 52px is roughly padding + a 2-line title with no room
       // left for .tl-meta, so anything shorter drops the time via .tl-tight (CSS)
       // rather than let it fight the title for space inside a fixed-height box.
-      const tight = isBlock && p.h < 52;
+      // 2026-08-15 corrections pass (item 2): desktop-day1's own tighter 5px 9px
+      // padding (CSS, [data-desk-day1] #dayTimelineWrap .tl-item — vs the app's
+      // normal 8px 12px) frees up enough of a block's height that the 52px
+      // "drop the meta line" cutoff, tuned for the wider padding, was hiding the
+      // time on plenty of blocks that now have real room for both lines at
+      // --hour-h:60px. Lowered to 28px there — the spec's own floor, below which
+      // even a single title line has no room (a 30-min block is only ~27px tall:
+      // Math.max(topForMin(ce)-top-3,26) above). Mobile/every other width keeps
+      // the original 52px, untouched.
+      const tight = isBlock && p.h < (deskDay1Active() ? 28 : 52);
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
@@ -20402,8 +20636,20 @@
     // "routine"] no longer shrink-wraps at all (CSS above), so there's no per-block
     // width to equalise -- every solo block is already full-width. Setting an inline
     // px width here would fight that CSS with a stale desktop-sized number.
+    // 2026-08-15 corrections pass (item 3): this pass was firing at the NEW
+    // desktop-day1 breakpoint too (window.innerWidth > 640 catches every desktop
+    // width, not just the old narrower 3-column layout it was tuned for) —
+    // narrowing every non-overlapping block that day to match the SHORTEST
+    // solo block's shrink-wrapped content width (confirmed live: two genuinely
+    // non-overlapping blocks both pinned to inline style="width:271px" against a
+    // 655px-wide column). clusterOverlaps() above already correctly gives a solo
+    // (non-overlapping) block cols===1/no colStyle — the bug was ENTIRELY this
+    // equalising pass fighting that with a stale mobile-era inline width. At
+    // desktop-day1 the spec wants every solo block simply at the column's own
+    // width (left:6px;right:6px, CSS above) — skip the equalise there so that
+    // CSS rule is the one thing setting a solo block's width, unfought.
     const soloBlocks = Array.from(layer.querySelectorAll('.tl-block[data-solo="true"]'));
-    if (soloBlocks.length > 1 && window.innerWidth > 640) {
+    if (soloBlocks.length > 1 && window.innerWidth > 640 && !deskDay1Active()) {
       const maxW = Math.max(...soloBlocks.map(el => el.getBoundingClientRect().width));
       soloBlocks.forEach(el => { el.style.width = `${Math.ceil(maxW)}px`; });
     }
@@ -23477,7 +23723,11 @@
   // unchecked in the sidebar's "Parts of life" list, filters the day grid). An
   // existing saved book33-prefs with only {calDays,navMode} gets all four filled
   // in, same as navMode's own arrival did -- no second migration path.
-  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, hideNames: false, tracksOff: [] };
+  // dayStart/dayEnd (item 6, 2026-08-15 corrections pass): "Hours shown" —
+  // desktop-day1's own grid-row trim only (see computeDeskHourRange/compactH
+  // below), read/written by the #ddtGear popover. Defaults match the spec's
+  // "6am"/"10pm".
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, hideNames: false, tracksOff: [], dayStart: 6, dayEnd: 22 };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -24065,7 +24315,21 @@
     const el = document.getElementById("dayCtxFasting");
     if (!el) return;
     const fd = widgetFastingDigest();
-    el.innerHTML = fd.active ? meterHtml("Fasting", fd.pct, `${fd.label} / ${fd.goal}`, "--fit-workout") : "";
+    // 2026-08-15 corrections pass (item 8): mobile keeps the deliberate
+    // no-empty-placeholder rule this function's own original comment describes
+    // (omitted entirely when not fasting, same as the birthday/cycle chips) —
+    // but at desktop-day1 the meters row is a fixed side-by-side DONE/FASTING
+    // pair (CSS, .dcx-meters flex-direction:row), and an empty #dayCtxFasting
+    // there drops out of the `:not(:empty)` flex rule entirely, so DONE alone
+    // stretches to fill the whole row instead. Desktop-day1 always renders a
+    // real (non-empty) row: the meter when active, a plain "— not fasting"
+    // caption when not, so the row never reflows between fasting/non-fasting
+    // days — matches the spec's own wording exactly.
+    el.innerHTML = fd.active
+      ? meterHtml("Fasting", fd.pct, `${fd.label} / ${fd.goal}`, "--fit-workout")
+      : (deskDay1Active()
+        ? `<div class="dcx-meter"><span class="dcx-meter-lbl">Fasting</span><span class="dcx-meter-val" style="color:var(--ink-faint);font-weight:400">— not fasting</span></div>`
+        : "");
   }
 
   // 2026-08-02 (Linh: "the day time view shows 6am-10pm ... expandable button"): tracks
@@ -24151,6 +24415,10 @@
     // personal/family timed items also stay in their sidebar lists for ticking off
     const timed = dayEvents.filter(e => !e.allDay && e.start);
     renderAlldayRow(alldayBdays);
+    // item 6 (2026-08-15 corrections pass): must run BEFORE computeCompactHours,
+    // which is what actually turns deskHourRange into real 0-height rows via
+    // compactH(h) — see its own comment.
+    computeDeskHourRange(timed);
     // 2026-08-04 (Linh: "hours size to their content automatically"): see this
     // function's own comment near buildHours() for exactly what "compact" means here.
     computeCompactHours(timed);
@@ -32639,7 +32907,6 @@
   document.getElementById("ddtTodayBtn")?.addEventListener("click", () => document.getElementById("todayPill")?.click());
   document.getElementById("ddtPrev")?.addEventListener("click", () => document.getElementById("prevDay")?.click());
   document.getElementById("ddtNext")?.addEventListener("click", () => document.getElementById("nextDay")?.click());
-  document.getElementById("ddtGear")?.addEventListener("click", () => { state.view = "notify"; render(); });
   document.getElementById("ddtHideNames")?.addEventListener("click", () => {
     PREFS.hideNames = !PREFS.hideNames;
     savePrefs();
@@ -32651,6 +32918,61 @@
     PREFS.calDays = parseInt(btn.dataset.ddtDays, 10);
     savePrefs();
     renderDeskDayTopbar();
+  });
+
+  /* ---- #ddtGear popover — item 6 (2026-08-15 corrections pass), "Hours
+     shown". #ddtGear used to jump straight to Notifications (state.view =
+     "notify") — that stays reachable via the link at the bottom of this
+     popover instead of being silently dropped. Same small anchored-popover
+     idiom as .wr-arrange-pop/renderWrArrangePop() a few thousand lines down
+     (toggle flag + a render function that (re)creates/removes one absolutely-
+     positioned div), not the full-screen b33mp date-picker overlay — that's a
+     heavier system built for a different job, and "just the two hour fields"
+     is explicitly the spec's own scope here. */
+  let ddtGearOpen = false;
+  function renderDdtGearPop() {
+    const btn = document.getElementById("ddtGear");
+    document.getElementById("ddtGearPop")?.remove();
+    if (!btn || !ddtGearOpen) return;
+    const hourOpts = sel => {
+      let html = "";
+      for (let h = START_HOUR; h <= END_HOUR; h++) html += `<option value="${h}"${h === sel ? " selected" : ""}>${hourLabel(h)}</option>`;
+      return html;
+    };
+    const pop = document.createElement("div");
+    pop.className = "ddt-gear-pop";
+    pop.id = "ddtGearPop";
+    pop.innerHTML = `
+      <div class="ddt-gear-row"><span>Day starts at</span><select id="ddtDayStartSel">${hourOpts(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6)}</select></div>
+      <div class="ddt-gear-row"><span>Day ends at</span><select id="ddtDayEndSel">${hourOpts(Number.isFinite(PREFS.dayEnd) ? PREFS.dayEnd : 22)}</select></div>
+      <button type="button" class="ddt-gear-link" id="ddtGearNotify">Notification settings →</button>`;
+    btn.parentElement.style.position = "relative";
+    btn.parentElement.appendChild(pop);
+  }
+  document.getElementById("ddtGear")?.addEventListener("click", () => {
+    ddtGearOpen = !ddtGearOpen;
+    renderDdtGearPop();
+  });
+  document.addEventListener("click", e => {
+    if (e.target.closest("#ddtGearNotify")) {
+      ddtGearOpen = false;
+      document.getElementById("ddtGearPop")?.remove();
+      state.view = "notify"; render();
+      return;
+    }
+    if (ddtGearOpen && !e.target.closest(".ddt-gear-pop") && !e.target.closest("#ddtGear")) {
+      ddtGearOpen = false;
+      document.getElementById("ddtGearPop")?.remove();
+    }
+  });
+  document.addEventListener("change", e => {
+    const startSel = e.target.closest("#ddtDayStartSel");
+    const endSel = e.target.closest("#ddtDayEndSel");
+    if (!startSel && !endSel) return;
+    if (startSel) PREFS.dayStart = parseInt(startSel.value, 10);
+    if (endSel) PREFS.dayEnd = parseInt(endSel.value, 10);
+    savePrefs();
+    renderDay();
   });
 
   /* ============================================================
@@ -32781,6 +33103,10 @@
      ============================================================ */
   const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "pileupBox", "streaksWidget"];
   const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", pileupBox: "Piling up", streaksWidget: "Streaks" };
+  // item 9: toggled by the "+N more" button inside the pileupBox card itself
+  // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
+  // below, not reset per day.
+  let wrPileupExpanded = false;
   function wrCardHtml(id) {
     const d = state.anchor;
     if (id === "focusTile") {
@@ -32810,19 +33136,34 @@
       </div>`;
     }
     if (id === "railPatients") {
-      // same read renderDeskRail()'s own "pats" list uses — straight off
-      // TL_ITEMS_BY_ID, no second data source.
-      const pats = Object.values(TL_ITEMS_BY_ID).filter(ev => ev.track === "work" && ev.start).sort((a, b) => toMin(a.start) - toMin(b.start));
+      // 2026-08-15 corrections pass (item 11): was listing every timed
+      // track:"work" item, so a commute ("Train to work") showed up as if it
+      // were a patient. clinicPatientsIn (shared with item 7's block fix, see
+      // its own comment) reads the SAME TL_ITEMS_BY_ID, no second data source —
+      // just the real "within CBD Work's own hours" signal instead of the bare
+      // track check. renderDeskRail()'s legacy rail reads the exact same call.
+      const pats = clinicPatientsIn(Object.values(TL_ITEMS_BY_ID)).sort((a, b) => toMin(a.start) - toMin(b.start));
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's patients · ${pats.length}</span>
         ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(PREFS.hideNames ? "Patient" : p.title)}</span><span class="wr-pat-state">${isDone(p.id) ? "✓ in" : ""}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
       </div>`;
     }
     if (id === "pileupBox") {
+      // 2026-08-15 corrections pass (item 9): was rendering EVERY overdue item
+      // (slice(0,8) was already wider than the 5 the spec wants, and a genuinely
+      // long pileup — 12+ rows — still pushed Numerology/Cycle/Patients/Streaks
+      // below the fold). Capped at 5 with a toggle-expand "+N more" (wrPileupExpanded,
+      // below) that reveals the rest IN PLACE, reusing this exact same
+      // .wr-pile-row template and the same pileUpItems() data — not a second list
+      // view. The header count stays the TRUE total either way, so nothing is
+      // silently hidden.
       const items = pileUpItems();
+      const shown = wrPileupExpanded ? items : items.slice(0, 5);
+      const hiddenCount = items.length - shown.length;
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Piling up · ${items.length}</span>
-        ${items.length ? items.slice(0, 8).map(it => `<div class="wr-pile-row"><span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span><span class="wr-pile-age">${it.overdueBy}${it.kind === "routine" ? "" : "d"}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing piling up.</div>`}
+        ${items.length ? shown.map(it => `<div class="wr-pile-row"><span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span><span class="wr-pile-age">${it.overdueBy}${it.kind === "routine" ? "" : "d"}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing piling up.</div>`}
+        ${hiddenCount > 0 ? `<button type="button" class="wr-pile-more" data-wr-pile-more="1">+${hiddenCount} more</button>` : ""}
       </div>`;
     }
     if (id === "streaksWidget") {
@@ -32872,6 +33213,14 @@
   document.getElementById("wrArrangeBtn")?.addEventListener("click", () => {
     wrArrangeOpen = !wrArrangeOpen;
     renderWrArrangePop();
+  });
+  // item 9: "+N more" inside the Piling up card — event-delegated (the card
+  // re-renders on every renderDeskWidgetRail() pass, same reason every other
+  // dynamic control in this rail is delegated rather than bound directly).
+  document.addEventListener("click", e => {
+    if (!e.target.closest("[data-wr-pile-more]")) return;
+    wrPileupExpanded = true;
+    renderDeskWidgetRail();
   });
   document.addEventListener("click", e => {
     if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn")) {
@@ -33032,10 +33381,12 @@
          ${sub ? `<span class="rail-cycle-sub">${esc(sub)}</span>` : ""}</span>`;
       cycCard.hidden = false;
     } else cycCard.hidden = true;
-    // Today's patients — the day's timed work/clinic items, straight from the same
-    // TL_ITEMS_BY_ID renderTimeline() just filled (no second data source to drift)
-    const pats = Object.values(TL_ITEMS_BY_ID)
-      .filter(ev => ev.track === "work" && ev.start)
+    // Today's patients — the day's real clinic bookings, straight from the same
+    // TL_ITEMS_BY_ID renderTimeline() just filled (no second data source to
+    // drift). 2026-08-15 corrections pass: clinicPatientsIn (shared with the
+    // widget rail's own card and the block second-line fix, see its comment)
+    // instead of a bare track==="work" check, which also matched commutes.
+    const pats = clinicPatientsIn(Object.values(TL_ITEMS_BY_ID))
       .sort((a, b) => toMin(a.start) - toMin(b.start));
     const head = document.getElementById("railPatHead");
     head.innerHTML = `<span>${pats.length ? `${pats.length} booked` : "No bookings"}</span><span class="dv">${deskPatOpen ? "▴" : "▾"}</span>`;
@@ -38758,7 +39109,7 @@
     const repositionRows = () => {
       document.querySelectorAll("#hours .hour-row[data-hour]").forEach(row => {
         const hh = parseInt(row.dataset.hour, 10);
-        row.style.height = state.compactHours.has(hh) ? `${compactH().toFixed(0)}px` : "";
+        row.style.height = state.compactHours.has(hh) ? `${compactH(hh).toFixed(0)}px` : "";
       });
     };
     scroller.addEventListener("touchstart", e => {
