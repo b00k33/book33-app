@@ -11769,6 +11769,329 @@
   #deskColLeft .patients-above-day #addRow .add-btn:hover { background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
 
   /* ============================================================
+     DESKTOP DAY VIEW — 4-ZONE LAYOUT (2026-08-15 build; closes out task #125
+     "desktop nav rail + collapsible calendar sidebar" and task #122's desktop
+     half "widget rail using the existing tile system"). Four zones: chapters
+     rail 52px (fixed, GLOBAL chrome — every desktop page, any day-count) ·
+     calendar sidebar 214px (Day page, 1-day only) · day grid flex · widget rail
+     286px (1-day only). Everything Day-page-specific below is gated on
+     [data-desk-day1], an attribute placeDeskGrid() stamps on <html> via
+     deskDay1Active() — true today whenever #deskGrid is showing at all, since
+     calDaysActive() hardcodes 1 at every desktop width until the separate
+     multi-day-desktop build lands (see that function's own comment); written
+     through the real function rather than a bare width check so this self-
+     corrects the day that build ships.
+     TOKEN MAP — this spec's vocabulary doesn't exist in this codebase, same
+     situation the Day-mode TOKEN MAP comment near :root already solved for a
+     sibling spec: --surface->--paper, --raised->--raised (this file's own,
+     already a derived ink-overlay), --field->--field-bg, --muted->--ink-soft,
+     --faint->--ink-faint, --line->--note-line. --cycle isn't a fixed hex — every
+     CD pill in this app already resolves its dot colour live (Book33CD.info's
+     own dotVar: --flow-med red normally, --fertile green on a fertile day), so
+     the widget rail's Cycle card reads that same dotVar rather than hardcoding
+     the mockup's red. --fitness->--fit-workout (this file's one Fitness green).
+     SPACING — the source spec's padding/gap literals outside this file's
+     4/8/12/16/24/32 scale are rounded to the nearest step per CLAUDE.md.
+     Component WIDTHS (52/214/286/54/46/60/19px, the zone/grid/cell dimensions
+     the spec is precise about and a real mockup confirms) are layout sizes, not
+     margin/padding/gap, so they stay exact — the same distinction --hour-h and
+     the existing .rail-card width already make. RADIUS is var(--radius-sm)/
+     var(--radius-md)/999px only: the spec's "radius 7/5/3" round up to
+     --radius-sm (10px), "radius 11" rounds to --radius-md (16px), every bar
+     track/fill is 999px (matching .dcx-meter-track, already exactly that).
+     ============================================================ */
+
+  /* ---- 1. Chapters rail — 52px, fixed, EVERY desktop page (not gated on
+     [data-desk-day1]: this is global nav chrome, the ≥1024px replacement for
+     #categoryTabs' chapter-tab row). 3 states: collapsed (default) / collapsed
+     + hover-peek (an absolute overlay, so the fixed rail's own box — and every
+     page's margin-left reserved for it — never changes width) / pinned
+     (in-flow at 238px, margin-left follows). Renders NAV_ITEMS — the SAME array
+     the mobile drawer/tabs already use, one source, new presentation. Persisted
+     as book33-prefs.navRail. ---- */
+  #deskNavRail { display: none; }
+  @media (min-width: 1024px) {
+    body { margin-left: 52px; }
+    body[data-nav-rail="pinned"] { margin-left: 238px; }
+    #deskNavRail {
+      display: block; position: fixed; top: 0; left: 0; height: 100vh; width: 52px;
+      z-index: 70; box-sizing: border-box;
+    }
+    #deskNavRail[data-state="pinned"] { width: 238px; }
+    .dnr-body {
+      position: absolute; top: 0; left: 0; width: 52px; height: 100%; overflow: hidden;
+      background: var(--paper); border-right: 1px solid var(--note-line);
+      display: flex; flex-direction: column; transition: width .12s ease; box-sizing: border-box;
+    }
+    #deskNavRail[data-state="collapsed"].peek .dnr-body {
+      width: 238px; box-shadow: 4px 0 16px rgba(0,0,0,.25);
+    }
+    #deskNavRail[data-state="pinned"] .dnr-body { position: static; width: 100%; transition: none; box-shadow: none; }
+    .dnr-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; padding: 8px 0; }
+    .dnr-row {
+      display: flex; align-items: center; width: 238px; min-height: 44px; flex: none;
+      border: none; background: none; color: var(--ink-soft); cursor: pointer; font: inherit; font-size: 12px;
+      text-align: left; position: relative;
+    }
+    .dnr-row.on { color: var(--margin-rule); background: var(--raised); }
+    .dnr-row.on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--margin-rule); }
+    .dnr-row:hover { background: var(--raised); }
+    .dnr-ic { flex: none; width: 52px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 1; }
+    .dnr-lbl { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
+    .dnr-count { flex: none; margin-right: 12px; background: var(--margin-rule); color: var(--accent-on); font-size: 9px; font-weight: 800; border-radius: 999px; padding: 1px 6px; }
+    .dnr-sep { height: 1px; background: var(--note-line); margin: 8px 0 8px 12px; width: 214px; flex: none; }
+    .dnr-foot { flex: none; border-top: 1px solid var(--note-line); }
+    .dnr-avatar-row { display: flex; align-items: center; width: 238px; min-height: 52px; padding: 4px 0; }
+    .dnr-avatar-ic {
+      flex: none; width: 52px; height: 44px; display: flex; align-items: center; justify-content: center;
+    }
+    .dnr-avatar-badge {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--margin-rule); color: var(--accent-on);
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800;
+    }
+    .dnr-foot-meta { flex: 1; min-width: 0; }
+    .dnr-foot-name { display: block; font-size: 11px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dnr-foot-sync { display: block; font-size: 9px; color: var(--ink-faint); white-space: nowrap; }
+    .dnr-pin {
+      flex: none; width: 28px; height: 28px; margin-right: 8px; border-radius: 999px; border: none;
+      background: none; color: var(--ink-faint); cursor: pointer; font-size: 11px;
+    }
+    .dnr-pin:hover, .dnr-pin[aria-pressed="true"] { color: var(--gold-bright); background: color-mix(in oklab, var(--gold-bright) 14%, transparent); }
+    /* the old chapter-tab row is superseded by this rail */
+    #categoryTabs { display: none !important; }
+  }
+
+  /* ---- 2. Day top bar — 54px, replaces .nav-tiers on the Day page at the
+     desktop 1-day breakpoint (every OTHER desktop page keeps .nav-tiers, minus
+     its now-hidden chapter tabs, above). ---- */
+  #deskDayTopbar { display: none; }
+  [data-desk-day1] .nav-tiers { display: none; }
+  [data-desk-day1] #deskDayTopbar {
+    display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 16px;
+    background: var(--paper); border-bottom: 1px solid var(--note-line); box-sizing: border-box;
+  }
+  .ddt-word { flex: none; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; color: var(--gold-bright); }
+  .ddt-title { flex: none; font-size: 19px; font-weight: 800; color: var(--ink); }
+  .ddt-date { flex: none; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+  .ddt-spacer { flex: 1 1 auto; }
+  .ddt-today-btn {
+    flex: none; border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .ddt-today-btn:hover { border-color: var(--margin-rule); color: var(--margin-rule); }
+  .ddt-nav { flex: none; display: flex; align-items: center; gap: 4px; }
+  .ddt-arrow {
+    width: 32px; height: 32px; border-radius: 999px; border: none; background: var(--raised);
+    color: var(--ink-soft); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ddt-arrow:hover { color: var(--margin-rule); }
+  .ddt-days { flex: none; display: flex; align-items: center; background: var(--field-bg); border-radius: 999px; padding: 2px; }
+  .ddt-day-btn {
+    min-width: 28px; height: 28px; padding: 0 8px; border: none; background: none; color: var(--ink-soft);
+    font: inherit; font-size: 11.5px; font-weight: 700; border-radius: 999px; cursor: pointer;
+  }
+  .ddt-day-btn.on { background: var(--margin-rule); color: var(--accent-on); }
+  .ddt-hide-names {
+    flex: none; border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft);
+    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  }
+  .ddt-hide-names[aria-pressed="true"] { border-color: var(--margin-rule); color: var(--margin-rule); background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
+  .ddt-gear {
+    flex: none; width: 32px; height: 32px; border-radius: 999px; border: none; background: none;
+    color: var(--gold-bright); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ddt-gear:hover { background: var(--raised); }
+
+  /* ---- 3. Calendar sidebar — 214px, Day page 1-day only. Collapses to a 22px
+     tab (book33-prefs.sideOpen). ---- */
+  #deskSidebar { display: none; }
+  [data-desk-day1] #deskSidebar {
+    display: flex; flex-direction: column; width: 214px; flex: none; box-sizing: border-box;
+    background: var(--paper); border-right: 1px solid var(--note-line); padding: 12px; overflow-y: auto;
+  }
+  [data-desk-day1] #deskSidebar[data-open="false"] { width: 22px; padding: 12px 0; align-items: center; }
+  [data-desk-day1] #deskSidebar[data-open="false"] .dsb-group { display: none; }
+  [data-desk-day1] #deskSidebar[data-open="true"] .dsb-tab { display: none; }
+  .dsb-tab {
+    writing-mode: vertical-rl; border: none; background: none; color: var(--ink-faint);
+    font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer; padding: 8px 0;
+  }
+  .dsb-tab:hover { color: var(--gold-bright); }
+  .dsb-group { padding: 12px 0; border-top: 1px solid var(--note-line); }
+  .dsb-group:first-child { padding-top: 0; border-top: none; }
+  .dsb-group-head { font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; }
+  .dsb-group-head-row { display: flex; align-items: center; justify-content: space-between; }
+  .dsb-group-head-row .dsb-group-head { margin: 0 0 8px; }
+  .dsb-collapse-btn { flex: none; border: none; background: none; color: var(--ink-faint); font-size: 11px; cursor: pointer; padding: 0 0 8px; margin-left: 4px; }
+  .dsb-collapse-btn:hover { color: var(--gold-bright); }
+  /* mini-month — reuses .mini-cal/.mini-cal-grid/.mini-cal-cell verbatim (the
+     shared component the mobile date-dropdown and the old desktop rail already
+     use), scoped overrides only: gold-FILLED today (the shared rule is an
+     outline, tuned for a 44px tap cell elsewhere) and the small activity dot
+     renderMiniCal() now stamps via data-has-items. */
+  #deskSidebar .mini-cal-nav { font-size: 12px; font-weight: 800; }
+  #deskSidebar #miniCalTitle { color: var(--ink); }
+  #deskSidebar .mini-cal-dow span { font-size: 7.5px; font-weight: 800; color: var(--ink-faint); }
+  #deskSidebar .mini-cal-cell { position: relative; height: 19px; font-size: 10px; font-weight: 600; }
+  #deskSidebar .mini-cal-cell[data-today="true"] {
+    background: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 700;
+  }
+  #deskSidebar .mini-cal-cell[data-has-items="true"]::after {
+    content: ""; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+    width: 2.5px; height: 2.5px; border-radius: 50%; background: var(--gold-bright); opacity: .5;
+  }
+  #deskSidebar .mini-cal-cell[data-today="true"][data-has-items="true"]::after { background: var(--accent-on); }
+  /* parts of life */
+  .dsb-parts-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: var(--radius-sm);
+    background: var(--raised); margin-bottom: 4px; cursor: pointer; min-height: 32px;
+  }
+  .dsb-parts-row[data-checked="false"] { opacity: .5; }
+  .dsb-parts-check { flex: none; width: 14px; height: 14px; accent-color: var(--gold-bright); }
+  .dsb-parts-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+  .dsb-parts-label { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dsb-parts-count { flex: none; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .dsb-parts-all {
+    display: block; width: 100%; text-align: left; border: none; background: none; color: var(--gold-bright);
+    font: inherit; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer;
+  }
+  /* quick add */
+  .dsb-quick-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: var(--radius-sm);
+    background: var(--raised); margin-bottom: 4px; border: none; width: 100%; cursor: pointer;
+    font: inherit; color: var(--ink); font-size: 11px; min-height: 32px; text-align: left;
+  }
+  .dsb-quick-row:hover { background: color-mix(in oklab, var(--raised) 60%, var(--gold-bright) 6%); }
+  .dsb-quick-plus { color: var(--gold-bright); font-weight: 800; flex: none; }
+
+  /* ---- 4. Day header (date + context chip strip) — new, sits at the top of
+     .day-main so it travels for free with placeDeskGrid()'s existing dayMain
+     reparent (colM below). ---- */
+  #deskDayHeader { display: none; }
+  [data-desk-day1] #deskDayHeader {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--note-line);
+  }
+  .ddh-date { flex: none; font-size: 17px; font-weight: 800; color: var(--ink); }
+  .ddh-chips { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .ddh-chip {
+    display: inline-flex; align-items: center; gap: 4px; background: var(--raised); border-radius: var(--radius-sm);
+    padding: 4px 8px; font-size: 10px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
+  }
+  .ddh-chip .glyph, .ddh-chip .moon { font-size: 12px; }
+  .ddh-chip-gold { color: var(--gold-bright); font-weight: 700; }
+  .ddh-cycle-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+
+  /* ---- 4.2 Meters row — reuses .dcx-wrap/.dcx-meters/meterHtml() verbatim (the
+     merged progress+fasting component §2 already built for mobile), just
+     re-enabled and laid out side by side at this breakpoint. .dcx-wrap is
+     force-hidden by the mobile-only §2 rule above (@media min-width:1024px) —
+     this specificity-higher override wins over that !important rule since it
+     also carries !important at equal specificity-plus-attribute-selector, and
+     is the one place this build intentionally reverses that gate. Streak chips
+     move to their own widget-rail card (below) so they don't show twice. */
+  [data-desk-day1] .dcx-wrap { display: flex !important; margin: 0; }
+  [data-desk-day1] #dayCtxChips { display: none; }
+  [data-desk-day1] .dcx-meters { flex-direction: row; gap: 16px; padding: 9px 12px; border-bottom: 1px solid var(--note-line); }
+  [data-desk-day1] .dcx-prog, [data-desk-day1] #dayCtxFasting { flex: 1; min-width: 0; }
+  [data-desk-day1] .dcx-meter-lbl { width: 46px; }
+  [data-desk-day1] #dayCtxStreaks { display: none; }
+  /* the old ring card + fasting bar + rail cards are fully superseded here —
+     "the meter replaces the old ring card, do not render both" */
+  [data-desk-day1] #dayProgress,
+  [data-desk-day1] #fastStatus,
+  [data-desk-day1] .desk-fast-card,
+  [data-desk-day1] .desk-glance,
+  [data-desk-day1] #railNum,
+  [data-desk-day1] #railCycle,
+  [data-desk-day1] #railPatients { display: none !important; }
+
+  /* ---- 4.3 All-day row — re-enabled at this breakpoint (mobile-only gate
+     above hid it too); gutter widened to match the 46px hour rail. ---- */
+  [data-desk-day1] .ad-row { display: flex !important; }
+  [data-desk-day1] #dayAlldayRow .ad-gutter { width: 46px; font-size: 7.5px; }
+
+  /* ---- 4.4 The grid — one column, --hour-h 60px, fasting tints the whole
+     column (data-desk-fasting, see renderDayFastTint()'s desktop half — a
+     deliberate reversal of the mobile "no tint at 1 day" rule, NOT a mistake). */
+  [data-desk-day1] { --hour-h: 60px !important; }
+  [data-desk-day1] #dayTimelineWrap[data-desk-fasting="true"] { background: color-mix(in oklab, var(--fast) 7%, transparent); }
+  [data-desk-day1] .hour-rail, [data-desk-day1] .ad-gutter { width: 46px; }
+
+  /* ---- 5. Widget rail — 286px (1440+), 250px (1200–1439), removed <1200
+     (widgets fall back to a block below the grid, .wr-fallback). ---- */
+  #deskWidgetRail { display: none; }
+  #wrFallback { display: none; }
+  /* the new zones replace #deskGrid's old 3-column (290/flex/300) template
+     wholesale, but only while the new system is active — #deskColLeft/
+     #deskColRight keep their existing template/content for the (currently
+     dormant, see deskDay1Active()'s own comment) multi-day-desktop branch. */
+  [data-desk-day1] #deskGrid { display: flex; align-items: stretch; grid-template-columns: none; gap: 0; margin: 0; }
+  [data-desk-day1] #deskColLeft, [data-desk-day1] #deskColRight { display: none !important; }
+  [data-desk-day1] #deskColMain { flex: 1 1 auto; min-width: 0; gap: 0; }
+  @media (min-width: 1200px) {
+    [data-desk-day1] #deskWidgetRail {
+      display: flex; flex-direction: column; width: 286px; flex: none; box-sizing: border-box;
+      background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px; overflow-y: auto;
+    }
+  }
+  @media (min-width: 1200px) and (max-width: 1439px) {
+    [data-desk-day1] #deskWidgetRail { width: 250px; }
+  }
+  .wr-head { display: flex; align-items: center; margin-bottom: 12px; }
+  .wr-head-lbl { font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); }
+  .wr-arrange-btn { margin-left: auto; border: none; background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .wr-card { position: relative; background: var(--raised); border-radius: var(--radius-md); padding: 12px 12px; margin-bottom: 8px; }
+  .wr-grip { position: absolute; top: 8px; right: 8px; font-size: 9px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
+  .wr-grip:active { cursor: grabbing; }
+  .wr-label { display: block; font-size: 9px; font-weight: 800; letter-spacing: .9px; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+  .wr-dragging { opacity: .45; }
+  .wr-over { outline: 2px dashed var(--gold-bright); outline-offset: 2px; }
+  /* Numerology */
+  .wr-num-value { font-size: 30px; font-weight: 800; color: var(--gold-bright); line-height: 1; }
+  .wr-num-sub { font-size: 11px; color: var(--ink-soft); margin-top: 4px; line-height: 1.4; }
+  .wr-num-sub b { display: block; color: var(--ink); font-weight: 700; }
+  /* Cycle */
+  .wr-cyc-day { font-size: 19px; font-weight: 800; }
+  .wr-cyc-sub { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .wr-cyc-bar { display: flex; gap: 4px; margin-top: 8px; }
+  .wr-cyc-seg { flex: 1; height: 5px; border-radius: 999px; background: var(--field-bg); }
+  .wr-cyc-seg.on { background: var(--cycle-dot, var(--danger)); }
+  /* Patients */
+  .wr-pat-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--note-line); }
+  .wr-pat-row:last-child { border-bottom: none; }
+  .wr-pat-time { flex: none; width: 48px; font-size: 10px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .wr-pat-name { flex: 1; min-width: 0; font-size: 11.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wr-pat-state { flex: none; font-size: 9px; font-weight: 800; color: var(--fit-workout); }
+  .wr-pat-empty { font-size: 11px; color: var(--ink-faint); font-style: italic; }
+  /* Piling up */
+  .wr-pile-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .wr-pile-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+  .wr-pile-name { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wr-pile-age { flex: none; font-size: 9.5px; font-weight: 800; color: var(--danger); }
+  /* Streaks */
+  .wr-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+
+  /* Arrange popover — scoped to this rail only, per-widget visibility checkbox */
+  .wr-arrange-pop {
+    position: absolute; top: 40px; right: 12px; z-index: 80; width: 220px;
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 8px;
+  }
+  .wr-arrange-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 4px; font-size: 12px; color: var(--ink); }
+  .wr-arrange-row input { accent-color: var(--gold-bright); }
+
+  /* 1024–1199px: widget rail drops out of the column layout; the same cards
+     fall back to a 2-up block under the grid instead (the mobile arrangement),
+     built by the same renderDeskWidgetRail() output, different container/CSS. */
+  @media (min-width: 1024px) and (max-width: 1199px) {
+    [data-desk-day1] #wrFallback {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px;
+      border-top: 1px solid var(--note-line);
+    }
+    [data-desk-day1] #wrFallback .wr-card:nth-child(3) { grid-column: 1 / -1; }
+  }
+
+  /* ============================================================
      NOTIFICATIONS — Book33Notify panel (2026-08-05, "B33 Notification" spec).
      Flat settings rows in the Ink & Brass language: hairline dividers, gold
      uppercase group labels, green switches, gold selected chips, gold values.
@@ -12139,6 +12462,18 @@
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
+
+  <!-- 2026-08-15 (desktop DAY view build, task #125): chapters rail — the
+       ≥1024px replacement for #categoryTabs' chapter-tab row, GLOBAL chrome
+       (every desktop page, not just Day). Renders from NAV_ITEMS via
+       renderDeskNavRail(); 3 states (collapsed/peek/pinned) via
+       book33-prefs.navRail, wired near that function. -->
+  <div id="deskNavRail" data-state="collapsed">
+    <div class="dnr-body">
+      <div class="dnr-scroll" id="dnrScroll"></div>
+      <div class="dnr-foot" id="dnrFoot"></div>
+    </div>
+  </div>
 
   <div class="astro">
     <!-- 2026-08-02 (Linh: "at the top of the app... remove that row, replace it with the
@@ -13814,6 +14149,23 @@
          strip, Numerology/Cycle cards). Centre: the day as hero (command bar,
          progress, fasting + timeline). Right: month calendar + patients + the rest
          of the rail. Hidden below 1024px, where the phone layout applies untouched. -->
+    <!-- 2026-08-15 (desktop DAY view build, §2): 54px top bar — REPLACES .nav-tiers
+         on this page at the desktop 1-day breakpoint (see [data-desk-day1] .nav-tiers
+         {display:none} in CSS). Filled by renderDeskDayTopbar(). -->
+    <div id="deskDayTopbar">
+      <span class="ddt-word">BOOK33</span>
+      <span class="ddt-title" id="ddtTitle">Today</span>
+      <span class="ddt-date" id="ddtDate"></span>
+      <span class="ddt-spacer"></span>
+      <button type="button" class="ddt-today-btn" id="ddtTodayBtn">Today</button>
+      <span class="ddt-nav">
+        <button type="button" class="ddt-arrow" id="ddtPrev" aria-label="Previous day">‹</button>
+        <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
+      </span>
+      <span class="ddt-days" id="ddtDays"></span>
+      <button type="button" class="ddt-hide-names" id="ddtHideNames" aria-pressed="false">Hide names</button>
+      <button type="button" class="ddt-gear" id="ddtGear" aria-label="Settings" title="Settings">⚙</button>
+    </div>
     <div id="deskGrid" hidden>
       <div id="deskColLeft">
         <div id="deskDateCard">
@@ -13842,9 +14194,45 @@
              existing global click delegate already handles, so no new fasting logic. -->
         <div class="desk-fast-card" id="deskFastCard" hidden></div>
       </div>
+      <!-- 2026-08-15 (desktop DAY view build, §3): calendar sidebar — mini-month
+           (reuses #miniCalWrap, reparented in by placeDeskGrid()), Parts of life,
+           Quick add. Filled/reparented by renderDeskSidebar(); #dsbSideHome marks
+           #miniCalWrap's true/default home so it can be returned there below this
+           breakpoint (same home-marker pattern as every other reparented piece). -->
+      <div id="deskSidebar" data-open="true">
+        <button type="button" class="dsb-tab" id="dsbTab" title="Show calendar sidebar" aria-label="Show calendar sidebar">CALENDAR</button>
+        <div class="dsb-group" id="dsbMiniCalGroup">
+          <div class="dsb-group-head-row">
+            <div class="dsb-group-head">Calendar</div>
+            <button type="button" class="dsb-collapse-btn" id="dsbCollapseBtn" title="Collapse sidebar" aria-label="Collapse calendar sidebar">«</button>
+          </div>
+          <div id="dsbMiniCalSlot"></div>
+        </div>
+        <div class="dsb-group">
+          <div class="dsb-group-head">Parts of life</div>
+          <div id="dsbParts"></div>
+        </div>
+        <div class="dsb-group">
+          <div class="dsb-group-head">Quick add</div>
+          <button type="button" class="dsb-quick-row" data-dsb-quick="busy"><span class="dsb-quick-plus">＋</span> Busy block</button>
+          <button type="button" class="dsb-quick-row" data-dsb-quick="routine"><span class="dsb-quick-plus">＋</span> One-off routine</button>
+        </div>
+      </div>
       <div id="deskColMain"></div>
       <div id="deskColRight"></div>
+      <!-- 2026-08-15 (desktop DAY view build, §5): widget rail — 1-day only, ≥1200px.
+           Filled by renderDeskWidgetRail(); TILE_PREFS-driven order + visibility,
+           see that function's own comment. -->
+      <div id="deskWidgetRail">
+        <div class="wr-head">
+          <span class="wr-head-lbl">Today's widgets</span>
+          <button type="button" class="wr-arrange-btn" id="wrArrangeBtn">Arrange</button>
+        </div>
+        <div id="wrCards"></div>
+      </div>
     </div>
+    <!-- 1024–1199px fallback: same cards, 2-up block under the grid (§6) -->
+    <div id="wrFallback"></div>
     <div class="day-row2" id="dayRow2">
       <div id="tilesDate" class="tile-shelf">
         <div class="page-head">
@@ -13932,6 +14320,14 @@
            return the mini calendar here when the viewport shrinks back under 901px —
            same marker trick #dayRow2Home uses for the mobile date line. -->
       <div id="miniCalHome" hidden></div>
+      <!-- 2026-08-15 fix (Bug 1, desktop widget-rail resize-stranding): placeDeskGrid()'s
+           "on" branch reparents #miniCalWrap into #dsbMiniCalSlot inside #deskSidebar; its
+           "off" branch below 1024px had no return path (the comment above at #dsbMiniCalSlot
+           always claimed one existed, it didn't) — resizing narrow could leave the mini-cal
+           stranded inside the hidden sidebar, offsetParent:null, forever. Same home-marker
+           pattern as #railHome/#qaSlotDayHome/etc: placeDeskGrid()'s "off" branch now does
+           dsbSideHome.after(miniCalWrap) to pull it back out. -->
+      <div id="dsbSideHome" hidden></div>
       <div class="mini-cal-wrap" id="miniCalWrap">
         <!-- 2026-08-02 ("move PY11 horse logo to the right hand side"): SUPERSEDES the
              weekday-moon-row placement — that row's far right was still only the left
@@ -14183,6 +14579,15 @@
              tick -- see tickFastDisplays() -- never touches the chip strip's scroll
              position or the progress row). Both collapse to zero height when empty,
              same pattern as #chainChips/#ocPrompts/#tlAlldayRow above. -->
+        <!-- 2026-08-15 (desktop DAY view build, §4.1): day header — date + context
+             chip strip (moon / sun sign / cycle), desktop 1-day only. Lives at the
+             very top of .day-main so it travels for free with placeDeskGrid()'s
+             existing dayMain reparent into the centre zone — no new reparenting
+             code needed. Filled by renderDeskDayHeader(). -->
+        <div id="deskDayHeader">
+          <span class="ddh-date" id="ddhDate"></span>
+          <span class="ddh-chips" id="ddhChips"></span>
+        </div>
         <div class="dcx-wrap" id="dayCtxWrap">
           <div class="dcx-chips" id="dayCtxChips"></div>
           <div class="dcx-meters">
@@ -19289,6 +19694,19 @@
     if (head) { head.hidden = true; head.textContent = ""; }
     const wrap = document.getElementById("dayTimelineWrap");
     if (wrap) wrap.dataset.fasting = "false";
+    // 2026-08-15 (desktop DAY view build) — a DELIBERATE platform difference, not a
+    // reversion of the §3 mobile revision two paragraphs up. Her 2026-08-15 mobile
+    // correction ("tinting the whole grid is heavy-handed... do NOT tint the column
+    // at 1 day... full stop") was scoped to the phone's one narrow column; THIS
+    // spec explicitly asks for the opposite on desktop's 1-day grid ("Fasting tints
+    // the whole column... at 1 day that is the entire grid area, which is correct
+    // and unmissable"). Kept as its own data attribute (data-desk-fasting) rather
+    // than touching data-fasting above, so the mobile path this function's first
+    // half controls is untouched byte-for-byte — CSS only paints this attribute's
+    // wash under the desktop 1-day breakpoint (see [data-desk-day1] rules), so nothing
+    // leaks onto a narrow screen even if this line runs there. Do NOT "fix" this to
+    // match the mobile revision — the two platforms want opposite answers on purpose.
+    if (wrap) wrap.dataset.deskFasting = String(deskDay1Active() && fastedHoursOn(state.anchor) > 0);
   }
 
   /* the right-hand rail follows the time of day — attention cards and the task
@@ -19743,11 +20161,26 @@
     });
     if (cluster.length) closeCluster();
   }
+  // count OTHER "work"-track items whose start falls inside this block's own
+  // [cs,ce) span — the "3 patients" a CBD Work block's second line names at the
+  // desktop 1-day breakpoint (§4.4: "for a work/clinic block, count same-block
+  // bookings"). Reads the same day's already-computed item list, no second data
+  // source — same reuse rule renderDeskRail()'s own "pats" filter follows.
+  function deskBlockPatientCount(e, all, cs, ce) {
+    return all.filter(o => o !== e && o.track === "work" && o.start != null).filter(o => {
+      const s = toMin(o.start);
+      return s !== null && s >= cs && s < ce;
+    }).length;
+  }
   function renderTimeline(items) {
     const layer = document.getElementById("eventsLayer");
     const H = HOUR_H();
     const outside = [], placed = [];
     TL_ITEMS_BY_ID = {};
+    // sidebar "Parts of life" checkboxes (desktop 1-day only — tracksOff is
+    // always empty everywhere else, see trackVisible()'s own comment) hide a
+    // life category from the grid without touching the underlying data.
+    items = items.filter(e => trackVisible(e.track));
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -19807,7 +20240,20 @@
       // visible label is a behaviour change, not part of this fix), note kept accurate so
       // the next reader doesn't go looking for a rule that no longer exists.
       const trackLbl = trackLabel(e.track);
-      const metaTrack = window.innerWidth <= 640 && isBlock && trackLbl ? ` · ${esc(trackLbl)}` : "";
+      // 2026-08-15 (desktop DAY view build, §4.4): a second, desktop-1-day-only
+      // variant of the mobile "time + track" subline just below — the column is
+      // wide there (only one of it), so the spec asks for real context instead of
+      // just the track name: a work/clinic block names how many patients land in
+      // its own span (deskBlockPatientCount, above), every other track falls back
+      // to the same trackLabel() reading the mobile line already uses. Gated on
+      // deskWidgetsActive() (≥1200px 1-day desktop, same breakpoint the widget
+      // rail itself uses) so a narrower desktop window keeps the plain time range,
+      // and .tl-tight (CSS) still drops this line entirely on a short block either
+      // way — untouched, per §4.4's own "don't fight that" instruction.
+      const metaDesk = deskWidgetsActive() && isBlock
+        ? (e.track === "work" ? ` · ${deskBlockPatientCount(e, items, p.cs, p.ce)} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
+        : "";
+      const metaTrack = metaDesk || (window.innerWidth <= 640 && isBlock && trackLbl ? ` · ${esc(trackLbl)}` : "");
       const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
       // 2026-08-06 (Linh: "remove the edit and delete icons from every event block --
       // they're faint and cluttered"): the per-card .tl-edit/.tl-del pencil/× are gone --
@@ -22389,6 +22835,26 @@
     { id: "alsoToday",      em: "📌", label: "Also today" },
     { id: "biomechTip",     em: "🦴", label: "Body tip" },
     { id: "shopSlot",       em: "🧾", label: "Shopping" },
+    // 2026-08-15 (desktop DAY view build, task #122/#125): registered so
+    // TILE_PREFS stays the ONE order/visibility store for every widget-rail
+    // member, mobile and desktop alike (task #122 is explicitly "ONE system, two
+    // layouts") — but #railCycle/#railPatients have no matching DOM element for
+    // applyDayTiles() to find below 641px (the old .rail-card pair is desktop/
+    // tablet-only, see its own "display:none under 641px" comment near the
+    // markup), so this is inert there. streaksWidget has no DOM element at all
+    // anywhere yet — a future mobile "Today's widgets" build (§122's other half,
+    // not this session) can give it one; today only renderDeskWidgetRail() reads
+    // it, straight from dayStreakChipsHtml(). Desktop's own widget rail does NOT
+    // route through applyDayTiles()'s group/shelf logic (see renderDeskWidgetRail
+    // for why) — these three ids exist here purely for the shared ord/hidden
+    // bookkeeping, not for this function's DOM-sweeping behaviour.
+    // 2026-08-15 fix (Bug 2): railOnly marks these three as TILE_PREFS/ord bookkeeping
+    // ONLY — applyDayTiles() (the mobile/tablet tile-shelf sweep below) must skip them
+    // entirely rather than injecting its .tile-ctl drag/group strip into the real
+    // #railCycle/#railPatients cards (still visible, undisturbed, at tablet widths).
+    { id: "railCycle",      em: "🌙", label: "Cycle", railOnly: true },
+    { id: "railPatients",   em: "🩺", label: "Today's patients", railOnly: true },
+    { id: "streaksWidget",  em: "🔥", label: "Streaks", railOnly: true },
   ];
   /* ---- Four named groups replace the old above/below positions (Linh 2026-07-27).
      Numerology & Astrology, Work and Home sit ABOVE the calendar — the day's live
@@ -22552,6 +23018,11 @@
     const ordered = TILE_DEFS.slice().sort((a, b) =>
       ((TILE_PREFS[a.id] || {}).ord ?? 99) - ((TILE_PREFS[b.id] || {}).ord ?? 99));
     ordered.forEach(def => {
+      // Bug 2 fix (2026-08-15): railOnly tiles (railCycle/railPatients/streaksWidget)
+      // exist in TILE_DEFS purely so the desktop widget rail can share TILE_PREFS
+      // ordering/visibility — this mobile/tablet tile-shelf sweep must never touch
+      // their real DOM elements (no .tile-ctl strip, no reparenting into a group box).
+      if (def.railOnly) return;
       const el = document.getElementById(def.id);
       if (!el) return;
       el.setAttribute("data-tile", def.id);
@@ -22621,6 +23092,7 @@
     // I haven't traced yet. Reverted to the version that verifies clean; ordering within a
     // group is handled below instead.
     TILE_DEFS.forEach(def => {
+      if (def.railOnly) return;   // Bug 2 fix — see the main ordered.forEach above
       const el = document.getElementById(def.id);
       const box = groupBoxes[tileGroup(def.id)];
       if (el && box && el.parentElement !== box) box.appendChild(el);
@@ -22661,6 +23133,9 @@
        around mid-render. */
     if (!applyDayTiles._retry) {
       const missing = TILE_DEFS.some(def => {
+        // Bug 2 fix: railOnly tiles never enter a .tile-grp-box (by design, see above)
+        // — without this guard they'd read as permanently "missing" and retry forever.
+        if (def.railOnly) return false;
         const el = document.getElementById(def.id);
         return el && !el.hidden && el.firstElementChild && !el.closest(".tile-grp-box");
       });
@@ -22995,7 +23470,14 @@
   // already anticipated (see below): ntMerge() deep-merges under these defaults, so
   // an existing saved book33-prefs with only calDays gets navMode:"drawer" filled
   // in for free, no migration needed.
-  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer" };
+  // 2026-08-15 (desktop DAY view build): four more keys, same free-fill-in via
+  // ntMerge() -- navRail (chapters-rail state, "collapsed"|"pinned"), sideOpen
+  // (calendar-sidebar manual open/closed), hideNames (Today's-patients privacy
+  // toggle, desktop top bar + widget rail), tracksOff (array of life-category ids
+  // unchecked in the sidebar's "Parts of life" list, filters the day grid). An
+  // existing saved book33-prefs with only {calDays,navMode} gets all four filled
+  // in, same as navMode's own arrival did -- no second migration path.
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, hideNames: false, tracksOff: [] };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -23016,6 +23498,26 @@
   function calDaysActive() {
     return (window.innerWidth < 1024) ? (PREFS.calDays || 1) : 1;
   }
+  // 2026-08-15 (desktop DAY view build): true unless the sidebar's "Parts of life"
+  // checklist has this life-category unchecked (PREFS.tracksOff) -- read by
+  // renderTimeline() to filter the grid, and by the sidebar itself to paint each
+  // row's checkbox state. Empty tracksOff (mobile never writes to it) is a no-op,
+  // so this is always true on phone/tablet.
+  function trackVisible(trackId) { return (PREFS.tracksOff || []).indexOf(trackId) === -1; }
+  // the ONE gate every new desktop 1-day zone (chapters rail excepted -- that's
+  // global chrome on every page/day-count) checks before rendering itself: wide
+  // enough for #deskGrid AND today's real day-count is 1. calDaysActive() already
+  // hardcodes 1 at every desktop width (multi-day desktop is out of scope for this
+  // build, see that function's own comment) -- written through it rather than a
+  // bare deskGridMq.matches so this self-corrects the moment that companion build
+  // lands and calDaysActive() starts returning real multi-day values on desktop.
+  function deskDay1Active() { return deskGridMq.matches && calDaysActive() === 1; }
+  // the narrower of the two 1-day-only breakpoints (§6): wide enough to show the
+  // widget rail as its own column. Below this (1024–1199px) the rail is dropped
+  // and its cards fall back to a block under the grid instead (see
+  // renderDeskWidgetRail()'s own comment for exactly how).
+  const deskWidgetsMq = window.matchMedia("(min-width: 1200px)");
+  function deskWidgetsActive() { return deskDay1Active() && deskWidgetsMq.matches; }
   // mdRendering itself is declared up near layerTopOffset() now (see the bugfix
   // comment there) — this is just its sibling scroll-init flag.
   let mdScrollInit = false;
@@ -23941,8 +24443,15 @@
     let html = "";
     for (let i = 0; i < 42; i++) {
       const d = addDays(gridStart, i), k = keyOf(d);
+      // 2026-08-15 (desktop DAY view build, §3): the small activity dot the
+      // calendar sidebar wants under any day with items — dayItemsFor(d) is the
+      // same authoritative per-day builder renderDay() itself uses, called once
+      // per visible cell (42 max). Harmless everywhere else this shared grid
+      // renders (mobile's date-dropdown calendar) — the attribute is just unused
+      // there, CSS only paints the dot inside #deskSidebar.
+      const hasItems = dayItemsFor(d).length > 0;
       html += `<button type="button" class="mini-cal-cell" data-out="${d.getMonth() !== m}"
-        data-today="${k === todayKey}" data-selected="${k === selectedKey}" data-jump="${k}">${d.getDate()}</button>`;
+        data-today="${k === todayKey}" data-selected="${k === selectedKey}" data-has-items="${hasItems}" data-jump="${k}">${d.getDate()}</button>`;
     }
     document.getElementById("miniCalGrid").innerHTML = html;
   }
@@ -30389,6 +30898,11 @@
     // visibility current on every navigation — the one hook point render() already
     // gives every other nav-adjacent thing (renderNav() itself, right above).
     renderNavExtras();
+    // 2026-08-15 (desktop DAY view build, task #125): the ≥1024px chapters rail is
+    // GLOBAL chrome (every page, not just Day) — same hook point as renderNavExtras()
+    // just above, so its active row follows every navigation, not only a Day-page
+    // renderDay() pass.
+    renderDeskNavRail();
     document.getElementById("dayPage").hidden = state.view !== "day";
     document.getElementById("weekPage").hidden = state.view !== "week";
     document.getElementById("monthPage").hidden = state.view !== "month";
@@ -31907,8 +32421,59 @@
     const tools = document.querySelector(".desk-tools");
     const navTiers = document.querySelector(".nav-tiers");
     const deskHead = document.getElementById("deskHead");
+    // 2026-08-15 (desktop DAY view build): the new 4-zone containers this build adds
+    // — reparented with the SAME home-marker pattern as everything above.
+    const sidebar = document.getElementById("deskSidebar");
+    const dsbMiniSlot = document.getElementById("dsbMiniCalSlot");
+    const miniCalWrap = document.getElementById("miniCalWrap");
+    const dsbSideHome = document.getElementById("dsbSideHome");
     grid.hidden = !on;
-    if (on) {
+    // 2026-08-15 (desktop DAY view build): the new 4-zone system replaces #deskGrid's
+    // old 3-column template WHOLESALE, but only while it's actually active
+    // (deskDay1Active() — today that's every time `on` is true, since
+    // calDaysActive() hardcodes 1 at every desktop width; see that function's own
+    // comment). The ORIGINAL "on"/"off" branches below are UNTOUCHED — kept
+    // verbatim for the day the separate multi-day-desktop build makes calDaysActive()
+    // return real values on desktop again, per "extend, don't rewrite."
+    document.documentElement.toggleAttribute("data-desk-day1", deskDay1Active());
+    document.body.dataset.navRail = PREFS.navRail === "pinned" ? "pinned" : "collapsed";
+    if (on && calDaysActive() === 1) {
+      if (logo && navTiers && logo.parentElement !== navTiers) navTiers.insertBefore(logo, navTiers.firstElementChild);
+      if (dropNav && dateCard && dropNav.parentElement !== dateCard) dateCard.appendChild(dropNav);
+      if (dayMain && dayMain.parentElement !== colM) colM.appendChild(dayMain);
+      if (sectionHead && dayStepRow && dayStepRow.parentElement !== sectionHead) sectionHead.appendChild(dayStepRow);
+      // the rest of the old colL-only content (numerology strip, icon toolbar,
+      // command bar, ring card, add-row, fasting card, the old rail's Numerology/
+      // Cycle cards) is fully superseded by the new day-header/meters-row/widget-
+      // rail zones (see [data-desk-day1] CSS) — still reparented into colL so
+      // their own renderers (renderDeskGlance()/renderDeskFastCard()/etc, all
+      // still called unconditionally further down in renderDay()) have a real DOM
+      // home to write into, harmlessly hidden there rather than left dangling.
+      if (tiles && tiles.parentElement !== colL) colL.appendChild(tiles);
+      if (tools && colL && tools.parentElement !== colL) colL.appendChild(tools);
+      if (qa && qa.parentElement !== colL) colL.appendChild(qa);
+      if (prog && prog.parentElement !== colL) colL.appendChild(prog);
+      if (addRowEl && addRowEl.parentElement !== colL) colL.appendChild(addRowEl);
+      if (fastEl && fastEl.parentElement !== colL) colL.appendChild(fastEl);
+      if (rNum && rNum.parentElement !== colL) colL.appendChild(rNum);
+      if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
+      // daySide hosts the #addForm overlay (position:fixed when open, but a
+      // display:none ANCESTOR still hides a fixed-position descendant) — colL is
+      // hidden at this breakpoint, so daySide joins colM (never hidden) instead,
+      // right after dayMain. Its own visible content (railPatients/pileupBox/
+      // herbAlertBox/alsoToday) is separately hidden via [data-desk-day1] CSS,
+      // superseded by the widget rail.
+      if (daySide && daySide.parentElement !== colM) colM.appendChild(daySide);
+      // the mini-month moves into the NEW sidebar instead of daySide — this runs
+      // AFTER placeMiniCalDesk() on every resize/render (registration order: that
+      // function's own listener was added earlier in the file, see its comment),
+      // so this always wins and the calendar never bounces back into daySide.
+      if (miniCalWrap && dsbMiniSlot && miniCalWrap.parentElement !== dsbMiniSlot) dsbMiniSlot.appendChild(miniCalWrap);
+      renderDeskDayTopbar();
+      renderDeskDayHeader();
+      renderDeskSidebar();
+      renderDeskWidgetRail();
+    } else if (on) {
       if (logo && navTiers && logo.parentElement !== navTiers) navTiers.insertBefore(logo, navTiers.firstElementChild);
       if (dropNav && dateCard && dropNav.parentElement !== dateCard) dateCard.appendChild(dropNav);
       if (tiles && tiles.parentElement !== colL) colL.appendChild(tiles);
@@ -31960,6 +32525,11 @@
       if (dropNav && dropPop && dropNav.parentElement !== dropPop) dropPop.insertBefore(dropNav, dropPop.firstChild);
       if (tiles && row2 && tiles.parentElement !== row2) row2.insertBefore(tiles, calHome);
       if (railHome && rNum && rCyc && rPat && railHome.nextElementSibling !== rNum) railHome.after(rNum, rCyc, rPat);
+      // Bug 1 fix (2026-08-15): return #miniCalWrap from #dsbMiniCalSlot (the "on"
+      // branch's home for it above) back to its true default spot in #dayRow2 — same
+      // marker-return pattern as railHome just above. placeMiniCalDesk() (its own,
+      // older resize listener) then takes over from here for the 641-1023px band.
+      if (dsbSideHome && miniCalWrap && dsbSideHome.nextElementSibling !== miniCalWrap) dsbSideHome.after(miniCalWrap);
       if (dayStepRowHome && dayStepRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow);
       // STEP 5: return each piece to its own home anchor inside .day-main —
       // independent of dayMain's own move below, same as every other anchor pair here.
@@ -31973,6 +32543,404 @@
   }
   window.addEventListener("resize", placeDeskGrid);
   if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDeskGrid);
+  if (deskWidgetsMq.addEventListener) deskWidgetsMq.addEventListener("change", placeDeskGrid);
+
+  /* ============================================================
+     CHAPTERS RAIL — 52px, GLOBAL desktop chrome (task #125). Renders NAV_ITEMS,
+     the SAME array the mobile drawer/tabs already use (navPanelRowHtml/
+     navTabRowHtml, above) — one source, new presentation. 3 states persisted as
+     book33-prefs.navRail: "collapsed" (default, hover-peeks a 186px overlay
+     panel after a 200ms delay, retracts on mouseleave) or "pinned" (in-flow at
+     238px via the 📌 footer control, [data-nav-rail="pinned"] on <body> widens
+     the reserved margin so the grid narrows for real).
+     ============================================================ */
+  function renderDeskNavRail() {
+    const scroll = document.getElementById("dnrScroll");
+    const foot = document.getElementById("dnrFoot");
+    const rail = document.getElementById("deskNavRail");
+    if (!scroll || !foot || !rail) return;
+    let html = "", lastGroup;
+    NAV_ITEMS.forEach(item => {
+      if (item.group !== lastGroup && (item.group === "_footer" || (lastGroup && item.group))) {
+        html += `<div class="dnr-sep" aria-hidden="true"></div>`;
+      }
+      lastGroup = item.group;
+      const active = item.viewId === state.view;
+      const count = item.count ? item.count() : 0;
+      const badge = count > 0 ? `<span class="dnr-count">${count > 99 ? "99+" : count}</span>` : "";
+      html += `<button type="button" class="dnr-row${active ? " on" : ""}" data-view="${item.viewId}" aria-current="${active ? "page" : "false"}">`
+        + `<span class="dnr-ic">${navIconHtml(item)}</span><span class="dnr-lbl">${esc(item.label)}</span>${badge}</button>`;
+    });
+    scroll.innerHTML = html;
+    const pinned = PREFS.navRail === "pinned";
+    const syncLbl = navSyncLabel();
+    foot.innerHTML = `<div class="dnr-avatar-row">
+        <span class="dnr-avatar-ic"><span class="dnr-avatar-badge">33</span></span>
+        <span class="dnr-foot-meta"><span class="dnr-foot-name">Book33</span>${syncLbl ? `<span class="dnr-foot-sync">${esc(syncLbl)}</span>` : ""}</span>
+        <button type="button" class="dnr-pin" id="dnrPinBtn" title="${pinned ? "Unpin the rail" : "Pin the rail open"}" aria-label="${pinned ? "Unpin the rail" : "Pin the rail open"}" aria-pressed="${pinned}">📌</button>
+      </div>`;
+    rail.dataset.state = pinned ? "pinned" : "collapsed";
+    document.body.dataset.navRail = pinned ? "pinned" : "collapsed";
+  }
+  document.getElementById("dnrScroll")?.addEventListener("click", e => {
+    const row = e.target.closest("[data-view]");
+    if (!row) return;
+    state.view = row.dataset.view;
+    render();
+  });
+  document.getElementById("dnrFoot")?.addEventListener("click", e => {
+    if (!e.target.closest("#dnrPinBtn")) return;
+    PREFS.navRail = PREFS.navRail === "pinned" ? "collapsed" : "pinned";
+    savePrefs();
+    renderDeskNavRail();
+  });
+  (function () {
+    const rail = document.getElementById("deskNavRail");
+    if (!rail) return;
+    let peekTimer = null;
+    rail.addEventListener("mouseenter", () => {
+      if (rail.dataset.state !== "collapsed") return;
+      peekTimer = setTimeout(() => rail.classList.add("peek"), 200);
+    });
+    rail.addEventListener("mouseleave", () => {
+      clearTimeout(peekTimer);
+      rail.classList.remove("peek");
+    });
+  })();
+
+  /* ============================================================
+     DAY TOP BAR — 54px, desktop 1-day only. Reuses the existing #prevDay/
+     #nextDay/#todayPill click listeners (simulated clicks) rather than a
+     second copy of the day-navigation logic. ============================================================ */
+  function renderDeskDayTopbar() {
+    const d = state.anchor;
+    const titleEl = document.getElementById("ddtTitle");
+    if (titleEl) titleEl.textContent = calDaysActive() === 1 ? "Today" : "Calendar";
+    const dateEl = document.getElementById("ddtDate");
+    if (dateEl) dateEl.textContent = `${WD_FULL[dowIndex(d)]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    const daysEl = document.getElementById("ddtDays");
+    // 2026-08-15: the source spec's segmented control reads "1 3 6 7" — a
+    // transcription slip against every other day-count control in this file
+    // (§1's own 1/3/5/7-day build, PREFS.calDays' real supported values); there
+    // is no 6-day view anywhere in this app, so this uses the real set instead
+    // of introducing one. Clicking a non-1 value here saves PREFS.calDays for
+    // when the separate multi-day-desktop build lands — calDaysActive() itself
+    // hardcodes 1 at every desktop width today (see its own comment), so no
+    // visible change yet; that's expected, not a bug.
+    if (daysEl) {
+      daysEl.innerHTML = [1, 3, 5, 7].map(n => `<button type="button" class="ddt-day-btn" data-ddt-days="${n}">${n}</button>`).join("");
+      daysEl.querySelectorAll("[data-ddt-days]").forEach(b => {
+        b.classList.toggle("on", calDaysActive() === parseInt(b.dataset.ddtDays, 10));
+      });
+    }
+    const hideBtn = document.getElementById("ddtHideNames");
+    if (hideBtn) hideBtn.setAttribute("aria-pressed", String(!!PREFS.hideNames));
+  }
+  document.getElementById("ddtTodayBtn")?.addEventListener("click", () => document.getElementById("todayPill")?.click());
+  document.getElementById("ddtPrev")?.addEventListener("click", () => document.getElementById("prevDay")?.click());
+  document.getElementById("ddtNext")?.addEventListener("click", () => document.getElementById("nextDay")?.click());
+  document.getElementById("ddtGear")?.addEventListener("click", () => { state.view = "notify"; render(); });
+  document.getElementById("ddtHideNames")?.addEventListener("click", () => {
+    PREFS.hideNames = !PREFS.hideNames;
+    savePrefs();
+    renderDay();
+  });
+  document.getElementById("ddtDays")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-ddt-days]");
+    if (!btn) return;
+    PREFS.calDays = parseInt(btn.dataset.ddtDays, 10);
+    savePrefs();
+    renderDeskDayTopbar();
+  });
+
+  /* ============================================================
+     DAY HEADER — date + context chip strip (moon / sun sign / cycle), desktop
+     1-day only (§4.1). Deliberately its OWN reading rather than reusing
+     dcxChipsHtml() — that mobile strip shows the day-RULER planet + birthdays,
+     this spec explicitly wants the sun SIGN instead, styled as flat raised
+     chips rather than pills — but every data read (moonIndex/astroFor/
+     cycleQuickInfo/Book33CD.info) is the SAME shared function every other
+     cosmic chip in this app already calls, and the moon/glyph markup reuses
+     moonHtml()/glyphHtml() (§8 icon language) rather than hand-rolled CSS.
+     ============================================================ */
+  function renderDeskDayHeader() {
+    const d = state.anchor;
+    const dateEl = document.getElementById("ddhDate");
+    if (dateEl) dateEl.textContent = `${WD_FULL[dowIndex(d)]} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+    const chipsEl = document.getElementById("ddhChips");
+    if (!chipsEl) return;
+    const mIdx = moonIndex(d);
+    const a = astroFor(d);
+    const chips = [
+      `<span class="ddh-chip">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span></span>`,
+      `<span class="ddh-chip">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span></span>`,
+    ];
+    // cycle is a live fact about today, not a property of whichever day she's
+    // browsing — same TODAY-not-state.anchor rule #numGrpCd/dcxChipsHtml already
+    // follow (see their own comments), so this reads TODAY too.
+    const q = cycleQuickInfo(TODAY);
+    if (q) {
+      const cdi = Book33CD.info(TODAY);
+      const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
+      chips.push(`<span class="ddh-chip"><span class="ddh-cycle-dot" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span>CD ${q.cd}${phaseLbl ? " · " + esc(phaseLbl) : ""}</span></span>`);
+    }
+    chipsEl.innerHTML = chips.join("");
+  }
+
+  /* ============================================================
+     CALENDAR SIDEBAR — 214px, mini-month (reuses #miniCalWrap/renderMiniCal()
+     verbatim, reparented in by placeDeskGrid()) + Parts of life + Quick add
+     (§3). Collapses to a 22px tab via book33-prefs.sideOpen. ============================================================ */
+  function renderDeskSidebar() {
+    const sidebar = document.getElementById("deskSidebar");
+    if (!sidebar) return;
+    sidebar.dataset.open = String(PREFS.sideOpen !== false);
+    const partsEl = document.getElementById("dsbParts");
+    if (partsEl) {
+      // dayItemsFor(d) is the same authoritative per-day item builder renderDay()
+      // itself reads from (§1's own shared function) — called again here (not a
+      // second calculation, the SAME pure function) because these counts must
+      // stay TRUE regardless of which tracks are currently unchecked, and
+      // renderTimeline()'s own item list is already trackVisible()-filtered by
+      // the time this runs.
+      const items = dayItemsFor(state.anchor);
+      partsEl.innerHTML = lifeCats().map(c => {
+        const checked = trackVisible(c.id);
+        const count = items.filter(e => e.track === c.id).length;
+        return `<div class="dsb-parts-row" data-checked="${checked}" data-track="${esc(c.id)}">
+          <input type="checkbox" class="dsb-parts-check" ${checked ? "checked" : ""} aria-label="Show ${esc(c.name)}">
+          <span class="dsb-parts-dot" style="background:var(--${c.id}-seed)"></span>
+          <span class="dsb-parts-label">${esc(c.name)}</span>
+          <span class="dsb-parts-count">${count}</span>
+        </div>`;
+      }).join("") + `<button type="button" class="dsb-parts-all" id="dsbPartsAll">Select all or clear all</button>`;
+    }
+    renderMiniCal();
+  }
+  function toggleDeskTrack(trackId, on) {
+    const off = new Set(PREFS.tracksOff || []);
+    if (on) off.delete(trackId); else off.add(trackId);
+    PREFS.tracksOff = [...off];
+    savePrefs();
+    renderDay();
+  }
+  document.getElementById("deskSidebar")?.addEventListener("click", e => {
+    if (e.target.closest("#dsbTab")) { PREFS.sideOpen = true; savePrefs(); renderDeskSidebar(); return; }
+    if (e.target.closest("#dsbCollapseBtn")) { PREFS.sideOpen = false; savePrefs(); renderDeskSidebar(); return; }
+    const allBtn = e.target.closest("#dsbPartsAll");
+    if (allBtn) {
+      const anyOn = lifeCats().some(c => trackVisible(c.id));
+      PREFS.tracksOff = anyOn ? lifeCats().map(c => c.id) : [];
+      savePrefs(); renderDay();
+      return;
+    }
+    const row = e.target.closest(".dsb-parts-row");
+    if (row && e.target.tagName !== "INPUT") {
+      const cb = row.querySelector(".dsb-parts-check");
+      const nextOn = cb ? !cb.checked : true;
+      if (cb) cb.checked = nextOn;
+      toggleDeskTrack(row.dataset.track, nextOn);
+      return;
+    }
+    const quick = e.target.closest("[data-dsb-quick]");
+    if (quick) {
+      // Bug 4 fix (2026-08-15): "routine" used to fall through to openFormWithAction("")
+      // — a blank generic task/event form, nothing "routine" about it. openFormWithAction
+      // only ever builds kind=task (formKind is hardcoded inside it), so it can't preset
+      // Routine itself; switching formKind + syncKind() right after is the same one-line
+      // pattern #kindPicker's own click handler uses (formKind = b.dataset.kind;
+      // syncKind();) — it shows #fRoutineField (pick which routine, which day) and hides
+      // the task-only fields, same as tapping the ↻ Routine pill by hand.
+      if (quick.dataset.dsbQuick === "routine") {
+        openFormWithAction("");
+        formKind = "routine"; syncKind();
+        return;
+      }
+      openFormWithAction(quick.dataset.dsbQuick === "busy" ? "Busy block" : "");
+      return;
+    }
+  });
+  document.getElementById("deskSidebar")?.addEventListener("change", e => {
+    const cb = e.target.closest(".dsb-parts-check");
+    if (!cb) return;
+    toggleDeskTrack(cb.closest(".dsb-parts-row").dataset.track, cb.checked);
+  });
+
+  /* ============================================================
+     WIDGET RAIL — 286px (250px at 1200–1439px), 1-day only (§5). Uses the
+     EXISTING TILE_PREFS/saveTilePrefs() store for order (.ord) and visibility
+     (.hidden) — the same single source of truth §122's mobile half will also
+     read — but does NOT route through applyDayTiles()'s group/shelf logic
+     (that system targets the mobile above/below-calendar shelves and doesn't
+     map onto a fixed sidebar). Every card's DATA read is the app's existing
+     function (universalDay/focusFor, cycleQuickInfo/Book33CD.info, the same
+     work-track filter renderDeskRail()'s own "pats" uses, pileUpItems(),
+     dayStreakChipsHtml()) — nothing here is a second calculation of anything.
+     Renders the SAME html into #wrCards (≥1200px column) and #wrFallback
+     (1024–1199px 2-up block under the grid) — CSS shows exactly one at a time.
+     ============================================================ */
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "pileupBox", "streaksWidget"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", pileupBox: "Piling up", streaksWidget: "Streaks" };
+  function wrCardHtml(id) {
+    const d = state.anchor;
+    if (id === "focusTile") {
+      const ud = universalDay(d);
+      const f = focusFor(ud.value);
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Numerology</span>
+        <div class="wr-num-value">${esc(String(ud.value))}</div>
+        <div class="wr-num-sub">Universal day${f ? `<b>${esc(f.title)}</b>` : ""}</div>
+      </div>`;
+    }
+    if (id === "railCycle") {
+      const q = cycleQuickInfo(TODAY);
+      if (!q) return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span><span class="wr-label">Cycle</span><div class="wr-pat-empty">Nothing logged yet.</div></div>`;
+      const cdi = Book33CD.info(TODAY);
+      const dotVar = cdi ? cdi.dotVar : "--flow-med";
+      const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
+      const sub = q.daysToPeriod != null && q.daysToPeriod > 0
+        ? `${phaseLbl ? phaseLbl + " · " : ""}${q.daysToPeriod} day${q.daysToPeriod === 1 ? "" : "s"} to go` : phaseLbl;
+      const order = ["menstrual", "follicular", "fertile", "luteal"];
+      const filled = order.indexOf(q.phase) + 1;
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Cycle</span>
+        <div class="wr-cyc-day" style="color:var(${dotVar})">CD ${q.cd}</div>
+        ${sub ? `<div class="wr-cyc-sub">${esc(sub)}</div>` : ""}
+        <div class="wr-cyc-bar">${[0, 1, 2, 3].map(i => `<span class="wr-cyc-seg${i < filled ? " on" : ""}" style="${i < filled ? `background:var(${dotVar})` : ""}"></span>`).join("")}</div>
+      </div>`;
+    }
+    if (id === "railPatients") {
+      // same read renderDeskRail()'s own "pats" list uses — straight off
+      // TL_ITEMS_BY_ID, no second data source.
+      const pats = Object.values(TL_ITEMS_BY_ID).filter(ev => ev.track === "work" && ev.start).sort((a, b) => toMin(a.start) - toMin(b.start));
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Today's patients · ${pats.length}</span>
+        ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(PREFS.hideNames ? "Patient" : p.title)}</span><span class="wr-pat-state">${isDone(p.id) ? "✓ in" : ""}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
+      </div>`;
+    }
+    if (id === "pileupBox") {
+      const items = pileUpItems();
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Piling up · ${items.length}</span>
+        ${items.length ? items.slice(0, 8).map(it => `<div class="wr-pile-row"><span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span><span class="wr-pile-age">${it.overdueBy}${it.kind === "routine" ? "" : "d"}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing piling up.</div>`}
+      </div>`;
+    }
+    if (id === "streaksWidget") {
+      // dayStreakChipsHtml()'s exact output, reused verbatim (not recomputed) —
+      // its chips are pre-joined strings, not structured {label,value} pairs, so
+      // the whole chip stays --raised rather than the spec's "value in gold"
+      // per-chip split; noted as a deliberate simplification, not an oversight.
+      const html = dayStreakChipsHtml();
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Streaks</span>
+        <div class="wr-streaks">${html || `<span class="wr-pat-empty">No streaks yet.</span>`}</div>
+      </div>`;
+    }
+    return "";
+  }
+  function renderDeskWidgetRail() {
+    const cardsEl = document.getElementById("wrCards");
+    const fallbackEl = document.getElementById("wrFallback");
+    if (!cardsEl && !fallbackEl) return;
+    const ordered = WR_WIDGET_IDS.slice()
+      .sort((a, b) => ((TILE_PREFS[a] || {}).ord ?? 99) - ((TILE_PREFS[b] || {}).ord ?? 99))
+      .filter(id => !(TILE_PREFS[id] || {}).hidden);
+    const html = ordered.map(wrCardHtml).join("");
+    if (cardsEl) cardsEl.innerHTML = html;
+    if (fallbackEl) fallbackEl.innerHTML = html;
+    renderWrArrangePop();
+  }
+  // Arrange popover — scoped to this rail, a visibility checkbox per widget
+  // (§5's "Arrange adds/removes"). Not the general-purpose Arrange rewrite the
+  // in-code "task #132" comment describes — only what this rail's own
+  // acceptance bullet needs.
+  let wrArrangeOpen = false;
+  function renderWrArrangePop() {
+    const btn = document.getElementById("wrArrangeBtn");
+    document.getElementById("wrArrangePop")?.remove();
+    if (!btn || !wrArrangeOpen) return;
+    const pop = document.createElement("div");
+    pop.className = "wr-arrange-pop";
+    pop.id = "wrArrangePop";
+    pop.innerHTML = WR_WIDGET_IDS.map(id => {
+      const hidden = !!(TILE_PREFS[id] || {}).hidden;
+      return `<label class="wr-arrange-row"><input type="checkbox" data-wr-vis="${id}" ${hidden ? "" : "checked"}> ${esc(WR_LABELS[id])}</label>`;
+    }).join("");
+    btn.parentElement.style.position = "relative";
+    btn.parentElement.appendChild(pop);
+  }
+  document.getElementById("wrArrangeBtn")?.addEventListener("click", () => {
+    wrArrangeOpen = !wrArrangeOpen;
+    renderWrArrangePop();
+  });
+  document.addEventListener("click", e => {
+    if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn")) {
+      wrArrangeOpen = false;
+      document.getElementById("wrArrangePop")?.remove();
+    }
+  });
+  document.addEventListener("change", e => {
+    const cb = e.target.closest("[data-wr-vis]");
+    if (!cb) return;
+    const t = TILE_PREFS[cb.dataset.wrVis] = TILE_PREFS[cb.dataset.wrVis] || {};
+    t.hidden = !cb.checked;
+    saveTilePrefs();
+    renderDeskWidgetRail();
+  });
+  // drag-to-reorder by the ⋮⋮ grip — its own self-contained system (data-wr-id/
+  // .wr-dragging/.wr-over), deliberately NOT the mobile tile-shelf drag system
+  // (data-tile-drag/data-tile/.tile-dragging) even though the goal is the same
+  // "reorder, write TILE_PREFS[id].ord" — that system's DOM shape (a shelf +
+  // per-group boxes) doesn't exist here, and reusing its exact attribute names
+  // on a differently-shaped card risked the two delegates silently cross-firing.
+  // Writes the SAME TILE_PREFS[id].ord + calls the SAME saveTilePrefs().
+  let wrDragId = null;
+  document.addEventListener("mousedown", e => {
+    const grip = e.target.closest(".wr-grip");
+    if (grip) { const host = grip.closest("[data-wr-id]"); if (host) host.setAttribute("draggable", "true"); return; }
+    const other = e.target.closest("[data-wr-id][draggable]");
+    if (other && !e.target.closest(".wr-grip")) other.removeAttribute("draggable");
+  });
+  document.addEventListener("dragstart", e => {
+    const host = e.target.closest && e.target.closest("[data-wr-id]");
+    if (!host || !host.getAttribute("draggable")) return;
+    wrDragId = host.dataset.wrId;
+    host.classList.add("wr-dragging");
+    try { e.dataTransfer.setData("text/plain", wrDragId); e.dataTransfer.effectAllowed = "move"; } catch (err) {}
+  });
+  document.addEventListener("dragend", () => {
+    document.querySelectorAll(".wr-dragging").forEach(el => el.classList.remove("wr-dragging"));
+    document.querySelectorAll(".wr-over").forEach(el => el.classList.remove("wr-over"));
+    document.querySelectorAll('[data-wr-id][draggable="true"]').forEach(el => el.removeAttribute("draggable"));
+    wrDragId = null;
+  });
+  document.addEventListener("dragover", e => {
+    if (!wrDragId) return;
+    const over = e.target.closest("[data-wr-id]");
+    if (!over || over.dataset.wrId === wrDragId) return;
+    e.preventDefault();
+    try { e.dataTransfer.dropEffect = "move"; } catch (err) {}
+    document.querySelectorAll(".wr-over").forEach(el => { if (el !== over) el.classList.remove("wr-over"); });
+    over.classList.add("wr-over");
+  });
+  document.addEventListener("drop", e => {
+    if (!wrDragId) return;
+    const over = e.target.closest("[data-wr-id]");
+    if (!over || over.dataset.wrId === wrDragId || !over.parentElement) return;
+    e.preventDefault();
+    const container = over.parentElement;
+    const dragged = container.querySelector(`[data-wr-id="${wrDragId}"]`);
+    if (!dragged) return;
+    const r = over.getBoundingClientRect();
+    container.insertBefore(dragged, e.clientY < r.top + r.height / 2 ? over : over.nextSibling);
+    [...container.querySelectorAll(":scope > [data-wr-id]")].forEach((el, i) => {
+      const t = TILE_PREFS[el.dataset.wrId] = TILE_PREFS[el.dataset.wrId] || {};
+      t.ord = i;
+    });
+    saveTilePrefs();
+    renderDeskWidgetRail();
+  });
+
   function renderDeskHead() {
     const el = document.getElementById("deskDateBlock");
     if (!el) return;
