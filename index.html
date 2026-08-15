@@ -2128,22 +2128,95 @@
   /* 2026-08-05 (Part 2, whole-app flat pass, "separate... with spacing, NOT... divider
      lines"): rows used to be split by a hairline border-top -- gap/padding alone is
      enough separation on a single-tone sheet, so the lines come out. */
+  /* 2026-08-15 fix (B5): 14px -> 13px, the declared body step. CLAUDE.md's type scale is
+     four sizes and 14px is not one of them ("treat any literal px outside the scale as a
+     bug to fix on sight"). This is deliberately fixed on the SHARED rule rather than
+     patched on the two new info rows: Where/Note/Repeats/Chain were all rendering at the
+     off-scale size too, and one type scale everywhere is the point. */
   .tl-detail-row {
-    display: flex; align-items: flex-start; gap: 16px; padding: 8px 0; font-size: 14px; color: var(--ink);
+    display: flex; align-items: flex-start; gap: 16px; padding: 8px 0; font-size: 13px; color: var(--ink);
   }
   .tl-detail-row .tl-detail-em { flex: none; width: 18px; text-align: center; color: var(--ink-faint); }
   /* 2026-08-10 (Notes brief): plain events/tasks can now write a multi-line note --
      keep its line breaks instead of collapsing them to one run like normal inline text. */
   .tl-detail-note-text { white-space: pre-wrap; }
-  .tl-detail-row .tl-detail-sub { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  /* 2026-08-15 fix (B5): 12px -> 11px, the declared label/caption step. */
+  .tl-detail-row .tl-detail-sub { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
   .tl-detail-done-btn {
-    display: flex; align-items: center; gap: 12px; width: 100%; margin: 2px 0 8px; padding: 12px 16px;
+    /* 2026-08-15: 2px -> 4px (CLAUDE.md spacing scale is 4/8/12/16/24/32, no 2px) —
+       fixed on sight while already touching this rule for the pair below; purely a
+       1px-visual, non-structural nudge. */
+    display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 8px; padding: 12px 16px;
     border: 1px solid var(--margin-rule); border-radius: var(--radius-md); background: transparent;
     color: var(--margin-rule); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .tl-detail-done-btn.done { background: var(--margin-rule); color: var(--accent-on); }
+  /* 2026-08-15 (§6 mobile redesign, Pass B — primary action pair): Done/Attended
+     stays the exact same .tl-detail-done-btn (data-tick-ev unchanged) now sized
+     flex:1 inside a row instead of full-width, solid-filled with --fit-workout —
+     this app's one existing "done" green (same token .rtn-today-pill-done already
+     fills with) — so it reads as the row's one primary action regardless of
+     ticked state. .tl-detail-skip-btn is its quiet fixed-width sibling (Skip
+     today / Didn't go) — flat --field-bg fill, no border, per §0's "no outlined
+     buttons anywhere in this build". Only an 8px gap between them (on-scale). */
+  .tl-detail-action-pair { display: flex; gap: 8px; margin: 4px 0 8px; }
+  /* 2026-08-15 fix (B1): min-height 44px — CLAUDE.md's minimum tap target, which both
+     buttons missed at 40px. min-height rather than more padding, matching the ~50 other
+     uses of exactly this pattern in the file (.tl-detail-manage-row among them), so the
+     padding stays on the 4/8/12/16 scale.
+     2026-08-15 fix (B3): justify-content: center — with the empty ✓ span gone from the
+     not-done markup, the label centres like its sibling instead of hugging the left. */
+  .tl-detail-action-pair .tl-detail-done-btn {
+    flex: 1; width: auto; margin: 0; min-height: 44px; justify-content: center; font-size: 13px;
+    border: none; background: var(--fit-workout); color: var(--accent-on);
+  }
+  /* 2026-08-15 fix (B6): done and not-done must be tellable apart at a glance. Pass B
+     made the solid green permanent, so an UNticked item wore a full "done-green" pill and
+     only the wording changed. The solid fill now belongs to the NOT-yet-done state, where
+     it reads as the call to action; done settles back to a quiet tint of the same token
+     plus the ✓, which is the more finished-looking of the two. Flat, no outline (§0).
+     Specificity matters here: .tl-detail-done-btn.done (0,2,0) and the pair rule above
+     (0,2,0) are a tie broken by source order, which is why the pair's green was winning
+     over the old .done rule at all — this selector is (0,3,0), so it beats both outright
+     rather than relying on where it happens to sit in the file.
+     Mixed against var(--paper) (the sheet's own surface), not `transparent`: an opaque
+     result is what both themes actually composite to anyway, and it can be read straight
+     off getComputedStyle for a contrast check instead of being re-composited by hand. */
+  .tl-detail-action-pair .tl-detail-done-btn.done {
+    background: color-mix(in oklab, var(--fit-workout) 22%, var(--paper));
+    /* NOT a bare var(--fit-workout): measured live, the raw green on its own 22% tint is
+       2.29:1 in light theme — well under AA for 13px text. Mixed toward --ink it adapts
+       in the right direction in BOTH themes automatically (--ink is near-black on light,
+       near-white on dark), so one declaration covers both: 5.10:1 light, 6.31:1 dark.
+       Still token-only — two tokens mixed, no hex. Measured alternatives: 100% green
+       2.29/4.26, 75% 3.53/5.33, 65% 4.23/5.80, 55% 5.10/6.31 (light/dark). */
+    color: color-mix(in oklab, var(--fit-workout) 55%, var(--ink));
+  }
+  /* 2026-08-15 fix (B2): --field-bg against the sheet's --paper measured 1.04:1 in light
+     and 1.07:1 in dark — the button had, in practice, no visible surface at all in either
+     theme. §0 rules out an outline, so it needs a real fill difference: a mix of --ink
+     into --paper is theme-aware by construction (it darkens on light, lightens on dark)
+     and stays quiet next to the primary action. Percentage tuned by measuring the
+     composed pair live in both themes, not by picking a number off the token values:
+     4% = 1.09/1.08, 8% = 1.19/1.18, 12% = 1.31/1.31, 20% = 1.58/1.62 (light/dark
+     against the sheet). 12% chosen — the app's own quiet surfaces measure 1.08-1.16
+     (--note-bg, --desk-btn-bg, and .tl-detail-manage-row in this very sheet), so 12%
+     sits a clear step above a passive row, as an action button should, while staying
+     well below anything that competes with the solid primary beside it. Hover is 18%
+     (~1.5:1) so the hover state is a perceptible step, not a guess.
+     2026-08-15 fix (B4): width 118px -> 120px, back on the 4px grid. Both labels ("Skip
+     today", "Didn't go") still sit on one line at 360px.
+     2026-08-15 fix (B1): min-height 44px, as above. */
+  .tl-detail-skip-btn {
+    flex: none; width: 120px; min-height: 44px; display: flex; align-items: center; justify-content: center;
+    padding: 12px 8px; border: none; border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--ink) 12%, var(--paper));
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center;
+  }
+  .tl-detail-skip-btn:hover { background: color-mix(in oklab, var(--ink) 18%, var(--paper)); }
   .tl-detail-steps { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
-  .tl-detail-step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--ink); }
+  /* 2026-08-15 fix (B5): 13.5px -> 13px — half-pixel sizes are explicitly banned. */
+  .tl-detail-step { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--ink); }
   .tl-detail-step input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: var(--margin-rule); cursor: pointer; }
   .tl-detail-step .tl-step-t { flex: 1; min-width: 120px; }
   .tl-detail-step.done .tl-step-t { text-decoration: line-through; opacity: 0.55; }
@@ -2220,11 +2293,20 @@
   @media (max-width: 640px) {
     .tl-detail-body { display: flex; flex-direction: column; }
     .tl-detail-body .fit-stars { order: 10; }
-    .tl-detail-body .tl-detail-done-btn { order: 20; }
+    /* was .tl-detail-done-btn directly -- it's now nested one level inside the new
+       .tl-detail-action-pair wrapper (see that class), and `order` only affects
+       DIRECT flex children of #tlDetailBody, so the wrapper carries the order now. */
+    .tl-detail-body .tl-detail-action-pair { order: 20; }
     .tl-detail-body .tl-detail-fitlink { order: 30; }
     .tl-detail-body .phase-bands { order: 40; }
     .tl-detail-body .tl-detail-steps { order: 50; }
     .tl-detail-body .tl-detail-row-repeats { order: 60; }
+    /* 2026-08-15 (§6 mobile redesign, Pass B): new info rows slotted between
+       Repeats and In-a-chain, matching the spec's "Repeats · Next after this ·
+       Streak · In a chain · Where · Note" order -- existing entries below are
+       untouched, no renumbering needed. */
+    .tl-detail-body .tl-detail-row-next { order: 63; }
+    .tl-detail-body .tl-detail-row-streak { order: 66; }
     .tl-detail-body .tl-detail-row-chain { order: 70; }
     .tl-detail-body .tl-detail-row-where { order: 80; }
     .tl-detail-body .tl-detail-row-note { order: 90; }
@@ -10783,7 +10865,10 @@
        hero (title/breadcrumb/when-line now live in the OLD .tl-detail-title/row
        markup instead, restored below), Zone-3 manage block, big Done button and
        toggle-pill pair all hide here (✕ close stays, in its own pre-existing spot) */
-    .tl-detail-drag, .tl-detail-hero, .tl-detail-manage, .tl-detail-done-btn, .tl-detail-move-toggle { display: none; }
+    /* .tl-detail-freq-rich (2026-08-15 fix C6): the mobile-only long Repeats sentence.
+       Desktop keeps the short ROUTINE_FREQ_LABEL wording it has always had — the long
+       form embeds the start time, which desktop already prints on the row above. */
+    .tl-detail-drag, .tl-detail-hero, .tl-detail-manage, .tl-detail-done-btn, .tl-detail-action-pair, .tl-detail-move-toggle, .tl-detail-freq-rich { display: none; }
     /* the mobile-only header duplicates .tl-detail-title/the time+track rows for
        Zone 1 — desktop never hides those originals (.tl-detail-mobile-hide only
        fires ≤640px), so nothing further is needed here to keep desktop's title/
@@ -16195,6 +16280,17 @@
     if (bd && bd.dataset.bdayPerson) { e.stopPropagation(); openPersonProfile(bd.dataset.bdayPerson); }
   });
 
+  // 2026-08-15 — ONE shared test for "this generated item is a placeholder, not a real
+  // occurrence". Both ghost kinds live here: ghostSkip (a skipped occurrence) and
+  // ghostMoved (a moved occurrence's marker on its ORIGIN day) — see generatedFor
+  // below, which pushes both. Every consumer MUST call this rather than hand-writing
+  // `!e.ghostSkip` (or `!e.ghostSkip && !e.ghostMoved`): that hand-copied test had
+  // drifted across six separate call sites, so when ghostMoved was added only the
+  // single-day renderer learned about it and move-ghosts leaked into the .ics export,
+  // the notification scheduler, the follow-up nudge, the Week grid, the day progress
+  // count and the multi-day grid as if they were real. One helper = the next ghost
+  // flag added here is picked up by all of them for free.
+  const isGhostItem = e => !!(e && (e.ghostSkip || e.ghostMoved));
   function generatedFor(date) {
     const out = [], k = keyOf(date);
     // 2026-08-11 (rotation rebuild): ONE hair-wash routine now, not 3 independently-
@@ -16288,11 +16384,55 @@
       // per-day overrides (t.overrides, 2026-08-04) — the occurrence is the TEMPLATE
       // merged with overrides[date]; override fields win, missing ones fall back.
       // skipped -> a faint restorable ghost instead of the block; movedTo (another
-      // date) -> nothing here, the injected pass after this forEach renders it there.
+      // date) -> a restorable ghost HERE too (2026-08-15, see below) while the
+      // injected pass after this forEach renders the real occurrence on the new day.
       const occId = `rt-${t.id}-${keyOf(date)}`;
       const ovr = rtnOvr(t, keyOf(date));
       const effTitle = ovr && ovr.title ? ovr.title : t.title;
-      if (ovr && ovr.movedTo && ovr.movedTo !== keyOf(date)) return;
+      if (ovr && ovr.movedTo && ovr.movedTo !== keyOf(date)) {
+        // 2026-08-15 (§6 mobile redesign, Pass B, "leaves a restorable ghost on the
+        // original day"): was a bare `return` (nothing rendered here at all) — now
+        // renders a ghost tile on the ORIGIN day, same shape as the skip-ghost just
+        // below (ghostMoved instead of ghostSkip — see the timeline block template's
+        // shared rendering branch for both). Suppressed when this override is ALSO
+        // skipped (moved, then deleted at the new slot — ovr.start/end here are the
+        // TARGET slot's time per rescheduleItem's own write, not a real origin time
+        // to ghost at, and the injection pass below already suppresses the
+        // target-day render in this same combined state via its own
+        // `if (ovr.skipped) return`). Uses startMin/effStart (the routine's
+        // OWN natural time for this date, computed above BEFORE any override is
+        // applied) rather than ovr.start/end, deliberately, since those hold the
+        // target slot here, not the origin.
+        //
+        // 2026-08-15 fix (A8): that `if (ovr.skipped) return` used to bail outright,
+        // which made moved-then-skipped PERMANENTLY unrestorable — nothing rendered on
+        // the origin day (this branch) and nothing on the target day (the injection
+        // pass's own skip guard), so the occurrence vanished with no Restore button
+        // anywhere. Two taps reached it (move it, then Skip today). Going forward
+        // "Skip today" on an already-moved occurrence clears movedTo as it writes the
+        // skip (see the data-ovr-skip handler), so the combined state can no longer be
+        // CREATED — but data saved before this fix can already be in it, so the
+        // combined case still renders here, as an ordinary restorable skip-ghost at the
+        // origin's natural time. Restore then clears the move (the rtRestore handler
+        // branches on ovr.movedTo), leaving a plain skip-ghost a second tap undoes:
+        // recoverable either way, never a dead end.
+        //
+        // 2026-08-15 fix (A9): end was a fabricated `start + 30`, so the ghost drew at
+        // the wrong height for every routine that isn't half an hour long. Uses
+        // routineDurMin(t, date) — the routine's REAL duration for this date, the same
+        // helper the non-ghost branches below derive their own end from (steps sum,
+        // weekly-layer start/end, durationMin, template start/end, then 30 as its own
+        // last resort). Deliberately not ovr.dur: that belongs to the target slot.
+        const gs = startMin != null ? minToTime(startMin) : effStart || "";
+        const ghostFlag = ovr.skipped ? { ghostSkip: true } : { ghostMoved: true };
+        if (gs) out.push({
+          id: occId, generated: true, date: keyOf(date), ...ghostFlag,
+          track: t.track, category: t.category || "Routine", title: effTitle,
+          kind: "routine", allDay: false, fromRoutine: true, rtTaskId: t.id,
+          start: gs, end: minToTime(Math.min(timeToMin(gs) + routineDurMin(t, date), 1439)),
+        });
+        return;
+      }
       if (ovr && ovr.skipped) {
         const gs = ovr.start || (startMin != null ? minToTime(startMin) : effStart || "");
         if (gs) out.push({
@@ -17193,7 +17333,14 @@
   // completable) and forward-looking previews (not actually due yet).
   function dayTickables(date) {
     const k = keyOf(date);
-    return [...generatedFor(date).filter(e => !e.preview && e.category !== "Birthdays"),
+    // 2026-08-15 fix (A5): ghosts are placeholders for something that ISN'T happening
+    // today — a skipped occurrence or one that's been moved to another day — so they
+    // must never sit in the "N left for today" denominator. They can't be ticked (the
+    // ghost tile renders a Restore button, no tick control), so every ghost on the day
+    // was permanently un-completable dead weight in dayProgress(): 2/3 where the truth
+    // was 2/2. This ALSO fixes a long-standing pre-existing miscount for skip-ghosts,
+    // not just the new move-ghosts.
+    return [...generatedFor(date).filter(e => !e.preview && !isGhostItem(e) && e.category !== "Birthdays"),
             ...EVENTS.filter(e => e.date === k)];
   }
   function dayProgress(date) {
@@ -17338,7 +17485,11 @@
     const fitWeeks = fitnessWeekStreak();
     if ([4, 8, 12, 26, 52].includes(fitWeeks)) return `🔥 ${fitWeeks} weeks of fitness fulfilment in a row.`;
     const best = bestRoutineStreak();
-    if (best && GROWTH_MILESTONES.includes(best.streak)) return `🔥 ${best.streak}-day streak on "${best.title}".`;
+    // 2026-08-15 fix (C1): same occurrence-vs-day mislabel as the detail sheet's streak
+    // row — bestRoutineStreak() counts scheduled OCCURRENCES via streakWithGrace, so
+    // "-day" was wrong for every non-daily routine. The fasting line above it IS
+    // genuinely day-based (fastRecords walks every calendar day) and stays as it is.
+    if (best && GROWTH_MILESTONES.includes(best.streak)) return `🔥 ${best.streak} in a row on "${best.title}".`;
     return null;
   }
   // the one hook — called from toggleDone() only when something turns ON, so
@@ -17399,7 +17550,10 @@
     const fitWeeks = fitnessWeekStreak();
     if (fitWeeks >= 2) streakBits.push(`🔥 Fitness · ${fitWeeks} wk${fitWeeks === 1 ? "" : "s"}`);
     const bestRtn = bestRoutineStreak();
-    if (bestRtn) streakBits.push(`🔥 ${esc(bestRtn.title)} · ${bestRtn.streak} day${bestRtn.streak === 1 ? "" : "s"}`);
+    // 2026-08-15 fix (C1): "N days" was the same occurrence-vs-day mislabel — see the
+    // note at checkRewardMilestones' own bestRoutineStreak line. The Fitness chip above
+    // is real weeks (fitnessWeekStreak) and is left alone.
+    if (bestRtn) streakBits.push(`🔥 ${esc(bestRtn.title)} · ${bestRtn.streak} in a row`);
     host.innerHTML = `<div class="dp-card" id="dpHeader" role="button" tabindex="0" aria-expanded="${dpRecapOpen}"
       aria-label="Today's progress — tap to ${dpRecapOpen ? "hide" : "show"} today's tasks">
       <span class="dp-ring-btn">
@@ -18658,7 +18812,13 @@
       // delegate below) instead of expanding in place — TL_ITEMS_BY_ID is how that
       // sheet finds this exact item's full data again, since generated items (routines,
       // hair, etc.) live nowhere queryable once render is done.
-      TL_ITEMS_BY_ID[e.id] = e;
+      // 2026-08-15 fix (A7): a ghost never OVERWRITES an entry that's already there. A
+      // move-ghost and the real relocated occurrence share one id by design (the id
+      // carries the origin date), so with a plain assignment whichever rendered last won
+      // this lookup — and if the ghost won, tapping the REAL card opened the wrong day's
+      // data, with the "This day only" editor prefilled to silently rewrite its time. A
+      // real item still overwrites a ghost, which is the direction we want.
+      if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e;
       // marks blocks free to size to their own content (not lane-packed side-by-side)
       // so the width-equalising pass below knows which ones it's safe to touch
       const solo = isBlock && !colStyle ? ` data-solo="true"` : "";
@@ -18683,8 +18843,23 @@
       // 2026-08-04 ("edit this day vs the routine", Stage 2): a skipped occurrence
       // leaves a faint restorable ghost in its slot instead of vanishing — one tap on
       // Restore deletes just the skip flag. No data-tl-detail: a ghost isn't openable.
-      if (e.ghostSkip) {
-        return `<div class="tl-item tl-block tl-ghost" data-track="${e.track}" style="${style}">
+      // 2026-08-15 (§6 mobile redesign, Pass B): same tile now also covers a MOVED
+      // occurrence's origin day (e.ghostMoved, generatedFor's own comment near
+      // "leaves a restorable ghost") — same markup, the data-rt-restore handler
+      // (document-level delegate, search "const rtRestore") branches on the
+      // override's own ovr.movedTo to clear the right fields either way.
+      if (isGhostItem(e)) {
+        // 2026-08-15 (follow-through on the A9 real-duration fix): a ghost always gets an
+        // EXPLICIT height, computed with the same block formula and 26px floor every
+        // other .tl-block uses. It has to: the tile always carries the .tl-block class
+        // (it holds a Restore control, so it can never collapse to a 20px .tl-point
+        // pill), and the shared `style` above only emits a height when p.isBlock — which
+        // is false under 30 minutes. Before A9 every ghost was hardcoded to 30 minutes so
+        // it was always a block; with real durations now in play, a 20-minute occurrence's
+        // ghost would have fallen through to auto-height and rendered ~93px tall, far
+        // bigger than the slot it stands in for.
+        const ghostStyle = `top:${p.top}px;height:${Math.max(topForMin(ce) - p.top - 3, 26)}px;` + colStyle;
+        return `<div class="tl-item tl-block tl-ghost" data-track="${e.track}" style="${ghostStyle}">
           <span class="tl-title">${esc(e.title)}</span>
           <button type="button" class="tl-ghost-restore" data-rt-restore="${e.id}">Restore</button>
         </div>`;
@@ -18760,10 +18935,32 @@
   // full-bleed labelled rows. Edit's label matches whichever action this item type
   // actually performs (edits the series / toggles the in-sheet panel / edits this
   // one item) so the row never over-promises what tapping it does.
+  // 2026-08-15 (§6 mobile redesign, Pass B): same movable-item test renderTlDetailBody's
+  // own canMove const already computes inline (search "const canMove =") — pulled out
+  // to a shared function so Zone 3 (renderTlDetailHeadActions, below) can reuse the
+  // exact same rule instead of a second hand-copied expression that could drift.
+  function tlItemCanMove(e) {
+    return !e.generated || (e.fromRoutine && !!e.rtTaskId) || (e.fromRecurringEvent && !!e.recurId) || e.id.indexOf("fitcal-") === 0;
+  }
   function renderTlDetailHeadActions(e) {
     const row = (attrs, label, icon, danger) =>
       `<button type="button" class="tl-detail-manage-row${danger ? " tl-detail-manage-danger" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}"><span class="tl-detail-em">${icon}</span><span>${label}</span></button>`;
     const actions = [];
+    // 2026-08-15 (§6 mobile redesign, Pass B, Zone 3): "+ Add to another day" and
+    // "Move this day" relocated here alongside Edit/Delete — the actual date/time
+    // panel (moveHtml) stays exactly where it already lived, in the body
+    // (renderTlDetailBody) — both rows just toggle the SAME tlDetailPanel state
+    // that panel already reads, the same dual-binding pattern data-tl-toggle-edit
+    // already uses across both #tlDetailBody's and this element's own click
+    // listener (see that listener, below). "Add to another day" opens the exact
+    // same panel — its own "Duplicate here"/"Book another like it" button
+    // (data-tl-duplicate) already IS "copy this item to a new date/time", so this
+    // needed no new mechanism, just a second doorway into the one that already
+    // exists (confirmed against duplicateItem, ~line 18412).
+    if (tlItemCanMove(e)) {
+      actions.push(row(`data-tl-toggle-move`, "Add to another day", "＋"));
+      actions.push(row(`data-tl-toggle-move`, "Move this day", "🕑"));
+    }
     if (!e.generated) {
       actions.push(row(`data-edit="${e.id}"`, "Edit", "✎"));
       actions.push(row(`data-del="${e.id}"`, "Delete", "🗑", true));
@@ -18842,17 +19039,60 @@
     const path = locOf(e);
     const hasSteps = kind === "routine" && e.steps && e.steps.length;
     const hasRtnExtras = kind === "routine" && !!e.fromRoutine;
+    // 2026-08-15 (§6 mobile redesign, Pass B): moved up from further below (was
+    // computed just above scopeHtml) so the new Repeats/Next-after-this/Streak
+    // info rows can all key off the real routine template object too — same
+    // isRtnOcc/rtnT used everywhere else in this function, just declared earlier.
+    // 2026-08-15 fix (C4): parseOccId(e.id) is part of the test now — see the long note
+    // at the action pair below. Everything gated on isRtnOcc (the Repeats label, the
+    // per-day override lookup, Next-after-this, Streak, the Skip button) needs a real
+    // "rt-<taskId>-<date>" occurrence to be meaningful, and the hair-wash occurrence
+    // ("hair-<date>") satisfied fromRoutine + rtTaskId without being one.
+    const isRtnOcc = !!(e.fromRoutine && e.rtTaskId && parseOccId(e.id));
+    const rtnT = isRtnOcc ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
     // 2026-08-04: same real-or-derived end as the calendar block (itemEndMin), so
     // this sheet never shows a bare start time for something that's rendering as a
     // full-duration block just above it.
     const detailEnd = e.start ? itemEndMin(e) : null;
     const timeLabel = e.start ? `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(detailEnd))}` : "All day";
-    const freqLabel = e.freq && ROUTINE_FREQ_LABEL[e.freq] ? `Repeats ${ROUTINE_FREQ_LABEL[e.freq].toLowerCase()}` : "";
-    // 2026-08-15 (§6 mobile redesign): mobile-only standalone Repeats info row —
-    // same freqLabel computed above, just split out of the old combined time+freq
-    // row into its own row per this pass's spec (desktop still sees it exactly as
-    // before, as that same row's .tl-detail-sub — see .tl-detail-mobile-hide).
-    const repeatsRowHtml = freqLabel ? `<div class="tl-detail-row tl-detail-row-repeats"><span class="tl-detail-em">↻</span><span>${esc(freqLabel)}</span></div>` : "";
+    // TWO Repeats labels, deliberately (2026-08-15 fix, C6):
+    //
+    // freqLabelShort — DESKTOP's, in the time row's own .tl-detail-sub. Byte-for-byte
+    // what it has always been: the short ROUTINE_FREQ_LABEL word. Pass B swapped it for the
+    // long routineFreqLabel(t) sentence, which on desktop was both much longer AND a
+    // duplicate — routineFreqLabel embeds the start time, which the very row it hangs
+    // under already prints. Desktop was explicitly out of scope for this mobile build,
+    // so it goes back to exactly its old text.
+    //
+    // freqLabelRow — MOBILE's standalone Repeats row only. Keeps Pass B's richer
+    // routineFreqLabel(t) (per-N pluralisation, weekly day-lists, start/end suffixes),
+    // which genuinely says more on a row that has nothing else on it.
+    //
+    // lcFirst, not .toLowerCase(): routineFreqLabel embeds real weekday and month
+    // abbreviations ("Weekly · Mon, Thu 7:00am"), and blanket-lowercasing mangled them
+    // to "mon, thu". Only the first character needs to change to read as a sentence
+    // after "Repeats ". The short-map fallback keeps .toLowerCase() because its values
+    // are single plain words ("Daily", "One-off", "As needed") with nothing to mangle —
+    // and because that is what desktop already renders.
+    const lcFirst = s => s.charAt(0).toLowerCase() + s.slice(1);
+    const freqLabelShort = e.freq && ROUTINE_FREQ_LABEL[e.freq] ? `Repeats ${ROUTINE_FREQ_LABEL[e.freq].toLowerCase()}` : "";
+    const freqLabelRow = isRtnOcc && rtnT ? `Repeats ${lcFirst(routineFreqLabel(rtnT))}` : freqLabelShort;
+    // The standalone Repeats row carries BOTH labels, one visible per width, because
+    // this row is NOT mobile-only in practice — verified live against `git stash`/HEAD
+    // at 1280px, where it renders too. Swapping its text outright would therefore have
+    // changed desktop, which this mobile pass must not do. So:
+    //   · .tl-detail-mobile-hide (existing utility, hides ≤640px) carries the SHORT
+    //     label — exactly the string, and exactly the render condition, HEAD used.
+    //   · .tl-detail-freq-rich (hidden ≥641px, added to the desktop hide list next to
+    //     .tl-detail-action-pair) carries the richer mobile label.
+    // The row itself is desktop-hidden when there is no short label at all, so a freq
+    // with no ROUTINE_FREQ_LABEL entry (interval, count, numMoney) still renders no row
+    // on desktop, just as HEAD did, while mobile gets its real "every 2 days" sentence.
+    const repeatsRowHtml = (freqLabelShort || freqLabelRow)
+      ? `<div class="tl-detail-row tl-detail-row-repeats${freqLabelShort ? "" : " tl-detail-freq-rich"}"><span class="tl-detail-em">↻</span><span>${
+          freqLabelShort ? `<span class="tl-detail-mobile-hide">${esc(freqLabelShort)}</span>` : ""
+        }${freqLabelRow ? `<span class="tl-detail-freq-rich">${esc(freqLabelRow)}</span>` : ""}</span></div>`
+      : "";
     const stepsHtml = hasSteps ? `<div class="tl-detail-steps">${e.steps.map((s, i) => {
       const stepId = `${e.id}::step::${i}`;
       const sd = isDone(stepId);
@@ -18882,13 +19122,50 @@
     // panel leads with a SCOPE toggle — "This day only" (default) writes t.overrides
     // [patternDate] via the Save button; "The routine" edits the template itself after
     // a red warning. Field values re-fill per scope on toggle (refreshOpenTlDetail).
-    const isRtnOcc = !!(e.fromRoutine && e.rtTaskId);
-    const rtnT = isRtnOcc ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
     const occDate = isRtnOcc ? (parseOccId(e.id) || {}).date : null;
     const occOvr = rtnT && occDate ? rtnOvr(rtnT, occDate) : null;
     const occDateD = occDate ? parseKey(occDate) : null;
     const occDateLbl = occDateD ? `${WD_FULL[dowIndex(occDateD)]} ${occDateD.getDate()} ${MON_SHORT[occDateD.getMonth()]}` : "";
     const schedLbl = rtnT ? (ROUTINE_FREQ_LABEL[rtnT.freq] || "Its usual schedule") : "";
+    // 2026-08-15 (§6 mobile redesign, Pass B, "Next after this" info row): reuses
+    // nextRoutineDue(t, from) — an existing helper (search "function
+    // nextRoutineDue") that was already fully written, with its own per-freq
+    // bounded horizon, but never actually called anywhere in the file until now.
+    // Walking forward from the day AFTER this occurrence (so a still-open "today"
+    // never reports itself as its own next date). Only computed for a real
+    // routine occurrence; omitted entirely when there's no next date (e.g. an
+    // ended or one-off routine) — never render "None" filler.
+    // 2026-08-15 fix (C2): nextRoutineDue's answer is now VALIDATED before it's shown.
+    // Its daily/monthly/yearly branches just do date arithmetic and never consult
+    // routineOwnPatternOn, so they happily return a date past the routine's endDate or
+    // before its startDate; and for freq:"once" it returns t.date — i.e. this very
+    // occurrence, so a one-off read "Next after this · <its own day>". Validating at the
+    // call site fixes every branch at once, rather than patching each one: the row only
+    // renders when the candidate is a date the routine genuinely occurs on AND is
+    // actually later than this occurrence. keyOf() string comparison, not Date >, since
+    // nextRoutineDue builds some of its answers with `new Date(y, m, d)` and others by
+    // addDays() off the passed-in date — comparing ISO day-keys is exact either way and
+    // immune to any time-of-day component riding along. The isNaN guard catches the
+    // Invalid Date a malformed monthly/yearly template would otherwise produce.
+    const nextCand = isRtnOcc && rtnT && occDateD ? nextRoutineDue(rtnT, addDays(occDateD, 1)) : null;
+    const nextDueD = nextCand && !isNaN(nextCand) && routineOccursOn(rtnT, nextCand) && keyOf(nextCand) > occDate ? nextCand : null;
+    const nextAfterHtml = nextDueD
+      ? `<div class="tl-detail-row tl-detail-row-next"><span class="tl-detail-em">⏭</span><span>Next after this · ${esc(`${WD_FULL[dowIndex(nextDueD)]} ${nextDueD.getDate()} ${MON_SHORT[nextDueD.getMonth()]}`)}</span></div>`
+      : "";
+    // 2026-08-15 (§6 mobile redesign, Pass B, "Streak" info row): reuses
+    // streakWithGrace(isScheduledFn, isDoneFn, maxLookback) — the same one-grace-
+    // miss counter bestRoutineStreak() already uses app-wide (search "function
+    // streakWithGrace") — scoped to THIS routine specifically rather than the
+    // single best routine across all of them. Omitted when 0 (no streak yet) or
+    // not a routine occurrence at all.
+    const streakN = isRtnOcc && rtnT ? streakWithGrace(d => routineOccursOn(rtnT, d), d => isDone(`rt-${rtnT.id}-${keyOf(d)}`), 200) : 0;
+    // 2026-08-15 fix (C1): "in a row", NOT "N-day streak". streakWithGrace counts
+    // consecutive scheduled OCCURRENCES, not calendar days — it skips every unscheduled
+    // date outright (see its own `if (!isScheduledFn(d)) continue`). So a weekly routine
+    // kept up for five straight weeks read "5-day streak", which is simply false for
+    // every cadence except daily. A unit-free label is true for all of them, and doesn't
+    // need the freq inspected to say the right thing.
+    const streakRowHtml = streakN > 0 ? `<div class="tl-detail-row tl-detail-row-streak"><span class="tl-detail-em">🔥</span><span>${streakN} in a row</span></div>` : "";
     const dayScope = tlOvrScope !== "routine";
     // field values follow the selected scope: day = the merged occurrence, routine = template
     const fldTitle = dayScope ? e.title : (rtnT ? rtnT.title : e.title);
@@ -18967,7 +19244,7 @@
     // open, showing two rows of identically-labelled "Reschedule"/"Book another" pills.
     // Cancel here (data-tl-toggle-move, same handler as the toggle pills) collapses
     // back to actionsHtml without confirming.
-    const canMove = !e.generated || (e.fromRoutine && !!e.rtTaskId) || (e.fromRecurringEvent && !!e.recurId) || e.id.indexOf("fitcal-") === 0;
+    const canMove = tlItemCanMove(e);
     const moveOpen = tlDetailPanel === "move";
     const moveHtml = canMove && moveOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
         <div class="tl-detail-move-head">
@@ -18992,6 +19269,79 @@
         ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="fit-star" data-tl-fit-star="${fs.id}:${n}"
             aria-pressed="${(fs.rating || 0) >= n}" aria-label="${n} star${n > 1 ? "s" : ""}">★</button>`).join("")}
       </div>` : "";
+    // 2026-08-15 (§6 mobile redesign, Pass B): mobile-only primary action PAIR,
+    // replacing the old single full-width .tl-detail-done-btn. Done/Attended keeps
+    // the exact same data-tick-ev attrs (same delegate, untouched) just narrower
+    // and paired with a second action so the sheet always offers "log what
+    // happened" as one immediate tap instead of only "done or nothing".
+    // Skip today routes two different ways depending on what this item actually is:
+    //  - a real routine occurrence (isRtnOcc — fromRoutine + rtTaskId + a parseable
+    //    occurrence id) — the SAME data-ovr-skip attribute/handler the edit panel's
+    //    "Skip this day" button already uses (see #tlDetailBody's click listener) —
+    //    writes a per-date ROUTINE_TASKS override and leaves a restorable ghost tile.
+    //  - a genuine one-off task that's a real stored EVENTS row with a time — rolls
+    //    forward to the next day, with Undo. See data-tl-skip-task's handler.
+    //  - anything else generated (hair wash, family admin, supplements, chain steps)
+    //    gets NO secondary button at all — Done goes full width. See the C4 note below.
+    //
+    // 2026-08-15 fix (C3): "Skip today" on a one-off task used to be data-del — it
+    // opened a confirm sheet reading 'Delete "…"?' and DESTROYED the task. The word did
+    // not match the deed. It's now a real, non-destructive skip: the task moves to the
+    // next day keeping its time, which is what an undone task actually does. Delete is
+    // still one tap away in Zone 3 for when she really means delete.
+    //
+    // 2026-08-15 fix (C4): isRtnOcc is tightened to what the data-ovr-skip handler can
+    // ACTUALLY service — it does parseOccId(item.id) and silently bails when that
+    // returns null. The hair-wash occurrence (id "hair-<date>") sets fromRoutine and
+    // rtTaskId but its id is not an "rt-<taskId>-<date>", so it passed the old guard and
+    // its Skip button did nothing at all when tapped. parseOccId in the guard means such
+    // an item now falls through to the no-button branch rather than to a dead one.
+    // Every other generated kind was checked against eventKind() for the same trap:
+    //   hair-<date>            routine, generated  -> no button (was: dead data-del)
+    //   fam-<id>-<date>        routine, generated  -> no button (was: dead data-del)
+    //   supp-<id>-<date>       routine, generated  -> no button (was: dead data-del)
+    //   chain-<id>-<i>-<date>  task,    generated  -> no button (was: dead data-del)
+    //   chain step (routine)   routine, generated, no rtTaskId -> no button (was: dead)
+    //   chain step (event)     task/event, generated but a REAL EVENTS id
+    //                                              -> no button (was: DESTRUCTIVE delete)
+    //   fitcal-<id>            event (category Fitness) -> "Didn't go", non-destructive
+    //   ev-<id>-<date> recur   event               -> "Didn't go", non-destructive
+    //   birthdays              event (category Birthdays) -> "Didn't go"; harmless (it
+    //                          only sets an outcome) though semantically odd — left as
+    //                          is, out of this pass's scope.
+    const doneWord = kind === "event" ? "Attended" : "Done";
+    const notDoneWord = kind === "event" ? "Mark attended" : "Mark done";
+    // 2026-08-15 fix (B3): the ✓ span is only emitted when there IS a ✓. It used to be
+    // rendered empty in the not-done state, and an empty flex child plus the button's
+    // own 12px gap left ~122px of dead space with the label shoved off-centre next to a
+    // perfectly centred sibling. (justify-content: center on the pair's own rule is the
+    // other half of this fix.)
+    const primaryActionBtnHtml = `<button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
+        ${done ? `<span>✓</span>` : ""}${done ? doneWord : notDoneWord}
+      </button>`;
+    let secondaryActionBtnHtml = "";
+    if (kind === "routine" || kind === "task") {
+      if (isRtnOcc) secondaryActionBtnHtml = `<button type="button" class="tl-detail-skip-btn" data-ovr-skip>Skip today</button>`;
+      // a real stored one-off with a time on it. e.start is required because
+      // rescheduleItem's plain-event branch writes start/end unconditionally, so an
+      // all-day task would come back with allDay:false and a nonsense end — for that
+      // shape no button is rendered at all (Done goes full width; Delete is in Zone 3),
+      // which is the correct trade over shipping a destructive action behind "Skip".
+      else if (!e.generated && e.start) secondaryActionBtnHtml = `<button type="button" class="tl-detail-skip-btn" data-tl-skip-task="${e.id}">Skip today</button>`;
+    } else if (kind === "event") {
+      // 2026-08-15: a second, direct entry point into setOutcomeStatus(e.id,
+      // "cancelled") — previously only reachable via the separate #ocOverlay
+      // outcome sheet's own "Cancelled" tile. Handled in #tlDetailBody's own click
+      // listener (data-tl-didnt-go), same close+re-render shape as data-ovr-skip.
+      secondaryActionBtnHtml = `<button type="button" class="tl-detail-skip-btn" data-tl-didnt-go="${e.id}">Didn't go</button>`;
+    }
+    // 2026-08-15: the wrapper is ALWAYS emitted, even with no secondary button — flex:1
+    // on a lone child simply fills the row, so a solo Done still renders full-width and
+    // identically styled. Required, not cosmetic: the mobile ordering rule now targets
+    // .tl-detail-action-pair (order: 20), so an unwrapped button would fall back to
+    // order 0 and jump to the top of the sheet. Kept unconditional so that can't drift
+    // again the next time a branch decides not to render the secondary action.
+    const actionPairHtml = `<div class="tl-detail-action-pair">${primaryActionBtnHtml}${secondaryActionBtnHtml}</div>`;
     // 2026-08-04 (Linh: "the actions -- Edit, Reschedule, Book another, Delete", per
     // her own mockup): Edit/Delete are the header's own icon pair for every item type
     // (see renderTlDetailHeadActions -- routine/fitcal's pencil now toggles the same
@@ -19001,7 +19351,15 @@
     // matches her mockup exactly, toggling the collapsed date/time panel open on tap.
     // 2026-08-06: hidden while moveOpen (see moveHtml above) so only one row of these
     // pills is ever on screen at a time.
-    const actionsHtml = canMove && !moveOpen ? `<div class="tl-detail-move-actions tl-detail-move-toggle">
+    // 2026-08-15 (§6 mobile redesign, Pass B): now ALSO carries .tl-detail-mobile-hide
+    // — Zone 3 (renderTlDetailHeadActions) grew its own "Add to another day"/"Move
+    // this day" rows that open this exact same panel, so this pill pair would read
+    // as visually duplicated on mobile. .tl-detail-move-toggle already hides this
+    // ≥641px (desktop never showed it — deskActionsHtml is desktop's own row), so
+    // adding .tl-detail-mobile-hide (hides ≤640px, same class Zone 1's markup-
+    // supersession already uses) retires it at every width without deleting the
+    // markup outright.
+    const actionsHtml = canMove && !moveOpen ? `<div class="tl-detail-move-actions tl-detail-move-toggle tl-detail-mobile-hide">
         <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">Reschedule</button>
         <button type="button" class="tl-move-btn" data-tl-toggle-move aria-expanded="false">${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>
       </div>` : "";
@@ -19100,18 +19458,18 @@
     const heroWhenHtml = [heroDateLbl, timeLabel, heroDur].filter(Boolean).map(esc).join(" · ");
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title tl-detail-mobile-hide"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
-      <div class="tl-detail-row tl-detail-mobile-hide"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabel ? `<span class="tl-detail-sub">${esc(freqLabel)}</span>` : ""}</span></div>
+      <div class="tl-detail-row tl-detail-mobile-hide"><span class="tl-detail-em">🕐</span><span>${timeLabel}${freqLabelShort ? `<span class="tl-detail-sub">${esc(freqLabelShort)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row tl-detail-row-where"><span class="tl-detail-em">📍</span><span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row tl-detail-mobile-hide"><span class="tl-detail-em">🏷</span><span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
       ${repeatsRowHtml}
+      ${nextAfterHtml}
+      ${streakRowHtml}
       ${chainRowHtml}
       ${nutritionRowHtml}
       ${phaseBandsHtml}
       ${remHtml}
       ${starsHtml}
-      <button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
-        <span>${done ? "✓" : ""}</span>${done ? "Done" : "Mark done"}
-      </button>
+      ${actionPairHtml}
       ${fitLinkHtml}${plainNoteHtml}
       ${stepsHtml}
       ${actionsHtml}${deskActionsHtml}
@@ -19479,7 +19837,10 @@
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const due = Object.values(TL_ITEMS_BY_ID)
-      .filter(e => e.start && !e.preview && !e.ghostSkip && itemEndMin(e) < nowMin && outcomeOf(e.id).status === "open")
+      // 2026-08-15 fix (A3): isGhostItem, not a bare e.ghostSkip — the nudge used to ask
+      // "Did this happen?" on the origin day about an occurrence that had been MOVED
+      // away from it, and its ✓ wrote the outcome onto the real (relocated) occurrence.
+      .filter(e => e.start && !e.preview && !isGhostItem(e) && itemEndMin(e) < nowMin && outcomeOf(e.id).status === "open")
       .sort((a, b) => toMin(a.start) - toMin(b.start)).slice(0, 3);
     host.innerHTML = due.map(e => `<div class="oc-prompt">
         <span class="oc-prompt-l"><span class="oc-prompt-q">Did this happen?</span>
@@ -19581,7 +19942,74 @@
       e.stopPropagation();
       const item = ovrItem();
       const p = item && parseOccId(item.id);
-      if (item && p && item.rtTaskId) setRtnOvr(item.rtTaskId, p.date, { skipped: true });
+      if (item && p && item.rtTaskId) {
+        // 2026-08-15 fix (A8): skipping an occurrence that has ALREADY been moved also
+        // clears the move. Writing a bare { skipped: true } on top of a movedTo override
+        // produced a combined state nothing could render — no block or ghost on the
+        // origin day, none on the target day either — so the occurrence disappeared with
+        // no Restore button anywhere, permanently, and it was two taps away (move it,
+        // then Skip today). Collapsing the move as we skip means "Skip today" always
+        // means the same thing: this occurrence isn't happening on its OWN day, and its
+        // ordinary restorable skip-ghost sits there. start/end/dur go with movedTo
+        // because they hold the TARGET slot's time (see rescheduleItem), which is
+        // meaningless once the move is gone.
+        // 2026-08-15 fix (C5): clear the done flag too. Skipping something already ticked
+        // used to leave it counted as DONE, so a skipped occurrence still fed progress
+        // and streaks. Same `if (DONE[id]) tickTask(id, false)` path setOutcomeStatus()
+        // already uses for its non-done statuses, so rewards/fitness auto-log unwind
+        // identically here.
+        const t = ROUTINE_TASKS.find(x => x.id === item.rtTaskId);
+        const ovr = t && rtnOvr(t, p.date);
+        setRtnOvr(item.rtTaskId, p.date, ovr && ovr.movedTo
+          ? { skipped: true, movedTo: undefined, start: undefined, end: undefined, dur: undefined }
+          : { skipped: true });
+        if (DONE[item.id]) tickTask(item.id, false);
+      }
+      closeTlDetail();
+      renderDay();
+      return;
+    }
+    // 2026-08-15 (§6 mobile redesign, Pass B): "Didn't go" — the primary action
+    // pair's secondary button for an appointment/event kind. A second, direct
+    // entry point into setOutcomeStatus(), previously only reachable via the
+    // separate #ocOverlay outcome sheet's own "Cancelled" tile (see that overlay's
+    // own click listener, search "setOutcomeStatus(e.id, \"cancelled\")", which
+    // this mirrors: same close+re-render shape as the routine/task data-ovr-skip
+    // branch just above).
+    // 2026-08-15 fix (C3): "Skip today" on a genuine one-off task — rolls it forward one
+    // day, keeping its time. Replaces the old data-del wiring, which opened a confirm
+    // sheet saying 'Delete "…"?' and then destroyed the task: the label said skip, the
+    // action said delete. Rolling to the next day is what "I'm not doing this today"
+    // actually means for a task, and it reuses rescheduleItem() — the same mover the
+    // Reschedule button and the drag handler already go through — rather than inventing
+    // a second way to move an item. Tomorrow is relative to the item's OWN date, not
+    // TODAY, so skipping from a day she's browsing behaves the way that page reads.
+    // rescheduleItem() re-anchors the calendar onto the target date (right for an
+    // explicit "move it to <date>", wrong here — she never picked a date and would just
+    // have to navigate back), so the anchor is put back afterwards. Undo restores the
+    // stored row's own date/time fields verbatim.
+    const skipTaskBtn = e.target.closest("[data-tl-skip-task]");
+    if (skipTaskBtn) {
+      e.stopPropagation();
+      const item = TL_ITEMS_BY_ID[skipTaskBtn.dataset.tlSkipTask];
+      const ev = item && EVENTS.find(x => x.id === item.id);
+      if (ev) {
+        const snap = { date: ev.date, allDay: ev.allDay, start: ev.start, end: ev.end };
+        const backTo = keyOf(state.anchor);
+        rescheduleItem(item, keyOf(addDays(parseKey(ev.date), 1)), ev.start);
+        if (keyOf(state.anchor) !== backTo) { state.anchor = parseKey(backTo); render(); }
+        showUndoSnackbar(`Skipped "${ev.title}" — moved to the next day`, () => {
+          Object.assign(ev, snap);
+          saveEvents(EVENTS);
+          render();
+        });
+      }
+      return;
+    }
+    const didntGoBtn = e.target.closest("[data-tl-didnt-go]");
+    if (didntGoBtn) {
+      e.stopPropagation();
+      setOutcomeStatus(didntGoBtn.dataset.tlDidntGo, "cancelled");
       closeTlDetail();
       renderDay();
       return;
@@ -19722,6 +20150,13 @@
     // any button inside #tlDetailBody would.
     const editToggle = e.target.closest("[data-tl-toggle-edit]");
     if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
+    // 2026-08-15 (§6 mobile redesign, Pass B): Zone 3's "Add to another day"/"Move
+    // this day" rows (renderTlDetailHeadActions) toggle the SAME tlDetailPanel
+    // state as the body's own data-tl-toggle-move pills — dual-bound across both
+    // click listeners exactly like data-tl-toggle-edit just above, since
+    // #tlDetailBody and #tlDetailHeadActions are two separate elements/listeners.
+    const moveToggle = e.target.closest("[data-tl-toggle-move]");
+    if (moveToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "move" ? null : "move"; refreshOpenTlDetail(); return; }
     if (e.target.closest("[data-edit]")) closeTlDetail();
     if (tryTlDelete(e.target)) return;
   });
@@ -21332,7 +21767,16 @@
     return dayEvents.concat(chainData.items);
   }
   function dayItemsFor(d) {
-    return dayEventsRawFor(d).filter(e => !e.allDay && e.start);
+    // 2026-08-15 fix (A6): ghosts are dropped here, so the multi-day (3/5/7-day) grid
+    // never sees one. That grid's own templates (mdItemHtml/mdBarHtml, below) have no
+    // ghost branch at all, so a move-ghost rendered there as a NORMAL, solid, tappable
+    // block — a visual duplicate of the relocated occurrence, showing on two different
+    // days, both carrying the same data-tl-detail id. Filtering rather than teaching
+    // those templates to draw ghosts is deliberate: a multi-day column has no Restore
+    // affordance (and is too narrow for one), so a ghost there conveys nothing. The
+    // single-day view is where the ghost belongs, and renderDay() does NOT call this
+    // (renderMultiDayGrid is its only caller), so that view is untouched.
+    return dayEventsRawFor(d).filter(e => !e.allDay && e.start && !isGhostItem(e));
   }
   // 2026-08-15 (§4 build) — "clinic-closed / away days" source. Searched this file
   // for any existing concept of this: "closed", "away", "holiday", "out of office", a
@@ -21543,8 +21987,12 @@
     const activeSpans = [];   // {e, dateEnd} for spans still running into a later column
     return perDay.map(({ dk, bdays, others }) => {
       const continuing = activeSpans.filter(s => s.dateEnd >= dk);
-      others.forEach(e => { TL_ITEMS_BY_ID[e.id] = e; });
-      bdays.forEach(e => { TL_ITEMS_BY_ID[e.id] = e; });
+      // 2026-08-15 fix (A7): same never-let-a-ghost-clobber-a-real guard as the
+      // single-day seeding site (search isGhostItem) — applied at every seeding site so
+      // the rule can't drift. Belt and braces here: an all-day list can't currently hold
+      // a ghost (every ghost is allDay:false with a start), but this is the shared rule.
+      others.forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
+      bdays.forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
       others.forEach(e => {
         // 2026-08-15: no path in this app (manual add, routines, or ICS import — see
         // the §4 build report) currently ever sets dateEnd on a plain event/task, so
@@ -21606,7 +22054,11 @@
     // openTlDetail() resolves ids through this map — extend it (not reset; the
     // single-day body above already seeded state.anchor's own items) with every
     // visible day's items so a tap on ANY column's card/bar can open the sheet.
-    dayList.forEach(({ items }) => items.forEach(e => { TL_ITEMS_BY_ID[e.id] = e; }));
+    // 2026-08-15 fix (A7): same never-let-a-ghost-clobber-a-real guard as the other two
+    // seeding sites. dayItemsFor() already drops ghosts (see its own comment), so this
+    // is the belt to that braces — it also protects the real occurrence seeded here from
+    // being replaced by the single-day pass's ghost for the same id, whichever runs last.
+    dayList.forEach(({ items }) => items.forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; }));
 
     mdRendering = true;
     const compact = days >= 5;   // §1: 1/3 = comfortable, 5/7 = compact — automatic from day count, never a separate setting
@@ -22576,7 +23028,9 @@
       // blocks; all-day/untimed stay chips in the header. Overlaps split into
       // side-by-side lanes — the same cluster approach the Day timeline uses. ----
       const wtAllday = shown.filter(e => e.allDay || toMin(e.start) === null);
-      const timed = evs.filter(e => !e.ghostSkip && !e.allDay && toMin(e.start) !== null);
+      // 2026-08-15 fix (A4): isGhostItem, not a bare e.ghostSkip — a move-ghost used to
+      // draw as a real block here, duplicating the relocated occurrence in the same week.
+      const timed = evs.filter(e => !isGhostItem(e) && !e.allDay && toMin(e.start) !== null);
       const placed = [];
       timed.forEach(e => {
         const s = toMin(e.start), en = Math.max(itemEndMin(e), s + 30);
@@ -33156,7 +33610,13 @@
     const rtTo = to || keyOf(addDays(parseKey(rtFrom), 90));
     for (let d = parseKey(rtFrom); keyOf(d) <= rtTo; d = addDays(d, 1)) {
       generatedFor(d).forEach(item => {
-        if (!item.fromRoutine || item.preview || item.ghostSkip) return;
+        // 2026-08-15 fix (A1): isGhostItem, not a bare item.ghostSkip. A move-ghost used
+        // to pass this test and get exported, emitting a SECOND VEVENT carrying the same
+        // UID:rt-<taskId>-<originDate>@book33 as the real relocated occurrence (which
+        // keeps the origin occurrence id by design). Two components sharing one UID with
+        // no RECURRENCE-ID is invalid RFC 5545 — Google/Apple Calendar keep exactly one
+        // of them, so importing could silently undo a reschedule in her real calendar.
+        if (!item.fromRoutine || item.preview || isGhostItem(item)) return;
         if (tr !== "all" && item.track !== tr) return;
         const rt = ROUTINE_TASKS.find(x => x.id === item.rtTaskId);
         if (!rt) return;
@@ -33769,7 +34229,20 @@
     if (rtRestore) {
       const p = parseOccId(rtRestore.dataset.rtRestore);
       const rItem = TL_ITEMS_BY_ID[rtRestore.dataset.rtRestore];
-      if (p && rItem && rItem.rtTaskId) setRtnOvr(rItem.rtTaskId, p.date, { skipped: undefined });
+      if (p && rItem && rItem.rtTaskId) {
+        // 2026-08-15 (§6 mobile redesign, Pass B): this ONE restore button now backs
+        // two different ghost shapes — the original skip-ghost (clears just the
+        // skip flag; any other per-day override fields, a moved time, a note, stay
+        // put — see the comment this line replaces) and the new move-ghost (clears
+        // exactly what rescheduleItem wrote for the move: start/end/dur/movedTo —
+        // see ~line 18385 — so the item isn't left half-moved after Restore).
+        // Branches on the override's own ovr.movedTo (the real stored truth)
+        // rather than a render-time flag.
+        const t = ROUTINE_TASKS.find(x => x.id === rItem.rtTaskId);
+        const ovr = t && rtnOvr(t, p.date);
+        if (ovr && ovr.movedTo) setRtnOvr(rItem.rtTaskId, p.date, { start: undefined, end: undefined, dur: undefined, movedTo: undefined });
+        else setRtnOvr(rItem.rtTaskId, p.date, { skipped: undefined });
+      }
       renderDay();
       return;
     }
@@ -37033,7 +37506,10 @@
       let all = [];
       try { all = [...generatedFor(d), ...EVENTS.filter(e => e.date === k), ...fitCalendarEventsFor(d)]; } catch (e) {}
       all.forEach(e => {
-        if (!e || !e.start || e.preview || e.ghostSkip || seen.has(e.id)) return;
+        // 2026-08-15 fix (A2): isGhostItem, not a bare e.ghostSkip — a move-ghost used to
+        // reach buildReminders() and arm a phantom reminder on the ORIGIN day at the
+        // origin time, for something that isn't happening then.
+        if (!e || !e.start || e.preview || isGhostItem(e) || seen.has(e.id)) return;
         seen.add(e.id); out.push(e);
       });
       return out;
@@ -37088,7 +37564,17 @@
               const when = startMs - mins * 60000;
               if (when <= now) return;
               out.push({
-                when, urgent: true, tag: `evt-${e.id}-${mins}`,
+                // 2026-08-15 fix (A2): evKey is in the tag now. A notification tag is a
+                // REPLACE key (both for the browser's own showNotification and for the
+                // push table's (owner, tag, fire_at) primary key), so two reminders that
+                // share one tag silently collapse into one — and an occurrence id is NOT
+                // unique per day: a moved routine occurrence keeps its ORIGIN day's id
+                // while living on the target date, so it could collide with a placeholder
+                // for the same occurrence and the later-armed one would replace the real
+                // reminder. Tags are never persisted or matched by format anywhere (only
+                // written: notifOptions, the book33-push-queue mirror, and the Edge
+                // Function's opaque PK column), so widening the string breaks nothing.
+                when, urgent: true, tag: `evt-${e.id}-${evKey}-${mins}`,
                 title: generic ? "Patient appointment" : e.title,
                 body: `${dayWord(evKey, when)}${fmtTime(e.start)}${e.end ? "–" + fmtTime(e.end) : ""} · ${notifCategoryOf(e)}`,
                 data: { date: evKey, eventId: e.id },
