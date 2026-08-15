@@ -11982,11 +11982,10 @@
     font: inherit; font-size: 11.5px; font-weight: 700; border-radius: 999px; cursor: pointer;
   }
   .ddt-day-btn.on { background: var(--margin-rule); color: var(--accent-on); }
-  .ddt-hide-names {
-    flex: none; border: 1px solid var(--note-line); background: transparent; color: var(--ink-soft);
-    border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
-  }
-  .ddt-hide-names[aria-pressed="true"] { border-color: var(--margin-rule); color: var(--margin-rule); background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
+  /* 2026-08-16 (Linh: "remove hide names, doesn't serve a purpose"): the
+     .ddt-hide-names button + its pressed state are gone. It was built as part of
+     the desktop widget-rail spec's privacy toggle; she never wanted it. The
+     Today's-patients widget now always shows real names — see wrCardHtml(). */
   .ddt-gear {
     flex: none; width: 32px; height: 32px; border-radius: 999px; border: none; background: none;
     color: var(--gold-bright); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -14348,7 +14347,6 @@
         <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
       </span>
       <span class="ddt-days" id="ddtDays"></span>
-      <button type="button" class="ddt-hide-names" id="ddtHideNames" aria-pressed="false">Hide names</button>
       <button type="button" class="ddt-gear" id="ddtGear" aria-label="Settings" title="Settings">⚙</button>
     </div>
     <div id="deskGrid" hidden>
@@ -23790,18 +23788,22 @@
   // already anticipated (see below): ntMerge() deep-merges under these defaults, so
   // an existing saved book33-prefs with only calDays gets navMode:"drawer" filled
   // in for free, no migration needed.
-  // 2026-08-15 (desktop DAY view build): four more keys, same free-fill-in via
+  // 2026-08-15 (desktop DAY view build): three more keys, same free-fill-in via
   // ntMerge() -- navRail (chapters-rail state, "collapsed"|"pinned"), sideOpen
-  // (calendar-sidebar manual open/closed), hideNames (Today's-patients privacy
-  // toggle, desktop top bar + widget rail), tracksOff (array of life-category ids
+  // (calendar-sidebar manual open/closed), tracksOff (array of life-category ids
   // unchecked in the sidebar's "Parts of life" list, filters the day grid). An
-  // existing saved book33-prefs with only {calDays,navMode} gets all four filled
+  // existing saved book33-prefs with only {calDays,navMode} gets all of them filled
   // in, same as navMode's own arrival did -- no second migration path.
   // dayStart/dayEnd (item 6, 2026-08-15 corrections pass): "Hours shown" —
   // desktop-day1's own grid-row trim only (see computeDeskHourRange/compactH
   // below), read/written by the #ddtGear popover. Defaults match the spec's
   // "6am"/"10pm".
-  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, hideNames: false, tracksOff: [], dayStart: 6, dayEnd: 22 };
+  // 2026-08-16 (Linh: "remove hide names, doesn't serve a purpose"): the hideNames
+  // key is GONE, along with its top-bar button and the widget-rail substitution it
+  // drove. A stale `hideNames` left in an already-saved book33-prefs is harmless —
+  // ntMerge only fills MISSING defaults, it never deletes extra stored keys, and
+  // nothing reads that name any more.
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, tracksOff: [], dayStart: 6, dayEnd: 22 };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -33130,17 +33132,10 @@
         b.classList.toggle("on", calDaysActive() === parseInt(b.dataset.ddtDays, 10));
       });
     }
-    const hideBtn = document.getElementById("ddtHideNames");
-    if (hideBtn) hideBtn.setAttribute("aria-pressed", String(!!PREFS.hideNames));
   }
   document.getElementById("ddtTodayBtn")?.addEventListener("click", () => document.getElementById("todayPill")?.click());
   document.getElementById("ddtPrev")?.addEventListener("click", () => document.getElementById("prevDay")?.click());
   document.getElementById("ddtNext")?.addEventListener("click", () => document.getElementById("nextDay")?.click());
-  document.getElementById("ddtHideNames")?.addEventListener("click", () => {
-    PREFS.hideNames = !PREFS.hideNames;
-    savePrefs();
-    renderDay();
-  });
   document.getElementById("ddtDays")?.addEventListener("click", e => {
     const btn = e.target.closest("[data-ddt-days]");
     if (!btn) return;
@@ -33374,7 +33369,7 @@
       const pats = clinicPatientsIn(Object.values(TL_ITEMS_BY_ID)).sort((a, b) => toMin(a.start) - toMin(b.start));
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's patients · ${pats.length}</span>
-        ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(PREFS.hideNames ? "Patient" : p.title)}</span><span class="wr-pat-state">${isDone(p.id) ? "✓ in" : ""}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
+        ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(p.title)}</span><span class="wr-pat-state">${isDone(p.id) ? "✓ in" : ""}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
       </div>`;
     }
     if (id === "pileupBox") {
