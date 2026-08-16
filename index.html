@@ -15208,6 +15208,14 @@
           <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
         </div>
       </div>
+      <div class="field full" id="rtnPhaseField">
+        <label>Before / Event / After <span class="field-hint">only matters if chained, or dragged into a phase on the Board</span></label>
+        <div class="track-picker" id="rtnPhasePicker" role="group" aria-label="Phase">
+          <button type="button" class="track-opt" data-phase="before" aria-pressed="false">Before</button>
+          <button type="button" class="track-opt" data-phase="during" aria-pressed="true">Event</button>
+          <button type="button" class="track-opt" data-phase="after" aria-pressed="false">After</button>
+        </div>
+      </div>
       <!-- 2026-08-08 (Linh, "Start + End (both optional)" brief): SUPERSEDES the single
            Start+Mins pair -- duration is now DERIVED from Start/End (rtnDurFromRange)
            instead of typed directly. #rtnEnd is the rarely-hidden field here (hidden the
@@ -37396,6 +37404,8 @@
   const rtnAddRow = document.getElementById("rtnAddRow");
   let rtnFreq = "weekly";
   let rtnTrack = "personal";
+  let rtnPhase = "during";
+  let rtnPhaseTouched = false;   // only true once the user actually taps a Phase chip
   let rtnEditId = null;
   // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
   // that row -- instead of opening the separate slide-over drawer"): which routine (if
@@ -37911,6 +37921,10 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  function syncRtnPhaseButtons() {
+    document.querySelectorAll("#rtnPhasePicker .track-opt").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.phase === rtnPhase)));
+  }
   // mirrors the Calendar column's own pill switch in the Routine Library table --
   // both read/write the same task.calOn (see the submit handler and the table's
   // own data-rtg-cal click handler).
@@ -38348,6 +38362,13 @@
     } else {
       rtnExtraDates = [];
     }
+    // Phase mirrors the Table view's own rtnGridPhaseOf() exactly, so a chain-anchored
+    // routine shows "Before"/"After" here already selected, matching its real state.
+    // rtnPhaseTouched resets to false on every open — only an explicit tap on a chip
+    // (not just having a phase already) counts as "the user changed this."
+    rtnPhase = task ? rtnGridPhaseOf(task) : "during";
+    rtnPhaseTouched = false;
+    syncRtnPhaseButtons();
     renderRtnExtraDates();
     renderRtnSchedExtra();
     renderRtnCatList();
@@ -38421,6 +38442,10 @@
   document.getElementById("rtnTrackPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-track]"); if (!b) return;
     rtnTrack = b.dataset.track; syncRtnTrackButtons(); renderRtnCatList();
+  });
+  document.getElementById("rtnPhasePicker").addEventListener("click", e => {
+    const b = e.target.closest("[data-phase]"); if (!b) return;
+    rtnPhase = b.dataset.phase; rtnPhaseTouched = true; syncRtnPhaseButtons();
   });
   document.getElementById("rtnFreqPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-freq]"); if (!b) return;
@@ -38735,6 +38760,27 @@
       task.intervalUnit = document.getElementById("rtnIntervalUnit").value;
     }
 
+    // Matches the Table view's own Phase-cell editor semantics exactly (rtgEditCell's
+    // "rtnPhase" case): explicitly picking a phase here is a repositioning, so it's
+    // allowed to clear any existing chain link, same as dropping a card in a new column
+    // would. If the Phase control WASN'T touched, carry the original anchor/deadline/
+    // phase fields forward instead — this form used to silently drop them on every
+    // save (task was always built fresh, never merged with the routine it replaced),
+    // which quietly broke any chained routine's link the next time it got edited for
+    // an unrelated reason. That's the actual fix; the phase-clear-on-touch above is
+    // just it correctly NOT firing when nothing about phase changed.
+    if (rtnPhaseTouched) {
+      if (rtnPhase !== "during") task.phase = rtnPhase;
+    } else if (rtnEditId) {
+      const orig = ROUTINE_TASKS.find(x => x.id === rtnEditId);
+      if (orig) {
+        if (orig.anchorTo != null) task.anchorTo = orig.anchorTo;
+        if (orig.anchorMode != null) task.anchorMode = orig.anchorMode;
+        if (orig.deadline != null) task.deadline = orig.deadline;
+        if (orig.deadlineLabel != null) task.deadlineLabel = orig.deadlineLabel;
+        if (orig.phase != null) task.phase = orig.phase;
+      }
+    }
     if (rtnEditId) {
       const idx = ROUTINE_TASKS.findIndex(x => x.id === rtnEditId);
       if (idx !== -1) ROUTINE_TASKS[idx] = task;
