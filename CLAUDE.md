@@ -245,13 +245,20 @@ somewhere in the file. The point is picking ONE and applying it everywhere.
   round) — already the majority pattern (`.add-btn`, duration pills, category dots).
 - **Card padding**: 16px all sides as the default recipe. Deviate only for a row
   short enough to need less (use 12px, never an odd value like 13/14/15px).
-- **Type scale** (four sizes, nothing between):
+- **Type scale** (four sizes for reading text, nothing between):
   - Page title (`.bd-head h1`): 38px, `var(--font-display)`, weight 400.
   - Section header (`.section-head h2`): 20px, `var(--font-display)`, weight 400.
   - Body text: 13px, regular weight.
   - Label / caption / meta: 11px, `--ink-soft` or `--ink-faint`.
   - No half-pixel sizes (10.5/11.5/12.5px etc.) and no near-duplicate in-between
     sizes (10/12/14/15px) used as one-off tuning — round to the nearest scale step.
+  - **5th role, named 2026-08-16: numeral / glyph display.** Big glanceable
+    numbers and icons — calendar date numbers, tile stat values (`.rail-chip .n`
+    and its kin), streak counters, the zodiac hanzi glyph — sit outside the four
+    reading-text sizes above on purpose (see `project_book33app_drift_sweep_2026_08`
+    memory, which first flagged this as real-but-unnamed). Size to the tile/card
+    that holds it, not to 11/13/20/38 — observed range 12-58px. Still gold/`--ink`
+    per the colour rules below; only the size is exempt.
 - **Buttons**:
   - `.btn-save` (primary Save inside an editor): 8px 20px padding, 13px font — this
     exact size everywhere. Don't shrink it per-page.
