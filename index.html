@@ -1297,6 +1297,23 @@
     .num-hover-pop { max-width: calc(100vw - 24px); width: 200px; }
   }
   .num-hover-pop--right { left: auto; right: 0; }
+  /* 2026-08-16 (item 2) — SPAN-SAFE POPOVER. The day-header chips (.ddh-chip /
+     .dcx-chip) are <span>s, so their popovers are built from <span>s too
+     (chipPopoverHtml in JS): a <div> inside an inline element is invalid content
+     model, and the inline box splits around it, orphaning the popover from its
+     trigger. These restore the block layout the <div>-based builders get for free.
+     NOTE: display is deliberately NOT set on .nhp-span itself — .num-hover-pop's own
+     none -> block reveal is what shows it, and a display:block here would pin every
+     popover permanently open. */
+  .nhp-span .df-tile, .nhp-span .t-label, .nhp-span .t-sub { display: block; }
+  .nhp-span .t-head { display: flex; align-items: center; gap: 8px; }
+  /* the mobile chip strip is a horizontal scroller, and overflow-x:auto computes
+     overflow-y to auto as well — a popover hanging below a chip would be clipped
+     inside it. Lift the clip only while one is actually open. The two chips that
+     carry popovers are the first two in the strip, so scrollLeft is ~0 whenever this
+     engages and nothing visibly jumps. */
+  .dcx-chips:has(.num-hover-trigger.pop-open),
+  .dcx-chips:has(.num-hover-trigger:focus-within) { overflow: visible; }
   .num-hover-trigger:hover .num-hover-pop,
   .num-hover-trigger:focus-within .num-hover-pop,
   .num-hover-trigger.pop-open .num-hover-pop { display: block; }
@@ -8496,6 +8513,28 @@
      same colour, no title text (set by JS, not here), 50% opacity per spec. */
   .ad-chip-cont { opacity: 0.5; }
 
+  /* 2026-08-16 (Linh, item 1) — SINGLE-DAY ALL-DAY ROW AS PILLS.
+     .ad-col is a COLUMN flex whose children stretch, so on the 1-day view every
+     all-day item rendered as a full-width 44px transparent bar stacked down the
+     middle. Google-Calendar language instead: a left-aligned wrapping row of
+     compact track-tinted pills.
+     SCOPED TO #dayAlldayRow, deliberately. .ad-cols/.ad-col/.ad-chip are shared
+     with #mdAlldayRow, where the column direction is load-bearing — one column
+     per visible day, each stacking that day's own items. Unscoping any line here
+     would collapse the 3/5/7-day row into one undifferentiated wrap. */
+  #dayAlldayRow .ad-cols { flex-wrap: wrap; gap: 6px; }
+  #dayAlldayRow .ad-col { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  #dayAlldayRow .ad-chip.tl-item {
+    width: auto; max-width: 260px; flex: 0 0 auto; min-height: 0;
+    border-radius: 999px; padding: 4px 12px;
+  }
+  /* each track wears its own timeline fill/ink — the same --tl-*-bg / --tl-*-title
+     pair the timeline blocks use, so an all-day item and a timed one of the same
+     part of life read as the same colour rather than two systems. */
+  #dayAlldayRow .ad-chip[data-track="work"] { background: var(--tl-work-bg); color: var(--tl-work-title); }
+  #dayAlldayRow .ad-chip[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
+  #dayAlldayRow .ad-chip[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
+
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
   @media (min-width: 1024px) {
@@ -12457,7 +12496,28 @@
   #deskSidebar .mini-cal-nav { font-size: 13px; font-weight: 800; }
   #deskSidebar #miniCalTitle { color: var(--ink); }
   #deskSidebar .mini-cal-dow span { font-size: 11px; font-weight: 800; color: var(--ink-faint); }
-  #deskSidebar .mini-cal-cell { position: relative; height: 19px; font-size: 11px; font-weight: 600; }
+  /* 2026-08-16 (item 4): the day grid wasn't width-constrained here, and
+     `grid-template-columns: repeat(7, 1fr)` means minmax(AUTO, 1fr) — so each column
+     floored at its own min-content instead of taking a seventh of the panel. The grid
+     grew past 214px and Sat/Sun pushed out to the right, out of line with the M T W T F
+     S S header above (which, being plain text, did fit). Constraining both to the panel
+     and letting the cells shrink below min-content puts all seven back on one pitch. */
+  #deskSidebar .mini-cal-dow,
+  #deskSidebar .mini-cal-grid { width: 100%; min-width: 0; box-sizing: border-box; }
+  /* two more causes found by measuring the ancestor chain, both needed before the
+     columns actually line up:
+       · #miniCalWrap is display:flex (row), so .mini-cal took its shrink-to-fit width —
+         148px inside a 189px slot. Stretch only applies on the CROSS axis, so it never
+         filled. flex:1 + min-width:0 makes the calendar own the panel's full width.
+       · .mini-cal-dow had NO gap while .mini-cal-grid has gap:4px, so the two 7-column
+         grids resolved to different track widths (18.84px vs 15.42px measured) and could
+         not align however wide either got. Same gap, same pitch. */
+  #deskSidebar .mini-cal { flex: 1 1 auto; min-width: 0; width: 100%; box-sizing: border-box; }
+  #deskSidebar .mini-cal-dow { gap: 4px; }
+  /* aspect-ratio (the shared .mini-cal-cell rule already sets it) replaces the fixed
+     19px height: with min-width:0 the column is now the panel's seventh, so a square
+     cell tracks that width instead of fighting it. */
+  #deskSidebar .mini-cal-cell { position: relative; min-width: 0; aspect-ratio: 1; height: auto; font-size: 11px; font-weight: 600; }
   #deskSidebar .mini-cal-cell[data-today="true"] {
     background: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 700;
   }
@@ -12515,6 +12575,12 @@
   }
   .ddh-chip .glyph, .ddh-chip .moon { font-size: 13px; }
   .ddh-chip-gold { color: var(--gold-bright); font-weight: 700; }
+  /* 2026-08-16 (item 3): the date printed TWICE at this breakpoint — once here in the
+     top bar (#ddtDate) and again as #deskDayHeader's own #ddhDate right below it. The
+     centre header is the one that belongs to the day being viewed, so the top bar drops
+     back to just "BOOK33 · Today". Hidden rather than removed from renderDeskDayTopbar()
+     so nothing else that reads/writes #ddtDate has to change. */
+  .ddt-date { display: none; }
   .ddh-cycle-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
 
   /* ---- 4.2 Meters row — reuses .dcx-wrap/.dcx-meters/meterHtml() verbatim (the
@@ -12666,6 +12732,20 @@
   .wr-pile-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
   .wr-pile-name { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wr-pile-age { flex: none; font-size: 11px; font-weight: 800; color: var(--danger); }
+  /* 2026-08-16 (item 5): tick + ✎ on each row. The ✎ is hover-revealed so a resting
+     card stays quiet, but it keeps its box at all times (opacity, not display) so the
+     row never reflows on hover and the control is still focusable by keyboard. */
+  .wr-pile-tick { flex: none; margin: 0; }
+  .wr-pile-edit {
+    flex: none; border: none; background: none; color: var(--ink-faint);
+    font: inherit; font-size: 11px; padding: 0 4px; cursor: pointer;
+    opacity: 0; transition: opacity .12s ease;
+  }
+  .wr-pile-row:hover .wr-pile-edit, .wr-pile-edit:focus-visible { opacity: 1; }
+  .wr-pile-edit:hover { color: var(--gold-bright); }
+  /* there is no hover on a touchscreen — an opacity-0 control would be invisible yet
+     tappable, which is worse than just showing it. */
+  @media (hover: none) { .wr-pile-edit { opacity: 1; } }
   /* item 9: "+N more" — caps the rendered rows so Numerology/Cycle/Patients/
      Streaks aren't pushed below the fold by a long pileup; toggles the SAME
      card's own full list in place (reuses pileUpItems(), the exact data source
@@ -16310,11 +16390,33 @@
   // formula already reads live (color-mix(...) references stay in the stylesheet,
   // untouched — only their INPUT changes) -- this is why editing a colour here
   // instantly recolours the whole app with no other code needing to change.
+  /* 2026-08-16 — SELF-REFERENTIAL SEED BUG (found while giving the all-day chips a track
+     fill; the fix belongs here, not there).
+     The three seeded life categories store their colour AS the stylesheet token they came
+     from — daybook-categories holds {"id":"work","color":"var(--work-seed)"} — and the
+     loop below wrote that straight back onto the SAME property, emitting
+     `--work-seed: var(--work-seed)` as an inline style on <html>. CSS resolves a
+     self-referential custom property to the guaranteed-invalid value, so --work-seed,
+     --personal-seed, --marriage-seed and both --cat-personal-* subs all computed to the
+     EMPTY string. Every consumer downstream (--track-*, --*-ink, --*-tint, --tl-*-bg, the
+     .tl-item --cat-c fills, the part-of-life dots) then resolved to nothing, which is why
+     calendar blocks and all-day chips were rendering with no fill at all — the
+     "transparent" in Linh's item 1. Verified live: setting --work-seed to a literal
+     immediately restored it.
+     Writing an override only when it ISN'T just pointing back at the property it would
+     overwrite keeps the table fully functional (a real colour she picks is still applied)
+     while letting "use the stylesheet default" mean exactly that. */
+  const isSelfRefColour = (val, prop) =>
+    typeof val === "string" && val.replace(/\s+/g, "").toLowerCase() === `var(${prop})`.toLowerCase();
+  function setCatProp(root, prop, val) {
+    if (isSelfRefColour(val, prop)) root.removeProperty(prop);
+    else root.setProperty(prop, val);
+  }
   function applyCategoryColours() {
     const root = document.documentElement.style;
     const ORIGINAL_LIFE = { personal: 1, work: 1, marriage: 1 };
     lifeCats().forEach(c => {
-      root.setProperty(`--${c.id}-seed`, c.color);
+      setCatProp(root, `--${c.id}-seed`, c.color);
       // the original 3 already have a hand-authored -ink/-tint formula in the
       // stylesheet reading var(--<id>-seed) live; a NEW life category (added via
       // the table) has no such formula pre-authored, so generate an equivalent one.
@@ -16324,7 +16426,8 @@
       }
     });
     CATS.filter(c => c.type === "sub").forEach(c => {
-      root.setProperty(`--cat-${c.parent}-${c.id}`, c.color);
+      // same self-reference guard — the seeded subs store "var(--cat-personal-fitness)"
+      setCatProp(root, `--cat-${c.parent}-${c.id}`, c.color);
     });
     // 2026-08-15 (Day mode, Phase 1): the Day twin of every seed/sub property above, under
     // a "-day" suffix. Plain values only — nothing here knows or asks which theme is
@@ -17052,6 +17155,45 @@
       <div class="t-label">${esc(label)}</div>
       <div class="t-head"><span class="t-title">${esc(name)}</span></div>
     </div></div>`;
+  }
+  /* 2026-08-16 (item 2) — the all-<span> twin of plainPopoverHtml, for triggers that
+     are themselves inline. The day-header chips are <span>s; a <div> child is invalid
+     content model there and splits the inline box, which orphans the popover from the
+     chip it belongs to. Same .df-tile/.t-label/.t-head/.t-sub classes, so it inherits
+     every existing popover style — .nhp-span (CSS) just restores display:block on the
+     pieces that were divs. headHtml is trusted markup (moonHtml/glyph), subText is
+     escaped here. */
+  function chipPopoverHtml(label, headHtml, subText, extraClass) {
+    return `<span class="num-hover-pop nhp-span${extraClass ? " " + extraClass : ""}"><span class="df-tile">
+      <span class="t-label">${esc(label)}</span>
+      <span class="t-head">${headHtml}</span>
+      ${subText ? `<span class="t-sub">${esc(subText)}</span>` : ""}
+    </span></span>`;
+  }
+  // moon chip popover: phase name + waxing/waning + ~% lit, per spec. Reuses
+  // moonIndex/moonIllumination/MOON_NAME/MOON_CLASS — the same four the badge and the
+  // desk-glance card already read, so this can never disagree with them.
+  /* `cls` is the anchor, and it differs per strip — measured, not assumed:
+       · #ddhChips (desktop) is margin-left:auto, i.e. RIGHT-aligned in the header, so its
+         popovers need "num-hover-pop--right" or they'd run off the right edge.
+       · #dayCtxChips (mobile) is LEFT-aligned, and --right anchored the popover's right
+         edge to the first chip's right edge — measured at 360px: left:-71, right:129,
+         i.e. 71px off the left of the screen. Default (left) anchoring is correct there.
+     Hence the anchor is passed by the call site rather than baked in here. */
+  function moonChipPopHtml(d, cls) {
+    const idx = moonIndex(d), pct = moonIllumination(d);
+    const dir = MOON_CLASS[idx] === "wax" ? "Waxing — growing towards full"
+      : MOON_CLASS[idx] === "wane" ? "Waning — shrinking towards new"
+      : idx === 0 ? "New — the cycle starts again" : "Full — fully lit";
+    return chipPopoverHtml("Moon phase",
+      `${moonHtml(idx)}<span class="t-title">${esc(MOON_NAME[idx])} · ${pct}% lit</span>`,
+      dir, cls);
+  }
+  // sun-sign chip popover: the sign, and whose season it is.
+  function signChipPopHtml(sign, cls) {
+    return chipPopoverHtml("Sun sign",
+      `<span class="t-value">${sign.gl}</span><span class="t-title">${esc(sign.name)}</span>`,
+      `In ${sign.name} season`, cls);
   }
   // 2026-08-11 (cosmic-card popover brief): the desktop glance chip's richer Moon
   // card -- phase % from moonIllumination(), next principal-or-not phase from
@@ -19655,6 +19797,12 @@
       if (days < 0) items.push({ kind: "shop", title: s.name, detail: "Shopping list", overdueBy: -days, id: s.id });
     });
     ROUTINE_TASKS.forEach(t => {
+      // 2026-08-16 (item 5): a routine that's due today AND already ticked off today has
+      // been dealt with — it must drop out of the basket immediately, not keep showing a
+      // "Missed 3 in a row" built purely from the days BEFORE today. Without this the new
+      // tick appears to do nothing: the row re-renders with the identical streak, because
+      // the loop below starts at i=1 and never looks at today at all.
+      if (routineOccursOn(t, TODAY) && isDone(`rt-${t.id}-${keyOf(TODAY)}`)) return;
       let streak = 0;
       for (let i = 1; i <= 14; i++) {
         const d = addDays(TODAY, -i);
@@ -19666,6 +19814,30 @@
     });
     return items.sort((a, b) => b.overdueBy - a.overdueBy);
   }
+  /* 2026-08-16 (item 5) — tick + edit for Piling up, shared by BOTH copies: the visible
+     widget-rail card (renderDeskWidgetRail) and this older #pileupList box. One pair of
+     builders on purpose — the two templates had already drifted (the rail had no actions
+     at all, this one had no routine tick), and a second divergence is exactly what the
+     next report would be about.
+     The tick reuses the app-wide [data-tick] -> tickTask delegate; nothing new is wired.
+     A routine's tick id is its OCCURRENCE id for TODAY (rt-<id>-<todayKey>) — the same
+     key isDone()/pileUpItems() read — so ticking marks today done and the row leaves the
+     basket on the next render (see the early-return added in pileUpItems). */
+  function pileTickHtml(it) {
+    const lbl = esc(it.title);
+    if (it.kind === "routine") return `<input type="checkbox" class="tick wr-pile-tick" data-track="${esc(it.track || "personal")}" data-tick="rt-${esc(it.id)}-${keyOf(TODAY)}" aria-label="Mark ${lbl} done today">`;
+    if (it.kind === "shop") return `<input type="checkbox" class="tick wr-pile-tick" data-bought="${esc(it.id)}" aria-label="Mark ${lbl} bought">`;
+    return `<input type="checkbox" class="tick wr-pile-tick" data-track="${esc(it.track || "personal")}" data-tick="${esc(it.id)}" aria-label="Mark ${lbl} done">`;
+  }
+  // ✎ — a routine opens its settings row (data-rt-open), a calendar task opens the event
+  // editor (data-edit). Both delegates already exist app-wide. Family occurrences and
+  // shopping lines have no single-item editor to open, so they get none rather than a
+  // dead button.
+  function pileEditHtml(it) {
+    if (it.kind === "routine") return `<button type="button" class="wr-pile-edit" data-rt-open="${esc(it.id)}" title="Edit routine settings" aria-label="Edit ${esc(it.title)}">✎</button>`;
+    if (it.kind === "task" && it.evId) return `<button type="button" class="wr-pile-edit" data-edit="${esc(it.evId)}" title="Edit this task" aria-label="Edit ${esc(it.title)}">✎</button>`;
+    return "";
+  }
   function renderPileUp() {
     const box = document.getElementById("pileupBox");
     if (!box) return;
@@ -19674,10 +19846,9 @@
     if (!items.length) return;
     const ICON = { task: "🧺", family: "🗂️", shop: "🛒", routine: "↻" };
     document.getElementById("pileupList").innerHTML = items.map(it => {
-      const tick = it.kind === "task" ? `<input type="checkbox" class="tick" data-track="${it.track}" data-tick="${it.id}" aria-label="Mark ${esc(it.title)} done">`
-        : it.kind === "family" ? `<input type="checkbox" class="tick" data-track="personal" data-tick="${it.id}" aria-label="Mark ${esc(it.title)} done">`
-        : it.kind === "shop" ? `<input type="checkbox" class="tick" data-bought="${it.id}" aria-label="Mark ${esc(it.title)} bought">`
-        : `<span class="pileup-noaction"></span>`;
+      // 2026-08-16 (item 5): was a `pileup-noaction` blank for routines — the one kind
+      // that most needs ticking off. Now the shared builder, same as the widget rail.
+      const tick = pileTickHtml(it);
       // 2026-08-02 (Linh: "allow me to reschedule the task to another day"): a third
       // action alongside → Today / Let go — a native date input, hidden until the 📅
       // button is tapped (keeps the row from carrying a full-width picker at rest).
@@ -19689,7 +19860,10 @@
           <button type="button" class="pileup-act" data-pile-resched-btn="${it.evId}" title="Move it to a specific day">📅</button>
           <input type="date" class="pileup-resched-input" data-pile-resched="${it.evId}" hidden aria-label="Move ${esc(it.title)} to a day" data-mp-today="1">
           <button type="button" class="pileup-act pileup-letgo" data-pile-letgo="${it.evId}" title="Release it — a conscious decision, not a quiet slip">Let go</button>
-        </span>` : "";
+        </span>`
+        // 2026-08-16 (item 5): routines get the ✎ too — theirs opens the routine's own
+        // settings row rather than the event editor (see pileEditHtml).
+        : it.kind === "routine" ? `<span class="pileup-acts">${pileEditHtml(it)}</span>` : "";
       return `<div class="pileup-item">
         ${tick}
         <span class="pileup-em">${ICON[it.kind]}</span>
@@ -25315,7 +25489,9 @@
     const d = state.anchor;
     const chips = [];
     const mIdx = moonIndex(d);
-    chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx] });
+    // 2026-08-16 (item 2): same popovers as the desktop #ddhChips copy — one pair of
+    // builders, both strips, so the two can't drift apart.
+    chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx], pop: moonChipPopHtml(d) });
     // 2026-08-16 (mobile Day tightening, item 1): SUN SIGN joins the strip. It used to
     // print only in the header's own #numGroupStrip (#dayAstroBits' bare ♌ glyph) —
     // that whole strip is hidden on mobile now (see its CSS gate), so the strip carries
@@ -25323,7 +25499,7 @@
     // call renderDay()'s header and #ddhChips already make; no new calculation, and the
     // strip now matches the desktop day header chip-for-chip.
     const a = astroFor(d);
-    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name });
+    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name, pop: signChipPopHtml(a.sign) });
     const pl = planetOf(d);
     chips.push({ ic: glyphHtml(pl.icon, "dcx-chip-ic"), val: pl.planet });
     const q = cycleQuickInfo(TODAY);
@@ -25344,7 +25520,7 @@
     }
     const bdays = birthdaysOn(d);
     if (bdays.length) chips.push({ ic: `<span class="dcx-chip-ic" aria-hidden="true">🎂</span>`, val: bdays.length === 1 ? bdays[0].name : `${bdays[0].name} +${bdays.length - 1}` });
-    return chips.map(c => `<span class="dcx-chip"${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span></span>`).join("");
+    return chips.map(c => `<span class="dcx-chip${c.pop ? " num-hover-trigger" : ""}"${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}${c.pop ? ` tabindex="0"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span>${c.pop || ""}</span>`).join("");
   }
   // fills the chip strip + the progress row (both cheap, non-ticking -- called once
   // per renderDay()). The fasting row is deliberately a separate function/container
@@ -34401,9 +34577,13 @@
     if (!chipsEl) return;
     const mIdx = moonIndex(d);
     const a = astroFor(d);
+    // 2026-08-16 (item 2): moon + sun-sign carry the same hover/tap popover the cosmic
+    // header buttons use. .num-hover-trigger supplies position:relative and the
+    // hover/focus/.pop-open reveal; the tap half is the existing global delegate, so no
+    // new handler. Popovers are chipPopoverHtml (all <span>) because .ddh-chip is a span.
     const chips = [
-      `<span class="ddh-chip">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span></span>`,
-      `<span class="ddh-chip">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span></span>`,
+      `<span class="ddh-chip num-hover-trigger">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span>${moonChipPopHtml(d, "num-hover-pop--right")}</span>`,
+      `<span class="ddh-chip num-hover-trigger">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span>${signChipPopHtml(a.sign, "num-hover-pop--right")}</span>`,
     ];
     // cycle is a live fact about today, not a property of whichever day she's
     // browsing — same TODAY-not-state.anchor rule #numGrpCd/dcxChipsHtml already
@@ -34574,7 +34754,7 @@
       const hiddenCount = items.length - shown.length;
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Piling up · ${items.length}</span>
-        ${items.length ? shown.map(it => `<div class="wr-pile-row"><span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span><span class="wr-pile-age">${it.overdueBy}${it.kind === "routine" ? "" : "d"}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing piling up.</div>`}
+        ${items.length ? shown.map(it => `<div class="wr-pile-row">${pileTickHtml(it)}<span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span>${pileEditHtml(it)}<span class="wr-pile-age">${it.overdueBy}${it.kind === "routine" ? "" : "d"}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing piling up.</div>`}
         ${hiddenCount > 0 ? `<button type="button" class="wr-pile-more" data-wr-pile-more="1">+${hiddenCount} more</button>` : ""}
       </div>`;
     }
