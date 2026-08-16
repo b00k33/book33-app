@@ -15253,6 +15253,13 @@
         <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
       </span>
       <span class="ddt-days" id="ddtDays"></span>
+      <!-- 2026-08-16: day/night had NO visible switch at this breakpoint — both existing
+           controls sit in containers this layout hides ([data-desk-day1] .nav-tiers, which
+           parents .theme-toggle, and #deskColLeft, which parents #deskToolMoon). This is a
+           proxy for #themeToggle, not a second implementation: all theme logic stays in
+           B33Theme. Reuses .ddt-gear's box so it matches the ⤢/⚙ beside it, no new CSS. -->
+      <button type="button" class="ddt-gear ddt-theme" id="ddtTheme"
+              aria-label="Day / night mode" title="Day / night">🌙</button>
       <!-- full-width toggle: hides the chapters rail, the CALENDAR sidebar and the
            widget rail in one press so the timeline spans the whole window. Reuses
            .ddt-gear's box wholesale so it can't drift from the ⚙ beside it. -->
@@ -34054,10 +34061,25 @@
   themeToggleBtn.addEventListener("click", () => {
     window.B33Theme.set(window.B33Theme.resolved() === "dark" ? "light" : "dark");
   });
+  // 2026-08-16: the desktop top bar's own day/night button (#ddtTheme, added because
+  // [data-desk-day1] hides BOTH .theme-toggle's container and #deskToolMoon's). Its face
+  // is set from the same resolved theme as #themeToggle's, from inside the same single
+  // hook below, so the two can never show different weather. The click wiring lives with
+  // the other top-bar handlers; only the icon is decided here.
+  const syncDdtThemeIcon = () => {
+    const btn = document.getElementById("ddtTheme");
+    if (!btn) return;
+    const dark = window.B33Theme.resolved() === "dark";
+    btn.textContent = dark ? "🌙" : "☀️";
+    btn.setAttribute("aria-label", dark
+      ? "Night mode is on — switch to Day"
+      : "Day mode is on — switch to Night");
+  };
   // single place every theme change lands, whoever caused it — this button, the Settings
   // segmented control, or the OS flipping under an "auto" preference.
   window.__b33ThemeChanged = () => {
     syncThemeToggleIcon();
+    syncDdtThemeIcon();
     const picker = document.getElementById("themeModePicker");
     if (picker) {
       const pref = window.B33Theme.pref();
@@ -35193,6 +35215,19 @@
     const btn = e.currentTarget;
     document.getElementById("themeToggle")?.click();
     btn.setAttribute("aria-pressed", String(document.documentElement.dataset.theme === "light"));
+  });
+  /* 2026-08-16 — #ddtTheme, the desktop top bar's day/night switch (needed because
+     [data-desk-day1] hides BOTH existing controls: .theme-toggle's container .nav-tiers,
+     and #deskToolMoon's container #deskColLeft). Same proxy shape as #deskToolMoon above
+     — it clicks #themeToggle rather than calling B33Theme itself, so exactly one place
+     still decides what a theme change means.
+     No icon handling here on purpose: the face is set by syncDdtThemeIcon() inside
+     __b33ThemeChanged, the existing "single place every theme change lands, whoever
+     caused it" hook. Doing it in this click handler instead (as the brief's snippet did)
+     would leave the glyph stale after a change made from Settings, from #themeToggle at a
+     narrow window, or from the OS flipping under the "auto" preference. */
+  document.getElementById("ddtTheme")?.addEventListener("click", () => {
+    document.getElementById("themeToggle")?.click();
   });
 
 
