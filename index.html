@@ -8558,8 +8558,19 @@
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
   @media (min-width: 1024px) {
-    .cal-days-row, .md-wrap, .dcx-wrap, #dayFastHead, .ad-row { display: none !important; }
+    .dcx-wrap, #dayFastHead, .ad-row { display: none !important; }
   }
+  /* 2026-08-16 (desktop multi-day build): .cal-days-row/.md-wrap used to be in the
+     blanket list above unconditionally, because calDaysActive() hardcoded 1 at every
+     desktop width, so they were ALWAYS the losing side of `hidden` anyway (belt-and-
+     suspenders). Now that calDaysActive() reads the real saved count on desktop too
+     (see its own comment), that blanket hide would permanently block the very thing
+     it's meant to show. Split instead: `[hidden]` (renderCalDaysUI(), toggled off
+     calDaysActive()) is the true source of visibility at every width now; the only
+     desktop-specific override left is #ddtDays' own topbar picker superseding this
+     inline row while desktop is genuinely on 1-day — same [data-desk-day1] gate every
+     other 1-day-exclusive zone uses. */
+  [data-desk-day1] .cal-days-row { display: none !important; }
 
   /* ============================================================
      DAY CONTEXT STRIP + METERS (§2 build, 2026-08-14) — "day context lives ON the
@@ -25258,11 +25269,16 @@
   function savePrefs() {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); } catch (e) {}
   }
-  // desktop (>=1024px) always behaves as calDays 1, regardless of what's saved —
-  // multi-day is mobile-only scope for this build (the CSS gate on .cal-days-row/
-  // .md-wrap is the visual backstop; this is what render logic itself checks).
+  // 2026-08-16 (desktop multi-day build): desktop now honours the real saved
+  // count too, same as mobile — the old "(width<1024) ? real : 1" hardcode is
+  // gone. Every gate composed from this (deskDay1Active/mobileDay1Active/
+  // hourTrimActive/deskWidgetsActive) already reads calDaysActive()===1 rather
+  // than a bare width check, per those functions' own comments, specifically so
+  // this one-line change would flip them all correctly with nothing else to
+  // touch — see placeDeskGrid()'s "else if (on)" branch (the pre-4-zone desktop
+  // layout, kept verbatim) for what now renders instead of the 1-day zones.
   function calDaysActive() {
-    return (window.innerWidth < 1024) ? (PREFS.calDays || 1) : 1;
+    return PREFS.calDays || 1;
   }
   // 2026-08-15 (desktop DAY view build): true unless the sidebar's "Parts of life"
   // checklist has this life-category unchecked (PREFS.tracksOff) -- read by
@@ -34754,12 +34770,20 @@
   document.getElementById("ddtTitle")?.addEventListener("click", () => document.getElementById("todayPill")?.click());
   document.getElementById("ddtPrev")?.addEventListener("click", () => document.getElementById("prevDay")?.click());
   document.getElementById("ddtNext")?.addEventListener("click", () => document.getElementById("nextDay")?.click());
+  // 2026-08-16 (desktop multi-day build): was renderDeskDayTopbar() only, harmless
+  // while calDaysActive() hardcoded 1 at desktop (the picker's OWN label was the
+  // only thing that could ever change). Now that desktop honours the real count,
+  // a plain topbar repaint left data-desk-day1/#deskGrid/#multiDayWrap all on their
+  // stale 1-day layout — full renderDay(), the same call the mobile/inline
+  // [data-cal-days] delegate already makes, so this and that stay one mechanism.
   document.getElementById("ddtDays")?.addEventListener("click", e => {
     const btn = e.target.closest("[data-ddt-days]");
     if (!btn) return;
-    PREFS.calDays = parseInt(btn.dataset.ddtDays, 10);
+    const n = parseInt(btn.dataset.ddtDays, 10);
+    if (!n || PREFS.calDays === n) return;
+    PREFS.calDays = n;
     savePrefs();
-    renderDeskDayTopbar();
+    renderDay();
   });
 
   /* ---- #ddtGear popover — item 6 (2026-08-15 corrections pass), "Hours
