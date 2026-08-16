@@ -12858,6 +12858,17 @@
   }
   /* Streaks */
   .wr-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  /* Today's boost (2026-08-16, moved from a standalone bottom-of-page card into this
+     rail): mirrors .wr-pat-row's own grammar exactly — a small fixed-width leading
+     element, a flexible label, a value pinned right — rather than the old 58px rings
+     side by side, which never fit a ~260px column. */
+  .wr-boost-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--note-line); }
+  .wr-boost-row:last-child { border-bottom: none; }
+  .wr-boost-ring { position: relative; flex: none; width: 20px; height: 20px; }
+  .wr-boost-ring .nut-ring-prog { stroke: var(--margin-rule); }
+  .wr-boost-emoji { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1; }
+  .wr-boost-label { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); }
+  .wr-boost-val { flex: none; font-size: 11px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
 
   /* Arrange popover — scoped to this rail only, per-widget visibility checkbox */
   .wr-arrange-pop {
@@ -13146,7 +13157,10 @@
     #wrMobileCards > .wr-card { margin-bottom: 0; }
     #wrMobileCards > [data-wr-id="railPatients"],
     #wrMobileCards > [data-wr-id="pileupBox"],
-    #wrMobileCards > [data-wr-id="streaksWidget"] { grid-column: 1 / -1; }
+    #wrMobileCards > [data-wr-id="streaksWidget"],
+    /* boostWidget (2026-08-16): three rows, same "taller than a single stat" shape as
+       the three above — Numerology/Cycle stay 2-up, everything list-shaped goes full width. */
+    #wrMobileCards > [data-wr-id="boostWidget"] { grid-column: 1 / -1; }
     /* the streak chips move INTO the block's own Streaks card here, so the copy inside
        the merged progress component would be a second printing of the same chips —
        same reasoning (and same one-line treatment) as [data-desk-day1] #dayCtxStreaks
@@ -16395,10 +16409,12 @@
              .wg-*) is left in place, unused -- some class names (.bw-*, .head-body) are
              shared with #dayBodyCard's own styling, too much of a shared surface to
              safely prune under that change.
-             2026-08-11 (Linh, new positive-factor engine): a deliberate, score-based
-             revival of a widget in this same spot -- #boostWidget/renderBoostWidget(),
-             not the old glance. See computeTodayBoosts() for what it reads. -->
-        <div class="h-card" id="boostWidget"></div>
+             2026-08-11 (Linh, new positive-factor engine): a score-based widget landed
+             in this exact slot -- #boostWidget/renderBoostWidget(), reading
+             computeTodayBoosts(). 2026-08-16 (Linh: "move Today's boost into the widget
+             rail"): moved out of this slot entirely, now a wr-card in the Today's-widgets
+             rail (see WR_WIDGET_IDS/wrCardHtml's "boostWidget" branch) -- the DATA
+             (computeTodayBoosts()) is unchanged, only the host and layout moved. -->
         <div id="biomechTip"></div>
         <!-- the two-person board: what's on his plate today and what you're both on -->
         <div id="usBox" class="us-box" hidden></div>
@@ -18035,7 +18051,6 @@
     saveNutMeals();
     if (entry.linkedEventId) { LINKED_MEALS[entry.linkedEventId] = { mealId: entry.id, date }; saveLinkedMeals(); }
     try { renderNutrition(); } catch (err) {}
-    try { renderBoostWidget(); } catch (err) {}
     renderDay();
     return entry;
   }
@@ -18056,7 +18071,7 @@
     }
     archiveMealEntry(entry, date);
     try { renderNutrition(); } catch (err) {}
-    try { renderBoostWidget(); } catch (err) {}
+    try { renderDeskWidgetRail(); } catch (err) {}
     if (entry.linkedEventId && TL_ITEMS_BY_ID[entry.linkedEventId]) {
       renderTlDetailHeadActions(TL_ITEMS_BY_ID[entry.linkedEventId]);
       renderTlDetailBody(TL_ITEMS_BY_ID[entry.linkedEventId]);
@@ -23231,10 +23246,10 @@
     applyMealNutritionToDaily(entry);
     closeMealLogSheet();
     // refresh every surface this touches: the still-open event sheet's "✓ Logged"
-    // line, the Nutrition page (if she's on it), and the Day boost widget
+    // line, the Nutrition page (if she's on it), and Today's boost (now in the widget rail)
     renderTlDetailHeadActions(e); renderTlDetailBody(e);
     try { renderNutrition(); } catch (err) {}
-    try { renderBoostWidget(); } catch (err) {}
+    try { renderDeskWidgetRail(); } catch (err) {}
   }
   // the Nutrition-page "↩ <title> · <time>" chip's tap target -- resolves the
   // source date fresh (routine occurrence via parseOccId, plain event via EVENTS),
@@ -26258,7 +26273,6 @@
     // recomputed on every renderDay() so browsing to a different day updates the tint.
     renderDayFastTint();
     renderFastBar();
-    renderBoostWidget();
     orderDayRail();
     renderTimeline(timed);
     // 2026-08-15 (§4 all-day row build): the new unified mobile row — shows bdays AND
@@ -27814,14 +27828,18 @@
                                      //   linkedEventId, linkedEventTitle, linkedEventTimeLabel}] }
 
   // small ring, same stroke-dasharray trick as the fasting ring — quick "did I have enough" glance
-  function nutRingSVG(pct, over) {
-    const size = 58, sw = 6, r = (size - sw) / 2, c = 2 * Math.PI * r;
+  // size/sw default to the Nutrition page's own 58px/6px ring unchanged — optional so a
+  // smaller caller (2026-08-16, the widget-rail Boost card) can shrink both without a
+  // second ring implementation. Stroke width moves to an inline style (was class-only)
+  // so a non-default sw actually takes; the class still sets 6 as its own fallback.
+  function nutRingSVG(pct, over, size = 58, sw = 6) {
+    const r = (size - sw) / 2, c = 2 * Math.PI * r;
     const off = c * (1 - Math.min(Math.max(pct, 0), 1));
     return `<svg viewBox="0 0 ${size} ${size}" class="nut-ring-svg">
-      <circle cx="${size/2}" cy="${size/2}" r="${r}" class="nut-ring-track"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" class="nut-ring-track" style="stroke-width:${sw}"/>
       <circle cx="${size/2}" cy="${size/2}" r="${r}" class="nut-ring-prog" data-over="${over}"
         transform="rotate(-90 ${size/2} ${size/2})"
-        style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/>
+        style="stroke-width:${sw};stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/>
     </svg>`;
   }
 
@@ -29219,25 +29237,9 @@
     ["physical", "cognitive", "emotional"].forEach(ax => { boosts[ax] = Math.max(0, Math.min(100, Math.round(boosts[ax]))); });
     return { boosts, why };
   }
-  // 2026-08-11: the Day-page widget for the above — reuses the Nutrition page's own
-  // ring markup (nutRingSVG/.nut-metric/.nut-today) verbatim, just without the
-  // editable <input> (these numbers are computed, not typed in). One shared ring
-  // colour for all three meters (nutRingSVG's own convention) rather than a
-  // colour-per-axis scheme — the app's palette has no Physical/Cognitive/Emotional
-  // mapping to hang one on.
-  function renderBoostWidget() {
-    const host = document.getElementById("boostWidget");
-    if (!host) return;
-    const { boosts } = computeTodayBoosts();
-    const meter = (icon, label, val) => `<div class="nut-metric">
-        <div class="nut-ring-wrap">${nutRingSVG(val / 100, false)}
-          <div class="nut-ring-center"><b>${val}</b><span>${icon}</span></div></div>
-        <div class="nut-metric-label">${label}</div>
-      </div>`;
-    host.innerHTML = `
-      <div class="section-head"><h2>Today's boost</h2><span class="rule"></span></div>
-      <div class="nut-today">${meter("💪", "Physical", boosts.physical)}${meter("🧠", "Cognitive", boosts.cognitive)}${meter("🙂", "Emotional", boosts.emotional)}</div>`;
-  }
+  // renderBoostWidget() (2026-08-11) removed 2026-08-16 -- Today's boost is now a
+  // wr-card, rendered by wrCardHtml()'s "boostWidget" branch via renderDeskWidgetRail().
+  // computeTodayBoosts() above is unchanged and is that branch's only data source.
   // small weekly bar chart, same rounded-bar/gold-dashed-target grammar as the
   // fasting hours chart above, generalised to any weekly count instead of hours.
   function growthWeeklyBarChart(weeks, opts) {
@@ -34362,7 +34364,7 @@
     const existing = HEALTH.sleep.find(x => x.date === k);
     if (existing) existing.hours = hours; else HEALTH.sleep.push({ id: uid(), date: k, hours });
     saveHealth(); e.target.reset(); renderHealth();
-    try { renderBoostWidget(); } catch (err) {}
+    try { renderDeskWidgetRail(); } catch (err) {}
   });
   document.getElementById("bfForm").addEventListener("submit", e => {
     e.preventDefault();
@@ -35069,8 +35071,11 @@
      Renders the SAME html into #wrCards (≥1200px column) and #wrFallback
      (1024–1199px 2-up block under the grid) — CSS shows exactly one at a time.
      ============================================================ */
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "pileupBox", "streaksWidget"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", pileupBox: "Piling up", streaksWidget: "Streaks" };
+  // 2026-08-16 (Linh: "move Today's boost into the widget rail"): boostWidget joins at
+  // the end of the default order -- no stated preference, and it's trivially draggable
+  // to wherever she wants via Arrange, same as any other card here.
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "pileupBox", "streaksWidget", "boostWidget"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -35143,6 +35148,24 @@
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Streaks</span>
         <div class="wr-streaks">${html || `<span class="wr-pat-empty">No streaks yet.</span>`}</div>
+      </div>`;
+    }
+    if (id === "boostWidget") {
+      // 2026-08-16 (Linh: "move Today's boost into the widget rail"): SAME data as the
+      // old standalone #boostWidget card (computeTodayBoosts() untouched, not recomputed
+      // differently) — only the layout changes, from three sixed-by-58px rings side by
+      // side (too wide for a ~260px rail) to three compact rows matching this rail's own
+      // .wr-pat-row grammar: a small ring stands in for .wr-pat-row's fixed-width time
+      // column, the label takes the flexible middle, the value sits gold on the right.
+      const { boosts } = computeTodayBoosts();
+      const row = (icon, label, val) => `<div class="wr-boost-row">
+          <span class="wr-boost-ring">${nutRingSVG(val / 100, false, 20, 3)}<span class="wr-boost-emoji">${icon}</span></span>
+          <span class="wr-boost-label">${label}</span>
+          <span class="wr-boost-val">${val}</span>
+        </div>`;
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Today's boost</span>
+        ${row("💪", "Physical", boosts.physical)}${row("🧠", "Cognitive", boosts.cognitive)}${row("🙂", "Emotional", boosts.emotional)}
       </div>`;
     }
     return "";
