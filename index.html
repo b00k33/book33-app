@@ -26766,6 +26766,25 @@
     // body below, regardless of what a previous renderMultiDayGrid() call left it
     // as — see layerTopOffset()'s own comment for why this matters.
     mdRendering = false;
+    // 2026-08-17 (Linh, screenshot: "the time displayed in block is not accurate"):
+    // placeDeskGrid() (called near the BOTTOM of this function, after the timeline
+    // below has already baked every block's top/height as inline pixel styles) is
+    // what actually stamps data-desk-day/data-desk-day1 on <html> -- the attributes
+    // [data-desk-day] { --hour-h: 60px !important } keys off. On the very first
+    // renderDay() of a session (and on any render that runs before placeDeskGrid()
+    // has ever set them), HOUR_H() reads whatever --hour-h was BEFORE that override
+    // applies -- her restored pinch-zoom value (e.g. 68.8px) -- so every block gets
+    // baked at the wrong scale. The hour RAIL doesn't show this: its rows use
+    // height:var(--hour-h) directly in CSS, which re-flows live the instant the
+    // attribute lands later in this same call. Blocks have no such live binding --
+    // topForMin()'s pixel math is a one-time snapshot -- so they stay wrong until
+    // some LATER renderDay() happens to run after the attribute is already set.
+    // Setting the same two attributes here, before buildHours()/the timeline body
+    // below ever call HOUR_H(), makes every block's very first paint agree with the
+    // rail from the start; placeDeskGrid()'s own copy of this later is now a no-op
+    // on the common path but still needed for its standalone resize-listener calls.
+    document.documentElement.toggleAttribute("data-desk-day", deskGridMq.matches);
+    document.documentElement.toggleAttribute("data-desk-day1", deskDay1Active());
     const d = state.anchor, k = keyOf(d);
     document.getElementById("theDayDateLbl").textContent = dayDateLabel(d);
     // 2026-08-16 (item 3): the merged mobile nav row's own centre label — the SAME
