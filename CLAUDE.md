@@ -36,6 +36,30 @@ symmetrical, aligned and organized. Follow every rule, then re-check your work.
   `.tl-title`, so it never squeezes); the time line is what runs into the bottom padding.
   Raising the threshold from 28 to 33 in `renderTimeline()` closes it if she asks.
 
+### Approved exception — mobile Body page (2026-08-16)
+- Linh supplied `mobile-body-reference.html` (a side-by-side "now vs compact"
+  mockup) and asked for the compact column verbatim as the approved design. Like
+  her Day-view sheet, its class names (`.kpis`/`.kpi`/`.wchart`/`.legend1`/`.stack`)
+  are LABELS for "what each part is", not selectors — every value is applied to this
+  app's own real ids/classes.
+- It uses type off the 38/20/13/11 scale on purpose: 7.5/8.5/9.5/10.5/12/14/16px.
+  **Her approved values win** — a recent decision of hers supersedes an older rule.
+  Do NOT round them back.
+- Scope, and nothing beyond it: the `MOBILE BODY PAGE — LINH'S APPROVED COMPACT
+  DESIGN (2026-08-16)` block in index.html (one `@media (max-width: 640px)` block),
+  plus the `.zone-key-mini` default-hidden rule just above it. Every rule inside is
+  scoped to `#healthPage` or its own ids **deliberately** — this page is built almost
+  entirely from classes shared with Medical, Growth, Cycle, Work-manual, Fridge, Day
+  and Today (`.h-card`, `.h-current`, `.section-head`, `.ideal-row`, `.chart-wrap`,
+  `.zone-key`, `.h-add`, `.log-row`, `.h-empty`, and all of `.fast-*`). Never
+  un-scope a rule in that block to a bare class.
+- Deliberate, do not "fix": fasting goal chips stay at the 44px tap-target minimum
+  even though her sheet draws them smaller — tap target beats visual density on a
+  control she uses one-handed. The weight chart also keeps its natural SVG aspect
+  (~100px tall, not her 64px): the chart is one `viewBox`-driven SVG, so forcing 64px
+  would need `preserveAspectRatio="none"`, which squashes its dots into ellipses and
+  distorts the axis text.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
