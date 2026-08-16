@@ -597,9 +597,24 @@
      What DOES still vary by width is the calendar-block radius: Night keeps the app's
      existing phone value (--radius-md) so nothing changes in her default theme, while Day's
      3px comes from the higher-specificity :root[data-theme="light"] block above and wins at
-     every width regardless of source order. */
+     every width regardless of source order.
+     2026-08-16 (mobile mockup-fidelity pass, item 4 — Linh's own mockup annotation: "3px
+     corners, dark ink, and no '· Personal' in the subtitle — the colour already says it"):
+     SUPERSEDES the "--radius-md on phone in Night" half of the note above. The phone value
+     is 3px in BOTH themes now, so Night and Day converge on the same square-ish block the
+     mockup draws — and on the same literal desktop-day1 already forces for its own blocks
+     ([data-desk-day1] #dayTimelineWrap .tl-item, ~line 12211). Still a TOKEN, and the
+     literal still lives inside :root, so CLAUDE.md's "no literal radius in a component"
+     rule holds; 3px is the one sanctioned off-scale radius (see --blk-radius' own note in
+     :root for why the 4/8/16/24/32 SPACING scale doesn't govern radii).
+     Checked before repointing rather than adding a scoped rule: --blk-radius has exactly
+     two consumers in the whole file, `.tl-item` (base) and `.tl-item[data-kind="event"]`,
+     and every OTHER .tl-item surface names its own radius in a later, higher-or-equal
+     specificity rule — .md-item.tl-item (multi-day cards, var(--radius-sm)) and .ad-chip
+     (all-day chips, 6px). Confirmed live at 360px: those two stayed 10px/6px while this
+     token read 16px, so nothing but the single-day calendar blocks moves. */
   @media (max-width: 640px) {
-    :root { --blk-radius: var(--radius-md); }
+    :root { --blk-radius: 3px; }
   }
   /* the quick-add bar was hardcoded dark (#1D1710 etc.) regardless of theme -- correct
      visually while light mode itself was warm/dark-adjacent gold, wrong now light mode
@@ -3388,6 +3403,29 @@
     .tl-item, .tl-item[data-kind="event"] { padding: 8px 12px; gap: 2px; }
     .tl-item .tl-title { font-size: 15px; line-height: 1.3; }
     .tl-item .tl-meta { font-size: 11.5px; font-weight: 500; opacity: 0.85; }
+    /* 2026-08-16 (mobile mockup-fidelity pass, item 6 — Linh's mockup annotation:
+       "Breakfast is 30 min so it's half the height of Train to work — and renders
+       single-line because it's under 28px").
+       The 28px in that annotation is DESKTOP-day1's threshold, tuned for desktop's own
+       5px 9px padding + 12px type. Mobile's numbers are different and were measured live
+       at 360px rather than assumed:
+         padding 8+8 = 16 · title line box 19.5 (15px x 1.3) · gap 2 · meta line box 14
+         → two lines need 51.5px, which is exactly why renderTimeline()'s mobile cutoff is
+           52px. Copying 28px across would push every 28-51px block back into two-line
+           mode with only 12-35px of content box — the opposite of the mockup, and the
+           meta would clip. So the threshold stays 52 on mobile (see its own comment in
+           renderTimeline()); what actually needed fixing is the SHORT end.
+         → one line needs 16 + 19.5 = 35.5px, but renderTimeline()'s height floor is 26px
+           (Math.max(..., 26)), so a genuinely short block was clipping ~9.5px off its
+           only line — the clipped descenders in her screenshot.
+       A tight block by definition has room for one line, so it gives that line the whole
+       box: 4px/4px (on-scale) + an 18px line box (1.2) = 26px, landing exactly on the
+       floor, so even the shortest block renders one clean, un-clipped line. #dayTimelineWrap
+       scoping (not plain .tl-block.tl-tight) is load-bearing: the mobile task-card rule
+       further down sets `padding: 8px 12px` at equal specificity but LATER in source order,
+       and would otherwise win back the padding on a tight task block. */
+    #dayTimelineWrap .tl-item.tl-tight { padding-top: 4px; padding-bottom: 4px; }
+    #dayTimelineWrap .tl-item.tl-tight .tl-title { line-height: 1.2; }
     .tl-point { flex-direction: column; align-items: stretch; min-height: 0; padding: 8px 12px; gap: 2px; }
     /* just the size bump — wrap-vs-ellipsis itself lives once on the base
        .tl-point .tl-title rule (now -webkit-line-clamp, see its own comment)
@@ -3488,8 +3526,42 @@
      override dot, chips, the tick button's label) was inheriting #0c2417. Pointing that
      inheritance at --cat-t keeps those pieces on the item's own ink instead of falling
      back to the page's --ink, which would be near-black text on a saturated fill in Day. */
+  /* 2026-08-16 (mobile mockup-fidelity pass, item 5 — Linh's mockup annotation: "3px
+     corners, dark ink, and no '· Personal' in the subtitle — the colour already says it"):
+     mobile day-timeline blocks now get the SAME dark-ink treatment desktop-day1 has had
+     since the 2026-08-15 corrections pass (search `[data-desk-day1] #dayTimelineWrap
+     .tl-item .tl-title`) — #12100c at weight 800, second line at opacity .72. #12100c is
+     this codebase's own sanctioned hardcoded exception for "dark ink on a saturated flat
+     fill" (.tl-detail-head's mobile header + the all-day chips already use it); reusing it
+     is deliberately NOT a second convention.
+     Routed through --blk-txt so ONE declaration decides the colour for the title, the time
+     line, the .loc span, everything inheriting from the block, AND the mobile task-card
+     overrides further down (which carry !important and would otherwise need their own
+     copy of the theme branch).
+     NIGHT ONLY, and that is the whole reason for the --blk-txt indirection. Day mode's
+     fills are the DARKENED colorDay values, chosen in book33-categories precisely so WHITE
+     reaches >=4.5:1 on them (see colorDay's own comment). Measured live with the page's own
+     WCAG helper, #12100c vs white on each seeded fill:
+        NIGHT  personal #B98D36 6.27 / 3.03 · fitness #37AF65 6.77 / 2.81
+               marriage #1E8FB8 5.14 / 3.70 · beauty  #CD495B 4.25 / 4.47
+               work     #37844D 4.14 / 4.60 · family  #B8456B 3.71 / 5.12
+               unassigned fallback #6B6152 3.13 / 6.07
+        DAY    personal #8A6626 3.63 / 5.24 · work #2C6A3E 2.93 / 6.48
+               marriage #187293 3.50 / 5.43 · fitness #2A854D 4.13 / 4.60
+     So Night flips to dark ink (the mockup's look, and a big win on the gold/green/blue
+     she actually uses) and Day keeps --cat-t. Known weak spots, matching what desktop-day1
+     already ships rather than diverging from it: Work green measures 4.14:1 and Beauty red
+     4.25:1 (both just under AA's 4.5 for non-large text, both helped by the 800 weight),
+     and a track with NO category colour falls back to #6B6152 at 3.13:1 — that fallback
+     only ever applies to a track id with no row in book33-categories, since every real
+     category generates its own --cat-c in regenerateCategoryStyles(). */
   @media (max-width: 640px) {
-    .tl-block { color: var(--cat-t); }
+    #dayTimelineWrap .tl-item { --blk-txt: #12100c; }
+    :root[data-theme="light"] #dayTimelineWrap .tl-item { --blk-txt: var(--cat-t); }
+    .tl-block { color: var(--blk-txt, var(--cat-t)); }
+    #dayTimelineWrap .tl-item .tl-title { color: var(--blk-txt); font-weight: 800; }
+    #dayTimelineWrap .tl-item .tl-meta { color: var(--blk-txt); opacity: .72; }
+    #dayTimelineWrap .tl-item .tl-meta .loc { color: var(--blk-txt); }
   }
   /* 2026-08-10 (Desktop Day page cleanup, "event blocks are grey strikethrough on
      green (unreadable)... fill each block with its track colour and use dark ink
@@ -3572,11 +3644,19 @@
     .tl-item[data-kind="task"] {
       background: var(--cat-c) !important; box-shadow: none; padding: 8px 12px;
     }
+    /* 2026-08-16 (item 5): var(--cat-t) -> var(--blk-txt, var(--cat-t)). These three
+       carry !important (they have to beat the desktop --ink-soft rules above), which
+       means they'd otherwise sit on white ink while every event/routine block beside
+       them switched to dark — the "same card as everything else" promise this block
+       exists to keep. The fallback keeps them on --cat-t anywhere --blk-txt isn't set
+       (outside #dayTimelineWrap), so nothing but the day timeline moves.
+       Weight 700 -> 800 for the same reason: it now matches the dark-ink title weight
+       #dayTimelineWrap .tl-item .tl-title sets, so the two card types stay identical. */
     .tl-item[data-kind="task"] .tl-title,
-    .tl-item[data-kind="task"] .tl-meta { color: var(--cat-t) !important; opacity: 1 !important; }
-    .tl-item[data-kind="task"] .tl-title { font-size: 15px; font-weight: 700; padding-right: 0; }
-    .tl-item[data-kind="task"] .tl-meta { opacity: 0.85 !important; }
-    .tl-item[data-kind="task"].done .tl-title { color: var(--cat-t) !important; }
+    .tl-item[data-kind="task"] .tl-meta { color: var(--blk-txt, var(--cat-t)) !important; opacity: 1 !important; }
+    .tl-item[data-kind="task"] .tl-title { font-size: 15px; font-weight: 800; padding-right: 0; }
+    .tl-item[data-kind="task"] .tl-meta { opacity: 0.72 !important; }
+    .tl-item[data-kind="task"].done .tl-title { color: var(--blk-txt, var(--cat-t)) !important; }
     /* the task card carries a real fill at this width (above) -- the part-of-life
        dot earns its keep here same as any other block, so undo the desktop hide */
     .tl-item[data-kind="task"] .tl-life-dot { display: inline-block; }
@@ -7908,13 +7988,34 @@
      media query adds no specificity, so a later single-class base rule would beat the
      override inside it. .day-nav-gear matches the .nav-arrow.day-step pair it sits
      beside: 28px box, 999px pill, no fill until pressed. */
+  /* 2026-08-16 (mobile mockup-fidelity pass, item 8): SUPERSEDES "no fill until pressed"
+     above — the mockup draws this ⚙ as a GOLD FILLED rounded-square with a dark glyph,
+     not a ghost icon. The fill is the app's existing primary-button pairing
+     (background --margin-rule / colour --accent-on, exactly what .pp-act.pri,
+     .cal-days-btn[aria-pressed="true"], .dnr-count and .dnr-avatar-badge already use) —
+     not a new colour treatment. Rounded-SQUARE per the mockup, so var(--radius-sm) (the
+     token for a small control nested inside a row) replaces the 999px pill.
+     The painted box stays 28px to stay level with the ‹ › arrows either side of it, and
+     the 44px tap target comes from an invisible ::after pad (28 + 8 + 8 = 44) — the same
+     "expand the target, not the art" pattern #addRow .add-btn::before and the compact
+     multi-day .md-bar already use.
+     The glyph is #12100c, NOT var(--accent-on), and that is measured rather than
+     stylistic: this button lives inside .page, which re-scopes --margin-rule to
+     var(--accent-seed) (gold #D4AF37) in BOTH themes — see .page's own token block — while
+     --accent-on stays the root value and flips to #FFFFFF in Day. The "obvious" pairing
+     therefore renders white-on-gold at 2.1:1 in Day mode (measured live before this note
+     was written). #12100c is the codebase's sanctioned dark-ink-on-a-saturated-fill hex
+     and measures 8.8:1 on that same gold, identically in both themes — the same
+     dark-glyph-on-the-gold-accent shape .page .tl-tick[data-on="true"] already uses. */
   .day-step-date { display: none; }
   .day-nav-gear {
     display: none; align-items: center; justify-content: center; flex: none;
-    width: 28px; height: 28px; padding: 0; border: none; border-radius: 999px;
-    background: none; color: var(--ink-soft); font: inherit; font-size: 15px; cursor: pointer;
+    position: relative;
+    width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--radius-sm);
+    background: var(--margin-rule); color: #12100c; font: inherit; font-size: 15px; cursor: pointer;
   }
-  .day-nav-gear:hover, .day-nav-gear[aria-expanded="true"] { color: var(--gold-bright); background: var(--raised); }
+  .day-nav-gear::after { content: ""; position: absolute; inset: -8px; }
+  .day-nav-gear:hover, .day-nav-gear[aria-expanded="true"] { background: var(--gold-bright); color: #12100c; }
   @media (max-width: 640px) {
     .day-step-row { gap: 4px; }
     .day-step-row .day-step-date {
@@ -9765,6 +9866,11 @@
      (which also retires the viewport-centred .nav-menu fix that used to live here:
      nothing floats any more, so nothing can land off-screen). */
   .nav-drawer-btn { display: none; }
+  /* 2026-08-16 (item 1): the phone-only face of #navDrawerBtn — off at every other width
+     so tablet keeps the medallion and desktop keeps the whole button hidden. Its type is
+     NOT declared here: it shares one declaration with the desktop top bar's own gold
+     wordmark (search `.ddt-word`), so the two surfaces can't drift apart. */
+  .nav-drawer-word { display: none; }
   @media (max-width: 640px) {
     /* 2026-08-04 (Step 2): was position:absolute/top:6/left:6, floating over whatever
        page content sat underneath. Now a normal flex item inside the real .nav-tiers
@@ -9787,10 +9893,21 @@
     /* 2026-08-06 (Linh: "make B33 logo glow in gold more"): border-radius clips the img
        to a circle before the filter runs, so drop-shadow hugs that circle (not the PNG's
        square canvas) — stacks on top of the glow already baked into icon-192.png itself. */
+    /* 2026-08-16 (mobile mockup-fidelity pass, item 1): SUPERSEDED at this width. Linh's
+       mockup replaces the glowing medallion with a small gold wordmark — "Logo band gone.
+       The glowing B33 medallion becomes a small gold wordmark in the header row." The
+       2026-08-06 note above is left intact because it still describes the TABLET (641-
+       1023px) presentation, which the mockup doesn't cover and which is untouched; this
+       dated note is here so nobody reads that one and "restores" the glow on the phone.
+       The rule itself is kept rather than deleted (same reversible-disable convention as
+       #expandModeBtn/#numStarBtn) — hiding the img and showing a text span is also safer
+       than removing markup other widths still render. */
     .nav-drawer-logo {
       width: 100%; height: 100%; border-radius: 50%; display: block;
       filter: drop-shadow(0 0 2px var(--accent-seed)) drop-shadow(0 0 7px color-mix(in oklab, var(--accent-seed) 70%, transparent));
     }
+    .nav-drawer-btn .nav-drawer-logo { display: none; }
+    .nav-drawer-btn .nav-drawer-word { display: block; }
     /* 2026-08-04: was anchored with a hardcoded "safe-area + 42px" guess at the header
        bar's height -- fragile the moment that bar's real height changes (which it just
        did, gaining safe-area padding of its own). Anchored to .nav-tiers itself instead
@@ -10186,6 +10303,15 @@
     :root[data-theme="dark"] .nav-tiers { background: color-mix(in srgb, var(--paper) 72%, transparent); }
     :root[data-theme="light"] .nav-tiers { background: color-mix(in srgb, var(--paper) 88%, transparent); }
     .topbar-right { display: flex; align-items: center; gap: 8px; }
+    /* 2026-08-16 (mobile mockup-fidelity pass, item 2): the cloud-sync indicator's phone
+       form — positionDot() reparents #b33Live in here and shrinks it to a bare 7px dot
+       (see its own comment for the whole rationale). Everything about the dot itself is
+       inline-styled by that function, since the element is built in JS; the ONE thing
+       that has to be a stylesheet rule is this invisible tap pad, because a pseudo-
+       element can't be written from an inline style. 12px box + 16px on every side = a
+       44x44 target for a 7px dot, exactly the "pad the hit area, don't grow the dot"
+       treatment #addRow .add-btn::before and the compact .md-bar already use. */
+    #b33Live[data-mini]::after { content: ""; position: absolute; inset: -16px; }
     /* 2026-08-06 (Linh: "move the day/night icon out of the top-right, pin it to the
        bottom-left corner, small and unobtrusive"): SUPERSEDES position:static above --
        pulled back out of the .topbar-right flex row (which now holds only the star
@@ -12024,7 +12150,12 @@
     display: flex; align-items: center; gap: 12px; height: 54px; padding: 0 16px;
     background: var(--paper); border-bottom: 1px solid var(--note-line); box-sizing: border-box;
   }
-  .ddt-word { flex: none; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; color: var(--gold-bright); }
+  /* 2026-08-16 (item 1): .nav-drawer-word (the phone header's B33 mark, inside
+     #navDrawerBtn) joins this rule rather than restating the same four values — the
+     mockup asks for "a small gold wordmark in the header row" and this IS that component,
+     already shipped on the desktop top bar. One declaration, two surfaces, no drift.
+     `display` is deliberately not set here: each surface owns its own show/hide gate. */
+  .ddt-word, .nav-drawer-word { flex: none; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; color: var(--gold-bright); }
   .ddt-title { flex: none; font-size: 19px; font-weight: 800; color: var(--ink); }
   .ddt-date { flex: none; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
   .ddt-spacer { flex: 1 1 auto; }
@@ -12224,6 +12355,15 @@
      clutter in the left gutter at 1 day, where every chain is a single block
      anyway — simplest fix per the spec's own stated preference order. */
   [data-desk-day1] #chainLayer { display: none; }
+  /* 2026-08-16 (mobile mockup-fidelity pass, item 7): the phone half of the same
+     call. Her screenshot showed one unexplained green dot floating in the left
+     gutter around 7am, and her own note gave the choice — "either give them a
+     tooltip (Chain: CBD Work) or drop them at 1 day". Dropped, same as desktop.
+     A plain width query IS "at 1 day" here and needs no calDays hook: #chainLayer
+     only ever exists inside #dayTimelineWrap (the single-day path), and
+     renderCalDaysUI() puts `hidden` on that whole subtree the moment calDays > 1,
+     so there is nothing for this to reach in a 3/5/7-day view. */
+  @media (max-width: 640px) { #chainLayer { display: none; } }
   /* item 6: hour rows outside the effective visible range (computeHourRange())
      collapse to 0 height via compactH(h) already; this just drops the orphaned
      absolutely-positioned .hour-label those 0-height rows would otherwise still
@@ -12817,7 +12957,15 @@
        corner -- none of those rules care where the element sits in the DOM tree, only
        the new mobile-only rules below read this nesting. -->
   <div class="nav-tiers">
-    <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false"><img src="icon-192.png" alt="" class="nav-drawer-logo"></button>
+    <!-- 2026-08-16 (mobile mockup-fidelity pass, item 1 — Linh's mockup annotation:
+         "Logo band gone. The glowing B33 medallion becomes a small gold wordmark in the
+         header row."): the <img> mark is KEPT in the markup and only hidden at ≤640px,
+         with .nav-drawer-word shown in its place. 641-1023px tablet still renders the
+         medallion (its own .nav-drawer-logo rule, a few hundred lines up in the §5 nav
+         block) and desktop still hides the whole button, so neither moves. The BUTTON is
+         unchanged in every other respect — same id, same aria-label, same 44px box, still
+         the thing that opens the chapters drawer; only its face changed. -->
+    <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false"><img src="icon-192.png" alt="" class="nav-drawer-logo"><span class="nav-drawer-word" aria-hidden="true">B33</span></button>
     <!-- 2026-08-05 (Part A, "put Mon 3 Aug · UD 3 on the SAME top row as BK33"): empty
          slot living in nav-tiers' own middle gap (real on mobile since #categoryTabs
          is pulled out of flow there — see the position:absolute drawer rule). JS
@@ -20728,6 +20876,12 @@
       // than the only way to tell tracks apart — left in place deliberately (removing a
       // visible label is a behaviour change, not part of this fix), note kept accurate so
       // the next reader doesn't go looking for a rule that no longer exists.
+      // 2026-08-16 (mobile mockup-fidelity pass, item 5): REMOVED, and the note above is
+      // exactly why — Linh's own mockup annotation says "no '· Personal' in the subtitle
+      // — the colour already says it", which is the same conclusion the B1 note reached
+      // on 2026-08-15 and only stopped short of acting on. metaTrack now carries the
+      // desktop-1-day variant alone (clinic patient counts, metaDesk) and is empty at
+      // every other width, so a mobile block's second line is a plain time range again.
       const trackLbl = trackLabel(e.track);
       // 2026-08-15 (desktop DAY view build, §4.4): a second, desktop-1-day-only
       // variant of the mobile "time + track" subline just below — the column is
@@ -20751,7 +20905,7 @@
       const metaDesk = deskWidgetsActive() && isBlock
         ? (isClinicBlock && patCount >= 1 ? ` · ${patCount} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
         : "";
-      const metaTrack = metaDesk || (window.innerWidth <= 640 && isBlock && trackLbl ? ` · ${esc(trackLbl)}` : "");
+      const metaTrack = metaDesk;
       const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
       // 2026-08-06 (Linh: "remove the edit and delete icons from every event block --
       // they're faint and cluttered"): the per-card .tl-edit/.tl-del pencil/× are gone --
@@ -24637,9 +24791,18 @@
     // real (non-empty) row: the meter when active, a plain "— not fasting"
     // caption when not, so the row never reflows between fasting/non-fasting
     // days — matches the spec's own wording exactly.
+    // 2026-08-16 (mobile mockup-fidelity pass, item 3): SUPERSEDES the
+    // "mobile keeps the no-empty-placeholder rule" half above. Linh's mobile
+    // mockup draws FASTING · ▓▓▓ · "— not fasting" sitting directly under
+    // TODAY, so on the phone the pair is a fixed two-row set exactly the way
+    // desktop-day1's is a fixed two-column one, and the same reasoning applies:
+    // a row that disappears on a non-fasting day is a reflow, not a tidy-up.
+    // Gated on `|| mobileDay1Active()` rather than dropping the gate entirely —
+    // tablet (641-1023px) and every multi-day count keep the omit-when-empty
+    // behaviour byte-for-byte, since neither shows the mockup's meter pair.
     el.innerHTML = fd.active
       ? meterHtml("Fasting", fd.pct, `${fd.label} / ${fd.goal}`, "--fit-workout")
-      : (deskDay1Active()
+      : (deskDay1Active() || mobileDay1Active()
         ? `<div class="dcx-meter"><span class="dcx-meter-lbl">Fasting</span><span class="dcx-meter-val" style="color:var(--ink-faint);font-weight:400">— not fasting</span></div>`
         : "");
   }
@@ -42842,12 +43005,49 @@
   // SUPERSEDES the mobile-only early-return + every earlier "live inside the header row"
   // placement this dot has cycled through (.nav-tiers, .topbar-right, .toprow) — now a
   // fixed bottom-right dot on EVERY screen size, same treatment desktop already had.
+  // 2026-08-16 (mobile mockup-fidelity pass, item 2 — Linh's mockup annotation: "Synced
+  // is a 7px dot in the header, not a pill floating over the calendar"): SUPERSEDES the
+  // "every screen size" half above at PHONE widths only. Nothing this thing KNOWS
+  // changes — syncState()/updateLiveBadge() keep every state and every colour mapping,
+  // setLive() keeps writing the same title/aria-label, and a tap still opens the same
+  // #b33LiveLabel popover with the full wording. Only the presentation moves: ≤640px it
+  // becomes a bare 7px coloured dot inside .nav-tiers' own .topbar-right group (inserted
+  // FIRST, so it sits to the LEFT of anything else that lands there), the always-visible
+  // text is hidden, and the popover flips to open DOWNWARD — the upward version exists
+  // because the pill lives bottom-right, and from a header it would render off the top.
+  // Desktop and tablet keep the pill exactly as it was: the else branch rewrites every
+  // declaration badge() originally set, from the shared LIVE_PILL_CSS string, so a
+  // resize down to phone and back up is lossless rather than "whatever survived".
+  // 7px is far under the binding 44px minimum, so the TARGET is padded rather than the
+  // dot grown (per the brief): a 12px flex box + an invisible ::after at inset -16px is
+  // exactly 44x44 — see the #b33Live[data-mini] rule in the mobile CSS block.
+  var LIVE_PILL_CSS = "position:fixed;display:flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:999px;background:var(--paper,#251D13);border:1px solid var(--note-line,rgba(240,230,212,.26));box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:2147483000;cursor:pointer;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--ink,#F0E6D4)";
+  var LIVE_MINI_CSS = "position:relative;display:flex;align-items:center;justify-content:center;flex:none;width:12px;height:12px;padding:0;border:none;background:none;box-shadow:none;border-radius:0;cursor:pointer;z-index:1";
   function positionDot() {
-    var dot = document.getElementById("b33Live");
-    if (!dot) return;
-    dot.style.top = "auto"; dot.style.left = "auto";
-    dot.style.right = "max(12px, env(safe-area-inset-right))";
-    dot.style.bottom = "max(12px, env(safe-area-inset-bottom))";
+    var box = document.getElementById("b33Live");
+    if (!box) return;
+    var d = document.getElementById("b33LiveDot");
+    var text = document.getElementById("b33LiveText");
+    var pop = document.getElementById("b33LiveLabel");
+    var slot = document.querySelector(".nav-tiers .topbar-right");
+    if (window.innerWidth <= 640 && slot) {
+      if (box.parentNode !== slot) slot.insertBefore(box, slot.firstChild);
+      box.dataset.mini = "1";
+      box.style.cssText = LIVE_MINI_CSS;
+      if (d) { d.style.width = "7px"; d.style.height = "7px"; }
+      if (text) text.style.display = "none";
+      if (pop) { pop.style.bottom = "auto"; pop.style.top = "calc(100% + 8px)"; }
+      return;
+    }
+    if (box.parentNode !== document.documentElement) document.documentElement.appendChild(box);
+    delete box.dataset.mini;
+    box.style.cssText = LIVE_PILL_CSS;
+    if (d) { d.style.width = "8px"; d.style.height = "8px"; }
+    if (text) text.style.display = "";
+    if (pop) { pop.style.top = "auto"; pop.style.bottom = "calc(100% + 8px)"; }
+    box.style.top = "auto"; box.style.left = "auto";
+    box.style.right = "max(12px, env(safe-area-inset-right))";
+    box.style.bottom = "max(12px, env(safe-area-inset-bottom))";
   }
   // 2026-08-07 (Linh: "edits not consistently maintained... this cannot happen
   // again" -- comprehensive audit): the dot only ever said "Synced" or
@@ -43035,7 +43235,11 @@
     b.id = "b33Live";
     b.setAttribute("role", "status");
     b.setAttribute("tabindex", "0");
-    b.style.cssText = "position:fixed;display:flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:999px;background:var(--paper,#251D13);border:1px solid var(--note-line,rgba(240,230,212,.26));box-shadow:0 4px 14px rgba(0,0,0,.28);z-index:2147483000;cursor:pointer;font:600 11px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--ink,#F0E6D4)";
+    // 2026-08-16 (item 2): the literal that used to sit here now lives once in
+    // LIVE_PILL_CSS (up by positionDot), because positionDot's "back to desktop" branch
+    // has to be able to restore this EXACT pill after a phone-width visit — two copies
+    // of the same string is precisely the drift that would silently break that.
+    b.style.cssText = LIVE_PILL_CSS;
     var dot = document.createElement("span");
     dot.id = "b33LiveDot";
     dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none;background:#c98b6b";
