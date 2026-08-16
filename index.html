@@ -12284,30 +12284,45 @@
 
   /* ---- 1. Chapters rail — 52px, fixed, EVERY desktop page (not gated on
      [data-desk-day1]: this is global nav chrome, the ≥1024px replacement for
-     #categoryTabs' chapter-tab row). 3 states: collapsed (default) / collapsed
-     + hover-peek (an absolute overlay, so the fixed rail's own box — and every
-     page's margin-left reserved for it — never changes width) / pinned
-     (in-flow at 238px, margin-left follows). Renders NAV_ITEMS — the SAME array
-     the mobile drawer/tabs already use, one source, new presentation. Persisted
-     as book33-prefs.navRail. ---- */
+     #categoryTabs' chapter-tab row). 2 open states, ONE behaviour: hover-peek
+     and pinned both widen the rail to 238px AND push the page over.
+
+     2026-08-16 — SUPERSEDES the old "hover-peek is an absolute overlay" design.
+     That version deliberately left the rail's own fixed box (and body's reserved
+     margin-left) at 52px while only .dnr-body grew, so peeking never reflowed
+     anything. Measured at 1440px: the peeked panel spanned x=0–238 while the
+     CALENDAR sidebar sat at x=53–267, i.e. it covered 185px of it and
+     elementFromPoint(150, 400) returned a .dnr-row instead of the calendar.
+     That is exactly the "it sits on top of the calendar instead of pushing it
+     over" Linh reported. Her call: "make hover act the same as pinned — always
+     reflow, no preview-without-committing. open = pushes, every time."
+     So .peek now takes the same declarations as [data-state="pinned"], and the
+     transient body.nav-rail-peek widens the reserved margin the same way
+     [data-nav-rail="pinned"] does. Nothing overlays anything any more.
+     Renders NAV_ITEMS — the SAME array the mobile drawer/tabs already use, one
+     source, new presentation. Persisted as book33-prefs.navRail. ---- */
   #deskNavRail { display: none; }
   @media (min-width: 1024px) {
     body { margin-left: 52px; }
-    body[data-nav-rail="pinned"] { margin-left: 238px; }
+    /* the persisted pinned state and the transient hover state reserve the SAME
+       width — one number, so the two can never disagree about how far to push */
+    body[data-nav-rail="pinned"], body.nav-rail-peek { margin-left: 238px; }
     #deskNavRail {
       display: block; position: fixed; top: 0; left: 0; height: 100vh; width: 52px;
       z-index: 70; box-sizing: border-box;
     }
-    #deskNavRail[data-state="pinned"] { width: 238px; }
+    #deskNavRail[data-state="pinned"], #deskNavRail.peek { width: 238px; }
     .dnr-body {
       position: absolute; top: 0; left: 0; width: 52px; height: 100%; overflow: hidden;
       background: var(--paper); border-right: 1px solid var(--note-line);
-      display: flex; flex-direction: column; transition: width .12s ease; box-sizing: border-box;
+      display: flex; flex-direction: column; box-sizing: border-box;
     }
-    #deskNavRail[data-state="collapsed"].peek .dnr-body {
-      width: 238px; box-shadow: 4px 0 16px rgba(0,0,0,.25);
-    }
-    #deskNavRail[data-state="pinned"] .dnr-body { position: static; width: 100%; transition: none; box-shadow: none; }
+    /* no width transition on either open state: the page's margin-left can't be
+       animated in step with it (that would reflow the whole grid every frame),
+       and a rail that slides while the content it pushes jumps is worse than
+       both moving together instantly. */
+    #deskNavRail[data-state="pinned"] .dnr-body,
+    #deskNavRail.peek .dnr-body { position: static; width: 100%; transition: none; box-shadow: none; }
     .dnr-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; padding: 8px 0; }
     .dnr-row {
       display: flex; align-items: center; width: 238px; min-height: 44px; flex: none;
@@ -34122,10 +34137,13 @@
      CHAPTERS RAIL — 52px, GLOBAL desktop chrome (task #125). Renders NAV_ITEMS,
      the SAME array the mobile drawer/tabs already use (navPanelRowHtml/
      navTabRowHtml, above) — one source, new presentation. 3 states persisted as
-     book33-prefs.navRail: "collapsed" (default, hover-peeks a 186px overlay
-     panel after a 200ms delay, retracts on mouseleave) or "pinned" (in-flow at
-     238px via the 📌 footer control, [data-nav-rail="pinned"] on <body> widens
-     the reserved margin so the grid narrows for real).
+     book33-prefs.navRail: "collapsed" (default; hover opens it after a 200ms
+     dwell and retracts on mouseleave) or "pinned" (stays open via the 📌 footer
+     control). 2026-08-16: BOTH open states now push the page — hover adds the
+     transient body.nav-rail-peek, pinned sets [data-nav-rail="pinned"], and the
+     CSS gives the two identical width/margin declarations. Hover used to be an
+     overlay that covered the calendar sidebar instead; see the CSS block's own
+     note for the measurement that killed it.
      ============================================================ */
   function renderDeskNavRail() {
     const scroll = document.getElementById("dnrScroll");
@@ -34154,6 +34172,10 @@
       </div>`;
     rail.dataset.state = pinned ? "pinned" : "collapsed";
     document.body.dataset.navRail = pinned ? "pinned" : "collapsed";
+    // pinning while the cursor is still on the rail would otherwise leave the
+    // transient hover state stuck on underneath the persisted one — same width,
+    // so nothing moves, but unpinning later would then read as "still open".
+    if (pinned) { rail.classList.remove("peek"); document.body.classList.remove("nav-rail-peek"); }
   }
   document.getElementById("dnrScroll")?.addEventListener("click", e => {
     const row = e.target.closest("[data-view]");
@@ -34171,13 +34193,19 @@
     const rail = document.getElementById("deskNavRail");
     if (!rail) return;
     let peekTimer = null;
+    // The 200ms dwell matters more now than it did as an overlay: opening also
+    // pushes the page 186px, so a cursor merely passing the left edge must not
+    // trigger it. Both classes go on and come off together — .peek widens the
+    // rail, body.nav-rail-peek widens the margin the page is laid out against.
+    const openPeek = () => { rail.classList.add("peek"); document.body.classList.add("nav-rail-peek"); };
+    const closePeek = () => { rail.classList.remove("peek"); document.body.classList.remove("nav-rail-peek"); };
     rail.addEventListener("mouseenter", () => {
       if (rail.dataset.state !== "collapsed") return;
-      peekTimer = setTimeout(() => rail.classList.add("peek"), 200);
+      peekTimer = setTimeout(openPeek, 200);
     });
     rail.addEventListener("mouseleave", () => {
       clearTimeout(peekTimer);
-      rail.classList.remove("peek");
+      closePeek();
     });
   })();
 
