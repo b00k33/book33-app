@@ -615,6 +615,11 @@
      token read 16px, so nothing but the single-day calendar blocks moves. */
   @media (max-width: 640px) {
     :root { --blk-radius: 3px; }
+    /* 2026-08-16 (Linh: "on mobile the calendar's hour height is about 127px. Change it
+       to 46px"): declared at the app's own 640px mobile breakpoint, not just the 520px
+       small-phone one below, so every phone width gets the same hour. Tablet (641px+)
+       keeps the :root 48px and desktop-day1 keeps its own 60px !important — untouched. */
+    :root { --hour-h: 46px; }
   }
   /* the quick-add bar was hardcoded dark (#1D1710 etc.) regardless of theme -- correct
      visually while light mode itself was warm/dark-adjacent gold, wrong now light mode
@@ -9330,7 +9335,9 @@
   .offline-ready .ok { color: var(--fit-workout); font-weight: 600; }
 
   @media (max-width: 520px) {
-    :root { --gutter: 60px; --hour-h: 48px; }
+    /* 2026-08-16: --hour-h 48px -> 46px, matching the 640px mobile rule above (this
+       narrower query would otherwise win back 48px on small phones). */
+    :root { --gutter: 60px; --hour-h: 46px; }
     .hour-row .hour-label { width: 26px; }
     .page { padding: 24px 16px 32px; }
     .date-block .date-big .date-num { font-size: 32px; }
@@ -16019,6 +16026,19 @@
   // updated; no behaviour rides on the name.
   let hourRange = { start: START_HOUR, end: END_HOUR };
   const HOUR_H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour-h")) || 84;
+  // 2026-08-16 (Linh: "on mobile the calendar's hour height is about 127px. Change it
+  // to 46px"): a saved pinch-zoom is written as an INLINE style on <html> by the loader
+  // right below, which outranks every stylesheet rule — so her device kept rendering
+  // ~127px no matter what --hour-h said in CSS, and the new 46px would have been
+  // invisible on the one device the request was about. This clears that one stale value
+  // ONCE (keyed, so it can never fire twice or undo a later deliberate zoom); pinch-zoom
+  // itself is untouched and starts persisting again from the next pinch.
+  try {
+    if (!localStorage.getItem("book33-hour-h-reset")) {
+      localStorage.removeItem("book33-hour-h");
+      localStorage.setItem("book33-hour-h-reset", "2026-08-16");
+    }
+  } catch (e) {}
   // her pinch-zoom level (see the touchstart/move/end IIFE far below), sticky across
   // reloads — applied before first render so the timeline never flashes at the default
   (function loadSavedHourH() {
