@@ -200,6 +200,11 @@
     /* 2026-08-17 (Linh "quieten Routines"): a routine with no set time reads as
        "task" rather than "event" -- see rtnPhasePillOf. Neutral, not a 4th hue. */
     --phase-task: var(--ink-faint);
+    /* 2026-08-17 pt 3 (Linh, "allow for routine to be both before and after"): a
+       combined Before+After tag is distinguished by its TEXT ("before + after"),
+       not a 5th hue -- same "neutral, not a new colour" call as --phase-task just
+       above, one step less faint since it's a deliberate choice, not a fallback. */
+    --phase-both: var(--ink-soft);
     /* 2026-08-06 (Linh's "Book33 · Pregnancies" mockup): its exact bloom peach +
        trimester tones, page-scoped to #pregPage's own classes only */
     --preg-bloom: #E3A06F;
@@ -2554,11 +2559,13 @@
   .phase-dot-before { background: var(--phase-before); }
   .phase-dot-during { background: var(--phase-during); }
   .phase-dot-after { background: var(--phase-after); }
+  .phase-dot-both { background: var(--phase-both); }
   .phase-lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
   .phase-lbl-before { color: var(--phase-before); }
   .phase-lbl-during { color: var(--phase-during); }
   .phase-lbl-after { color: var(--phase-after); }
   .phase-lbl-task { color: var(--phase-task); }
+  .phase-lbl-both { color: var(--phase-both); }
   .phase-ct { margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .phase-t-row { justify-content: flex-start; }
   .phase-t-time { margin-left: auto; flex: none; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
@@ -5379,6 +5386,7 @@
   .rtg-phase.phase-lbl-during { background: color-mix(in oklab, var(--phase-during) 7%, transparent); }
   .rtg-phase.phase-lbl-after { background: color-mix(in oklab, var(--phase-after) 8%, transparent); }
   .rtg-phase.phase-lbl-task { background: color-mix(in oklab, var(--phase-task) 10%, transparent); }
+  .rtg-phase.phase-lbl-both { background: color-mix(in oklab, var(--phase-both) 10%, transparent); }
   .rtg-muted { color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
   /* Repeats (Routines page rebuild spec, "Repeats cell wraps"): a full weekly pattern
      ("Weekly · Mon, Tue, Wed, Thu, Fri, Sat 9am") is the one cell worth showing in
@@ -16904,6 +16912,7 @@
                 <option value="during">Not part of a chain</option>
                 <option value="before">Before</option>
                 <option value="after">After</option>
+                <option value="both">Both (bookends the anchor)</option>
               </select>
             </div>
             <!-- rtnActChain needs a real saved id to seed the builder (same constraint
@@ -32040,9 +32049,17 @@
     // only via the ⛓ Chains builder) wins when present; otherwise the plain
     // t.phase label (set by dragging here) places it with no gluing at all.
     const before = [], evt = [], after = [];
+    // 2026-08-17 pt 3 (Linh, "allow for routine to be both before and after"): a
+    // "both"-tagged routine bookends its anchor, so it belongs in both columns at
+    // once -- the Board is a spatial 3-column layout with no single-cell way to
+    // show "both" as one badge the way the Table/Cards phase pill does, so it
+    // appears as the same pill in each. Chained routines are unaffected -- a real
+    // chain link still resolves to one anchorMode, same as before.
     ROUTINE_TASKS.forEach(t => {
       const mode = (t.anchorTo && chainAnchorOf(t)) ? t.anchorMode : t.phase;
-      (mode === "before" ? before : mode === "after" ? after : evt).push(t);
+      if (mode === "before" || mode === "both") before.push(t);
+      if (mode === "after" || mode === "both") after.push(t);
+      if (mode !== "before" && mode !== "after" && mode !== "both") evt.push(t);
     });
     let html = `<div class="rtb-tbl"><div class="rtb-grid">`;
     html += cell(before, "Before", "before", true) + cell(evt, "Event", "during", false) + cell(after, "After", "after", false);
@@ -32272,7 +32289,7 @@
     if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; return; }
     const row = t => {
       const phase = rtnGridPhaseOf(t);
-      const phaseLbl = phase === "during" ? "event" : phase;
+      const phaseLbl = phase === "during" ? "event" : phase === "both" ? "before + after" : phase;
       const timeMin = rtnGridTimeMin(t);
       // a chain-linked step's Time cell shows the chain-computed time (see rtnGridTimeMin),
       // not a value of its own -- editing it inline would silently write a fallback-only
@@ -32364,7 +32381,7 @@
   // rather than a fabricated "event" with nothing to be on time for.
   const rtnPhasePillOf = t => {
     const p = rtnGridPhaseOf(t);
-    const label = p === "during" ? (rtnGridTimeMin(t) == null ? "task" : "event") : p;
+    const label = p === "during" ? (rtnGridTimeMin(t) == null ? "task" : "event") : p === "both" ? "before + after" : p;
     const cls = p === "during" ? (rtnGridTimeMin(t) == null ? "phase-lbl-task" : "phase-lbl-during") : `phase-lbl-${p}`;
     return `<span class="rtg-phase ${cls}">${label}</span>`;
   };
@@ -32845,7 +32862,7 @@
       // it clears any chain link/deadline the same way a drop would -- a phase this
       // cell sets is independent, so it can't also be chain-governed at the same time.
       const orig = rtnGridPhaseOf(t);
-      const opts = [["before", "Before"], ["during", "Event"], ["after", "After"]]
+      const opts = [["before", "Before"], ["during", "Event"], ["after", "After"], ["both", "Both"]]
         .map(([v, l]) => `<option value="${v}"${v === orig ? " selected" : ""}>${l}</option>`).join("");
       cell.innerHTML = `<select class="rtg-edit-in">${opts}</select>`;
       const sel = cell.querySelector("select");
@@ -37929,9 +37946,19 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  // 2026-08-17 pt 3 (Linh, "allow for routine to be both before and after"): Before
+  // and After are now independently toggleable (a routine can bookend an anchor --
+  // e.g. "stretch" both before AND after "Workout") while Event stays exclusive with
+  // both. rtnPhase is still a single string ("before"/"after"/"both"/"during"), same
+  // shape t.phase already stores -- "both" is just a new value in that same enum, not
+  // a structural change (see rtnPhaseHas/rtnPhaseToggle below).
+  const rtnPhaseHas = which => rtnPhase === which || rtnPhase === "both";
   function syncRtnPhaseButtons() {
-    document.querySelectorAll("#rtnPhasePicker .track-opt").forEach(b =>
-      b.setAttribute("aria-pressed", String(b.dataset.phase === rtnPhase)));
+    document.querySelectorAll("#rtnPhasePicker .track-opt").forEach(b => {
+      const p = b.dataset.phase;
+      const pressed = p === "during" ? rtnPhase === "during" : rtnPhaseHas(p);
+      b.setAttribute("aria-pressed", String(pressed));
+    });
   }
   // mirrors the Calendar column's own pill switch in the Routine Library table --
   // both read/write the same task.calOn (see the submit handler and the table's
@@ -38453,7 +38480,15 @@
   });
   document.getElementById("rtnPhasePicker").addEventListener("click", e => {
     const b = e.target.closest("[data-phase]"); if (!b) return;
-    rtnPhase = b.dataset.phase; rtnPhaseTouched = true; syncRtnPhaseButtons();
+    const which = b.dataset.phase;
+    if (which === "during") {
+      rtnPhase = "during";
+    } else {
+      const before = which === "before" ? !rtnPhaseHas("before") : rtnPhaseHas("before");
+      const after = which === "after" ? !rtnPhaseHas("after") : rtnPhaseHas("after");
+      rtnPhase = before && after ? "both" : before ? "before" : after ? "after" : "during";
+    }
+    rtnPhaseTouched = true; syncRtnPhaseButtons();
   });
   document.getElementById("rtnFreqPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-freq]"); if (!b) return;
