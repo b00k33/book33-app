@@ -93,6 +93,76 @@ variables and never one-off, so map, don't paste:
 `var(--dl-sep)` · `hairline rgba(216,185,121,.10)` → `var(--note-line)`.
 A raw hex from §4 pasted into a component is still a bug by §6.
 
+## book33-support-rules — the standing support system (Linh's own words, 2026-08-16)
+Translates her own profile into concrete, enforceable rules — the same role design44
+plays for visual design, but for STRUCTURE and FUNCTION. Claude Code reads this on every
+change and applies it by DEFAULT, not only to screens that mention essentials by name.
+When a request conflicts with one of these, say so — same as the existing "flag conflicts
+with design44" rule. Full reasoning: book33-human-profile-code44.md and
+book33-support-design-rules.md, when those exist in the project — as of 2026-08-16 they
+aren't committed here, so treat this section as the complete, standalone statement of the
+rules, not a summary of something else to go read.
+
+### 1. One tap, always
+Any done/skip/log action — essential, routine, habit, quick log — is ONE tap. No
+confirmation dialog for anything reversible (nearly everything here; undo instead of
+confirm-before). A miss in the moment ("low energy, can't start it right now") competes
+directly with every extra tap a flow adds. (This is about the APP'S OWN UI toward Linh —
+separate from, and doesn't loosen, Claude Code's own standing rule to confirm before
+risky actions it takes itself, like deleting data or force-pushing.)
+
+### 2. No failure states, ever
+A missed essential or routine is never styled as a failure — no red, no "you didn't," no
+streak-breaking guilt language, no badge that reads as a scold. Faint/neutral, always
+resumable, always loggable late. Non-negotiable, not a tone preference: shame teaches
+avoidance of the app, which defeats the point of it existing. Applies everywhere
+done/not-done is shown — Today's progress, streaks, the habit grid, the Daily Check-in,
+Growth page, all of it.
+
+### 3. Don't make her hunt
+Anything time-sensitive or important surfaces WHERE SHE IS, not only on the page that
+"owns" it — she won't reliably remember to go check a separate page for something she
+isn't actively thinking about. Essentials visible from the main Today view, not nested
+behind tap-to-expand only; gap-reminders (nothing scheduled this week) surface
+proactively, not only if she happens to open Routines and notice. When in doubt, surface
+it rather than filing it one level deeper.
+
+### 4. Real interruption for essentials, quiet for everything else — two tiers
+Essentials (sleep/eat/shower/teeth/water/medication) get real notifications —
+sound/vibration, escalating/repeating until acknowledged (open notification-infrastructure
+question — see book33-daily-checkin-concept.md if/when it exists in the project). Ordinary
+routines and habits stay passive — visible when she opens the app, no push, no escalation.
+Keep the two tiers distinctly different in how loudly they behave, not just in list
+position: mixing them either makes essentials easy to miss (too quiet) or turns the whole
+app into noise (too loud).
+
+### 5. Consistency is executive-function support, not polish
+One component identical everywhere isn't just visual tidiness — every place an
+interaction pattern differs is a small relearning cost at a moment attention may already
+be thin. This raises §6 above from should-do to must-do here: a page-specific one-off
+button/toggle/card pattern is a bug, not a style nit, exactly like a stray hex colour
+outside the design tokens is already treated as a bug on sight.
+
+### 6. Zero-effort starting point
+Smart defaults everywhere a form or log appears — today's date pre-filled, the last-used
+value suggested, quick-tap chips over typing. Starting to log something should cost
+nothing to think about, because "what do I even put here" is itself a barrier at low
+energy. Never require re-entering something the app already knows — reapply ABOUT-ME.md's
+existing rule specifically to essentials and quick-log flows, where it matters most.
+
+### 7. Time-blindness support: show elapsed/remaining, don't make her do the math
+Wherever relevant, show "how long since" or "how long until," not just a raw clock time
+she has to compare against her own sense of time (which isn't reliable for her). The
+fasting timer counting up is the existing pattern — extend it to essentials: "4h since
+water," "since 8am" on an unlogged breakfast, rather than only a bare timestamp.
+
+### 8. A miss is data, not a dead end
+When an essential or routine goes unlogged for the day, it doesn't vanish at midnight —
+it stays loggable late ("log it for earlier today" / backdate) and stays visible as
+still-open rather than silently disappearing. Catching up after a gap should never be MORE
+effortful than logging on time would have been — that's exactly when the lowest-friction
+path matters most.
+
 ## Fit the screen
 - Design for a phone ~360px wide. Nothing wider than the screen or overflowing.
 - Any popup/dropdown/panel/menu MUST fit the visible screen; if taller, it
