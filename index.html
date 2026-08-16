@@ -17077,16 +17077,24 @@
     Venus: { trait: "Love, beauty, connection",
       acts: ["Plan time with a partner", "Make something beautiful", "Reach out with love"] },
   };
-  function dayRulerPopoverHtml(pl) {
+  // `cls` is the popover anchor modifier (e.g. "num-hover-pop--right"), same param
+  // moonChipPopHtml/signChipPopHtml already take -- unused by the one pre-existing
+  // caller (#weekday .planet, mobile), so this stays backward compatible with it.
+  // 2026-08-17 (Linh, "the chips are <span>s... or the browser orphans them"): was
+  // <div>-built, like plainPopoverHtml before chipPopoverHtml existed as its all-<span>
+  // twin (see that comment for the mechanism). Converted to the same nhp-span shape --
+  // .theme-acts/.df-lean already set their own `display` explicitly (CSS, tag-agnostic),
+  // so nothing here needed a new rule beyond the tag swap itself.
+  function dayRulerPopoverHtml(pl, cls) {
     const info = PLANET_INFO[pl.planet];
-    if (!info) return plainPopoverHtml("Day ruler", pl.planet);
+    if (!info) return chipPopoverHtml("Day ruler", `<span class="t-title">${esc(pl.planet)}</span>`, "", cls);
     const chip = x => `<span data-add-action="${esc(x)}" title="Add “${esc(x)}” to this day" role="button" tabindex="0">${esc(x)}</span>`;
-    return `<div class="num-hover-pop"><div class="df-tile">
-      <div class="t-label">Day ruler</div>
-      <div class="t-head"><span class="t-value">${pl.icon}</span><span class="t-title">${esc(pl.planet)}</span></div>
-      <div class="t-sub">${esc(info.trait)}</div>
-      <div class="df-lean theme-acts">${info.acts.slice(0, 3).map(chip).join("")}</div>
-    </div></div>`;
+    return `<span class="num-hover-pop nhp-span${cls ? " " + cls : ""}"><span class="df-tile">
+      <span class="t-label">Day ruler</span>
+      <span class="t-head"><span class="t-value">${pl.icon}</span><span class="t-title">${esc(pl.planet)}</span></span>
+      <span class="t-sub">${esc(info.trait)}</span>
+      <span class="df-lean theme-acts">${info.acts.slice(0, 3).map(chip).join("")}</span>
+    </span></span>`;
   }
   const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -25997,6 +26005,12 @@
     const d = state.anchor;
     const chips = [];
     const mIdx = moonIndex(d);
+    // 2026-08-17 (Linh's mockup, "day-planet chip BEFORE the moon"): was pushed 3rd,
+    // after moon+sign, as a bare untappable glyph. Now first, with a drawn emblem
+    // (planetMarkHtml, same treatment as the moon) and the same day-ruler popover the
+    // desktop chip below gets — one pair of builders, both strips, so they can't drift.
+    const pl = planetOf(d);
+    chips.push({ ic: planetMarkHtml(pl.planet, "dcx-chip-ic"), val: pl.planet, pop: dayRulerPopoverHtml(pl) });
     // 2026-08-16 (item 2): same popovers as the desktop #ddhChips copy — one pair of
     // builders, both strips, so the two can't drift apart.
     chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx], pop: moonChipPopHtml(d) });
@@ -26008,8 +26022,6 @@
     // strip now matches the desktop day header chip-for-chip.
     const a = astroFor(d);
     chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name, pop: signChipPopHtml(a.sign) });
-    const pl = planetOf(d);
-    chips.push({ ic: glyphHtml(pl.icon, "dcx-chip-ic"), val: pl.planet });
     const q = cycleQuickInfo(TODAY);
     // 2026-08-16 (item 1): two changes, both so this ONE chip can replace the retired
     // 5am grid marker (renderSleepBand) outright.
@@ -35127,11 +35139,17 @@
     if (!chipsEl) return;
     const mIdx = moonIndex(d);
     const a = astroFor(d);
+    const pl = planetOf(d);
     // 2026-08-16 (item 2): moon + sun-sign carry the same hover/tap popover the cosmic
     // header buttons use. .num-hover-trigger supplies position:relative and the
     // hover/focus/.pop-open reveal; the tap half is the existing global delegate, so no
     // new handler. Popovers are chipPopoverHtml (all <span>) because .ddh-chip is a span.
+    // 2026-08-17 (Linh's mockup, "day-planet chip BEFORE the moon"): planetMarkHtml is
+    // the drawn emblem (same treatment/size as the drawn moon, .pl-mark beside .moon in
+    // CSS); dayRulerPopoverHtml is the same span-safe builder dcxChipsHtml's mobile copy
+    // now uses, so the two strips read the ruling planet from one shared source.
     const chips = [
+      `<span class="ddh-chip num-hover-trigger">${planetMarkHtml(pl.planet)}<span>${esc(pl.planet)}</span>${dayRulerPopoverHtml(pl, "num-hover-pop--right")}</span>`,
       `<span class="ddh-chip num-hover-trigger">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span>${moonChipPopHtml(d, "num-hover-pop--right")}</span>`,
       `<span class="ddh-chip num-hover-trigger">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span>${signChipPopHtml(a.sign, "num-hover-pop--right")}</span>`,
     ];
