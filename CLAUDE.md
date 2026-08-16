@@ -77,9 +77,11 @@ side back:
 - **§7 "tap targets ≥ ~24px" vs "Minimum tap target 44px" below.** design44 is the newer
   statement and is the floor now. 44px remains the preferred size for a primary control
   she uses one-handed; anything between 24 and 44 is acceptable rather than a bug.
-- **§1 spacing scale vs the two approved exception blocks** (mobile Day view, mobile Body
-  page, both dated 2026-08-16 and documented below). Those are stylesheets she approved
-  verbatim and they win inside their own scope only.
+- **§1 spacing scale vs the three approved exception blocks** (mobile Day view and mobile
+  Body page, both dated 2026-08-16; mobile Routines, dated 2026-08-17; all documented
+  below). The first two are stylesheets she approved verbatim; Routines is Claude's own
+  judgment call under her explicit pre-authorization to go off-scale if needed. All three
+  win inside their own scope only.
 - **§3 "Today tinted gold in every view"** vs the §3-fasting spec that removed the Day
   grid's today gold wash. Unresolved — ask before re-adding the wash to the day grid;
   it reads as a real conflict, not an oversight.
@@ -220,6 +222,37 @@ path matters most.
   (~100px tall, not her 64px): the chart is one `viewBox`-driven SVG, so forcing 64px
   would need `preserveAspectRatio="none"`, which squashes its dots into ellipses and
   distorts the axis text.
+
+### Approved exception — mobile Routines page (2026-08-17)
+- Linh: "shrink overall text size in mobile version for routines page, and reduce
+  space between lines" — scope confirmed as "everything on the page", magnitude as
+  "as small as still comfortably readable" (Claude's judgment call, not a supplied
+  stylesheet like the two exceptions above), "reduce space between lines" confirmed
+  as BOTH padding and line-height, and she explicitly pre-authorized going off both
+  scales if the target required it — same standing precedent as the Day-view/Body-
+  page exceptions. **Her authorization stands even though the values were judgment,
+  not dictation** — do not round these back to 11/13/20/38 without asking first.
+- Built in two passes: a sibling session shrunk the Cards view first ("Linh, 'shrink
+  it for mobile' round", commit `5b66ca5`) — Table view (`.rn-*` nested rows), the
+  flat sortable table (`.rtg-tbl`), Chains cards and the Add/Edit editor were shrunk
+  to match in the follow-up pass so all four surfaces read as one consistent scale
+  (§6), plus a line-height layer added on top of the Cards-view pass since that
+  commit only touched font-size/padding.
+- Values used, off both scales on purpose: type at 8.5/10/10.5/11/11.5/12px
+  (including half-pixels), padding/gaps at 1/2/3/6/10px, line-height 1.2–1.3.
+- Scope, and nothing beyond it: every rule inside `#routinesPage`'s
+  `@media (max-width: 640px)` blocks (the "ROUTINES · MOBILE" block and its
+  "Your exact sizes"/2026-08-17 follow-on rules), `#rtnGrid .rtg-tbl`'s
+  `@media (max-width: 640px) and (orientation: portrait)` block, the `.chain-row`
+  mobile block just below its base rule, and `#rtnAddForm`'s mobile blocks (field
+  text/labels/hints, `.rtn-repeat-*`, `.rtn-add-time-btn`, `.rtn-remove-time-link`,
+  `.rtn-sectitle`, sub-task text, duration readouts). The scale still governs every
+  other page and every other width, including Routines desktop.
+- Deliberate, do not "fix": every 44px/40px/36px tap target the 2026-08-17 "simplify
+  the editor" and earlier passes established (fields, sub-rows, add-time button,
+  repeat-sum, `.chain-unlink`) is untouched — this pass is font-size/line-height/
+  internal padding only, never a tap-target shrink, same split the Body-page
+  exception already established.
 
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
