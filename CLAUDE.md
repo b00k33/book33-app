@@ -65,12 +65,15 @@ deleting existing data. After each change, report what changed + the one-line un
 design44 is the general standard. The rules further down are the detailed component
 reference. Four genuine conflicts exist; resolve them this way, and do NOT "fix" either
 side back:
-- **§2 cap-and-center vs the desktop Day page.** On 2026-08-16 Linh asked for the exact
-  opposite for ONE surface: "the space of the day page should take up the whole browser
-  instead of having gaps and empty space." `[data-desk-day1] .wrap[data-view="day"]
-  { max-width: none }` and the ⤢ full-width toggle are that request. §2 still governs
-  every other page (Routines/Money/forms keep their caps — verified). A calendar is the
-  one thing that wants the whole window; nothing else is exempt.
+- **§2 cap-and-center vs full-bleed pages.** Two escalating decisions, both Linh's:
+  (a) 2026-08-16 morning — the desktop Day page goes full-window (`[data-desk-day1]
+  .wrap[data-view="day"] { max-width: none }` + the day-max toggle). (b) 2026-08-16
+  later — she extended it to EVERY page: "make EVERY page drop the floating framed-card
+  look and fill the full browser width — flat, edge-to-edge." The `.wrap` caps
+  (--wide-max + habits/money per-view) and `.page`'s radius/shadow/gold-glow frame are
+  gone at all widths. §2 now governs INNER content only: forms, editors and tables
+  (.add-form, routine/money editors, etc.) keep their own max-widths so fields never
+  stretch — the page CANVAS itself is full-bleed. Don't re-add a page-level cap.
 - **§7 "tap targets ≥ ~24px" vs "Minimum tap target 44px" below.** design44 is the newer
   statement and is the floor now. 44px remains the preferred size for a primary control
   she uses one-handed; anything between 24 and 44 is acceptable rather than a bug.
