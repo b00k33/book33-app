@@ -13000,14 +13000,11 @@
     display: block; width: 100%; text-align: left; border: none; background: none; color: var(--gold-bright);
     font: inherit; font-size: 11px; font-weight: 700; padding: 4px 8px; cursor: pointer;
   }
-  /* quick add */
-  .dsb-quick-row {
-    display: flex; align-items: center; gap: 8px; padding: 8px 8px; border-radius: var(--radius-sm);
-    background: var(--raised); margin-bottom: 4px; border: none; width: 100%; cursor: pointer;
-    font: inherit; color: var(--ink); font-size: 11px; min-height: 32px; text-align: left;
-  }
-  .dsb-quick-row:hover { background: color-mix(in oklab, var(--raised) 60%, var(--gold-bright) 6%); }
-  .dsb-quick-plus { color: var(--gold-bright); font-weight: 800; flex: none; }
+  /* 2026-08-17 (Linh: "collapse part of life"): tap-to-expand head, same chevron
+     idiom as #rtnChainsHead on the Routines page. */
+  #dsbPartsHead { cursor: pointer; }
+  #dsbPartsHead .dsb-group-head::after { content: " ›"; color: var(--ink-faint); }
+  #dsbPartsHead[aria-expanded="true"] .dsb-group-head::after { content: " ▾"; }
   /* 2026-08-15 corrections pass (item 5): #miniCalWrap (mini-month + this PY/UY/
      animal-motif/CD-pill row, .num-grp-mascot) reparents INTO the 214px sidebar
      at this breakpoint (placeDeskGrid()) — it was never designed for that width
@@ -13513,11 +13510,6 @@
     content: ""; position: absolute; left: 3px; top: -1px; width: 4px; height: 8px;
     border: solid var(--accent-on); border-width: 0 2px 2px 0; transform: rotate(45deg);
   }
-  /* quick-add rows get the spec's own exact grey rather than the derived
-     6%-ink-over-rail mix (--raised) everywhere else in this rail uses —
-     close but not identical to her literal #e4e7ec. */
-  [data-desk-day][data-theme="light"] .dsb-quick-row { background: #e4e7ec; }
-  [data-desk-day][data-theme="light"] .dsb-quick-row:hover { background: color-mix(in srgb, #e4e7ec 85%, var(--gold-bright) 8%); }
 
   /* ---- 2026-08-16 (mobile Day tightening, item 4): "Today's widgets" on the phone —
      the ≤640px member of the same one-render/several-containers set as #wrCards and
@@ -16121,13 +16113,18 @@
              (not a rebuilt copy) so its existing renderDeskRail() wiring, popover, and
              styling all come along unchanged. -->
         <div id="dsbNumSlot"></div>
+        <!-- 2026-08-17 (Linh: "collapse part of life, remove quick add"): Parts of
+             life now starts collapsed behind its own head, same tap-to-expand +
+             ›/▾ chevron idiom as the Routines page's Chains section
+             (#rtnChainsHead) -- one collapsible-section pattern everywhere
+             (design44 §6), not a new one-off. State persists via PREFS.dsbPartsOpen,
+             same as the sidebar's own #dsbTab/#dsbCollapseBtn open/closed prefs.
+             Quick add (the "+ Busy block" row) is removed outright, not hidden. -->
         <div class="dsb-group">
-          <div class="dsb-group-head">Parts of life</div>
-          <div id="dsbParts"></div>
-        </div>
-        <div class="dsb-group">
-          <div class="dsb-group-head">Quick add</div>
-          <button type="button" class="dsb-quick-row" data-dsb-quick="busy"><span class="dsb-quick-plus">＋</span> Busy block</button>
+          <div class="dsb-group-head-row" id="dsbPartsHead" role="button" tabindex="0" aria-expanded="false" title="Show parts of life">
+            <div class="dsb-group-head">Parts of life</div>
+          </div>
+          <div id="dsbParts" hidden></div>
         </div>
       </div>
       <div id="deskColMain"></div>
@@ -35761,14 +35758,21 @@
 
   /* ============================================================
      CALENDAR SIDEBAR — 214px, mini-month (reuses #miniCalWrap/renderMiniCal()
-     verbatim, reparented in by placeDeskGrid()) + Parts of life + Quick add
-     (§3). Collapses to a 22px tab via book33-prefs.sideOpen. ============================================================ */
+     verbatim, reparented in by placeDeskGrid()) + Parts of life (§3). Collapses
+     to a 22px tab via book33-prefs.sideOpen. Parts of life itself starts
+     collapsed too (2026-08-17, Linh: "collapse part of life, remove quick
+     add") -- PREFS.dsbPartsOpen, same persisted-prefs idiom as sideOpen.
+     ============================================================ */
   function renderDeskSidebar() {
     const sidebar = document.getElementById("deskSidebar");
     if (!sidebar) return;
     sidebar.dataset.open = String(PREFS.sideOpen !== false);
+    const partsHead = document.getElementById("dsbPartsHead");
     const partsEl = document.getElementById("dsbParts");
+    const partsOpen = PREFS.dsbPartsOpen === true;
+    if (partsHead) partsHead.setAttribute("aria-expanded", String(partsOpen));
     if (partsEl) {
+      partsEl.hidden = !partsOpen;
       // dayItemsFor(d) is the same authoritative per-day item builder renderDay()
       // itself reads from (§1's own shared function) — called again here (not a
       // second calculation, the SAME pure function) because these counts must
@@ -35799,6 +35803,7 @@
   document.getElementById("deskSidebar")?.addEventListener("click", e => {
     if (e.target.closest("#dsbTab")) { PREFS.sideOpen = true; savePrefs(); renderDeskSidebar(); return; }
     if (e.target.closest("#dsbCollapseBtn")) { PREFS.sideOpen = false; savePrefs(); renderDeskSidebar(); return; }
+    if (e.target.closest("#dsbPartsHead")) { PREFS.dsbPartsOpen = !(PREFS.dsbPartsOpen === true); savePrefs(); renderDeskSidebar(); return; }
     const allBtn = e.target.closest("#dsbPartsAll");
     if (allBtn) {
       const anyOn = lifeCats().some(c => trackVisible(c.id));
@@ -35814,14 +35819,9 @@
       toggleDeskTrack(row.dataset.track, nextOn);
       return;
     }
-    const quick = e.target.closest("[data-dsb-quick]");
-    if (quick) {
-      // 2026-08-17 (Event/Repeats collapse): "One-off routine" quick-add is retired --
-      // it depended on #kindPicker's routine option, which no longer exists (Repeats
-      // on the unified form now covers everything a routine used to be).
-      openFormWithAction(quick.dataset.dsbQuick === "busy" ? "Busy block" : "");
-      return;
-    }
+  });
+  document.getElementById("dsbPartsHead")?.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.target.click(); }
   });
   document.getElementById("deskSidebar")?.addEventListener("change", e => {
     const cb = e.target.closest(".dsb-parts-check");
