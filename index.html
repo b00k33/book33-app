@@ -6030,6 +6030,31 @@
   #rtnNoteField { order: 4; }
   #rtnAlsoRunsField { order: 5; }
   #rtnSchedExtraField { order: 6; }
+  /* New nested "Advanced" tier (Linh, "shrink it, ask me qs" round) — reuses the existing
+     .more-opts-toggle look for visual consistency with the outer More-options toggle, just
+     driven by native <details>/<summary> instead of a JS-toggled aria-expanded button, so no
+     new JS is needed. Takes over Sub-tasks' old order:3 slot so Category/FitLink/[Advanced]/
+     Note/SchedExtra still read as a coherent sequence; the old order:5 on #rtnAlsoRunsField
+     is now a harmless no-op (it's nested, not a direct flex/grid child, so `order` no longer
+     applies to it — nothing to clean up). */
+  #rtnAdvancedField { order: 3; }
+  #rtnAdvancedField summary { list-style: none; cursor: pointer; }
+  #rtnAdvancedField summary::-webkit-details-marker { display: none; }
+  #rtnAdvancedField[open] summary .moreopts-chevron { transform: rotate(90deg); }
+  #rtnAdvancedField > *:not(summary) { margin-top: 10px; }
+  /* .field sets display:flex unconditionally (needed once open) -- that author rule
+     beats the UA stylesheet's own `details:not([open]) > *:not(summary){display:none}`,
+     so a closed <details> would otherwise still show its .field children. Restate the
+     hide explicitly, scoped to this one details element only. */
+  #rtnAdvancedField:not([open]) > *:not(summary) { display: none; }
+
+  /* ---- Text/spacing tightened throughout the form (both Add-new and Edit modes) ---- */
+  #rtnAddForm { gap: 8px; padding: 12px 14px; margin-top: 12px; }
+  #rtnAddForm.rtn-inline-mode { gap: 6px 12px; margin: 6px 0; padding: 10px 14px; }
+  #rtnAddForm .field { gap: 3px; }
+  #rtnAddForm .field label { font-size: 10px; }
+  #rtnAddForm .field-hint { font-size: 10px; margin-top: 2px; }
+  #rtnAddForm.rtn-inline-mode .rtn-sectitle { font-size: 10px; margin: 3px 0 -3px; }
   /* 2026-08-09 (readable + tessellated mobile editor brief follow-up): measured
      live -- Category's generic .rtn-g8 (62%) plus FitLink's generic .rtn-g4
      (30%, but floored at min-width:140px by the .rtn-g6 rule two lines below --
@@ -15343,79 +15368,90 @@
             <input type="date" id="rtnEndDate">
           </div>
         </div>
-        <div class="field full" id="rtnAlsoRunsField">
-          <label>Also runs on <span class="field-hint">extra one-off dates</span></label>
-          <div id="rtnExtraList" class="rtn-date-list"></div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <input type="date" id="rtnExtraDate" style="max-width:170px">
-            <button type="button" class="add-btn" id="rtnExtraAdd">+ Add date</button>
-          </div>
-        </div>
         <div class="field rtn-g8" id="rtnCategoryField">
           <label for="rtnCategory">Sub-category <span class="field-hint">optional</span></label>
           <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
           <datalist id="rtnCatList"></datalist>
         </div>
-        <div class="field rtn-g6" id="rtnSubTasksField">
-          <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
-          <!-- 2026-08-11 (grouped sub-tasks brief): #rtnSubList now holds one or more
-               .rtn-sub-group sections (each its own 2-col .rtn-sub-group-grid of tiles)
-               instead of being the grid itself -- see the CSS comment by .rtn-sub-list
-               for why group membership needs no separate bookkeeping. #rtnSubAdd/
-               #rtnSubAddGroup moved OUT into their own row below #rtnSubList so
-               clearRtnSubRows()'s rtnSubList.innerHTML="" can't delete them. -->
-          <div id="rtnSubList" class="rtn-sub-list"></div>
-          <div class="rtn-sub-actions">
-            <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
-            <button type="button" class="add-btn rtn-sub-addgroup" id="rtnSubAddGroup">+ Add group</button>
+        <!-- 2026-08-17 (Linh, "shrink it, ask me qs" round): a SECOND, nested tier
+             inside the existing More-options reveal, for the three fields she flagged
+             as rarely used -- Chain, Sub-tasks (+ the hair-routine fields that stand in
+             for it), and Also-runs-on (moved here from right after Starts/Ends). Native
+             <details>/<summary> needs no JS -- every id/class/handler inside is
+             unchanged, only the parent moved. -->
+        <details class="field full rtn-advanced" id="rtnAdvancedField">
+          <summary class="more-opts-toggle">
+            <span>Advanced — chain, sub-tasks, one-off dates</span><span class="moreopts-chevron">›</span>
+          </summary>
+          <div class="field rtn-g6" id="rtnSubTasksField">
+            <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
+            <!-- 2026-08-11 (grouped sub-tasks brief): #rtnSubList now holds one or more
+                 .rtn-sub-group sections (each its own 2-col .rtn-sub-group-grid of tiles)
+                 instead of being the grid itself -- see the CSS comment by .rtn-sub-list
+                 for why group membership needs no separate bookkeeping. #rtnSubAdd/
+                 #rtnSubAddGroup moved OUT into their own row below #rtnSubList so
+                 clearRtnSubRows()'s rtnSubList.innerHTML="" can't delete them. -->
+            <div id="rtnSubList" class="rtn-sub-list"></div>
+            <div class="rtn-sub-actions">
+              <button type="button" class="add-btn rtn-sub-add" id="rtnSubAdd">+ Add sub-task</button>
+              <button type="button" class="add-btn rtn-sub-addgroup" id="rtnSubAddGroup">+ Add group</button>
+            </div>
+            <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
+            <!-- 2026-08-17 (Linh, "simplify" brief): the sub-task/duration relationship
+                 tools -- Set total vs From steps, the locked auto-readout, the "steps
+                 saved but not driving length" summary, and the mismatch warning --
+                 relocated here from the main-surface "How long" picker (her explicit
+                 "do NOT show the sub-task-summing duration" on that reveal). Same ids/
+                 handlers/updateRtnSubTotal() logic, unchanged; only the parent moved. -->
+            <div class="track-picker rtn-durmode-toggle" id="rtnDurModeToggle" role="group" aria-label="What sets this routine's length" hidden>
+              <button type="button" class="track-opt" data-durmode="set" aria-pressed="true">Set total</button>
+              <button type="button" class="track-opt" data-durmode="steps" aria-pressed="false">From steps</button>
+            </div>
+            <button type="button" class="rtn-dur-locked" id="rtnDurLocked" hidden>
+              <span id="rtnDurLockedVal"></span><span class="rtn-dur-locked-tag">🔒 auto</span>
+            </button>
+            <button type="button" class="rtn-subs-summary" id="rtnSubsSummary" hidden></button>
+            <div class="rtn-dur-warn" id="rtnDurWarn" hidden>
+              <span id="rtnDurWarnText"></span>
+              <button type="button" class="rtn-fit-steps-btn" id="rtnFitStepsBtn">Fit to steps</button>
+            </div>
           </div>
-          <div id="rtnSubTotal" class="rtn-sub-total" hidden></div>
-          <!-- 2026-08-17 (Linh, "simplify" brief): the sub-task/duration relationship
-               tools -- Set total vs From steps, the locked auto-readout, the "steps
-               saved but not driving length" summary, and the mismatch warning --
-               relocated here from the main-surface "How long" picker (her explicit
-               "do NOT show the sub-task-summing duration" on that reveal). Same ids/
-               handlers/updateRtnSubTotal() logic, unchanged; only the parent moved. -->
-          <div class="track-picker rtn-durmode-toggle" id="rtnDurModeToggle" role="group" aria-label="What sets this routine's length" hidden>
-            <button type="button" class="track-opt" data-durmode="set" aria-pressed="true">Set total</button>
-            <button type="button" class="track-opt" data-durmode="steps" aria-pressed="false">From steps</button>
+          <!-- 2026-08-12 (hair-wash rotation rebuild): shown ONLY when editing the single
+               hair-wash routine (task.id === HAIR_ROUTINE_ID) -- replaces #rtnSubTasksField
+               for that one routine (hidden together, see syncRtnHairFields). Rotation is the
+               ordered, looping queue of wash ids the position pointer walks through; each
+               wash's own step list lives in the field below it. -->
+          <div class="field full" id="rtnHairRotField" hidden>
+            <label>Rotation <span class="field-hint">the looping order washes cycle through</span></label>
+            <div id="rtnHairRotList" class="rtn-hairrot-list"></div>
+            <button type="button" class="add-btn" id="rtnHairRotAdd">+ Add to rotation</button>
           </div>
-          <button type="button" class="rtn-dur-locked" id="rtnDurLocked" hidden>
-            <span id="rtnDurLockedVal"></span><span class="rtn-dur-locked-tag">🔒 auto</span>
-          </button>
-          <button type="button" class="rtn-subs-summary" id="rtnSubsSummary" hidden></button>
-          <div class="rtn-dur-warn" id="rtnDurWarn" hidden>
-            <span id="rtnDurWarnText"></span>
-            <button type="button" class="rtn-fit-steps-btn" id="rtnFitStepsBtn">Fit to steps</button>
+          <div class="field full" id="rtnHairWashField" hidden>
+            <label>Washes &amp; steps <span class="field-hint">each wash is its own reusable step list</span></label>
+            <div id="rtnHairWashList" class="rtn-hairwash-list"></div>
+            <button type="button" class="add-btn" id="rtnHairWashAdd">+ Add wash</button>
           </div>
-        </div>
-        <!-- 2026-08-12 (hair-wash rotation rebuild): shown ONLY when editing the single
-             hair-wash routine (task.id === HAIR_ROUTINE_ID) -- replaces #rtnSubTasksField
-             for that one routine (hidden together, see syncRtnHairFields). Rotation is the
-             ordered, looping queue of wash ids the position pointer walks through; each
-             wash's own step list lives in the field below it. -->
-        <div class="field full" id="rtnHairRotField" hidden>
-          <label>Rotation <span class="field-hint">the looping order washes cycle through</span></label>
-          <div id="rtnHairRotList" class="rtn-hairrot-list"></div>
-          <button type="button" class="add-btn" id="rtnHairRotAdd">+ Add to rotation</button>
-        </div>
-        <div class="field full" id="rtnHairWashField" hidden>
-          <label>Washes &amp; steps <span class="field-hint">each wash is its own reusable step list</span></label>
-          <div id="rtnHairWashList" class="rtn-hairwash-list"></div>
-          <button type="button" class="add-btn" id="rtnHairWashAdd">+ Add wash</button>
-        </div>
-        <!-- 2026-08-17 (Linh, "simplify" brief -- "Chain to another routine"): there was
-             no in-form chain control before this -- chaining has only ever lived on the
-             separate Chains page/builder (rtnActChain, also reached from the row's ⋯
-             menu). Rather than build a second, parallel way to set the same anchor
-             fields (a real duplication risk -- design44 §6), this is a shortcut into
-             that exact same existing flow: reuses rtnActChain() verbatim. Hidden for a
-             not-yet-saved new routine (nothing to seed the builder with yet), same
-             pattern as #rtnDeleteBtn. -->
-        <div class="field full" id="rtnChainField" hidden>
-          <label for="rtnChainBtn">Chain to another routine <span class="field-hint">optional</span></label>
-          <button type="button" class="rtn-repeat-sum" id="rtnChainBtn">Open the chain builder ›</button>
-        </div>
+          <!-- 2026-08-17 (Linh, "simplify" brief -- "Chain to another routine"): there was
+               no in-form chain control before this -- chaining has only ever lived on the
+               separate Chains page/builder (rtnActChain, also reached from the row's ⋯
+               menu). Rather than build a second, parallel way to set the same anchor
+               fields (a real duplication risk -- design44 §6), this is a shortcut into
+               that exact same existing flow: reuses rtnActChain() verbatim. Hidden for a
+               not-yet-saved new routine (nothing to seed the builder with yet), same
+               pattern as #rtnDeleteBtn. -->
+          <div class="field full" id="rtnChainField" hidden>
+            <label for="rtnChainBtn">Chain to another routine <span class="field-hint">optional</span></label>
+            <button type="button" class="rtn-repeat-sum" id="rtnChainBtn">Open the chain builder ›</button>
+          </div>
+          <div class="field full" id="rtnAlsoRunsField">
+            <label>Also runs on <span class="field-hint">extra one-off dates</span></label>
+            <div id="rtnExtraList" class="rtn-date-list"></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="date" id="rtnExtraDate" style="max-width:170px">
+              <button type="button" class="add-btn" id="rtnExtraAdd">+ Add date</button>
+            </div>
+          </div>
+        </details>
         <div class="field rtn-g4" id="rtnFitLinkField">
           <label for="rtnFitLink">Fitness tracker link <span class="field-hint">optional</span></label>
           <select id="rtnFitLink">
