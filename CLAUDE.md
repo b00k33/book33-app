@@ -2,6 +2,89 @@
 Also read ABOUT-ME.md before any work — build to this user's preferences.
 Book33 is a single-file mobile web app (index.html). It must always look clean,
 symmetrical, aligned and organized. Follow every rule, then re-check your work.
+## design44 — the standing design system (Linh's own words, 2026-08-16)
+Book33's standing design system — the design requests Linh keeps making. When she says
+"design44" (e.g. "apply design44"), follow ALL rules below. Claude Code reads this on
+every change and applies it by DEFAULT to every new screen and edit (desktop AND mobile
+unless a rule says otherwise). Before 2026-08-16 this existed only as 23 scattered
+inline citations in index.html with no written definition — this section is now the
+single source; cite it, don't re-derive it from a code comment.
+
+### 1. Compact & dense
+Tight, dense layouts by default — short rows, small section gaps, small uppercase labels,
+no tall pills with empty middles. Spacing scale only: 4/8/12/16/24/32px. "Tessellate":
+pack related controls together as tiles in a 12-column grid, not a full-width vertical
+stack. Narrow items (sub-tasks, chips) go two+ per row.
+
+### 2. Not too wide — cap & center
+Nothing edge-to-edge. Centered columns: `--content-max:720px` (forms/reading),
+`--wide-max:1040–1160px` (tables/dashboards). Container `max-width; width:100%; margin:0
+auto`. Form fields must not stretch full screen. Any "too wide" → add max-width + margin
+auto.
+
+### 3. Succinct, not cluttered — scannable at a glance
+Aligned grids/tables over scattered full-width rows (trackers = one grid, rows=trackers,
+cols=days, small marks). Light not loud: colour dot + text on subtle bg, not big saturated
+pills. Dim/strike done items. Cap visible items then "+N more". Today tinted gold as an
+anchor in every view.
+
+### 4. Flat design + Ink & Brass
+Separate with colour + space, not boxes/borders/nested boxes. Palette: bg #0f0b07, surface
+#17120d, ink #efe7d6, muted #9c8f79, faint #5f5645, gold #d8b979, bright gold #EAC24E,
+hairline rgba(216,185,121,.10). Gold for numbers/accents; colour = category.
+
+### 5. Proportional & aligned
+Calendar: one fixed scale — every hour same height, blocks sized to real duration, snapped
+to hour lines (no auto-fit rows); overlaps split into side-by-side columns. Everything
+aligns to a shared grid/column edge.
+
+### 6. Consistency
+One component identical everywhere (button, chip, card, dropdown, toggle). Reuse existing
+components/variables; no one-offs.
+
+### 7. Interaction
+Anything representing a page (fasting bar, summary strip) is tappable → navigates there.
+Whole element is the tap target; cursor:pointer + hover/press; keyboard accessible. Mobile
+tap targets ≥ ~24px.
+
+### 8. Mobile vs desktop
+Density/tessellation is a desktop/wide gain. Under @media (max-width:640px) collapse to a
+clean single column; never leave mobile cramped; never change a working mobile layout when
+the request is about desktop.
+
+### 9. Every code change (workflow)
+Commit and push to main automatically (no waiting for approval), EXCEPT confirm before
+deleting existing data. After each change, report what changed + the one-line undo command.
+
+### Where design44 and the older rules below disagree — precedence
+design44 is the general standard. The rules further down are the detailed component
+reference. Four genuine conflicts exist; resolve them this way, and do NOT "fix" either
+side back:
+- **§2 cap-and-center vs the desktop Day page.** On 2026-08-16 Linh asked for the exact
+  opposite for ONE surface: "the space of the day page should take up the whole browser
+  instead of having gaps and empty space." `[data-desk-day1] .wrap[data-view="day"]
+  { max-width: none }` and the ⤢ full-width toggle are that request. §2 still governs
+  every other page (Routines/Money/forms keep their caps — verified). A calendar is the
+  one thing that wants the whole window; nothing else is exempt.
+- **§7 "tap targets ≥ ~24px" vs "Minimum tap target 44px" below.** design44 is the newer
+  statement and is the floor now. 44px remains the preferred size for a primary control
+  she uses one-handed; anything between 24 and 44 is acceptable rather than a bug.
+- **§1 spacing scale vs the two approved exception blocks** (mobile Day view, mobile Body
+  page, both dated 2026-08-16 and documented below). Those are stylesheets she approved
+  verbatim and they win inside their own scope only.
+- **§3 "Today tinted gold in every view"** vs the §3-fasting spec that removed the Day
+  grid's today gold wash. Unresolved — ask before re-adding the wash to the day grid;
+  it reads as a real conflict, not an oversight.
+
+### Palette note — design44's names vs the app's real tokens
+§4's hexes are Linh's mockup vocabulary, not all of them literal app tokens. §6 says reuse
+variables and never one-off, so map, don't paste:
+`gold #d8b979` → `var(--cosmic-gold)` · `bright gold #EAC24E` → `var(--gold-bright)` ·
+`ink #efe7d6` → `var(--dl-day)` (nearest live token; the app's body ink is
+`var(--ink)` #F0E6D4) · `muted #9c8f79` → `var(--dl-small)` · `faint #5f5645` →
+`var(--dl-sep)` · `hairline rgba(216,185,121,.10)` → `var(--note-line)`.
+A raw hex from §4 pasted into a component is still a bug by §6.
+
 ## Fit the screen
 - Design for a phone ~360px wide. Nothing wider than the screen or overflowing.
 - Any popup/dropdown/panel/menu MUST fit the visible screen; if taller, it
