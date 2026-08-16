@@ -15,6 +15,27 @@ symmetrical, aligned and organized. Follow every rule, then re-check your work.
 - One corner radius for cards, one for pills. One type scale (title/body/label) —
   see Component reference below for the actual values.
 - Minimum tap target 44px.
+### Approved exception — mobile Day view (2026-08-16)
+- Linh supplied an approved target stylesheet for the MOBILE DAY VIEW in a design
+  session and asked for it verbatim ("it's the approved design"). It uses values off
+  both scales on purpose: spacing/sizes 3/5/6/7/9/10/14/24/26/32/34/50px and type at
+  9/9.5/10/11/11.5/12/12.5/14px including half-pixels. **Her approved values win** —
+  a recent decision of hers supersedes an older rule. Do NOT round them back.
+- Scope of the exception, and nothing beyond it: the `MOBILE DAY VIEW — LINH'S APPROVED
+  DESIGN (2026-08-16)` block in index.html (one `@media (max-width: 1023px)` block plus
+  the small `@media (max-width: 640px)` header block right after it). Everything it
+  touches is listed in its own header comment: the mobile header row, the day-context
+  chips, the command bar, the merged day-nav row, the two meters, the sleep note, the
+  hour grid and the calendar blocks. The scale still governs every other page and every
+  other width, including desktop.
+- Two consequences of her sheet that ARE deliberate and should not be "fixed": chips are
+  7px-cornered (not 999px) and the meter bars are 4px-cornered (not 999px) on that view.
+- Known gap, measured, left as-is: her single-line block threshold is 28px but her
+  two-line block needs ~33px at `--hour-h: 46px`. A 41–47 minute block therefore renders
+  two lines in a slightly-too-short box. The NAME is protected (`flex: none` on
+  `.tl-title`, so it never squeezes); the time line is what runs into the bottom padding.
+  Raising the threshold from 28 to 33 in `renderTimeline()` closes it if she asks.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.

@@ -512,7 +512,11 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { background: var(--desk); }
+  /* 2026-08-16 (Linh's approved mobile Day design, "nothing may spill off the screen"):
+     max-width is the harmless half of her rule and stays unscoped as she wrote it. The
+     other half, overflow-x:hidden, is deliberately mobile-only — see the MOBILE DAY VIEW
+     block near the end of this stylesheet for why (page-level position:sticky). */
+  html, body { background: var(--desk); max-width: 100%; }
   /* the browser's default 8px body margin was never reset -- every .wrap padding value
      in the file has silently had an extra 8px tacked onto all four sides this whole
      time, on every page, both viewports. */
@@ -1392,6 +1396,14 @@
     font-size: 1.25em; line-height: 1; letter-spacing: 0;
     display: inline-block; color: var(--ink);
   }
+  /* 2026-08-16 (Linh's approved mobile Day design, "no colour emoji in the header"):
+     the Day header's day-ruler now goes through glyphHtml() (see renderDay), but the
+     .glyph + U+FE0E pair alone can't win against an explicit colour-emoji-FIRST
+     font-family — an explicit family outranks a presentation request. Same one-line
+     unwind, and the same reasoning, as the existing .astro-line .gl.glyph rule further
+     down; scoped to .glyph so a planet printed WITHOUT the helper (Month day-of-week
+     labels, cycle dates, weekday pickers) keeps .planet's own stack untouched. */
+  .planet .glyph { font-family: var(--font-body); }
   .date-block .date-big {
     /* 2026-08-01: bare serif "1" reads as a capital I at 72px (no flag stroke in
        Cormorant Garamond) — font-body keeps the hero number legible as a numeral. */
@@ -12558,6 +12570,254 @@
   }
 
   /* ============================================================
+     MOBILE DAY VIEW — LINH'S APPROVED DESIGN (2026-08-16)
+     ============================================================
+     Source: a target stylesheet she approved in a design session and handed over as
+     "the approved design... change styling only". Her class names in that sheet
+     (.dayHead/.chips/.cmdBar/.dayNav/.meter/.wakeNote/.dayGrid/.blk) are LABELS for
+     "what each part is", not selectors — she said so explicitly — so every declaration
+     below is applied to this app's own real class, and none of her names are introduced.
+
+     Placed LAST of the Day-page CSS on purpose: almost every rule here ties on
+     specificity with an existing single-class rule somewhere above (.dcx-chip,
+     .quick-add, .nav-arrow.day-step, .tl-item…), and source order is what decides a tie.
+     Moving this block earlier silently un-applies roughly half of it.
+
+     BREAKPOINT — hers is 1023px, not this file's usual 640px, so TABLET (641–1023px)
+     now gets the same day-view treatment. Deliberate, and it is what her sheet says.
+     Two pieces stay at ≤640px because their DOM arrangement, not their styling, is
+     gated there and re-gating it would be a behaviour change she ruled out:
+       · .dayHead — placeDateLine() (JS) only reparents #dayRow2 into the header slot at
+         ≤640px, and .nav-tiers is a COLUMN above that width. Her one-row header simply
+         does not exist at tablet, so its values are applied in the ≤640px block below.
+       · the merged `‹ date › ⚙` nav row — #dayStepDate/#dayNavGear are display:none
+         above 640px (see their own block). Her .dayNav SIZES still apply at tablet (the
+         arrows are real there); the parts that are hidden just don't paint.
+
+     TOKENS — her sheet writes --gold/--field/--muted/--faint/--ink/--raised/--grid,
+     which is HER vocabulary, mapped here onto this file's real Ink & Brass tokens:
+       --gold   -> var(--margin-rule)   the live gold accent (what .day-nav-gear,
+                                        .cal-days-btn[aria-pressed] and .pp-act.pri
+                                        already use for exactly this "filled control"
+                                        role) — EXCEPT the B33 wordmark, which keeps
+                                        --gold-bright, the token it already shares with
+                                        the desktop .ddt-word so the two can't drift.
+       --field  -> var(--field-bg)      --muted -> var(--ink-soft)
+       --faint  -> var(--ink-faint)     --ink   -> var(--ink)
+       --raised -> var(--raised)        --grid  -> var(--paper-line)  (already what
+                                        .hour-row::before/::after draw the hairlines in)
+     The only two literal hexes are the two her sheet names itself, #12100c (block ink)
+     and #171006 (ink on a gold fill) — both already sanctioned in this codebase.
+
+     OFF-SCALE VALUES — her sheet is full of 14/9/7/5/34/26/10/6/3px and half-pixel type
+     (12.5/11.5/9.5px), which CLAUDE.md's 4/8/12/16/24/32 spacing scale and 38/20/13/11
+     type scale both forbid. Applied verbatim anyway: she is the designer, this is the
+     approved design, and a recent decision of hers supersedes an older rule. CLAUDE.md
+     carries a dated exception note pointing at this block so a later pass doesn't
+     "correct" it back. The exception is THIS BLOCK ONLY — the scale still governs
+     everywhere else.
+     ============================================================ */
+  /* her sheet's --pad: ONE gutter shared by the header, the chips, the command bar, the
+     nav row, the meters and the grid, so everything on the day sits on one left edge.
+     This app already has that mechanism — .page's own side padding — so --pad becomes
+     that number rather than a second gutter system bolted onto each component. Day page
+     only; every other page keeps its own padding. */
+  @media (max-width: 1023px) {
+    #dayPage { padding-left: 14px; padding-right: 14px; }
+    /* her --hour-h:46px (already this file's phone value; this extends it to tablet,
+       which was still on the :root 48px) and her --rail-w:32px + .dayGrid's 7px column
+       gap. --gutter is this file's existing single knob for "how far the content column
+       sits from the true left edge", i.e. exactly rail + gap = 39px, so the hour rail,
+       the sleep note, the template bands and the events layer all move together. */
+    :root { --hour-h: 46px; --gutter: 39px; --blk-radius: 3px; }
+    /* "nothing may spill off the screen". SCOPED TO MOBILE, unlike her sheet, which has
+       it unscoped: overflow-x:hidden on html/body makes the document a scroll container
+       and is the classic reason a page-level position:sticky silently stops sticking —
+       and .rtn-side (the desktop Routines side editor, ≥1024px) is exactly that. Her
+       intent is a phone concern and she asked for desktop to stay as it is, so the
+       clamp applies where it is needed and the desktop sticky is left working. */
+    html, body { overflow-x: hidden; }
+
+    /* ---- .chips -> .dcx-chips / .dcx-chip / .dcx-chip-val (#dayCtxChips) ---- */
+    /* #dayPage-scoped because the ≤640px spacing-rhythm block above sets
+       `#dayPage .dcx-chips { padding-bottom: 4px }` at id specificity — a plain
+       .dcx-chips rule here loses to it however late it sits. */
+    #dayPage .dcx-chips { gap: 5px; padding: 0 0 10px; }
+    .dcx-chip {
+      background: var(--raised); border-radius: 7px; padding: 5px 8px;
+      font-size: 10px; color: var(--ink-soft); font-weight: 600; gap: 5px;
+    }
+    .dcx-chip-val { color: var(--ink); font-weight: 700; }
+
+    /* ---- .cmdBar -> .quick-add (#qaSlotDay) ---- */
+    /* background --field-bg replaces a hardcoded #1D1710 and the hairline border goes:
+       her bar is one flat filled field, no outline. */
+    #qaSlotDay .quick-add {
+      margin: 0 0 9px; background: var(--field-bg); border: none; border-radius: 10px;
+      padding: 9px 10px; gap: 8px;
+    }
+    #qaSlotDay .qa-field { padding: 0; }
+    #qaSlotDay .quick-add input { font-size: 12px; font-weight: 600; }
+    /* the placeholder IS her .cmdBar .t text. Its colour is set by a `:root .quick-add
+       input::placeholder { ... !important }` rule further up (a Day-mode fix), so this
+       needs !important to reach it at all — the id raises specificity, !important only
+       breaks the tie the other !important created. */
+    #qaSlotDay .quick-add input::placeholder { color: var(--ink-faint) !important; }
+    /* colour only at this width — the 24px SQUARE geometry is phone-only, see the
+       ≤640px block at the end for why. */
+    #qaSlotDay .quick-add .qa-btn:not(.qa-secondary) {
+      background: var(--margin-rule); border-color: var(--margin-rule); color: #171006;
+      font-weight: 800;
+    }
+
+    /* ---- .dayNav -> .day-step-row ---- */
+    #dayPage .day-step-row { gap: 7px; padding: 0 0 9px; }
+    .nav-arrow.day-step {
+      width: 34px; height: 34px; border-radius: 9px; border: none;
+      background: var(--field-bg); color: var(--margin-rule);
+      font-size: 14px; font-weight: 700; flex: none;
+    }
+    .nav-arrow.day-step::after { content: ""; position: absolute; inset: -5px; }
+    /* Day mode only: her sheet was drawn against Night, where gold on --field-bg is a
+       dark-on-dark-ish pairing that reads fine. In Day, --field-bg is #EDEDED and the
+       same gold (#D4AF37, what --margin-rule resolves to inside .page in BOTH themes)
+       measures 1.80:1 against it — unreadable. --ink is what this file's own existing
+       mobile .nav-arrow rule already uses, so this is the established pairing rather
+       than a new one; the gold fill/dark glyph on the ⚙ beside it measures 8.9:1 in
+       both themes and is untouched. */
+    :root[data-theme="light"] .nav-arrow.day-step { color: var(--ink); }
+    .day-step-row .day-step-date { font-size: 14px; font-weight: 700; }
+    .day-nav-gear {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--margin-rule); color: #171006; font-size: 12.5px; font-weight: 800;
+    }
+    .day-nav-gear::after { inset: -5px; }
+
+    /* ---- .meter -> .dcx-meter (both rows, deliberately identical) ---- */
+    .dcx-meter { gap: 9px; padding: 7px 0; }
+    .dcx-meter-lbl { width: 50px; font-size: 9px; letter-spacing: 0.8px; font-weight: 800; }
+    .dcx-meter-track { height: 6px; border-radius: 4px; min-width: 0; }
+    .dcx-meter-fill { border-radius: 4px; }
+    .dcx-meter-val { font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+    /* ---- .wakeNote -> #sleepBand's one-line "Slept until 6am" (renderSleepBand) ----
+       type/colour/gap only. It stays absolutely positioned against the grid rather than
+       becoming an in-flow row: that is DOM structure, not styling. The italic is kept
+       deliberately — it is Linh's own earlier explicit preference ("i like that sleep is
+       in italics indicated here") and her sheet doesn't ask for it to go, it just
+       doesn't mention font-style. */
+    .sleep-band .lbl {
+      display: flex; align-items: center; gap: 7px;
+      font-size: 10px; font-weight: 600; color: var(--ink-faint);
+    }
+
+    /* ---- .dayGrid -> #dayTimelineWrap / #timelineScroll ---- */
+    /* "no border, no rounded frame": the calendar stops being a card and becomes the
+       page. (A fasting day keeps its wash + rounded bottom — that rule carries a
+       [data-fasting] attribute and therefore outranks this one, which is right: the tint
+       is a live status, not frame decoration.) padding-top stays as it is; the hour
+       labels are positioned at top:-8px and would be clipped by overflow:hidden without
+       it, so it is clearance, not styling. */
+    #dayTimelineWrap {
+      background: none; border: 0; border-radius: 0; box-shadow: none;
+    }
+    #timelineScroll { border-radius: 0; }
+    /* id-scoped to beat `.timeline-wrap .hour-row .hour-label` (3 classes, further up),
+       which is what actually owns this label's type today. */
+    #dayTimelineWrap .hour-row .hour-label { width: 32px; font-size: 9px; font-weight: 700; }
+
+    /* ---- .blk -> .tl-item inside the day grid ---- */
+    #dayTimelineWrap .tl-item, #dayTimelineWrap .tl-item[data-kind="event"] {
+      padding: 4px 8px; gap: 0;
+    }
+    /* flex:none on BOTH lines is load-bearing, not tidying. .tl-item is a flex column
+       with a fixed height, so its children shrink by default — measured live at 360px
+       before this was added: a 45-minute block (31.5px) squeezed its 14.4px title line
+       box down to 11.5px, i.e. the name's own descenders got cut, which is exactly the
+       clipping her design is fixing. With flex:none the title always gets its full line
+       and the TIME is what yields at the bottom edge instead — the app's own long-
+       standing rule for this ("shorten or hide the time, never the name").
+       line-height:1 on the time line for the same reason: it takes the meta's own line
+       box from ~11px to 9.5px, which is what lets a 45-minute block show BOTH lines
+       whole. See the note in CLAUDE.md for the one band this still can't reach. */
+    #dayTimelineWrap .tl-item .tl-title { font-size: 12px; font-weight: 800; line-height: 1.2; flex: none; }
+    #dayTimelineWrap .tl-item .tl-meta {
+      font-size: 9.5px; font-weight: 600; opacity: 0.7; margin-top: 1px;
+      line-height: 1; flex: none;
+    }
+    /* dark ink on the track fill — was ≤640px only, extended to her breakpoint so a
+       tablet block reads the same as a phone one. Night only; Day mode's fills are the
+       darkened colorDay values chosen for WHITE, so it keeps --cat-t (see the ≤640px
+       original's own measured contrast table for the numbers). */
+    #dayTimelineWrap .tl-item { --blk-txt: #12100c; }
+    :root[data-theme="light"] #dayTimelineWrap .tl-item { --blk-txt: var(--cat-t); }
+    .tl-block { color: var(--blk-txt, var(--cat-t)); }
+    #dayTimelineWrap .tl-item .tl-meta .loc { color: var(--blk-txt); }
+
+    /* ---- .blk--single -> .tl-item.tl-tight ----
+       a block under 28px tall (renderTimeline's threshold) becomes ONE row: name and
+       start time side by side instead of stacked. The base .tl-block.tl-tight rule
+       DROPS the time entirely; her design keeps it, so it is turned back on here (id +
+       two classes, which beats that two-class rule). Desktop-day1 is above this media
+       query and keeps the old drop-the-time behaviour untouched. */
+    #dayTimelineWrap .tl-item.tl-tight {
+      flex-direction: row; align-items: center; gap: 6px; padding: 3px 8px;
+    }
+    /* flex:1 1 auto here UNDOES the flex:none the two-line rule above sets — that one is
+       about the COLUMN axis (don't let the name's line box be squeezed vertically), but
+       .tl-tight flips the block to a ROW, where the same flex:none stopped the name
+       shrinking sideways. Measured live at 360px before this line existed: a long name in
+       a half-width lane pushed the time clean outside the block (title right edge 381px
+       against a block ending at 341px), so the time simply vanished. min-width:0 is what
+       lets a flex item shrink below its content width at all; the 1-line clamp then
+       ellipsizes the name instead of overflowing it. */
+    #dayTimelineWrap .tl-item.tl-tight .tl-title {
+      font-size: 11px; line-height: 1.2; flex: 1 1 auto; min-width: 0;
+      -webkit-line-clamp: 1; padding-right: 0;
+    }
+    #dayTimelineWrap .tl-item.tl-tight .tl-meta {
+      display: block; margin-top: 0; font-size: 9px; flex: none;
+    }
+  }
+  /* ---- .dayHead -> .nav-tiers (phone only — see the BREAKPOINT note above) ---- */
+  @media (max-width: 640px) {
+    /* her 12px/14px/9px, with the safe-area floor this bar already owns for every page */
+    .nav-tiers { padding: max(12px, env(safe-area-inset-top)) 14px 9px; gap: 8px; }
+    /* .b33 — scoped to .nav-drawer-word so the desktop .ddt-word it shares a declaration
+       with (12px/1.4px) is untouched. */
+    .nav-drawer-word { font-size: 11px; font-weight: 800; letter-spacing: 1.3px; }
+    /* .dt — the date line is ONE size and weight in her header, where this slot had
+       three tiers (11px words, 13px gold numbers) left over from an earlier pass. */
+    #navDateSlot .weekday-moon-row, #navDateSlot .date-row,
+    #navDateSlot .weekday, #navDateSlot .ud-badge,
+    #navDateSlot .date-big .date-num, #navDateSlot .date-big .date-mon,
+    #navDateSlot .ud-badge .n { font-size: 12.5px; font-weight: 700; }
+    /* .ic — the header's icon buttons. #numStarBtn (the only .jump-btn that docks here)
+       is display:none app-wide today, so this currently paints nothing; it is applied so
+       the set already matches her design whenever an icon returns to this row. */
+    .nav-tiers .topbar-right .jump-btn {
+      width: 26px; height: 26px; border-radius: 8px; border: none;
+      background: var(--field-bg); color: var(--ink-soft); font-size: 11.5px; flex: none;
+    }
+    /* .cmdBar .add — the 24px gold square. PHONE ONLY, and that is a measured tablet
+       conflict rather than a preference: ≤640px is the only width where "Search" and
+       "Best day" are hidden and this is the bar's lone trailing +. At 641–1023px they
+       are still there at 35px tall, and a 24px button between them measured visibly
+       uneven — one of the things Linh names as a dislike. Tablet keeps the button's
+       existing size and takes only the colour change from the block above. */
+    #qaSlotDay .quick-add .qa-btn:not(.qa-secondary) {
+      width: 24px; height: 24px; border-radius: 7px; position: relative;
+    }
+    #qaSlotDay .quick-add .qa-btn:not(.qa-secondary)::after { font-size: 14px; }
+    /* 24px is well under CLAUDE.md's 44px minimum tap target, so the TARGET is padded
+       rather than the art grown — the same invisible-pseudo trick .day-nav-gear and
+       #addRow .add-btn already use. ::before, because ::after already carries the "+". */
+    #qaSlotDay .quick-add .qa-btn:not(.qa-secondary)::before {
+      content: ""; position: absolute; inset: -10px;
+    }
+  }
+
+  /* ============================================================
      NOTIFICATIONS — Book33Notify panel (2026-08-05, "B33 Notification" spec).
      Flat settings rows in the Ink & Brass language: hairline dividers, gold
      uppercase group labels, green switches, gold selected chips, gold values.
@@ -16758,8 +17018,21 @@
   // present 34 times elsewhere in this file. Writing it as ASCII makes the one
   // character this whole section depends on readable and reviewable.
   const VS15 = String.fromCharCode(0xFE0E);
+  // 2026-08-16 (Linh's approved mobile Day design, "no colour emoji in the header"):
+  // appending VS15 is a no-op if the string ALREADY carries VS16 (U+FE0F, the opposite
+  // instruction) — a variation selector binds to the base character immediately before
+  // it, so "☀️︎" is still an emoji-presentation ☀ with a stray VS15 after it.
+  // PLANETS[6].icon is written as "☀️" (U+2600 U+FE0F) and Sunday's day-ruler therefore
+  // rendered as a colour emoji everywhere it went through this helper, including the
+  // #dayCtxChips day-ruler chip §8 had already "fixed". Stripping VS16 first is safe for
+  // every caller by definition: this function's ONE job is text presentation, and the
+  // four colour emoji §8 deliberately keeps (🗓 🍎 🎂 🎉) are never routed through it.
+  // built from its code point for the same reason VS15 is, one line up: both are
+  // invisible in an editor and in a diff.
+  const VS16 = String.fromCharCode(0xFE0F);
   function glyphHtml(g, cls) {
-    return `<span class="glyph${cls ? " " + cls : ""}" aria-hidden="true">${g}${VS15}</span>`;
+    const txt = String(g).split(VS16).join("");
+    return `<span class="glyph${cls ? " " + cls : ""}" aria-hidden="true">${txt}${VS15}</span>`;
   }
   // 0 new · 1-3 waxing · 4 full · 5-7 waning — the 8 real phases onto §8's 4 class
   // names; data-phase carries the exact index so the CSS can still tell a crescent
@@ -20859,9 +21132,32 @@
        every task instead of stacking them under each other. top/bottom both go through
        topForMin (2026-08-02, code44 per-block expand) so an item spanning across an
        expanded block stretches to include that extra room instead of floating loose. */
+    // 2026-08-16 (Linh's approved mobile Day design, fix 1 — "block height comes from
+    // duration only; minimum rendered height 14px"): the floor was 26px, which is what
+    // actually broke proportionality at the short end — at --hour-h:46 a 30-min block
+    // (23px) and a 35-min block (26.8px) BOTH clamped to the same 26px, so two different
+    // durations drew the same box. 14px is her floor: it is below every real block's own
+    // computed height (a 30-min block is 20px now, a 35-min one 23.8px), so the clamp
+    // stops firing on anything she actually schedules and only guards against a
+    // degenerate zero/negative height.
+    // The `- 3` is NOT part of the floor bug and stays: it is the constant hairline gap
+    // that keeps two back-to-back blocks from painting as one continuous column. It costs
+    // strict proportionality a constant (a 90-min block is 66px vs a 45-min block's
+    // 31.5px, i.e. 2.09x rather than exactly 2.00x) — remove the `- 3` if she ever wants
+    // literal proportionality more than the separation.
+    // 14px is the MOBILE (and tablet) floor — her spec's number, and it works there
+    // because her .blk--single is a centred one-line row at 11px/3px padding, which was
+    // measured at 14px with only 0.6px of LEADING (not ink) outside the box. Desktop-day1
+    // keeps 26px, and that is measured too rather than cautious: its own block is a
+    // 13.5px title in a 5px-padded COLUMN, needing 26.9px for one line, and at a 14px
+    // floor a short routine ("Manage fridge") rendered with its title squeezed to a 4px
+    // line box — unreadable. Lowering the floor there would be a regression, not the
+    // improvement fix 1 is, so desktop keeps the number that was tuned to its own metrics.
+    // Nothing about proportionality differs: the floor only ever clamps blocks shorter
+    // than ~22 min (mobile) / ~17 min (desktop) and every longer block is pure duration.
     placed.forEach(p => {
       p.top = topForMin(p.cs);
-      p.h = p.isBlock ? Math.max(topForMin(p.ce) - p.top - 3, 26) : 20;
+      p.h = p.isBlock ? Math.max(topForMin(p.ce) - p.top - 3, deskDay1Active() ? 26 : 14) : 20;
     });
     // 2026-08-06 (Linh, screenshot: "the overlapping events need to display overlap"):
     // SUPERSEDES the 2026-08-02 "no overlapping blocks" mobile special-case that used
@@ -20926,7 +21222,6 @@
         ? (isClinicBlock && patCount >= 1 ? ` · ${patCount} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
         : "";
       const metaTrack = metaDesk;
-      const meta = `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
       // 2026-08-06 (Linh: "remove the edit and delete icons from every event block --
       // they're faint and cluttered"): the per-card .tl-edit/.tl-del pencil/× are gone --
       // tapping the block opens the detail popup, whose own header pencil/trash already
@@ -20951,7 +21246,20 @@
       // even a single title line has no room (a 30-min block is only ~27px tall:
       // Math.max(topForMin(ce)-top-3,26) above). Mobile/every other width keeps
       // the original 52px, untouched.
-      const tight = isBlock && p.h < (deskDay1Active() ? 28 : 52);
+      // 2026-08-16 (Linh's approved mobile Day design, fix 1): 28px is now the ONE
+      // threshold at every width — her spec states it plainly ("under 28px → render one
+      // line, name + start time only"), and the mobile-only 52px it replaces was tuned
+      // for the OLD mobile block metrics (8px padding + a 15px title). Her .blk--single
+      // values — 3px/8px padding and an 11px single-line title, applied in CSS below —
+      // put a one-line block at 19.2px, so 28px is comfortably above what one clean,
+      // un-clipped line needs. Desktop-day1 already used 28 and is unchanged.
+      const tight = isBlock && p.h < 28;
+      // her single-line variant is "name + START time", not the full range: at 9px in a
+      // flex row beside the title there is room for one time, and the end time is one tap
+      // away in the detail sheet. Non-tight blocks keep the full range exactly as before.
+      const meta = tight
+        ? fmtTime(e.start)
+        : `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
@@ -24820,10 +25128,18 @@
     // Gated on `|| mobileDay1Active()` rather than dropping the gate entirely —
     // tablet (641-1023px) and every multi-day count keep the omit-when-empty
     // behaviour byte-for-byte, since neither shows the mockup's meter pair.
+    // 2026-08-16 (Linh's approved mobile Day design): the inactive state was a bare
+    // label + caption with NO bar track, so FASTING and TODAY were two different row
+    // SHAPES stacked on each other — the label sat at 50px, the caption then started
+    // wherever the flex row put it instead of lining up with TODAY's value on the right.
+    // It now goes through meterHtml() like every other meter, at 0% width, so the two
+    // rows are byte-for-byte the same markup and the bar/value columns align exactly.
+    // Same call at both widths (desktop-day1 and mobile-1-day) — nothing about WHEN the
+    // row renders changes, only what it renders.
     el.innerHTML = fd.active
       ? meterHtml("Fasting", fd.pct, `${fd.label} / ${fd.goal}`, "--fit-workout")
       : (deskDay1Active() || mobileDay1Active()
-        ? `<div class="dcx-meter"><span class="dcx-meter-lbl">Fasting</span><span class="dcx-meter-val" style="color:var(--ink-faint);font-weight:400">— not fasting</span></div>`
+        ? meterHtml("Fasting", 0, "— not fasting", "--fit-workout")
         : "");
   }
 
@@ -24950,8 +25266,17 @@
     // .day-row2 .weekday .planet override below, scoped so the shared .planet base
     // rule (used everywhere else: Month day-of-week, cycle dates, weekday pickers)
     // stays untouched.
+    // 2026-08-16 (Linh's approved mobile Day design, "no colour emoji in the header"):
+    // pl.icon went in RAW here, so Sunday's "☀️" (U+2600 U+FE0F) painted as a colour
+    // emoji right beside the weekday — the one glyph her device screenshot flags. Routed
+    // through glyphHtml() now, the same §8 text-presentation helper #dayCtxChips and
+    // #ddhChips already use for this exact value; the information (which planet rules
+    // the day) and the tap-for-popover trigger are both untouched, only the rendering.
+    // glyphHtml strips the VS16 first (see its own comment) — without that the suffix
+    // would be a no-op. The .glyph span also needs .planet's colour-emoji-FIRST
+    // font-family unwound, which is a one-line CSS rule beside .planet's own.
     document.getElementById("weekday").innerHTML =
-      `<span class="wd-full">${WD_FULL[dowIndex(d)]}</span><span class="wd-short">${WD_FULL[dowIndex(d)].slice(0, 3)}</span><span class="planet num-hover-trigger" tabindex="0">${pl.icon}${dayRulerPopoverHtml(pl)}</span>`;
+      `<span class="wd-full">${WD_FULL[dowIndex(d)]}</span><span class="wd-short">${WD_FULL[dowIndex(d)].slice(0, 3)}</span><span class="planet num-hover-trigger" tabindex="0">${glyphHtml(pl.icon)}${dayRulerPopoverHtml(pl)}</span>`;
     document.getElementById("dateBig").innerHTML =
       `<span class="date-num">${d.getDate()}</span><span class="date-mon">${MON_SHORT[d.getMonth()]}</span>`;
     // 2026-08-02 (Linh: "shown when mouse hovers over PM9"): focusPopoverHtml() reuses
