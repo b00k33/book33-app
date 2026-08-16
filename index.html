@@ -12281,6 +12281,31 @@
   [data-desk-day1] .wrap { padding: 0; }
   [data-desk-day1] .astro { display: none; }
   [data-desk-day1] #dayPage { padding: 0; box-shadow: none; border-radius: 0; background: none; }
+  /* 2026-08-16 — THE gap Linh kept reporting ("the day page should take up the
+     whole browser instead of having gaps and empty space"). The item-0 pass above
+     removed both PADDING layers but left `.wrap[data-view="day"] { max-width:
+     1400px }` (base rule, far above) untouched, and .wrap centres itself with auto
+     margins. So on a 1920 monitor the whole 4-zone layout sat in a 1400px column
+     with 226px of dead space down each side, and collapsing a panel only ever
+     redistributed width INSIDE that column — the calendar could never actually get
+     bigger, which is exactly what she was describing.
+     Scoped to [data-desk-day1] on purpose: the 2026-08-06 "make the app more
+     compact on desktop" decision was about FORMS and TABLES stretching unreadably
+     wide, and every one of those pages keeps its cap. A calendar is the one thing
+     that genuinely wants every pixel of the window. */
+  [data-desk-day1] .wrap[data-view="day"] { max-width: none; }
+
+  /* ---- 0b. FULL-WIDTH CALENDAR (2026-08-16, "maximise") — one press drops all
+     three side zones so the timeline owns the whole window, one press restores
+     them. book33-prefs.dayMax, toggled by #ddtMaxBtn in the topbar.
+     Each selector is `body[data-day-max="on"] #id` = (1 id, 1 attr, 1 element),
+     which outranks the `[data-desk-day1] #id` rules that show these zones
+     (1 id, 1 attr) — so no !important is needed anywhere here. ---- */
+  body[data-day-max="on"] { margin-left: 0; }
+  body[data-day-max="on"] #deskNavRail,
+  body[data-day-max="on"] #deskSidebar,
+  body[data-day-max="on"] #deskWidgetRail { display: none; }
+  .ddt-max[aria-pressed="true"] { background: var(--margin-rule); color: var(--accent-on); }
 
   /* ---- 1. Chapters rail — 52px, fixed, EVERY desktop page (not gated on
      [data-desk-day1]: this is global nav chrome, the ≥1024px replacement for
@@ -15148,6 +15173,11 @@
         <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
       </span>
       <span class="ddt-days" id="ddtDays"></span>
+      <!-- full-width toggle: hides the chapters rail, the CALENDAR sidebar and the
+           widget rail in one press so the timeline spans the whole window. Reuses
+           .ddt-gear's box wholesale so it can't drift from the ⚙ beside it. -->
+      <button type="button" class="ddt-gear ddt-max" id="ddtMaxBtn" aria-pressed="false"
+              aria-label="Full-width calendar" title="Full-width calendar">⤢</button>
       <button type="button" class="ddt-gear" id="ddtGear" aria-label="Settings" title="Settings">⚙</button>
     </div>
     <div id="deskGrid" hidden>
@@ -24782,7 +24812,7 @@
   // drove. A stale `hideNames` left in an already-saved book33-prefs is harmless —
   // ntMerge only fills MISSING defaults, it never deletes extra stored keys, and
   // nothing reads that name any more.
-  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, tracksOff: [], dayStart: 6, dayEnd: 22 };
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, dayMax: false, tracksOff: [], dayStart: 6, dayEnd: 22 };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -34014,6 +34044,7 @@
     // return real values on desktop again, per "extend, don't rewrite."
     document.documentElement.toggleAttribute("data-desk-day1", deskDay1Active());
     document.body.dataset.navRail = PREFS.navRail === "pinned" ? "pinned" : "collapsed";
+    applyDayMax();
     if (on && calDaysActive() === 1) {
       if (logo && navTiers && logo.parentElement !== navTiers) navTiers.insertBefore(logo, navTiers.firstElementChild);
       if (dropNav && dateCard && dropNav.parentElement !== dateCard) dateCard.appendChild(dropNav);
@@ -34132,6 +34163,34 @@
   window.addEventListener("resize", placeDeskGrid);
   if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDeskGrid);
   if (deskWidgetsMq.addEventListener) deskWidgetsMq.addEventListener("change", placeDeskGrid);
+
+  /* ============================================================
+     FULL-WIDTH CALENDAR (2026-08-16). Linh, repeatedly: the day page should
+     "take up the whole browser instead of having gaps and empty space", and
+     maximise should "fill the whole window". Two separate things were stopping
+     that, and only this one is a real toggle — the other was the 1400px cap on
+     .wrap (see the CSS block, item 0). This drops the chapters rail, the
+     CALENDAR sidebar and the widget rail together, because hiding any one of
+     them alone still left the timeline boxed in by the other two.
+     ============================================================ */
+  function applyDayMax() {
+    const on = PREFS.dayMax === true;
+    document.body.dataset.dayMax = on ? "on" : "off";
+    const btn = document.getElementById("ddtMaxBtn");
+    if (btn) {
+      btn.setAttribute("aria-pressed", String(on));
+      // ⤡ reads as "bring the corners back in", the inverse of ⤢
+      btn.textContent = on ? "⤡" : "⤢";
+      const lbl = on ? "Exit full-width calendar" : "Full-width calendar";
+      btn.setAttribute("aria-label", lbl);
+      btn.setAttribute("title", lbl);
+    }
+  }
+  document.getElementById("ddtMaxBtn")?.addEventListener("click", () => {
+    PREFS.dayMax = PREFS.dayMax !== true;
+    savePrefs();
+    applyDayMax();
+  });
 
   /* ============================================================
      CHAPTERS RAIL — 52px, GLOBAL desktop chrome (task #125). Renders NAV_ITEMS,
