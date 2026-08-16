@@ -12023,9 +12023,20 @@
     }
     .rail-info { border: none; background: none; cursor: pointer; color: var(--ink-faint); font-size: 13px; padding: 0; }
     .rail-info:hover { color: var(--gold-bright); }
-    .rail-chips { display: flex; gap: 8px; }
-    .rail-chip { flex: 1; text-align: center; padding: 8px; border-radius: 12px; background: var(--desk-btn-bg); }
-    .rail-chip .n { display: block; font-size: 24px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+    /* 2026-08-16 (Linh, "the third tile gets cut off"): was 3 flex:1 chips in a row --
+       always as wide as the sidebar forced them, so a 4th/5th never had room. A
+       2-wide grid wraps instead (5 items -> 3 rows), so tile width is fixed and
+       independent of item count. .n carries the "numeral/glyph display" role
+       CLAUDE.md's type scale doesn't name (see project_book33app_drift_sweep_2026_08
+       memory) -- 16px here, shrunk from the old 24px because 5 tiles now share the
+       space 3 used to have; the .word variant (sun sign / zodiac animal, a name
+       instead of a number) drops to 12px with wrapping allowed since
+       "Sagittarius"/"Rooster Year" won't fit one line at this tile width --
+       min-height keeps 1-line numeral and 2-line word tiles the same height. */
+    .rail-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .rail-chip { text-align: center; padding: 8px; border-radius: var(--radius-sm); background: var(--desk-btn-bg); min-width: 0; }
+    .rail-chip .n { display: flex; align-items: center; justify-content: center; min-height: 30px; font-size: 16px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
+    .rail-chip .n.word { font-size: 12px; line-height: 1.2; white-space: normal; }
     .rail-chip .l { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-top: 4px; }
     .rail-cycle { display: flex; align-items: center; gap: 12px; }
     .rail-cycle-ring {
@@ -16180,7 +16191,7 @@
              their rail homes below the 1024px breakpoint -->
         <div id="railHome" hidden></div>
         <div class="rail-card" id="railNum">
-          <h4>Numerology <button type="button" class="rail-info" id="railNumInfo" title="Universal, Personal and Month numbers — the full reading lives in the Numerology &amp; Astrology card">ⓘ</button></h4>
+          <h4>Numerology <button type="button" class="rail-info" id="railNumInfo" title="Universal Day, Personal Month, sun sign, Chinese year and Personal Year — the full reading lives in the Numerology &amp; Astrology card">ⓘ</button></h4>
           <div class="rail-chips" id="railNumChips"></div>
         </div>
         <div class="rail-card" id="railCycle" hidden>
@@ -30370,6 +30381,24 @@
     return reduceKeepMaster(toSingleDigit(pm) + toSingleDigit(date.getDate()));
   }
 
+  // Shared numerology/astrology chip set (Linh 2026-08-16, "the sidebar and header
+  // never disagree"): every UD/PM/Sign/Animal-year/PY chip display reads from this
+  // ONE function instead of re-deriving its own subset, so they can't drift apart.
+  // Same universalDay/personalMonth/personalYear/astroFor calls every other
+  // numerology display in the app already uses -- this just packages them as one
+  // ordered, labelled set. `word: true` marks the two astrology entries whose value
+  // is a name (Leo, Horse Year) rather than a number, for tiles that display either.
+  function dayNumerologyChips(d) {
+    const pm = personalMonth(d), py = personalYear(d), a = astroFor(d);
+    return [
+      { code: "ud", label: "UD", value: universalDay(d).value, word: false },
+      { code: "pm", label: "PM", value: pm != null ? masterLabel(pm) : "—", word: false },
+      { code: "sign", label: "Sign", value: a.sign.name, word: true },
+      { code: "animal", label: "Animal", value: `${a.cy.animal} Year`, word: true },
+      { code: "py", label: "PY", value: py != null ? masterLabel(py) : "—", word: false },
+    ];
+  }
+
   // IMPRINT MONTH — Personal Month 1 (Linh 2026-07-23: "August is my first imprint
   // month. I need to plan most of my major event's actions in this month"). The 1
   // opens the personal cycle: what gets started here imprints the months that follow,
@@ -35382,11 +35411,9 @@
     const chips = document.getElementById("railNumChips");
     if (!chips) return;
     const d = state.anchor;
-    chips.innerHTML = [
-      { n: universalDay(d).value, l: "Universal" },
-      { n: personalDay(d), l: "Personal" },
-      { n: personalMonth(d), l: "Month" },
-    ].map(c => `<span class="rail-chip"><b class="n">${c.n}</b><span class="l">${c.l}</span></span>`).join("");
+    chips.innerHTML = dayNumerologyChips(d)
+      .map(c => `<span class="rail-chip"><b class="n${c.word ? " word" : ""}">${esc(c.value)}</b><span class="l">${esc(c.label)}</span></span>`)
+      .join("");
     // Cycle — mini ring (42px, never giant), phase emoji inside, ring colour from the
     // same dotVar every other CD pill uses; whole card hides when nothing is logged
     const cycCard = document.getElementById("railCycle");
