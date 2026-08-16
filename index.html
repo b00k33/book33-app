@@ -16774,6 +16774,29 @@
               <label for="fNote">Notes <span class="field-hint">optional</span></label>
               <textarea id="fNote" class="field-bare" rows="3" placeholder="Add notes or a description…"></textarea>
             </div>
+            <!-- 2026-08-17 (Linh, "can't be edited to be after or before"): a routine
+                 created through the Repeats picker had no way to join a chain -- the
+                 Routines editor's own Before/During/After + "Chain to another routine"
+                 shortcut (rtnActChain) didn't exist here. Phase is a plain independent
+                 field, same meaning as the Routines table's own quick rtnPhase cell --
+                 works immediately, no save needed first. Both shown only once Repeats
+                 is set (see syncFRepeatChoice) -- a one-off event has no chain to join. -->
+            <div class="field full" id="fPhaseField" hidden>
+              <label for="fPhaseSel">Chain phase <span class="field-hint">optional</span></label>
+              <select id="fPhaseSel" class="field-bare">
+                <option value="during">Not part of a chain</option>
+                <option value="before">Before</option>
+                <option value="after">After</option>
+              </select>
+            </div>
+            <!-- rtnActChain needs a real saved id to seed the builder (same constraint
+                 the Routines editor's own #rtnChainBtn has) -- this saves the routine
+                 with whatever's filled in so far, then jumps straight into the chain
+                 builder for it, one tap instead of save-then-go-find-it. -->
+            <div class="field full" id="fChainField" hidden>
+              <label for="fChainBtn">Chain to another routine <span class="field-hint">optional</span></label>
+              <button type="button" class="rtn-repeat-sum" id="fChainBtn">Save &amp; open the chain builder ›</button>
+            </div>
           </div>
         </form>
 
@@ -40015,6 +40038,8 @@
       document.getElementById("fRptIntervalField").hidden = false;
     }
     document.getElementById("fFillCalField").hidden = fRepeatChoice === "none";
+    document.getElementById("fPhaseField").hidden = fRepeatChoice === "none";
+    document.getElementById("fChainField").hidden = fRepeatChoice === "none";
     const LABELS = {
       none: "Doesn't repeat", daily: "Every day", weekdays: "Weekdays (Mon–Fri)",
       eachweekday: (document.getElementById("fRptEachWeekdayBtn") || {}).textContent || "Every…",
@@ -42799,6 +42824,82 @@
     durMinutes.value = total > 0 ? String(total % 60) : "";
     syncDurFromBoxes();
   });
+  // fRepeatChoice -> ROUTINE_TASKS freq/weekdays/etc, shared by the submit handler's
+  // routine branch AND #fChainBtn (which saves the routine on its own, outside the
+  // form's submit event, so it can jump straight into the chain builder afterward).
+  // Returns false (having already alerted/focused the bad field) on validation failure.
+  function computeFRepeatFields(task, dateVal) {
+    if (fRepeatChoice === "daily") {
+      task.freq = "daily";
+    } else if (fRepeatChoice === "weekdays") {
+      task.freq = "weekly"; task.weekdays = [0, 1, 2, 3, 4];
+    } else if (fRepeatChoice === "eachweekday") {
+      task.freq = "weekly"; task.weekdays = [dowIndex(parseKey(dateVal))];
+    } else if (fRepeatChoice === "weekly") {
+      const days = fRptWeekdays.slice().sort((a, b) => a - b);
+      if (!days.length) { alert("Pick at least one day of the week."); return false; }
+      task.freq = "weekly"; task.weekdays = days;
+      const wi = parseInt(document.getElementById("fRptWeekInterval").value, 10) || 1;
+      if (wi > 1) {
+        const wa = document.getElementById("fRptWeekAnchor").value;
+        if (!wa) { document.getElementById("fRptWeekAnchor").focus(); return false; }
+        task.weekInterval = wi; task.weekAnchor = wa;
+      }
+    } else if (fRepeatChoice === "monthly") {
+      const dv = parseInt(document.getElementById("fRptMonthlyDay").value, 10);
+      if (!dv || dv < 1 || dv > 31) { document.getElementById("fRptMonthlyDay").focus(); return false; }
+      task.freq = "monthly"; task.day = dv;
+    } else if (fRepeatChoice === "yearly") {
+      const dv = document.getElementById("fRptYearlyDate").value;
+      if (!dv) { document.getElementById("fRptYearlyDate").focus(); return false; }
+      const dd = parseKey(dv);
+      task.freq = "yearly"; task.month = dd.getMonth() + 1; task.day = dd.getDate();
+    } else if (fRepeatChoice === "interval" || fRepeatChoice === "every2days") {
+      const n = parseInt(document.getElementById("fRptIntervalN").value, 10);
+      if (!n || n < 1) { document.getElementById("fRptIntervalN").focus(); return false; }
+      task.freq = "interval"; task.intervalDays = n; task.anchor = dateVal;
+      task.intervalUnit = document.getElementById("fRptIntervalUnit").value;
+    }
+    return true;
+  }
+  // builds a ROUTINE_TASKS row from whatever's currently in the form and saves it --
+  // self-contained (reads the DOM itself) so both the normal Save button and
+  // #fChainBtn's "save & open the chain builder" shortcut can call it without one
+  // depending on the other's local state. Returns null (already focused/alerted the
+  // problem field) if the form isn't ready to save yet.
+  function buildRoutineFromCurrentForm() {
+    const title = fTitle.value.trim();
+    if (!title) { fTitle.focus(); return null; }
+    const noteVal = document.getElementById("fNote").value.trim();
+    const allDay = fAllDay.checked || !fStart.value;
+    let start = allDay ? "" : fStart.value;
+    let end = allDay ? "" : fEnd.value;
+    if (!allDay && start && !end && fDur.value) {
+      const dur = parseInt(fDur.value, 10);
+      if (dur > 0) end = minToTime(toMin(start) + dur);
+    }
+    if (start && end && toMin(end) <= toMin(start)) end = "";
+    const dateVal = fDate.value || keyOf(state.anchor);
+    const task = {
+      id: uid(), title, track: state.track, category: fCat.value.trim(),
+      note: noteVal, calOn: fFillCalOn, freq: "",
+    };
+    if (start) task.start = start;
+    if (!allDay && start && end) task.end = end;
+    if (!computeFRepeatFields(task, dateVal)) return null;
+    const phase = document.getElementById("fPhaseSel").value;
+    if (phase !== "during") task.phase = phase;
+    ROUTINE_TASKS.push(task);
+    saveRoutines();
+    if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
+    return task;
+  }
+  document.getElementById("fChainBtn").addEventListener("click", () => {
+    const task = buildRoutineFromCurrentForm();
+    if (!task) return;
+    closeForm();
+    rtnActChain(task.id);   // seeds the chain builder with this routine and navigates there
+  });
   form.addEventListener("submit", e => {
     e.preventDefault();
     const title = fTitle.value.trim();
@@ -42828,46 +42929,8 @@
     // back to "none" for that case (syncFRepeatLock), same "no conversion in v1"
     // rule the legacy weekly-repeat checkbox below already used.
     if (fRepeatChoice !== "none" && !eventEditId) {
-      const task = {
-        id: uid(), title, track: state.track, category: fCat.value.trim(),
-        note: noteVal, calOn: fFillCalOn, freq: "",
-      };
-      if (start) task.start = start;
-      if (!allDay && start && end) task.end = end;
-      if (fRepeatChoice === "daily") {
-        task.freq = "daily";
-      } else if (fRepeatChoice === "weekdays") {
-        task.freq = "weekly"; task.weekdays = [0, 1, 2, 3, 4];
-      } else if (fRepeatChoice === "eachweekday") {
-        task.freq = "weekly"; task.weekdays = [dowIndex(parseKey(dateVal))];
-      } else if (fRepeatChoice === "weekly") {
-        const days = fRptWeekdays.slice().sort((a, b) => a - b);
-        if (!days.length) { alert("Pick at least one day of the week."); return; }
-        task.freq = "weekly"; task.weekdays = days;
-        const wi = parseInt(document.getElementById("fRptWeekInterval").value, 10) || 1;
-        if (wi > 1) {
-          const wa = document.getElementById("fRptWeekAnchor").value;
-          if (!wa) { document.getElementById("fRptWeekAnchor").focus(); return; }
-          task.weekInterval = wi; task.weekAnchor = wa;
-        }
-      } else if (fRepeatChoice === "monthly") {
-        const dv = parseInt(document.getElementById("fRptMonthlyDay").value, 10);
-        if (!dv || dv < 1 || dv > 31) { document.getElementById("fRptMonthlyDay").focus(); return; }
-        task.freq = "monthly"; task.day = dv;
-      } else if (fRepeatChoice === "yearly") {
-        const dv = document.getElementById("fRptYearlyDate").value;
-        if (!dv) { document.getElementById("fRptYearlyDate").focus(); return; }
-        const dd = parseKey(dv);
-        task.freq = "yearly"; task.month = dd.getMonth() + 1; task.day = dd.getDate();
-      } else if (fRepeatChoice === "interval" || fRepeatChoice === "every2days") {
-        const n = parseInt(document.getElementById("fRptIntervalN").value, 10);
-        if (!n || n < 1) { document.getElementById("fRptIntervalN").focus(); return; }
-        task.freq = "interval"; task.intervalDays = n; task.anchor = dateVal;
-        task.intervalUnit = document.getElementById("fRptIntervalUnit").value;
-      }
-      ROUTINE_TASKS.push(task);
-      saveRoutines();
-      if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
+      const task = buildRoutineFromCurrentForm();
+      if (!task) return;
       closeForm();
       render();   // a new routine can touch many days — refresh every view, not just today
       return;
