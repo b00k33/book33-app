@@ -276,8 +276,9 @@ somewhere in the file. The point is picking ONE and applying it everywhere.
 ## Components
 - Reuse the same button/pill/card/row styles everywhere; no one-offs — see the
   Component reference above for the actual shared values.
-- Every editor for an event, task, routine, recipe, goal, person, family task,
-  work-manual section, or shopping item MUST have a Save button in its TOP-RIGHT
+- Every editor for an event (a routine is an event with Repeats set), a to-do
+  item, recipe, goal, person, family task, work-manual section, or shopping
+  item MUST have a Save button in its TOP-RIGHT
   corner (reuse .addform-head-save), so it can be saved without scrolling to the
   bottom. Keep the bottom Save/Cancel bar too. (True for Events/Routines/Meal-log
   only as of 2026-08-13 — Recipe, Goal, Person, Family task, Work-manual section,

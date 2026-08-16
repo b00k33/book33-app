@@ -6540,19 +6540,6 @@
     padding: 0; font-size: 13px; font-weight: 600; color: var(--margin-rule);
   }
   #addForm .more-opts-toggle:hover, #addForm .more-opts-toggle:focus-visible { color: var(--nav-active); }
-  /* Type: a true joined segmented control (Task / Event / Routine), one-line labels
-     with a leading icon standing in for the old round/square dot -- the dot doesn't
-     read as "joined" the way a shared track shape does. */
-  #kindPicker.track-picker { background: var(--field-bg); border-radius: 999px; padding: 4px; gap: 4px; flex-wrap: nowrap; }
-  #kindPicker .kind-opt {
-    flex: 1; border: none; background: none; border-radius: 999px; padding: 8px 4px;
-    font-size: 13px; white-space: nowrap; color: var(--ink-soft);
-  }
-  #kindPicker .kind-opt::before { display: none; }
-  #kindPicker .kind-opt[aria-pressed="true"] {
-    background: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
-  }
-  .kind-help { margin: 4px 4px 0; }
   /* 2026-08-09 (design44, "Add box redesign" job, STEP 1): slim sheet header --
      close (X) / title / Save -- replaces the old bottom Cancel+Save row so the
      sheet has ONE clear action surface instead of a header AND a footer. */
@@ -15646,6 +15633,49 @@
     <div id="catBody"></div>
   </div>
 
+  <!-- ================= TO-DO (2026-08-17, Event/Repeats collapse) =================
+       "Tasks become an off-calendar to-do list" -- a plain, undated checklist. Every
+       row: tick it off, or turn it into a real calendar Event once it has a day/time
+       (see #todoList's click delegate, openFormFromTodo). Row/form pattern copied
+       from Shopping List (checkbox + title + meta + delete, top-right Save). -->
+  <div class="page" id="todoPage" hidden>
+    <div class="bd-head">
+      <div class="eyebrow">A plain list, off the calendar</div>
+      <h1>☑ To-do</h1>
+    </div>
+    <p class="nt-intro">Tick something off, or turn it into an event once it has a day and time.</p>
+    <div id="todoList"></div>
+    <div class="add-row" id="todoAddRow">
+      <button class="add-btn" id="todoAddBtn">+ Add a task</button>
+    </div>
+    <form class="add-form" id="todoAddForm" hidden>
+      <div class="addform-head-saveonly full">
+        <button type="submit" class="addform-head-save" id="todoTopSaveBtn">Save</button>
+      </div>
+      <div class="field full">
+        <label for="todoTitle">What</label>
+        <input type="text" id="todoTitle" class="field-bare" placeholder="e.g. Book the dentist, Return the parcel" autocomplete="off" required>
+      </div>
+      <div class="field full">
+        <label>Part of life</label>
+        <div class="track-picker" id="todoTrackPicker" role="group" aria-label="Part of life">
+          <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
+          <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
+          <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
+          <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
+        </div>
+      </div>
+      <div class="field full">
+        <label for="todoCat">Category <span class="field-hint">optional</span></label>
+        <input type="text" id="todoCat" class="field-bare" placeholder="e.g. Errands, Admin" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="todoCancelBtn">Cancel</button>
+        <button type="submit" class="btn-save" id="todoSubmitBtn">Add to list</button>
+      </div>
+    </form>
+  </div>
+
   <!-- ================= MONTH ================= -->
   <div class="page" id="monthPage" hidden>
     <div class="mo-head">
@@ -15849,7 +15879,6 @@
         <div class="dsb-group">
           <div class="dsb-group-head">Quick add</div>
           <button type="button" class="dsb-quick-row" data-dsb-quick="busy"><span class="dsb-quick-plus">＋</span> Busy block</button>
-          <button type="button" class="dsb-quick-row" data-dsb-quick="routine"><span class="dsb-quick-plus">＋</span> One-off routine</button>
         </div>
       </div>
       <div id="deskColMain"></div>
@@ -16436,19 +16465,6 @@
               <button type="button" class="track-opt" data-track="personal" aria-pressed="false">Personal</button>
             </div>
           </div>
-          <div class="field full">
-            <label>Type</label>
-            <div class="track-picker" id="kindPicker" role="group" aria-label="Type">
-              <button type="button" class="track-opt kind-opt" data-kind="task" aria-pressed="true">✓ Task</button>
-              <button type="button" class="track-opt kind-opt" data-kind="event" aria-pressed="false">📅 Event</button>
-              <button type="button" class="track-opt kind-opt" id="kindRoutineBtn" data-kind="routine" aria-pressed="false">↻ Routine</button>
-            </div>
-            <p class="field-hint kind-help" id="kindHelp">Tick it off when it's done.</p>
-          </div>
-          <div class="field full" id="fRoutineField" hidden>
-            <label for="fRoutine">Which routine <span class="field-hint">stays in sync with the routine</span></label>
-            <select id="fRoutine" class="field-bare"></select>
-          </div>
           <div class="addform-section-label full" id="fWhenHeading">When</div>
           <!-- 2026-08-10 (Linh, "Compact the When/How long block" brief): Day+Starts
                move from the outer 2-col grid into their own flex row (.when .row/.ef)
@@ -16505,9 +16521,81 @@
               <textarea id="fStages" class="field-bare" rows="3" placeholder="e.g. Message patient to pick up ~5m&#10;Picked up&#10;Paid"></textarea>
             </div>
           </div>
-          <!-- recurring events (2026-08-04, "add that to routines and events"): weekly
-               layers exactly like the Routines form's. Only offered on kind=event, and
-               never while editing an existing one-off (no conversion in v1). -->
+          <!-- 2026-08-17 (Event/Repeats collapse, Linh: "a routine is really just an
+               event that repeats -- collapse it"): the one plain-language Repeats
+               control for the unified form. Tap the summary line to reveal the
+               picker; choosing anything but "Doesn't repeat" saves this item as a
+               real routine (ROUTINE_TASKS, the same recurrence engine the Routines
+               page uses) instead of a plain calendar event -- see the submit
+               handler. Locked to "Doesn't repeat" while editing an existing one-off
+               event (fSyncRepeatLock, same "no conversion in v1" rule the legacy
+               weekly-repeat checkbox below already used). -->
+          <div class="field full" id="fRepeatSummaryField">
+            <label>Repeats</label>
+            <button type="button" class="rtn-repeat-sum" id="fRepeatSummaryBtn" aria-expanded="false" aria-controls="fRepeatOptions">Doesn't repeat</button>
+            <div class="track-picker" id="fRepeatOptions" role="group" aria-label="Repeats" style="flex-wrap:wrap" hidden>
+              <button type="button" class="track-opt" data-rpt="none" aria-pressed="true">Doesn't repeat</button>
+              <button type="button" class="track-opt" data-rpt="daily" aria-pressed="false">Every day</button>
+              <button type="button" class="track-opt" data-rpt="weekdays" aria-pressed="false">Weekdays (Mon–Fri)</button>
+              <button type="button" class="track-opt" data-rpt="eachweekday" id="fRptEachWeekdayBtn" aria-pressed="false">Every…</button>
+              <button type="button" class="track-opt" data-rpt="every2days" aria-pressed="false">Every 2 days…</button>
+              <button type="button" class="track-opt" data-rpt="weekly" aria-pressed="false">Weekly on…</button>
+              <button type="button" class="track-opt" data-rpt="monthly" aria-pressed="false">Monthly…</button>
+              <button type="button" class="track-opt" data-rpt="yearly" aria-pressed="false">Yearly…</button>
+              <button type="button" class="track-opt" data-rpt="interval" aria-pressed="false">Custom…</button>
+            </div>
+          </div>
+          <div class="field full" id="fRptWeekdayField" hidden>
+            <label>Days <span class="field-hint">tap one or more</span></label>
+            <div class="track-picker" id="fRptWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
+          </div>
+          <div class="field full" id="fRptWeekIntervalField" hidden>
+            <label for="fRptWeekInterval">Every <span class="field-hint">1 = every week</span></label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="fRptWeekInterval" min="1" value="1" style="width:70px">
+              <span style="font-size:13px;color:var(--ink-soft)">week(s)</span>
+            </div>
+          </div>
+          <div class="field full" id="fRptWeekAnchorField" hidden>
+            <label for="fRptWeekAnchor">Starting the week of</label>
+            <input type="date" id="fRptWeekAnchor">
+          </div>
+          <div class="field full" id="fRptMonthlyField" hidden>
+            <label for="fRptMonthlyDay">Day of month</label>
+            <input type="number" id="fRptMonthlyDay" min="1" max="31" placeholder="1–31">
+          </div>
+          <div class="field full" id="fRptYearlyField" hidden>
+            <label for="fRptYearlyDate">Date each year</label>
+            <input type="date" id="fRptYearlyDate">
+          </div>
+          <div class="field full" id="fRptIntervalField" hidden>
+            <label for="fRptIntervalN">Repeat every</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="number" id="fRptIntervalN" min="1" value="2" style="width:70px">
+              <select id="fRptIntervalUnit">
+                <option value="days">days</option>
+                <option value="weeks">weeks</option>
+                <option value="months">months</option>
+                <option value="years">years</option>
+              </select>
+            </div>
+          </div>
+          <!-- 2026-08-09 (STEP 2 fix pattern, reused): mirrors the Routines editor's
+               own #rtnAutoToggle/task.calOn exactly -- same switch, same field,
+               same meaning ("fills the calendar on this schedule when on"). Only
+               shown once a repeat pattern is actually chosen -- a one-off event has
+               nothing to auto-fill. -->
+          <div class="field full" id="fFillCalField" hidden>
+            <label for="fFillCalToggle">Fill my calendar automatically<span class="field-hint" id="fFillCalHint"> — on</span></label>
+            <button type="button" class="rtg-auto-switch" id="fFillCalToggle" role="switch" aria-checked="true" aria-label="Fill my calendar automatically on this schedule"></button>
+          </div>
+          <!-- legacy weekly-layers recurring-EVENT system (2026-08-04, "add that to
+               routines and events"): SUPERSEDED for new items by the Repeats control
+               above (which creates a real routine instead) -- kept only so an
+               EXISTING RECURRING_EVENTS template (editingRecurTemplateId, opened via
+               openFormForRecurEdit) still opens and saves exactly as it always has.
+               fRepeatField's visibility is now keyed off editingRecurTemplateId, not
+               formKind -- see syncKind(). Never shown for a fresh add. -->
           <div class="allday-row full" id="fRepeatField" hidden>
             <input type="checkbox" id="fRepeat"><label for="fRepeat">Repeats</label>
           </div>
@@ -19918,7 +20006,7 @@
   /* ============================================================
      Storage
      ============================================================ */
-  const STORE_KEY = "book33-events", DONE_KEY = "book33-done", SHOP_KEY = "book33-shopping";
+  const STORE_KEY = "book33-events", DONE_KEY = "book33-done", SHOP_KEY = "book33-shopping", TODO_KEY = "book33-todos";
   function loadEvents() {
     try {
       return JSON.parse(localStorage.getItem(STORE_KEY) || "[]").map(e => ({
@@ -19941,6 +20029,12 @@
   function saveOutcomes() { try { localStorage.setItem(OUTCOME_KEY, JSON.stringify(OUTCOMES)); } catch (e) {} }
   function loadShop() { try { return JSON.parse(localStorage.getItem(SHOP_KEY) || "[]"); } catch (e) { return []; } }
   function saveShop(list) { try { localStorage.setItem(SHOP_KEY, JSON.stringify(list)); } catch (e) {} }
+  // 2026-08-17 (Event/Repeats collapse, Linh: "tasks become an off-calendar to-do
+  // list"): {id, title, track, category, note, done, createdAt} -- plain, undated,
+  // no calendar placement at all. Ticking sets done directly on the item (no
+  // DONE-map id-namespacing needed, unlike calendar occurrences).
+  function loadTodos() { try { return JSON.parse(localStorage.getItem(TODO_KEY) || "[]"); } catch (e) { return []; } }
+  function saveTodos(list) { try { localStorage.setItem(TODO_KEY, JSON.stringify(list)); } catch (e) {} }
   let EVENTS = loadEvents();
   // 2026-08-06: same family→personal reassignment as migrateFamilyTrackToPersonal()
   // above, for saved calendar events specifically.
@@ -19952,6 +20046,7 @@
   let DONE = loadDone();
   let OUTCOMES = loadOutcomes();
   let SHOP = loadShop();
+  let TODOS = loadTodos();
   // one-time: add Linh's L'Oreal scalp serum to the shopping list (2026-07-26)
   (function addScalpSerum2026() {
     const FLAG = "book33-shop-scalp-serum-2026";
@@ -21051,6 +21146,28 @@
     if ((e.steps && e.steps.length) || /^(hair|rt|fam|supp)-/.test(String(e.id))) return "routine";
     return e.category ? "event" : "task";
   }
+  // 2026-08-17 (Event/Repeats collapse, one-time): every EVENTS row that was a
+  // calendar "task" moves into the new off-calendar to-do list, preserving its
+  // done-state, then is dropped from EVENTS -- after this runs, kind:"task" can
+  // no longer exist anywhere in EVENTS (the add form no longer offers it, and
+  // every other creation path was repointed to kind:"event" alongside this
+  // change), so nothing downstream needs to filter tasks out of the calendar --
+  // there simply aren't any to find. Guarded so it only ever runs once.
+  (function migrateCalendarTasksToTodos() {
+    const FLAG = "book33-todos-migrated-v1";
+    if (localStorage.getItem(FLAG)) return;
+    const moving = EVENTS.filter(e => eventKind(e) === "task");
+    if (moving.length) {
+      moving.forEach(e => TODOS.push({
+        id: e.id, title: e.title, track: e.track || "personal", category: e.category || "",
+        note: e.note || "", done: !!DONE[e.id], createdAt: e.date || keyOf(TODAY),
+      }));
+      saveTodos(TODOS);
+      EVENTS = EVENTS.filter(e => eventKind(e) !== "task");
+      saveEvents(EVENTS);
+    }
+    localStorage.setItem(FLAG, "1");
+  })();
   const stepMinOf = s => (s && typeof s === "object" && s.min) ? s.min : HAIR_STEP_MIN;
   // steps can be plain strings (hair) or {text,min} objects (routine sub-tasks)
   const stepLabel = s => (s && typeof s === "object") ? (s.text || "") : s;
@@ -21129,6 +21246,10 @@
         { id: "month", label: "Month" },
         { id: "birthdays", label: "Birthdays" },
         { id: "routines", label: "Routines" },
+        // 2026-08-17 (Event/Repeats collapse, Linh: "tasks become an off-calendar
+        // to-do list"): its own page, next to Routines -- the two are now the
+        // planner's "what am I tracking" pair (repeating things vs a plain list).
+        { id: "todo", label: "To-do" },
         // 2026-08-06 (Linh: "make me a chain building page"): whole-sequence chain builder
         { id: "chains", label: "Chains" },
         { id: "events", label: "Events" },
@@ -22025,7 +22146,7 @@
       saveFitLog();
     } else {
       EVENTS.push({
-        id: uid(), date: dateKey, track: e.track, title: e.title, category: e.category || "",
+        id: uid(), date: dateKey, track: e.track, title: e.title, kind: "event", category: e.category || "",
         locPath: Array.isArray(e.locPath) ? e.locPath.slice() : [], allDay: false,
         start: timeStr, end: minToTime(Math.min(toMin(timeStr) + dur, 1439)),
       });
@@ -25458,11 +25579,13 @@
       <input type="text" id="usGiveInput" placeholder="Give ${esc(partnerName())} something for this day…" autocomplete="off">
       <button type="button" id="usGiveBtn">+ Allocate</button>
     </div>`;
-  // hand a task straight to him (or to both) on a given day
+  // hand something straight to him (or to both) on a given day. 2026-08-17
+  // (Event/Repeats collapse): kind is "event" now, not "task" -- tasks can never
+  // be a calendar-item kind any more.
   function usAllocate(title, who, date) {
     const t = String(title || "").trim();
     if (!t) return null;
-    const ev = { id: uid(), date: keyOf(date || state.anchor), track: "marriage", title: t, kind: "task",
+    const ev = { id: uid(), date: keyOf(date || state.anchor), track: "marriage", title: t, kind: "event",
                  category: "", locPath: [], allDay: true, start: "", end: "", who: who || "partner" };
     EVENTS.push(ev); saveEvents(EVENTS);
     return ev;
@@ -27042,7 +27165,9 @@
       const ix = (WTODO[scope] || []).findIndex(i => i.id === id);
       if (ix < 0) continue;
       const it = WTODO[scope][ix];
-      EVENTS.push({ id: uid(), date: dateKey, track: "personal", kind: "task",
+      // 2026-08-17 (Event/Repeats collapse): kind is always "event" now -- tasks
+      // can never be a calendar-item kind any more, per Linh's "never as a task".
+      EVENTS.push({ id: uid(), date: dateKey, track: "personal", kind: "event",
         title: it.text, category: "", locPath: [], allDay: true, start: "", end: "" });
       saveEvents(EVENTS);
       WTODO[scope].splice(ix, 1); saveWTodo();
@@ -32804,7 +32929,7 @@
       // the milestone cleans the event up with it
       if (document.getElementById("pregMsCal").checked) {
         const evId = uid();
-        EVENTS.push({ id: evId, date, title: `🎀 ${pregName(p)} — ${label}`, track: "personal", category: "", allDay: true, start: "", end: "" });
+        EVENTS.push({ id: evId, date, title: `🎀 ${pregName(p)} — ${label}`, track: "personal", kind: "event", category: "", allDay: true, start: "", end: "" });
         saveEvents(EVENTS);
         ms.evId = evId;
       }
@@ -33350,6 +33475,7 @@
     document.getElementById("chainsPage").hidden = state.view !== "chains";
     document.getElementById("medicalPage").hidden = state.view !== "medical";
     document.getElementById("routinesPage").hidden = state.view !== "routines";
+    document.getElementById("todoPage").hidden = state.view !== "todo";
     document.getElementById("cbdWorkPage").hidden = state.view !== "cbdWork";
     document.getElementById("workManualPage").hidden = state.view !== "workManual";
     document.getElementById("cpdPage").hidden = state.view !== "cpd";
@@ -33397,6 +33523,7 @@
     else if (state.view === "us") renderUsPage();
     else if (state.view === "notify") renderNotifyPage();
     else if (state.view === "categories") renderCategories();
+    else if (state.view === "todo") renderTodoPage();
     else renderBirthdays();
     syncFastTimer();
     refreshLocList();   // keep the shared "Where" dropdown current with her latest saves
@@ -35338,18 +35465,9 @@
     }
     const quick = e.target.closest("[data-dsb-quick]");
     if (quick) {
-      // Bug 4 fix (2026-08-15): "routine" used to fall through to openFormWithAction("")
-      // — a blank generic task/event form, nothing "routine" about it. openFormWithAction
-      // only ever builds kind=task (formKind is hardcoded inside it), so it can't preset
-      // Routine itself; switching formKind + syncKind() right after is the same one-line
-      // pattern #kindPicker's own click handler uses (formKind = b.dataset.kind;
-      // syncKind();) — it shows #fRoutineField (pick which routine, which day) and hides
-      // the task-only fields, same as tapping the ↻ Routine pill by hand.
-      if (quick.dataset.dsbQuick === "routine") {
-        openFormWithAction("");
-        formKind = "routine"; syncKind();
-        return;
-      }
+      // 2026-08-17 (Event/Repeats collapse): "One-off routine" quick-add is retired --
+      // it depended on #kindPicker's routine option, which no longer exists (Repeats
+      // on the unified form now covers everything a routine used to be).
       openFormWithAction(quick.dataset.dsbQuick === "busy" ? "Busy block" : "");
       return;
     }
@@ -39136,9 +39254,11 @@
       const step = (document.getElementById("unstickStep") || {}).value?.trim() || "";
       if (!text && !step) { const t = document.getElementById("unstickText"); if (t) t.focus(); return; }
       const entry = { id: uid(), ts: Date.now(), date: keyOf(TODAY), text, step, taskId: null };
-      // the small move becomes a real task on today's plan — started, not just soothed
+      // the small move becomes a real item on today's plan — started, not just
+      // soothed. 2026-08-17 (Event/Repeats collapse): kind is "event" now, not
+      // "task" -- tasks can never be a calendar-item kind any more.
       if (step) {
-        const task = { id: uid(), date: keyOf(TODAY), track: "personal", kind: "task",
+        const task = { id: uid(), date: keyOf(TODAY), track: "personal", kind: "event",
           title: step, category: "", locPath: [], allDay: true, start: "", end: "" };
         EVENTS.push(task); saveEvents(EVENTS);
         entry.taskId = task.id;
@@ -39491,62 +39611,41 @@
   }
 
   let eventEditId = null;
-  let formKind = "task";
-  // "Routine" in this form never creates anything new — it attaches an EXISTING
-  // routine to one more day, the same live reference the Routines page's own
-  // "Also runs on" list uses (Linh 2026-07-27: "when i add an event to the
-  // calendar, let me add a routine"). Sorted by title so a long list is scannable.
-  function populateFRoutine() {
-    const sel = document.getElementById("fRoutine");
-    const prev = sel.value;
-    sel.innerHTML = ROUTINE_TASKS.slice().sort((a, b) => a.title.localeCompare(b.title))
-      .map(t => `<option value="${t.id}">${esc(t.title)}${t.category ? ` — ${esc(t.category)}` : ""}</option>`).join("");
-    if (prev && ROUTINE_TASKS.some(t => t.id === prev)) sel.value = prev;
-  }
-  // 2026-08-09 (design44, "Add box redesign" job, STEP 1): one short line under
-  // the Type control that changes with the choice, so the segmented control's
-  // three icons don't have to carry the explanation alone.
-  const KIND_HELP = {
-    task: "Tick it off when it's done.",
-    event: "A set appointment or plan.",
-    routine: "Attach an existing routine to this day.",
-  };
-  // sheet-header title -- "New X" while creating, "Edit X" while editing an
-  // existing item or series, always paired with whichever Type is selected
+  let formKind = "event";
+  // 2026-08-17 (Event/Repeats collapse): the picker's own state -- "none" means
+  // "Doesn't repeat" (a plain one-off event); anything else means this save
+  // becomes a real routine. Declared here (not down by the picker's own wiring)
+  // so every function above that reads it (syncAddFormTitle etc.) is safe to call
+  // from the moment the form module loads, same reasoning as formKind above.
+  let fRepeatChoice = "none";
+  // 2026-08-17 (Event/Repeats collapse): set by the To-do page's "Make event"
+  // button (openFormFromTodo) -- when a save actually completes below, the
+  // source to-do item leaves the to-do list. Opening the form isn't enough;
+  // only a real save should remove it (Linh: "once saved as an event").
+  let convertingTodoId = null;
+  // sheet-header title -- "New event"/"Edit event", or "New routine" once a repeat
+  // pattern is actually chosen (see syncFRepeatChoice, which also calls this).
   function syncAddFormTitle() {
     const el = document.getElementById("addFormTitleText");
     if (!el) return;
     const editing = !!eventEditId || !!editingRecurTemplateId;
-    const kindLabel = formKind === "event" ? "event" : formKind === "routine" ? "routine" : "task";
+    const kindLabel = (fRepeatChoice !== "none" && !eventEditId) ? "routine" : "event";
     el.textContent = `${editing ? "Edit" : "New"} ${kindLabel}`;
   }
   function syncKind() {
-    document.querySelectorAll("#kindPicker .kind-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.kind === formKind)));
-    const isRoutine = formKind === "routine";
-    const kh = document.getElementById("kindHelp");
-    if (kh) kh.textContent = KIND_HELP[formKind] || "";
-    // follow-up stages only make sense on tickable tasks
+    // follow-up stages were a task-only field; formKind is always "event" now, so
+    // this naturally stays hidden -- left in place (not deleted) since the submit
+    // handler's stages/estVal reads are still real, shared code.
     const sf = document.getElementById("fStagesField");
     if (sf) sf.hidden = formKind !== "task";
-    // an attached routine carries its own title/track/time/place already —
-    // this form only has to say WHICH routine and WHICH day
-    document.getElementById("fRoutineField").hidden = !isRoutine;
-    ["fTitleField", "fTrackField", "fWhoField", "fStartField", "fDurPickerField", "fEndField", "fAllDayRow", "fCatField", "fLocField"]
-      .forEach(id => { const el = document.getElementById(id); if (el) el.hidden = isRoutine; });
-    fTitle.required = !isRoutine;
-    if (isRoutine) populateFRoutine();
-    // recurring events: Repeats is only offered on kind=event, and never while
-    // editing an existing one-off (converting one-off ↔ series isn't supported)
-    document.getElementById("fRepeatField").hidden = formKind !== "event" || eventEditId != null;
+    // legacy weekly-layers recurring-event checkbox: only ever relevant while
+    // editing a pre-existing RECURRING_EVENTS template -- see the comment above
+    // #fRepeatField in the HTML. Never shown for a fresh add any more.
+    document.getElementById("fRepeatField").hidden = !editingRecurTemplateId;
+    syncFRepeatLock();
     syncRepeatFields();
     syncAddFormTitle();
   }
-  document.getElementById("kindPicker").addEventListener("click", e => {
-    const b = e.target.closest(".kind-opt");
-    if (!b) return;
-    if (editingRecurTemplateId) return;   // a recurring series is always an event
-    formKind = b.dataset.kind; syncKind();
-  });
 
   /* ---- recurring-event form state (weekly layers, mirrors the Routines form) ---- */
   let editingRecurTemplateId = null;
@@ -39635,6 +39734,98 @@
     const anchorInput = document.getElementById("fWeekAnchorDate");
     if (!anchorField.hidden && !anchorInput.value) anchorInput.value = keyOf(startOfWeek(TODAY));
   });
+
+  /* ---- Repeats (2026-08-17, Event/Repeats collapse) — the new plain-language
+     control. fRepeatChoice "none" = a plain one-off event; anything else means the
+     submit handler saves this as a real routine instead (ROUTINE_TASKS). ---- */
+  let fRptWeekdays = [];
+  let fFillCalOn = true;
+  // locked to "Doesn't repeat" while editing an existing one-off event — same
+  // "no conversion in v1" rule the legacy weekly-repeat checkbox already used.
+  function syncFRepeatLock() {
+    const field = document.getElementById("fRepeatSummaryField");
+    const locked = !!eventEditId;
+    if (field) field.hidden = locked;
+    if (locked && fRepeatChoice !== "none") { fRepeatChoice = "none"; syncFRepeatChoice(); }
+  }
+  function updateEachWeekdayLabel() {
+    const dv = document.getElementById("fDate").value || keyOf(state.anchor);
+    const wd = WD_FULL[dowIndex(parseKey(dv))];
+    const btn = document.getElementById("fRptEachWeekdayBtn");
+    if (btn) btn.textContent = `Every ${wd}…`;
+    if (fRepeatChoice === "eachweekday") {
+      const sb = document.getElementById("fRepeatSummaryBtn");
+      if (sb) sb.textContent = `Every ${wd}`;
+    }
+  }
+  function syncFRepeatChoice() {
+    ["fRptWeekdayField", "fRptWeekIntervalField", "fRptWeekAnchorField", "fRptMonthlyField", "fRptYearlyField", "fRptIntervalField"]
+      .forEach(id => { const el = document.getElementById(id); if (el) el.hidden = true; });
+    if (fRepeatChoice === "weekly") {
+      document.getElementById("fRptWeekdayField").hidden = false;
+      document.getElementById("fRptWeekIntervalField").hidden = false;
+      const wi = parseInt(document.getElementById("fRptWeekInterval").value, 10) || 1;
+      document.getElementById("fRptWeekAnchorField").hidden = wi <= 1;
+    } else if (fRepeatChoice === "monthly") {
+      document.getElementById("fRptMonthlyField").hidden = false;
+    } else if (fRepeatChoice === "yearly") {
+      document.getElementById("fRptYearlyField").hidden = false;
+    } else if (fRepeatChoice === "interval" || fRepeatChoice === "every2days") {
+      document.getElementById("fRptIntervalField").hidden = false;
+    }
+    document.getElementById("fFillCalField").hidden = fRepeatChoice === "none";
+    const LABELS = {
+      none: "Doesn't repeat", daily: "Every day", weekdays: "Weekdays (Mon–Fri)",
+      eachweekday: (document.getElementById("fRptEachWeekdayBtn") || {}).textContent || "Every…",
+      every2days: "Every 2 days", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly", interval: "Custom",
+    };
+    const summaryBtn = document.getElementById("fRepeatSummaryBtn");
+    if (summaryBtn) summaryBtn.textContent = LABELS[fRepeatChoice] || "Doesn't repeat";
+    document.querySelectorAll("#fRepeatOptions .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.rpt === fRepeatChoice)));
+    syncAddFormTitle();
+  }
+  document.getElementById("fRepeatSummaryBtn").addEventListener("click", () => {
+    const box = document.getElementById("fRepeatOptions");
+    const open = box.hidden;
+    box.hidden = !open;
+    document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", String(open));
+  });
+  document.getElementById("fRepeatOptions").addEventListener("click", e => {
+    const b = e.target.closest("[data-rpt]"); if (!b) return;
+    fRepeatChoice = b.dataset.rpt;
+    if (fRepeatChoice === "every2days") {
+      document.getElementById("fRptIntervalN").value = "2";
+      document.getElementById("fRptIntervalUnit").value = "days";
+    }
+    document.getElementById("fRepeatOptions").hidden = true;
+    document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", "false");
+    syncFRepeatChoice();
+  });
+  document.getElementById("fRptWeekInterval").addEventListener("input", syncFRepeatChoice);
+  document.getElementById("fRptWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">
+      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+  const syncFRptWeekdayButtons = () => document.querySelectorAll("#fRptWeekdayPicker .track-opt")
+    .forEach(b => b.setAttribute("aria-pressed", String(fRptWeekdays.includes(+b.dataset.weekday))));
+  document.getElementById("fRptWeekdayPicker").addEventListener("click", e => {
+    const b = e.target.closest("[data-weekday]"); if (!b) return;
+    const d = +b.dataset.weekday;
+    fRptWeekdays = fRptWeekdays.includes(d) ? fRptWeekdays.filter(x => x !== d) : [...fRptWeekdays, d];
+    syncFRptWeekdayButtons();
+  });
+  function syncFFillCalToggle() {
+    const btn = document.getElementById("fFillCalToggle");
+    const hint = document.getElementById("fFillCalHint");
+    if (btn) btn.setAttribute("aria-checked", String(fFillCalOn));
+    if (hint) hint.textContent = fFillCalOn ? " — on" : " — off";
+  }
+  document.getElementById("fFillCalToggle").addEventListener("click", () => {
+    fFillCalOn = !fFillCalOn;
+    syncFFillCalToggle();
+  });
+  document.getElementById("fDate").addEventListener("input", updateEachWeekdayLabel);
+  syncFFillCalToggle();
+
   // whose job is it — Mine / his / Both (two-person system)
   let formWho = "me";
   // 2026-08-02 (code44): picking always re-collapses back to the summary line —
@@ -39698,7 +39889,10 @@
     editingRecurTemplateId = null;
     fRepeatWeekdays = []; fExtraSchedules = [];
     renderFSchedExtra(); syncFWeekdayButtons();
-    formKind = "task"; syncKind();
+    formKind = "event";
+    fRepeatChoice = "none"; fRptWeekdays = []; fFillCalOn = true;
+    convertingTodoId = null;
+    syncFRepeatChoice(); syncKind();
     formWho = "me"; syncWho();
     fStart.disabled = false; fEnd.disabled = false; fDur.disabled = false;
     setDurDisabled(false); syncDurBoxesFromFDur();
@@ -39713,8 +39907,8 @@
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
-    document.getElementById("kindRoutineBtn").hidden = false;
     fDate.value = keyOf(state.anchor);
+    updateEachWeekdayLabel();
     document.getElementById("fStages").value = "";
     syncKind();
     formWho = prefWho || "me"; syncWho();
@@ -39728,15 +39922,13 @@
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
-    // attaching a routine only ever creates a NEW placement — there's no such
-    // thing as "turn this hand-written event into a routine attachment"
-    document.getElementById("kindRoutineBtn").hidden = true;
     eventEditId = ev.id;
     fTitle.value = ev.title;
     state.track = ev.track; syncTrack();
-    formKind = eventKind(ev) === "event" ? "event" : "task"; syncKind();
+    formKind = "event"; syncKind();
     formWho = whoOf(ev); syncWho();
     fDate.value = ev.date || keyOf(state.anchor);
+    updateEachWeekdayLabel();
     document.getElementById("fStages").value = (ev.stages || []).join("\n");
     fCat.value = ev.category || "";
     fLoc.value = (ev.locPath || []).join(" > ");
@@ -39767,7 +39959,6 @@
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
-    document.getElementById("kindRoutineBtn").hidden = true;
     eventEditId = null;
     editingRecurTemplateId = t.id;
     fTitle.value = t.title;
@@ -40747,8 +40938,24 @@
       qaShowNote(`Repeating: <b>${esc(p.title)}</b> — ${rec.label}${p.start ? ` · ${fmtTime(p.start)}` : ""} · ${p.track}`, true);
       return;
     }
+    // 2026-08-17 (Event/Repeats collapse): a quick-add the ☑ Task detector
+    // recognised (e.g. "do the dishes") now lands in the to-do list instead of
+    // the calendar as a task-kind block -- tasks can never be a calendar item
+    // any more. The 📅 Event branch below is unaffected.
+    if (kind === "task") {
+      TODOS.push({ id: uid(), title: p.title, track: p.track, category: "", note: "", done: false, createdAt: keyOf(TODAY) });
+      saveTodos(TODOS);
+      lastQuickAdd = { evIds: [], routineIds: [], spendIds: [] };
+      if (spendAmount != null) {
+        lastQuickAdd.spendIds = [addSpend({ date: keyOf(p.date), amount: spendAmount, category: guessSpendCategory(p.title), note: p.title })];
+      }
+      render();
+      qaShowNote(`Added ☑ <b>${esc(p.title)}</b> to your to-do list`
+        + `${spendAmount != null ? ` · <b>$${spendAmount.toFixed(2)}</b> → Money page` : ""}`, true);
+      return;
+    }
     EVENTS.push({
-      id: uid(), date: keyOf(p.date), track: p.track, title: p.title, kind,
+      id: uid(), date: keyOf(p.date), track: p.track, title: p.title, kind: "event",
       category: "", locPath: p.locPath, allDay: !p.start, start: p.start, end: p.end,
       ...(dft.who && dft.who !== "me" ? { who: dft.who } : {}),
       ...(dft.estMin != null ? { estMin: dft.estMin } : {}),
@@ -40760,7 +40967,7 @@
     }
     state.anchor = new Date(p.date);
     render();
-    qaShowNote(`Added ${kind === "event" ? "📅" : "☑"} <b>${esc(p.title)}</b> — ${p.date.getDate()} ${MON_SHORT[p.date.getMonth()]}`
+    qaShowNote(`Added 📅 <b>${esc(p.title)}</b> — ${p.date.getDate()} ${MON_SHORT[p.date.getMonth()]}`
       + `${dft.who && dft.who !== "me" ? ` · ${whoEm(dft.who)} <b>${esc(whoLabel(dft.who))}</b>` : ""}`
       + `${p.start ? ` · ${fmtTime(p.start)}${p.end ? `–${fmtTime(p.end)}` : ""}` : " · all day"}`
       + `${p.locPath.length ? ` · ${esc(p.locPath.join(" › "))}` : ""} · ${p.track}`
@@ -41306,7 +41513,7 @@
     addRow.hidden = true; form.hidden = false;
     fTitle.value = title;
     state.track = "personal"; syncTrack();
-    formKind = "task"; syncKind();
+    formKind = "event"; syncKind();
     fDate.value = keyOf(state.anchor);
     fAllDay.checked = true;
     fStart.disabled = fEnd.disabled = fDur.disabled = true;
@@ -41323,7 +41530,7 @@
     addRow.hidden = true; form.hidden = false;
     fTitle.value = title;
     state.track = "personal"; syncTrack();
-    formKind = "task"; syncKind();
+    formKind = "event"; syncKind();
     fDate.value = keyOf(state.anchor);
     fAllDay.checked = false;
     fStart.disabled = fEnd.disabled = fDur.disabled = false;
@@ -42220,7 +42427,7 @@
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
       let minutes = Math.round(minForTop(e.clientY - r.top) / 15) * 15;
       minutes = Math.max(START_MIN, Math.min(END_MIN - 30, minutes));
-      EVENTS.push({ id: uid(), date: keyOf(state.anchor), track: d.track, title: d.title, category: "", locPath: locForMinute(minutes), allDay: false, start: minToTime(minutes), end: minToTime(minutes + 30) });
+      EVENTS.push({ id: uid(), date: keyOf(state.anchor), track: d.track, title: d.title, kind: "event", category: "", locPath: locForMinute(minutes), allDay: false, start: minToTime(minutes), end: minToTime(minutes + 30) });
       saveEvents(EVENTS); renderDay();
     }
     dayPage.addEventListener("pointerup", e => endTodoDrag(e, true));
@@ -42262,7 +42469,7 @@
     const track = e.dataTransfer.getData("application/x-book33-track") || "personal";
     if (!title) return;
     const start = minToTime(minutes), end = minToTime(minutes + 30);
-    EVENTS.push({ id: uid(), date: keyOf(state.anchor), track, title, category: "", locPath: locForMinute(minutes), allDay: false, start, end });
+    EVENTS.push({ id: uid(), date: keyOf(state.anchor), track, title, kind: "event", category: "", locPath: locForMinute(minutes), allDay: false, start, end });
     saveEvents(EVENTS); renderDay();
   });
   document.getElementById("cancelBtn").addEventListener("click", closeForm);
@@ -42353,21 +42560,6 @@
   });
   form.addEventListener("submit", e => {
     e.preventDefault();
-    // attaching an existing routine to this day — no EVENTS entry at all, just
-    // the same extraDates a routine's own edit form writes, so it stays one
-    // live object: editing the routine still updates this placement too
-    if (formKind === "routine") {
-      const rid = document.getElementById("fRoutine").value;
-      const rt = ROUTINE_TASKS.find(x => x.id === rid);
-      if (!rt) { document.getElementById("fRoutine").focus(); return; }
-      const dateVal = fDate.value || keyOf(state.anchor);
-      if (!Array.isArray(rt.extraDates)) rt.extraDates = [];
-      if (!rt.extraDates.includes(dateVal)) rt.extraDates.push(dateVal);
-      saveRoutines(); closeForm();
-      if (dateVal !== keyOf(state.anchor)) { state.anchor = parseKey(dateVal); render(); }
-      else renderDay();
-      return;
-    }
     const title = fTitle.value.trim();
     if (!title) { fTitle.focus(); return; }
     const noteVal = document.getElementById("fNote").value.trim();
@@ -42385,9 +42577,64 @@
       ? document.getElementById("fStages").value.split("\n").map(s => s.trim()).filter(Boolean)
       : [];
     const estVal = formKind === "task" ? parseInt(document.getElementById("fEst").value, 10) : NaN;
-    // recurring event (weekly layers) — its OWN save path, never also an EVENTS row
-    const repeats = formKind === "event" && !document.getElementById("fRepeatField").hidden
-      && document.getElementById("fRepeat").checked;
+
+    // 2026-08-17 (Event/Repeats collapse, Linh: "a routine is really just an event
+    // that repeats"): choosing a repeat pattern on a NEW item saves it as a real
+    // routine (ROUTINE_TASKS) instead of a plain calendar event -- reuses the
+    // exact same recurrence engine the Routines page writes to (schedulesOf /
+    // routineOccursOn / generatedFor), so it recurs identically to a routine built
+    // there. Never while editing an existing one-off -- fRepeatChoice is locked
+    // back to "none" for that case (syncFRepeatLock), same "no conversion in v1"
+    // rule the legacy weekly-repeat checkbox below already used.
+    if (fRepeatChoice !== "none" && !eventEditId) {
+      const task = {
+        id: uid(), title, track: state.track, category: fCat.value.trim(),
+        note: noteVal, calOn: fFillCalOn, freq: "",
+      };
+      if (start) task.start = start;
+      if (!allDay && start && end) task.end = end;
+      if (fRepeatChoice === "daily") {
+        task.freq = "daily";
+      } else if (fRepeatChoice === "weekdays") {
+        task.freq = "weekly"; task.weekdays = [0, 1, 2, 3, 4];
+      } else if (fRepeatChoice === "eachweekday") {
+        task.freq = "weekly"; task.weekdays = [dowIndex(parseKey(dateVal))];
+      } else if (fRepeatChoice === "weekly") {
+        const days = fRptWeekdays.slice().sort((a, b) => a - b);
+        if (!days.length) { alert("Pick at least one day of the week."); return; }
+        task.freq = "weekly"; task.weekdays = days;
+        const wi = parseInt(document.getElementById("fRptWeekInterval").value, 10) || 1;
+        if (wi > 1) {
+          const wa = document.getElementById("fRptWeekAnchor").value;
+          if (!wa) { document.getElementById("fRptWeekAnchor").focus(); return; }
+          task.weekInterval = wi; task.weekAnchor = wa;
+        }
+      } else if (fRepeatChoice === "monthly") {
+        const dv = parseInt(document.getElementById("fRptMonthlyDay").value, 10);
+        if (!dv || dv < 1 || dv > 31) { document.getElementById("fRptMonthlyDay").focus(); return; }
+        task.freq = "monthly"; task.day = dv;
+      } else if (fRepeatChoice === "yearly") {
+        const dv = document.getElementById("fRptYearlyDate").value;
+        if (!dv) { document.getElementById("fRptYearlyDate").focus(); return; }
+        const dd = parseKey(dv);
+        task.freq = "yearly"; task.month = dd.getMonth() + 1; task.day = dd.getDate();
+      } else if (fRepeatChoice === "interval" || fRepeatChoice === "every2days") {
+        const n = parseInt(document.getElementById("fRptIntervalN").value, 10);
+        if (!n || n < 1) { document.getElementById("fRptIntervalN").focus(); return; }
+        task.freq = "interval"; task.intervalDays = n; task.anchor = dateVal;
+        task.intervalUnit = document.getElementById("fRptIntervalUnit").value;
+      }
+      ROUTINE_TASKS.push(task);
+      saveRoutines();
+      if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
+      closeForm();
+      render();   // a new routine can touch many days — refresh every view, not just today
+      return;
+    }
+    // legacy weekly-layers recurring EVENT template -- superseded for new items by
+    // the Repeats branch above; only reachable while editing a pre-existing
+    // RECURRING_EVENTS template (see the big HTML comment above #fRepeatField).
+    const repeats = editingRecurTemplateId != null && document.getElementById("fRepeat").checked;
     if (repeats || editingRecurTemplateId) {
       if (!fStart.value) { fStart.focus(); return; }   // v1 series are always timed
       const days = fRepeatWeekdays.slice().sort((a, b) => a - b);
@@ -42458,7 +42705,9 @@
         ...(estVal > 0 ? { estMin: estVal } : {}),
       });
     }
-    saveEvents(EVENTS); closeForm();
+    saveEvents(EVENTS);
+    if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
+    closeForm();
     // moved or written onto a different day? follow it there so she sees it landed
     if (dateVal !== keyOf(state.anchor)) { state.anchor = parseKey(dateVal); render(); }
     else renderDay();
@@ -43513,6 +43762,85 @@
       renderCategories();
       return;
     }
+  });
+
+  /* ================= TO-DO (2026-08-17, Event/Repeats collapse) =================
+     Row markup/classes reused verbatim from Shopping List (.shop-lux-item etc.) --
+     design44 §6: one component identical everywhere, no one-offs. */
+  function renderTodoPage() {
+    const host = document.getElementById("todoList");
+    if (!host) return;
+    const sorted = TODOS.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    host.innerHTML = sorted.length ? sorted.map(t => {
+      const bits = [t.category, TRACK_LABEL[t.track] || t.track].filter(Boolean);
+      return `<div class="shop-lux-item${t.done ? " bought" : ""}">
+        <input type="checkbox" class="tick" data-todo-tick="${t.id}" ${t.done ? "checked" : ""} aria-label="Mark ${esc(t.title)} done">
+        <div class="shop-lux-main">
+          <span class="shop-lux-name">${esc(t.title)}</span>
+          ${bits.length ? `<span class="shop-lux-meta">${bits.map(esc).join(" · ")}</span>` : ""}
+        </div>
+        <button type="button" class="add-btn todo-make-event" data-todo-event="${t.id}">→ Make event</button>
+        <button class="shop-del" data-todo-del="${t.id}" aria-label="Remove ${esc(t.title)}">×</button>
+      </div>`;
+    }).join("") : `<div class="fam-empty">Nothing on your to-do list. Add one below.</div>`;
+  }
+  // opens the shared Event form pre-filled from a to-do item -- convertingTodoId
+  // (declared up by fRepeatChoice) tells the form's submit handler to remove this
+  // item once a save actually completes, not just on open.
+  function openFormFromTodo(id) {
+    const t = TODOS.find(x => x.id === id);
+    if (!t) return;
+    state.view = "day"; render();
+    openForm(null);
+    fTitle.value = t.title;
+    state.track = t.track || "personal"; syncTrack();
+    if (t.category) fCat.value = t.category;
+    if (t.note) document.getElementById("fNote").value = t.note;
+    convertingTodoId = id;
+  }
+  document.getElementById("todoList").addEventListener("click", e => {
+    const tick = e.target.closest("[data-todo-tick]");
+    if (tick) {
+      const t = TODOS.find(x => x.id === tick.dataset.todoTick);
+      if (t) { t.done = tick.checked; saveTodos(TODOS); renderTodoPage(); }
+      return;
+    }
+    const del = e.target.closest("[data-todo-del]");
+    if (del) {
+      TODOS = TODOS.filter(x => x.id !== del.dataset.todoDel);
+      saveTodos(TODOS); renderTodoPage();
+      return;
+    }
+    const mk = e.target.closest("[data-todo-event]");
+    if (mk) openFormFromTodo(mk.dataset.todoEvent);
+  });
+  function closeTodoForm() {
+    document.getElementById("todoAddForm").hidden = true;
+    document.getElementById("todoAddRow").hidden = false;
+    document.getElementById("todoAddForm").reset();
+    document.querySelectorAll("#todoTrackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === "personal")));
+  }
+  document.getElementById("todoTrackPicker").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    document.querySelectorAll("#todoTrackPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  document.getElementById("todoAddBtn").addEventListener("click", () => {
+    document.getElementById("todoAddRow").hidden = true;
+    document.getElementById("todoAddForm").hidden = false;
+    document.getElementById("todoTitle").focus();
+  });
+  document.getElementById("todoCancelBtn").addEventListener("click", closeTodoForm);
+  document.getElementById("todoAddForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const title = document.getElementById("todoTitle").value.trim();
+    if (!title) { document.getElementById("todoTitle").focus(); return; }
+    const pressed = document.querySelector("#todoTrackPicker .track-opt[aria-pressed=\"true\"]");
+    const track = pressed ? pressed.dataset.track : "personal";
+    const category = document.getElementById("todoCat").value.trim();
+    TODOS.push({ id: uid(), title, track, category, note: "", done: false, createdAt: keyOf(TODAY) });
+    saveTodos(TODOS);
+    closeTodoForm();
+    renderTodoPage();
   });
   // live swatch/preview while dragging the native colour picker, no save/re-render
   // until it commits (the 'change' handler above) — a full table rebuild mid-drag
