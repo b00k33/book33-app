@@ -324,6 +324,23 @@
     --font-emoji: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
     --hour-h: 48px;   /* 2026-08-01 ("calendar does not look like mockup"): compact rows matching the mockup's ~44px hours — supersedes 2026-07-23's generous 84px */
     --gutter: 78px;
+    /* 2026-08-16 (Linh's approved Day-view stylesheet, GAP 2): the two tokens her sheet
+       declares alongside --hour-h. They were previously "applied" by hardcoding 14px and
+       39px at the mobile use sites, which meant querying --pad on :root came back EMPTY —
+       the token she asked for did not exist. Now it does, and the mobile Day rules read
+       through it (see the MOBILE DAY VIEW block near the end of the Day CSS).
+       --pad   = the ONE side gutter the day header, chips, command bar, nav row, meters
+                 and grid all sit on.
+       --rail-w = the hour-label rail's own width. This file's long-standing --gutter is
+                 rail + the 7px column gap, so --gutter is derived from it rather than
+                 replaced by it; --gutter stays the knob every absolutely-positioned
+                 layer (.hours, .events-layer, .sleep-band, .animal-layer…) already reads.
+       These :root values are HER desktop numbers. Only the ≤1023px Day rules are wired to
+       them today — desktop's real rail is 34px inside a 78px --gutter and its page padding
+       comes from .page, and re-pointing those would move desktop, which is out of scope
+       for a mobile Day-view fix. Deliberate, not an oversight. */
+    --pad: 16px;
+    --rail-w: 46px;
     --radius-sm: 10px;
     --radius-md: 16px;
     --radius-lg: 22px;
@@ -3608,8 +3625,16 @@
      wants Google Calendar's own look, full-width solid blocks sized to duration, which
      is also the room-for-a-glance/tap-target win a phone actually needs. Desktop keeps
      shrink-wrap untouched; scoping this by min-width instead of adding a mobile
-     override keeps a single source of truth for which one wins at which size. */
-  @media (min-width: 641px) {
+     override keeps a single source of truth for which one wins at which size.
+     2026-08-16: breakpoint moved 641px -> 1024px, applying that same "one source of
+     truth" rule to a line that had gone stale. Linh's approved Day design (the MOBILE
+     DAY VIEW block far below) runs to 1023px and names the calendar blocks as one of the
+     things it governs — full-width blocks sized to duration — so 641-1023px is her
+     mobile day now, not a small desktop. Measured at 800px before this change: a solo
+     block shrink-wrapped to 214.6px of a 660px column, and an 8-hour "Code" block to
+     119px. Nothing at 1024px+ moves: desktop-day1's own left:6px/right:6px solo rule
+     already outranks this one there. */
+  @media (min-width: 1024px) {
     .tl-item[data-kind="event"], .tl-item[data-kind="routine"] {
       right: auto; width: fit-content; max-width: calc(100% - 10px);
     }
@@ -10329,8 +10354,22 @@
        that has to be a stylesheet rule is this invisible tap pad, because a pseudo-
        element can't be written from an inline style. 12px box + 16px on every side = a
        44x44 target for a 7px dot, exactly the "pad the hit area, don't grow the dot"
-       treatment #addRow .add-btn::before and the compact .md-bar already use. */
-    #b33Live[data-mini]::after { content: ""; position: absolute; inset: -16px; }
+       treatment #addRow .add-btn::before and the compact .md-bar already use.
+       2026-08-16 (GAP 4 — "2px of horizontal overflow"): the pad used to be a plain
+       `inset: -16px`, and THAT was the whole 2px. Measured at 390px: the dot is the last
+       item in .topbar-right and sits flush against .nav-tiers' 14px right padding, so its
+       right edge is at 376 and a symmetric 16px pad reached 392 against a 390px viewport
+       — document.body.scrollWidth 392 vs clientWidth 390, exactly. overflow-x:hidden was
+       masking it rather than fixing it. The pad is invisible, so the fix is to spend all
+       44px of it INWARD: right edge pinned to the dot's own, the full 32px of slack taken
+       on the left. Still exactly 44x44, and now breakpoint-proof — it no longer depends
+       on how much side padding the header happens to have at a given width. The 32px it
+       reaches into is dead space at the right end of #dayRow2 (measured: nothing in that
+       row has a right edge past x=320, and its click delegate only fires for
+       [data-add-action] chips, which are all further left), so no tap changes owner. */
+    #b33Live[data-mini]::after {
+      content: ""; position: absolute; top: -16px; bottom: -16px; right: 0; left: -32px;
+    }
     /* 2026-08-06 (Linh: "move the day/night icon out of the top-right, pin it to the
        bottom-left corner, small and unobtrusive"): SUPERSEDES position:static above --
        pulled back out of the .topbar-right flex row (which now holds only the star
@@ -12623,13 +12662,22 @@
      that number rather than a second gutter system bolted onto each component. Day page
      only; every other page keeps its own padding. */
   @media (max-width: 1023px) {
-    #dayPage { padding-left: 14px; padding-right: 14px; }
+    /* 2026-08-16 (GAP 2): --pad is a REAL token now (declared on :root, see near the top
+       of the stylesheet) instead of this number being written out by hand here. Same
+       resolved value, so nothing moves. */
+    #dayPage { padding-left: var(--pad); padding-right: var(--pad); }
     /* her --hour-h:46px (already this file's phone value; this extends it to tablet,
        which was still on the :root 48px) and her --rail-w:32px + .dayGrid's 7px column
        gap. --gutter is this file's existing single knob for "how far the content column
-       sits from the true left edge", i.e. exactly rail + gap = 39px, so the hour rail,
-       the sleep note, the template bands and the events layer all move together. */
-    :root { --hour-h: 46px; --gutter: 39px; --blk-radius: 3px; }
+       sits from the true left edge", i.e. exactly rail + gap, so the hour rail, the sleep
+       note, the template bands and the events layer all move together. Written as a calc
+       off --rail-w (2026-08-16, GAP 2) rather than the literal 39px it used to be, so the
+       two can never drift: change the rail and the gutter follows. Resolves to the same
+       39px as before. */
+    :root {
+      --hour-h: 46px; --pad: 14px; --rail-w: 32px;
+      --gutter: calc(var(--rail-w) + 7px); --blk-radius: 3px;
+    }
     /* "nothing may spill off the screen". SCOPED TO MOBILE, unlike her sheet, which has
        it unscoped: overflow-x:hidden on html/body makes the document a scroll container
        and is the classic reason a page-level position:sticky silently stops sticking —
@@ -12724,7 +12772,9 @@
     #timelineScroll { border-radius: 0; }
     /* id-scoped to beat `.timeline-wrap .hour-row .hour-label` (3 classes, further up),
        which is what actually owns this label's type today. */
-    #dayTimelineWrap .hour-row .hour-label { width: 32px; font-size: 9px; font-weight: 700; }
+    /* 2026-08-16 (GAP 2): the rail's width now reads the --rail-w token declared above
+       rather than repeating its number — same 32px, one source. */
+    #dayTimelineWrap .hour-row .hour-label { width: var(--rail-w); font-size: 9px; font-weight: 700; }
 
     /* ---- .blk -> .tl-item inside the day grid ---- */
     #dayTimelineWrap .tl-item, #dayTimelineWrap .tl-item[data-kind="event"] {
@@ -12777,6 +12827,42 @@
     }
     #dayTimelineWrap .tl-item.tl-tight .tl-meta {
       display: block; margin-top: 0; font-size: 9px; flex: none;
+    }
+
+    /* ---- .tick -> .tl-tick, the tick-to-complete ring on a calendar block ----
+       2026-08-16 (GAP 3): 18px, up from the base rule's 15px. SIZE ONLY — the ring's
+       click handler (the data-tick-ev branch in the document click delegate), its
+       press-and-hold Cancelled/Rescheduled menu, and its outcome-status faces
+       (.tl-tick[data-oc-status=…]) are all untouched, per "KEEP EXACTLY AS IT IS".
+       Scoped to .tl-block so the 12px ring on a .tl-point pill (its own base rule) is
+       left alone — a point is a 20px pill and 18px would fill it edge to edge.
+       Measured consequence, deliberate and unchanged in KIND from today: on a
+       .tl-tight block (14px tall, 3px padding, so an 8px content box) a centred ring
+       taller than 14px is clipped by .tl-item's overflow:hidden. At 15px that clip was
+       0.5px a side; at 18px it is 2px a side. The ring still reads as a ring, and the
+       alternative — raising the 14px block floor, or letting the ring paint outside its
+       card onto the hour lines — is a change she ruled out. */
+    #dayTimelineWrap .tl-block .tl-tick {
+      width: 18px; height: 18px; font-size: 11px; position: relative;
+    }
+    /* 18px is under CLAUDE.md's 44px minimum tap target, so the TARGET grows and the
+       ART does not — the same invisible-pseudo pad #b33Live[data-mini], .day-nav-gear
+       and #qaSlotDay's + button already use. ::after is free here (the ✓/✕/🕑 face is
+       real text content, not a pseudo).
+       MEASURED, and short of 44px on purpose — read this before "fixing" it: the ring
+       lives inside .tl-title, which carries -webkit-line-clamp (2 lines, 1 on a tight
+       block) and therefore overflow:hidden, and an ancestor's overflow clips hit-testing
+       as well as painting. The pad's own box is 42x42, but the title's box is only the
+       ring's line box tall, so the EFFECTIVE target measures 30 x 17.5 at 390px — up
+       from the bare 15 x 15 this ring had with no pad at all, and the most that can be
+       claimed without moving the pad's containing block up to .tl-item, which would hand
+       the ring a 44px slab of the block's top-left corner and steal taps that currently
+       open the detail sheet. Linh's instruction on this ring is "KEEP EXACTLY AS IT IS",
+       so the tap OWNERSHIP is left alone and the pad takes what the title box allows.
+       Dropping the clamp on .tl-title would lift the ceiling, at the cost of long names
+       overflowing their block instead of ellipsing — not a trade to make silently. */
+    #dayTimelineWrap .tl-block .tl-tick::after {
+      content: ""; position: absolute; inset: -13px;
     }
   }
   /* ---- .dayHead -> .nav-tiers (phone only — see the BREAKPOINT note above) ---- */
@@ -21028,8 +21114,23 @@
   // (renderMultiDayGrid()/mdColumnHtml()) uses the SAME side-by-side lane algorithm
   // instead of a second copy of it — same "shape" Week's own column-lane clustering
   // uses, just the one this file already had. Pure: takes entries that already carry
-  // .top/.h (from topForMin()), mutates .col/.cols onto each.
+  // .top/.h (from topForMin()) and .cs/.ce (clamped start/end MINUTES), mutates
+  // .col/.cols onto each.
+  // 2026-08-16 (Linh: "Code (9am-5pm) renders about 58% wide even though nothing
+  // shares its time"): a SESSION is an item with real clock duration >= 30 min.
+  // Anything shorter is a momentary MARKER — a reminder pinned at an instant, not a
+  // competing booking — and a marker must never narrow a session's column.
+  // This deliberately does NOT reuse renderTimeline()'s `isBlock`, which is
+  // `(ce - cs >= 30) || !!hasSteps`: a routine WITH STEPS is forced to block treatment
+  // however short it really is (it has to hold its tickable sub-tasks), so isBlock is
+  // true for a zero-minute item like "Manage fridge" 9:30am. Measured live at 390px
+  // before this fix: that one 14px marker cut an 8-hour "Code" block to 153.5px of a
+  // 323px column. Real duration off the ALREADY-CLAMPED cs/ce is the honest
+  // discriminator; hasSteps is about markup, not about time.
   function clusterOverlaps(placed) {
+    // clamped real duration, so an item running past the visible window is judged on
+    // what it actually occupies on this grid (the same cs/ce the height math uses).
+    const isSession = p => (p.ce - p.cs) >= 30;
     placed.sort((a, b) => a.top - b.top || b.h - a.h);
     let cluster = [], clusterEnd = -1;
     const closeCluster = () => {
@@ -21049,8 +21150,23 @@
       // per item, not a cluster-wide total.
       cluster.forEach(p => {
         let maxCol = p.col;
+        // 2026-08-16 (see isSession above): when p is a real session, only OTHER
+        // sessions may widen its column count — a momentary marker sitting inside its
+        // span is not a double-booking. A marker's own col/cols is left computed
+        // exactly as before (every overlapper counts), so it still offsets into its own
+        // lane and never paints on top of the session's title; it is drawn above the
+        // session simply because `placed` is sorted by top and it starts later.
+        // Knowingly untouched: the lane-PACKING pass above still runs in pure time
+        // order, so a marker that starts just BEFORE a session (close enough that its
+        // 14px floor still reaches the session's top) can hold lane 0 and leave the
+        // session at col 1 / cols 2. Repacking to fix that would have to move the
+        // session into the lane the marker occupies, i.e. paint them on top of each
+        // other — strictly worse. The common case (marker INSIDE the session's span,
+        // which is the one Linh reported) sorts session-first and is fully fixed.
+        const pIsSession = isSession(p);
         cluster.forEach(o => {
           if (o === p) return;
+          if (pIsSession && !isSession(o)) return;
           const overlaps = o.top < p.top + p.h && p.top < o.top + o.h;
           if (overlaps && o.col > maxCol) maxCol = o.col;
         });
@@ -21272,8 +21388,12 @@
       // hidden) for no actual readability win. The 2-line clamp on .tl-title already
       // shows a full, meaningful prefix of the name at any column width and never
       // regresses to a nameless pill -- that's the real fix, already in place above.
+      // 2026-08-16: her spec writes this pair as `left: calc(X% + 3px); width: calc(Y%
+      // - 6px)` — 3px in from the lane's left edge and 3px clear of the next lane, one
+      // symmetric 3px gutter. The width subtrahend was 8px, which took an extra 2px off
+      // every lane for no stated reason; 6px is the number her design asks for.
       const colStyle = p.cols > 1
-        ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 3px);width:calc(${(100 / p.cols).toFixed(2)}% - 8px);right:auto;`
+        ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 3px);width:calc(${(100 / p.cols).toFixed(2)}% - 6px);right:auto;`
         : "";
       const style = (isBlock ? `top:${p.top}px;height:${p.h}px;` : `top:${p.top}px;`) + colStyle;
       const done = isDone(e.id);
@@ -21403,8 +21523,22 @@
     // desktop-day1 the spec wants every solo block simply at the column's own
     // width (left:6px;right:6px, CSS above) — skip the equalise there so that
     // CSS rule is the one thing setting a solo block's width, unfought.
+    // 2026-08-16 (found MEASURING the session-vs-marker fix above, at 800px): the gate
+    // was `> 640`, which is the OLD mobile breakpoint. Linh's approved Day design now
+    // runs to 1023px, so 641–1023px is her mobile day too — full-width blocks, no
+    // shrink-wrap — and this pass was overriding that with an inline px width taken from
+    // the narrowest solo block's content. It stayed hidden only because a solo block was
+    // rare there; the moment a non-competing 9–5 block correctly became solo, "Code"
+    // dropped from 326px to 215px of a 660px column at 800px. Same defect item 3 of the
+    // 2026-08-15 corrections pass fixed for desktop-day1, one breakpoint band later.
+    // With `!deskDay1Active()` alongside it this now makes the pass unreachable in
+    // practice (calDaysActive() hardcodes 1 at every width ≥1024, so deskDay1Active() is
+    // always true up there). Kept rather than deleted for the same reason
+    // calDaysActive() is written the way it is: a desktop multi-day build would make
+    // this branch live again, and losing the behaviour silently is worse than a dormant
+    // guard that documents itself.
     const soloBlocks = Array.from(layer.querySelectorAll('.tl-block[data-solo="true"]'));
-    if (soloBlocks.length > 1 && window.innerWidth > 640 && !deskDay1Active()) {
+    if (soloBlocks.length > 1 && window.innerWidth > 1023 && !deskDay1Active()) {
       const maxW = Math.max(...soloBlocks.map(el => el.getBoundingClientRect().width));
       soloBlocks.forEach(el => { el.style.width = `${Math.ceil(maxW)}px`; });
     }
