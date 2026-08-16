@@ -28,10 +28,15 @@ cols=days, small marks). Light not loud: colour dot + text on subtle bg, not big
 pills. Dim/strike done items. Cap visible items then "+N more". Today tinted gold as an
 anchor in every view.
 
-### 4. Flat design + Ink & Brass
-Separate with colour + space, not boxes/borders/nested boxes. Palette: bg #0f0b07, surface
-#17120d, ink #efe7d6, muted #9c8f79, faint #5f5645, gold #d8b979, bright gold #EAC24E,
-hairline rgba(216,185,121,.10). Gold for numbers/accents; colour = category.
+### 4. Flat design + Black & Brass
+Separate with colour + space, not boxes/borders/nested boxes. Night palette (2026-08-16,
+supersedes the old "Ink & Brass" browns — Linh: "change the brown to black, dark black"):
+bg #000000, surface #0D0D0D, raised #161616, recessed #0A0A0A — a flat NEUTRAL (R=G=B, no
+warm mix) staircase, not a dark tint. ink #efe7d6, muted #9c8f79, faint #5f5645 (unchanged
+— only the surfaces under them went black). gold #d8b979, bright gold #EAC24E stay the
+app's one signature colour ("Brass" survives; only "Ink" the brown did not). Stars are
+plain white (#FFFFFF), not the old blue-grey/gold mix. Day mode is untouched — see its own
+palette map further down. Gold for numbers/accents; colour = category.
 
 ### 5. Proportional & aligned
 Calendar: one fixed scale — every hour same height, blocks sized to real duration, snapped
@@ -146,8 +151,8 @@ A raw hex from §4 pasted into a component is still a bug by §6.
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
-## Colours — Ink & Brass, one source of truth
-- Use ONLY Ink & Brass variables (--ink*, --*-seed, --*-ink, --tl-*-bg,
+## Colours — Black & Brass, one source of truth
+- Use ONLY the token set (--ink*, --*-seed, --*-ink, --tl-*-bg,
   --accent-seed). Never hardcode a hex in a component. Works in dark AND light.
   Track colours come only from --*-seed. A hardcoded hex outside the :root block is
   always a bug, even one that "matches" a token's current value by coincidence —
