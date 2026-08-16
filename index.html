@@ -1238,6 +1238,19 @@
     font-weight: 400;
   }
   .patients-nudge.open .nudge-pop { display: block; }
+  /* 2026-08-17 (Book33 — rail widgets brief): the "Today's patients" rail-card copy of
+     this trigger sits in a compact .rail-card h4 (flex row, 8px gap — see that rule)
+     next to plain text, not the spacious date dropdown .patients-nudge was built for —
+     restyle its pill chrome down to .rail-info's plain-icon look (matching #railNumInfo,
+     its sibling in the same header slot) while keeping the .patients-nudge class itself
+     for the shared click-toggle delegate and .nudge-pop's own CSS (both keyed off that
+     class name). ID-scoped + both classes for specificity, so this wins over the base
+     .patients-nudge rule above without touching that rule or #patientsNudge itself. */
+  #railPatNudge.rail-info.patients-nudge {
+    background: none; border: none; padding: 0; border-radius: 0;
+    text-transform: none; letter-spacing: normal; font-size: 13px; align-self: auto;
+  }
+  #railPatNudge.rail-info.patients-nudge:hover { background: none; color: var(--gold-bright); }
   /* 2026-08-02 (Linh: "previously there were numerology tasks like in image... shown
      when mouse hovers over PM9 or UD1 or PY11"): #focusTile's six energy-tiles are still
      built fresh every render by renderDailyFocus(), just hidden (display:none) since the
@@ -13217,6 +13230,17 @@
     color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700;
     padding: 8px 0 0; cursor: pointer;
   }
+  /* To-do (2026-08-17, rail widgets brief): quick-add row at the bottom of the card --
+     a real text input (not a button) styled to read as the next row after the list,
+     same "gold, top-divider, 8px" grammar as .wr-pile-more just above so it feels like
+     part of the same card, not a bolted-on form. */
+  .wr-todo-add { margin-top: 8px; }
+  .wr-todo-add-input {
+    width: 100%; font: inherit; font-size: 11px; color: var(--ink);
+    background: none; border: none; border-top: 1px solid var(--note-line);
+    padding: 8px 0 0; outline: none;
+  }
+  .wr-todo-add-input::placeholder { color: var(--gold-bright); font-weight: 700; opacity: 1; }
   /* Streaks */
   .wr-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
   /* Today's boost (2026-08-16, moved from a standalone bottom-of-page card into this
@@ -16630,7 +16654,19 @@
           <div class="rail-cycle" id="railCycleBody"></div>
         </div>
         <div class="rail-card" id="railPatients">
-          <h4>Today's patients</h4>
+          <h4>Today's patients
+            <!-- 2026-08-17 (Linh: "put the /patients hover instruction back"): reuses
+                 #patientsNudge's own .patients-nudge/.nudge-pop pattern verbatim (same
+                 class, same copy) rather than a new popover — see the delegated
+                 click-toggle listener below, which now covers every .patients-nudge
+                 trigger, not just the date-dropdown one. .rail-info styles it down to
+                 a plain icon (matching #railNumInfo, its sibling in this exact header
+                 slot) instead of .patients-nudge's own pill chrome, which is sized for
+                 the more spacious date dropdown -- see the small override near
+                 .patients-nudge's own rule. Always rendered (not gated on any patients
+                 being booked) so the reminder works on an empty day too. -->
+            <button type="button" class="rail-info patients-nudge" id="railPatNudge" aria-label="Ask Claude: /patients">ⓘ<span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span></button>
+          </h4>
           <button type="button" class="rail-pat-head" id="railPatHead" aria-expanded="false"></button>
           <div id="railPatList" hidden></div>
         </div>
@@ -20108,6 +20144,64 @@
           deadlineMin, deadlineLabel: deadlineMin != null ? (t.deadlineLabel || t.title) : undefined,
         });
       }
+    });
+    // 2026-08-17 (Linh, "Train doesn't show 6-7pm" -- Train has 4 weekly schedule
+    // layers, several sharing the same days): the loop above always resolves ONE
+    // layer per routine per day (t.schedules.find(...) picks the first match in
+    // array order) -- correct for the common case, but silently drops every OTHER
+    // layer that also matches that day, with no warning. Train's Mon/Tue/Wed/Thu
+    // 6-7pm layer never rendered on any of those days because an earlier layer
+    // (9am or the 1pm Wed layer) always matched first; its Sat 2-3pm layer was lost
+    // the same way. This pass adds a block for each EXTRA matching layer the loop
+    // above didn't use (extra blocks reuse the SAME occId as the primary one --
+    // Linh's explicit choice, "shared status" over independent per-session
+    // tracking: ticking, skipping, resizing, or moving any one of a routine's
+    // same-day blocks affects the whole routine for that day, exactly as it always
+    // has, just with every scheduled time now actually showing up).
+    // Deliberately narrow, skipped entirely when:
+    //  - only one layer matches (the loop above already covered it in full)
+    //  - the routine is chain-anchored (its time comes from the anchor, not the
+    //    layer -- every layer would resolve to the same time and render as an
+    //    exact duplicate)
+    //  - today is skipped or moved to another day (that override already fully
+    //    replaces the occurrence with a single ghost above; a ghost per layer
+    //    would be wrong -- there's one place this routine went, not several)
+    //  - today has a manually-set custom start time (ovr.start) -- a specific
+    //    time picked for one day doesn't have a natural per-layer split to honor,
+    //    so every block would collapse onto that same time; falls back to the
+    //    pre-fix single-block behaviour on that one day only
+    routinesOn(date).forEach(t => {
+      if (!(Array.isArray(t.schedules) && t.schedules.length > 1)) return;
+      if (t.anchorTo && chainAnchorOf(t)) return;
+      const ovr = rtnOvr(t, k);
+      if (ovr && (ovr.skipped || ovr.start || (ovr.movedTo && ovr.movedTo !== k))) return;
+      const hits = t.schedules.filter(l => layerOccursOn(l, date));
+      if (hits.length < 2) return;
+      const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
+      const occId = `rt-${t.id}-${k}`;
+      const effTitle = ovr && ovr.title ? ovr.title : t.title;
+      const occNote = ovr && ovr.note != null ? ovr.note : null;
+      // hits[0] is exactly what the primary loop's own .find() already rendered --
+      // every OTHER matching layer gets a block here.
+      hits.slice(1).forEach(layer => {
+        if (!layer.start) return;
+        const sMin = timeToMin(layer.start);
+        let effEnd;
+        if (subs.length) {
+          const total = ovr && ovr.dur ? ovr.dur : routineDurMin(t, date);
+          effEnd = minToTime(Math.min(sMin + total, 1439));
+        } else {
+          effEnd = layer.end || (t.durationMin ? minToTime(Math.min(sMin + t.durationMin, 1439)) : "");
+        }
+        out.push({
+          id: occId, generated: true, date: k, hasOvr: !!ovr,
+          track: t.track, category: t.category || "Routine", title: effTitle,
+          note: occNote != null ? occNote : t.note, freq: t.freq,
+          kind: subs.length ? "routine" : undefined, allDay: false, fromRoutine: true,
+          start: layer.start, end: effEnd,
+          steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null, linkInfo: linkInfo(t),
+        });
+      });
     });
     // 2026-08-05 (Part D, cross-day reschedule): routineOccursOn()/routinesOn() above
     // only ever look at a routine's own recurrence pattern, so a routine occurrence
@@ -35751,8 +35845,12 @@
   // 2026-08-16 (Linh: "move Today's boost into the widget rail"): boostWidget joins at
   // the end of the default order -- no stated preference, and it's trivially draggable
   // to wherever she wants via Arrange, same as any other card here.
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "pileupBox", "streaksWidget", "boostWidget"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost" };
+  // 2026-08-17 (Book33 — rail widgets brief, "add a To-do widget to the rail"):
+  // railTodo joins the default order right after railPatients (another
+  // action-oriented "things to do today" card) -- fully draggable to wherever she
+  // wants via Arrange after that, same as every other card here.
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "pileupBox", "streaksWidget", "boostWidget"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -35796,6 +35894,35 @@
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's patients · ${pats.length}</span>
         ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(p.title)}</span><span class="wr-pat-state">${isDone(p.id) ? "✓ in" : ""}</span></div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
+      </div>`;
+    }
+    if (id === "railTodo") {
+      // 2026-08-17 (Book33 — rail widgets brief, "add a To-do widget... reads the same
+      // TODOS list as my To-do page — one source of truth, no second store"): TODOS/
+      // saveTodos() are the exact globals renderTodoPage() (the To-do page itself) reads
+      // and writes — nothing here is a second copy. Done items sink to the bottom on the
+      // real page (renderTodoPage's own sort); this card only ever shows PENDING ones,
+      // capped at 5 -- same capping IDEA as pileupBox just above (a true total in the
+      // label, a "+N more" when there's more than fits), but linking to the real To-do
+      // page rather than pileupBox's in-place expand, per her explicit spec ("+N more
+      // that links to the full To-do page").
+      const pending = TODOS.filter(t => !t.done);
+      const shown = pending.slice(0, 5);
+      const hiddenCount = pending.length - shown.length;
+      // .wr-pile-row/.wr-pile-tick/.wr-pile-name/.wr-pile-edit reused verbatim from
+      // Piling up right below — same row grammar (tick, name, hover-revealed action),
+      // not a new one-off pattern.
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">To-do · ${pending.length}</span>
+        ${pending.length ? shown.map(t => `<div class="wr-pile-row">
+            <input type="checkbox" class="wr-pile-tick" data-wr-todo-tick="${t.id}" aria-label="Mark ${esc(t.title)} done">
+            <span class="wr-pile-name">${esc(t.title)}</span>
+            <button type="button" class="wr-pile-edit" data-wr-todo-event="${t.id}" title="Convert to event" aria-label="Convert ${esc(t.title)} to an event">→</button>
+          </div>`).join("") : `<div class="wr-pat-empty">Nothing on your to-do list.</div>`}
+        ${hiddenCount > 0 ? `<button type="button" class="wr-pile-more" data-jump-view="todo">+${hiddenCount} more →</button>` : ""}
+        <form class="wr-todo-add" data-wr-todo-add>
+          <input type="text" class="wr-todo-add-input" placeholder="+ Add a to-do" autocomplete="off" aria-label="Add a to-do">
+        </form>
       </div>`;
     }
     if (id === "pileupBox") {
@@ -35918,6 +36045,38 @@
   document.addEventListener("click", e => {
     if (!e.target.closest("[data-wr-pile-more]")) return;
     wrPileupExpanded = true;
+    renderDeskWidgetRail();
+  });
+  // 2026-08-17 (Book33 — rail widgets brief): the To-do rail card's own tick + convert-
+  // to-event actions — same TODOS/saveTodos() the To-do page's own tick handler uses
+  // (renderTodoPage() below), and openFormFromTodo() is the exact same convert flow its
+  // "→ Make event" button calls, reused verbatim. Delegated off document, not bound to
+  // one element, because wrCardHtml()'s output can exist in more than one mount at once
+  // (desktop rail / 1024-1199px fallback / mobile shelf) — same reason data-wr-pile-more
+  // above is delegated instead of bound directly.
+  document.addEventListener("click", e => {
+    const tick = e.target.closest("[data-wr-todo-tick]");
+    if (tick) {
+      const t = TODOS.find(x => x.id === tick.dataset.wrTodoTick);
+      if (t) { t.done = tick.checked; saveTodos(TODOS); renderDeskWidgetRail(); }
+      return;
+    }
+    const mk = e.target.closest("[data-wr-todo-event]");
+    if (mk) openFormFromTodo(mk.dataset.wrTodoEvent);
+  });
+  // the quick-add row (data-wr-todo-add) — same TODOS.push() shape openFormFromTodo's
+  // own page uses, defaulted to track "personal"/no category since this is a one-line
+  // jot, not the full add form (her "+ Add a to-do line ... jot one straight into the
+  // widget" — the full track/category picker stays the To-do page's own job).
+  document.addEventListener("submit", e => {
+    const form = e.target.closest("[data-wr-todo-add]");
+    if (!form) return;
+    e.preventDefault();
+    const input = form.querySelector(".wr-todo-add-input");
+    const title = input.value.trim();
+    if (!title) return;
+    TODOS.push({ id: uid(), title, track: "personal", category: "", note: "", done: false, createdAt: keyOf(TODAY) });
+    saveTodos(TODOS);
     renderDeskWidgetRail();
   });
   document.addEventListener("click", e => {
@@ -42073,9 +42232,15 @@
     state.cyclePopoverOpen = false;
     renderDayHealth();
   }
-  document.getElementById("patientsNudge").addEventListener("click", e => {
+  // 2026-08-17 (Book33 — rail widgets brief): delegated so every .patients-nudge
+  // trigger toggles itself (was #patientsNudge-only) -- #railPatNudge (the "Today's
+  // patients" rail card's copy) rides this for free, same reason every other rail
+  // control here is delegated rather than bound per-id.
+  document.addEventListener("click", e => {
+    const nudge = e.target.closest(".patients-nudge");
+    if (!nudge) return;
     e.stopPropagation();
-    document.getElementById("patientsNudge").classList.toggle("open");
+    nudge.classList.toggle("open");
   });
   // 2026-08-04 (Linh: "remove the manual hour-expand feature completely -- no tap,
   // double-tap, arrow, or any expand gesture... swiping/scrolling the calendar must
@@ -42223,7 +42388,7 @@
       }, 150);
     });
   })();
-  document.addEventListener("click", () => document.getElementById("patientsNudge")?.classList.remove("open"));
+  document.addEventListener("click", () => document.querySelectorAll(".patients-nudge.open").forEach(el => el.classList.remove("open")));
   document.getElementById("dayHealthBody").addEventListener("click", e => {
     if (e.target.closest("[data-cyc-close]")) closeCycleLog();
     if (e.target.closest("[data-cyc-log]")) {
