@@ -2652,6 +2652,11 @@
      descendant selector, so wrapping them in a label changes nothing about it). */
   .tl-move-fld { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .tl-move-fld-lbl { font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+  /* 2026-08-18 (Linh: "Move to [date] sometimes just silently does nothing" -- never
+     quietly do nothing, show what's missing): same recipe as .rtn-dur-warn's
+     non-blocking mismatch banner (--warn per CLAUDE.md's "no hardcoded hex" rule) --
+     no margin-top needed, .tl-detail-extra's own flex gap already spaces it. */
+  .tl-move-error { padding: 8px 12px; background: color-mix(in oklab, var(--warn) 12%, transparent); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.4; color: var(--warn); }
   /* the single gold confirm — §0's "one primary action per surface, gold". Same recipe
      as .b33mp-confirm, the month picker's own confirm, so the two buttons she meets one
      after the other in this flow are literally the same button. */
@@ -23571,6 +23576,12 @@
           ${moveField("tlMoveTime", "tl-move-time", "time", "Starts", moveDayScope ? e.start : (rtnT && rtnT.start) || e.start)}
           ${moveField("tlMoveEnd", "tl-move-time", "time", "Ends", moveDayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : ((rtnT && rtnT.end) || e.end || ""))}
         </div>
+        <!-- 2026-08-18 (Linh: "Move to [date] sometimes just silently does nothing"):
+             commitTlMove() below writes a message here instead of quietly returning
+             when the move can't be saved. Starts hidden -- a fresh render of this panel
+             (Cancel/reopen) always starts clean; .tl-detail-extra's own flex gap spaces
+             it without an extra margin. -->
+        <div class="tl-move-error" id="tlMoveError" hidden></div>
         <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
       </div>` : "";
     // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
@@ -24464,13 +24475,37 @@
      edit, not a move, and belongs in the routine editor this sheet already links to.
      So routine scope moves the TIME, on all its days, and says so in both the hint and
      the button. Everything else about the scope step matches the spec. */
+  // 2026-08-18 (Linh: "Move to [date] sometimes just silently does nothing"): the
+  // inline feedback slot commitTlMove writes to below instead of quietly returning.
+  function tlMoveErrorEl() { return document.getElementById("tlMoveError"); }
+  function showTlMoveError(msg) {
+    const el = tlMoveErrorEl();
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+  function clearTlMoveError() {
+    const el = tlMoveErrorEl();
+    if (el) el.hidden = true;
+  }
   function commitTlMove(id) {
     const ev = TL_ITEMS_BY_ID[id];
     if (!ev) return;
+    // 2026-08-18 (Linh, same report): a native date/time <input> can leave an
+    // in-progress keystroke uncommitted while it still has focus -- .value reads back
+    // "" (or the pre-edit value) until the field blurs -- so tapping Confirm right
+    // after typing could race the field's own commit and read nothing. Force-blur
+    // whatever's still focused in THIS panel before reading any value below, so a
+    // value just typed is never lost to that race. Does not touch how the move is
+    // actually saved (rescheduleItem/setRtnOvr, untouched further down).
+    const focused = document.activeElement;
+    if (focused && document.getElementById("tlDetailMove")?.contains(focused)) focused.blur();
+    clearTlMoveError();
     const copy = tlDetailPanel === "copy";
     const startVal = document.getElementById("tlMoveTime")?.value || "";
     const endVal = document.getElementById("tlMoveEnd")?.value || "";
-    if (!startVal) return;
+    // was a bare `return` -- a silent no-op with no visible feedback at all.
+    if (!startVal) { showTlMoveError("Add a start time to move this."); return; }
     const p = parseOccId(ev.id);
     const rt = ev.rtTaskId ? ROUTINE_TASKS.find(x => x.id === ev.rtTaskId) : null;
     if (!copy && tlMoveScope === "routine" && rt && p) {
@@ -24484,7 +24519,8 @@
       return;
     }
     const dateVal = document.getElementById("tlMoveDate")?.value || "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return;
+    // was a bare `return` -- same silent no-op.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { showTlMoveError("Pick a valid date to move this to."); return; }
     tlDetailPanel = null;
     if (copy) duplicateItem(ev, dateVal, startVal, endVal);
     else rescheduleItem(ev, dateVal, startVal, endVal);
@@ -24497,8 +24533,22 @@
   // the §7 month picker fires input AND change on #tlMoveDate when a day is picked, and
   // a native time/date control fires them as she steps through values.
   ["input", "change"].forEach(evt => document.getElementById("tlDetailBody").addEventListener(evt, e => {
-    if (e.target.id === "tlMoveDate" || e.target.id === "tlMoveTime") refreshTlMoveConfirm();
+    if (e.target.id === "tlMoveDate" || e.target.id === "tlMoveTime") { refreshTlMoveConfirm(); clearTlMoveError(); }
   }));
+  // 2026-08-18 (Linh: "make sure the confirm button is never hidden behind the
+  // on-screen keyboard when a time field is focused"): scroll the gold confirm into
+  // view the moment any move-panel date/time field gains focus, so it stays visible
+  // above the keyboard the whole time she's typing rather than only after she
+  // dismisses it. block:"nearest" is a no-op once it's already visible (true on
+  // desktop, which has no on-screen keyboard to hide it behind, and true on mobile
+  // once scrolled up once) -- no width gate needed. The short delay lets the
+  // keyboard's own show animation finish first; scrolling immediately measures the
+  // pre-keyboard viewport and undershoots.
+  document.getElementById("tlDetailBody").addEventListener("focusin", e => {
+    if (!e.target.matches(".tl-move-date, .tl-move-time")) return;
+    const btn = document.getElementById("tlMoveConfirm");
+    if (btn) setTimeout(() => btn.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300);
+  });
   document.getElementById("tlDetailBody").addEventListener("change", e => {
     const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
     // 2026-08-05 ("B33 Notification" Step 4): custom minutes-before for this event
