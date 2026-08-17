@@ -3489,6 +3489,15 @@
        hold. Block text was never selectable-by-design anyway (tap = open detail). */
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   }
+  /* A marker floating on top of a session it doesn't narrow (see isMarkerOverlay, JS) —
+     a border in the page's own background colour reads as "cut out and pinned on top"
+     without a drop-shadow, matching the existing flat/no-shadow rule every other block
+     already follows. Same border-ring technique .phase-dot already uses for the same
+     "separate this from what's behind it" job. */
+  .tl-item.tl-marker-overlay {
+    z-index: 2;
+    border: 2px solid var(--paper);
+  }
   /* 2026-08-01 ("the font looks ugly, and the color contrast is terrible"): SUPERSEDES
      the serif title — the mockup's .tl-event/.tl-task text is always --sans (Inter), never
      the display serif. A bold display serif at 14.5px inside a small solid-colour chip is
@@ -6675,8 +6684,8 @@
   #rtnAddForm .dur-boxes { display: flex; gap: 8px; }
   #rtnAddForm .dur-box-wrap {
     flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
-    background: var(--field-bg); border-radius: var(--field-radius-sm); padding: 8px 12px;
-    cursor: text;
+    background: var(--field-bg); border-radius: var(--field-radius-sm); padding: 0 8px 0 12px;
+    min-height: 44px; cursor: text;
   }
   #rtnAddForm .dur-box-wrap:focus-within { box-shadow: inset 0 0 0 1.5px var(--margin-rule); }
   #rtnAddForm .dur-input { border: none; background: none; padding: 0; width: 100%; min-width: 0; text-align: right; }
@@ -6722,14 +6731,36 @@
   #addForm .dur .num {
     background: var(--field-bg); border-radius: 9px;
     box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--margin-rule) 22%, transparent);
-    min-height: 38px; display: flex; align-items: baseline; gap: 4px; padding: 0 12px;
+    min-height: 44px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 12px;
   }
   #addForm .dur .num:focus-within { box-shadow: inset 0 0 0 1.5px var(--margin-rule); }
   #addForm .dur .num input {
-    width: 30px; border: 0; background: transparent; color: var(--ink);
+    width: 34px; border: 0; background: transparent; color: var(--ink);
     font-size: 13px; font-weight: 700; text-align: right; outline: none;
   }
   #addForm .dur .num .u { font-size: 11px; color: var(--ink-faint); font-weight: 600; }
+  /* 2026-08-18 (Linh: "can't type into the h/m boxes, up/down arrows aren't visible
+     or don't work"): the native number spinner sat INSIDE the old 30px box, leaving
+     next to no room for the digits themselves -- unreliable across browsers anyway
+     (often invisible on mobile). Hidden everywhere the "How long" picker appears and
+     replaced with our own two-button stepper, sized and styled to match the pill --
+     one shared component (.dur-stepper/.dur-step) for both #addForm's compact .num
+     here and #rtnAddForm's roomier .dur-box-wrap below, so it's the same control in
+     both places (design44 §6). The delegated click handler (search "dur-step-up")
+     reads the input's own min/max/step and fires a real "input" event, so
+     syncDurFromBoxes()/rtnSyncDurFromBoxes() need no changes at all -- stepping is
+     just a second way to trigger the exact same path typing already does. */
+  .dur-input[type=number]::-webkit-inner-spin-button,
+  .dur-input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .dur-input[type=number] { -moz-appearance: textfield; }
+  .dur-stepper { display: flex; flex-direction: column; flex: none; align-self: stretch; }
+  .dur-step {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    min-width: 22px; min-height: 20px; border: none; background: none; padding: 0; margin: 0;
+    color: var(--ink-faint); font-size: 7px; line-height: 1; cursor: pointer;
+  }
+  .dur-step:hover, .dur-step:focus-visible { color: var(--gold-bright); outline: none; }
+  .dur-step:active { color: var(--gold-bright); }
   #addForm #durChips.track-picker .track-opt { min-height: 34px; }
   #addForm #durChips .track-opt:disabled { opacity: .4; cursor: not-allowed; }
   /* Whose job (More options): the summary button already reads as a single
@@ -13491,6 +13522,15 @@
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] .tl-meta { color: color-mix(in srgb, #c2567f 50%, black); }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item .tl-title { font-weight: 800; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item .tl-meta { opacity: .68; }
+  /* the four Option C swatch rules above each set their own per-track border (including
+     a 4px border-left), at (0,1,4,0) specificity — higher than the plain
+     .tl-item.tl-marker-overlay rule near the base .tl-item styles, so on desktop-day1's
+     Day theme specifically the marker's separation ring was silently losing that fight
+     and never painting. Same selector shape (same specificity) placed after them wins by
+     source order instead. */
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item.tl-marker-overlay {
+    border: 2px solid var(--paper);
+  }
   /* done: "keep the fill, no faded strikethrough" — overrides the app-wide
      .tl-item.done rule (opacity:.55 + strikethrough) at this breakpoint only,
      and adds the top-right check the spec asks for in its place. No markup
@@ -15423,10 +15463,12 @@
                 <label class="dur-box-wrap">
                   <input type="number" id="rtnDurHours" class="dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours">
                   <span class="dur-unit">h</span>
+                  <span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span>
                 </label>
                 <label class="dur-box-wrap">
                   <input type="number" id="rtnDurMinutes" class="dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes">
                   <span class="dur-unit">m</span>
+                  <span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span>
                 </label>
               </div>
               <div class="track-picker dur-chips" id="rtnDurChips" role="group" aria-label="Quick duration">
@@ -16772,8 +16814,8 @@
           <div class="field full" id="fDurPickerField">
             <label>How long</label>
             <div class="dur" id="durPicker">
-              <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span></span>
-              <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span></span>
+              <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span></span>
+              <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span></span>
               <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
                 <button type="button" class="track-opt" data-dur="15">15m</button>
                 <button type="button" class="track-opt" data-dur="30">30m</button>
@@ -22861,6 +22903,12 @@
       // put a one-line block at 19.2px, so 28px is comfortably above what one clean,
       // un-clipped line needs. Desktop-day1 already used 28 and is unchanged.
       const tight = isBlock && p.h < 28;
+      // A marker (real duration < 30 min — same threshold clusterOverlaps' isSession()
+      // uses) that got a shared lane (p.cols > 1) is sitting ON TOP of a real session
+      // that correctly wasn't narrowed for it (see clusterOverlaps' own 2026-08-16
+      // comment) — flagged here so CSS can visually separate the two layers instead of
+      // letting them read as clashing/overlapping blocks.
+      const isMarkerOverlay = p.cols > 1 && (ce - p.cs) < 30;
       // her single-line variant is "name + START time", not the full range: at 9px in a
       // flex row beside the title there is room for one time, and the end time is one tap
       // away in the detail sheet. Non-tight blocks keep the full range exactly as before.
@@ -22868,6 +22916,7 @@
         ? fmtTime(e.start)
         : `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
+        + (isMarkerOverlay ? " tl-marker-overlay" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
       // 2026-08-11 (STEP 6 investigation): tried a min-width floor here so a 5-way
@@ -43272,6 +43321,28 @@
     durHours.value = total > 0 ? String(Math.floor(total / 60)) : "";
     durMinutes.value = total > 0 ? String(total % 60) : "";
     syncDurFromBoxes();
+  });
+  // 2026-08-18 (Linh: "up/down arrows aren't visible or don't work"): custom
+  // stepper for both #durHours/#durMinutes (this form) AND #rtnDurHours/
+  // #rtnDurMinutes (the routine editor's own copy) -- generic, keyed off DOM
+  // structure (.num / .dur-box-wrap) rather than element ids, so one delegate
+  // covers both forms' copies of the "How long" picker. Reads the target
+  // input's own min/max/step and fires a real "input" event -- syncDurFromBoxes()/
+  // rtnSyncDurFromBoxes() (each form's existing listener) do the actual work,
+  // exactly as if she'd typed the value; this button never touches #fDur/
+  // #rtnEnd itself.
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".dur-step");
+    if (!btn) return;
+    const input = btn.closest(".num, .dur-box-wrap")?.querySelector("input[type=number]");
+    if (!input || input.disabled) return;
+    const step = parseInt(input.step, 10) || 1;
+    const min = input.min !== "" ? parseInt(input.min, 10) : -Infinity;
+    const max = input.max !== "" ? parseInt(input.max, 10) : Infinity;
+    const cur = parseInt(input.value, 10) || 0;
+    const dir = btn.classList.contains("dur-step-up") ? 1 : -1;
+    input.value = String(Math.min(max, Math.max(min, cur + dir * step)));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   // fRepeatChoice -> ROUTINE_TASKS freq/weekdays/etc, shared by the submit handler's
   // routine branch AND #fChainBtn (which saves the routine on its own, outside the
