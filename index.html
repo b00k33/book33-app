@@ -24521,6 +24521,34 @@
     const dateVal = document.getElementById("tlMoveDate")?.value || "";
     // was a bare `return` -- same silent no-op.
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { showTlMoveError("Pick a valid date to move this to."); return; }
+    // 2026-08-18 (Linh: "my move button doesn't work" -- reproduced on the hair-wash
+    // block specifically): hair wash isn't a normal routine occurrence -- it's
+    // generated fresh for TODAY ONLY, off its own cadence (HAIRD.lastDone), never a
+    // calendar pattern (generatedFor's `k === keyOf(TODAY)` gate, untouched here), so
+    // its id ("hair-<date>") never matches parseOccId's "rt-<taskId>-<date>" shape. It
+    // still passes tlItemCanMove (fromRoutine + rtTaskId) so Reschedule shows for it,
+    // but rescheduleItem's routine branch then computes p=null and quietly returns --
+    // exactly the silent no-op this whole fix exists to kill. There's no per-date
+    // occurrence for setRtnOvr to write an override onto, so route it to what CAN
+    // change instead: the routine's own Start/End fields, the same source Segment H's
+    // timed-block fix already made authoritative for this item's calendar time. A
+    // genuinely different date has no meaning for it (it always lands on its own next
+    // due day), so that's reported, not silently dropped either. rescheduleItem/
+    // setRtnOvr themselves are still untouched -- this only adds a case they were
+    // never wired to handle.
+    if (!copy && rt && rt.id === HAIR_ROUTINE_ID) {
+      if (dateVal !== ev.date) {
+        showTlMoveError("Hair wash always lands on its next due day — this can only change today's time, not the date.");
+        return;
+      }
+      rt.start = startVal;
+      if (endVal) rt.end = endVal;
+      saveRoutines();
+      tlDetailPanel = null;
+      closeTlDetail();
+      renderDay();
+      return;
+    }
     tlDetailPanel = null;
     if (copy) duplicateItem(ev, dateVal, startVal, endVal);
     else rescheduleItem(ev, dateVal, startVal, endVal);
