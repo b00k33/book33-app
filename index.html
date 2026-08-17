@@ -2319,6 +2319,26 @@
     border-radius: var(--radius-md) var(--radius-md) 0 0; box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
     display: flex; flex-direction: column; overflow: hidden;
   }
+  /* Routine popup -> right-docked side panel (Linh, "the box gets cut off, make it side
+     display" round). :has() targets the overlay whenever ITS sheet carries the new
+     modifier — one flag on the sheet (set in openTlDetail) is enough, no second class
+     needed on the overlay itself. Full height + its own scroll (inherited from
+     #tlDetailBody's existing overflow, untouched) is the actual fix for "cut off" — a
+     bottom sheet capped at 74-82vh vs. a full-height dock. Scoped to routines only. */
+  .tl-detail-overlay:has(.tl-detail-sheet.tl-routine-panel) {
+    align-items: stretch; justify-content: flex-end;
+    /* cancels the desktop @media (min-width:641px) rule's own padding-top:12vh just
+       below -- that spacing is for the OLD dropdown-style sheet (starts partway down,
+       capped height); a full-height dock has no "start partway down" to space for, and
+       without this override the panel's own explicit 100vh overflowed the viewport by
+       exactly that padding amount (verified live: 96px overflow at 800px height). */
+    padding-top: 0;
+  }
+  .tl-detail-sheet.tl-routine-panel {
+    width: min(420px, 92vw); height: 100vh; max-height: 100vh;
+    border-radius: 0; border: none; border-left: 1px solid var(--margin-rule);
+    box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
+  }
   @media (min-width: 641px) {
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
     .tl-detail-sheet { border-radius: var(--radius-md); max-height: 74vh; }
@@ -6065,6 +6085,24 @@
   #rtnAddForm .field { gap: 4px; }
   #rtnAddForm .field label { font-size: 11px; }
   #rtnAddForm .field-hint { font-size: 11px; margin-top: 4px; }
+  /* Google-structure round (Linh): plain underline instead of a boxed pill, for the fields
+     she specifically flagged. Own rule (not reusing #addForm's .field-bare, which keeps a
+     background fill) because the approved mockup showed a true underline with no fill —
+     deliberately different from #addForm's own flatter-but-still-filled convention.
+     .field-bare itself is the ONE FIELD LANGUAGE law's documented escape hatch (see its
+     own comment a few thousand lines up) — required to opt out of the law's !important
+     border/background at all; this is what that field-bare CLASS then looks like here. */
+  #rtnAddForm .field-bare {
+    font-family: inherit; font-size: 14px; color: var(--ink); background: none;
+    border: none; border-bottom: 1px solid var(--note-line); border-radius: 0;
+    width: 100%; padding: 6px 2px; transition: border-color 0.15s ease;
+  }
+  /* plain :focus (not :focus-visible) -- matches the sibling .rtn-inline-mode focus
+     rule's own established reasoning (search "tapping, not tabbing"): a programmatic
+     focus() from a real tap doesn't reliably match :focus-visible in this browser
+     (verified live), so the gold underline would silently never show on a phone. */
+  #rtnAddForm .field-bare:focus { outline: none; border-bottom-color: var(--margin-rule); }
+  #rtnAddForm .field-bare::placeholder { color: var(--ink-faint); opacity: 1; }
   /* 2026-08-10 (design rule, CLAUDE.md: "every event/task/routine editor has a
      top-right Save"): reuses .addform-head-save as-is (it's self-contained, no
      dependency on #addForm's own header markup) inside a dedicated full-width row
@@ -6266,9 +6304,14 @@
   /* 2026-08-06: the #rtnAddForm-specific cap that used to live here (2026-08-05 pt.2)
      is SUPERSEDED by the shared .add-form desktop cap above (var(--content-max)) —
      #rtnAddForm carries that base class, so it's covered without a one-off. */
-  #rtnAddForm .field input[type="text"], #rtnAddForm .field input[type="time"],
-  #rtnAddForm .field input[type="number"], #rtnAddForm .field input[type="date"],
-  #rtnAddForm .field select {
+  /* :not(.field-bare) added (Google-structure round): this rule out-specifies the new
+     #rtnAddForm .field-bare rule below (id + class + type/attr beats id + class alone),
+     so Name/Start/End kept their old filled-pill background through the underline
+     override without the exclusion -- same escape-hatch idiom the ONE FIELD LANGUAGE
+     law itself already uses. */
+  #rtnAddForm .field input[type="text"]:not(.field-bare), #rtnAddForm .field input[type="time"]:not(.field-bare),
+  #rtnAddForm .field input[type="number"]:not(.field-bare), #rtnAddForm .field input[type="date"]:not(.field-bare),
+  #rtnAddForm .field select:not(.field-bare) {
     border: none; background: var(--field-bg);
     height: 38px; padding: 0 12px; box-sizing: border-box;
   }
@@ -6430,9 +6473,14 @@
      only under #addForm (a different form) -- adopting it here would mean redefining
      it from scratch anyway, so matching its own !important is the smaller, more
      surgical change. */
-  #rtnAddForm.rtn-inline-mode .field input[type="text"], #rtnAddForm.rtn-inline-mode .field input[type="time"],
-  #rtnAddForm.rtn-inline-mode .field input[type="number"], #rtnAddForm.rtn-inline-mode .field input[type="date"],
-  #rtnAddForm.rtn-inline-mode .field select, #rtnAddForm.rtn-inline-mode .rtn-icon-input {
+  /* :not(.field-bare) added (Google-structure round): without it, these !important
+     overrides (needed to beat the ONE FIELD LANGUAGE law for every OTHER field in
+     inline mode) also painted a boxed well onto Name/Start/End, which now carry
+     .field-bare specifically to opt OUT of that law entirely -- same reasoning as
+     the plain (non-inline) .field-bare exclusion added to the rule above. */
+  #rtnAddForm.rtn-inline-mode .field input[type="text"]:not(.field-bare), #rtnAddForm.rtn-inline-mode .field input[type="time"]:not(.field-bare),
+  #rtnAddForm.rtn-inline-mode .field input[type="number"]:not(.field-bare), #rtnAddForm.rtn-inline-mode .field input[type="date"]:not(.field-bare),
+  #rtnAddForm.rtn-inline-mode .field select:not(.field-bare), #rtnAddForm.rtn-inline-mode .rtn-icon-input {
     background: var(--raised) !important; border: none !important;
   }
   /* 2026-08-09 (readable + tessellated mobile editor brief): a raised fill alone
@@ -6442,19 +6490,22 @@
      every control read as tappable before you even touch it. box-shadow isn't
      one of the properties the ONE FIELD LANGUAGE law !importants (only
      background/border/border-radius/padding are), so a plain declaration wins
-     here without needing to match its !important. */
-  #rtnAddForm.rtn-inline-mode .field input[type="text"], #rtnAddForm.rtn-inline-mode .field input[type="time"],
-  #rtnAddForm.rtn-inline-mode .field input[type="number"], #rtnAddForm.rtn-inline-mode .field input[type="date"],
-  #rtnAddForm.rtn-inline-mode .field select, #rtnAddForm.rtn-inline-mode .rtn-icon-input {
+     here without needing to match its !important. :not(.field-bare): a ring around
+     a field that's meant to read as a plain underline would look like a stray box. */
+  #rtnAddForm.rtn-inline-mode .field input[type="text"]:not(.field-bare), #rtnAddForm.rtn-inline-mode .field input[type="time"]:not(.field-bare),
+  #rtnAddForm.rtn-inline-mode .field input[type="number"]:not(.field-bare), #rtnAddForm.rtn-inline-mode .field input[type="date"]:not(.field-bare),
+  #rtnAddForm.rtn-inline-mode .field select:not(.field-bare), #rtnAddForm.rtn-inline-mode .rtn-icon-input {
     box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--margin-rule) 22%, transparent);
   }
   /* SUPERSEDES the old plain neutral focus ring -- the brief calls for the active
      field to "glow gold" (inset ring + a touch more fill), and :focus (not just
      :focus-visible) since tapping, not tabbing, is the normal way into a field
      on a phone. outline:none here because the global law's own gold :focus-visible
-     outline (an OUTSIDE ring) would otherwise double up with this inset one. */
-  #rtnAddForm.rtn-inline-mode .field input:focus,
-  #rtnAddForm.rtn-inline-mode .field select:focus {
+     outline (an OUTSIDE ring) would otherwise double up with this inset one.
+     :not(.field-bare): its own :focus rule (search "field-bare:focus") gives the
+     underline a gold bottom-border instead -- this filled/ringed glow doesn't apply. */
+  #rtnAddForm.rtn-inline-mode .field input:not(.field-bare):focus,
+  #rtnAddForm.rtn-inline-mode .field select:not(.field-bare):focus {
     outline: none;
     box-shadow: inset 0 0 0 1.5px var(--margin-rule);
     background: color-mix(in oklab, var(--margin-rule) 14%, var(--raised)) !important;
@@ -8921,6 +8972,14 @@
     font-size: 11px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
   }
   .dcx-chip-ic { font-size: 13px; line-height: 1; }
+  /* 2026-08-18 (Day-view top redesign, "give the chips a hint of colour"): a subtle ~15%
+     wash of the chip's own colour instead of the flat --raised above — shape/border/text
+     untouched, only the fill. One rule covers both chip families (mobile .dcx-chip and
+     desktop .ddh-chip, see their own builders' comments for the --chip-tint values) so
+     there is a single place this "how tinted" number lives. [data-chip] raises specificity
+     over the plain single-class rules above (here and the mobile-narrow/desktop copies
+     further down) without needing !important. */
+  .dcx-chip[data-chip], .ddh-chip[data-chip] { background: color-mix(in oklab, var(--chip-tint), transparent 85%); }
   .dcx-meters { display: flex; flex-direction: column; gap: 8px; }
   /* the app's one label-bar-value shape -- .spend-bar-row/.sb-* (Money's spend bars,
      and the Day page's own #fastStatus row) already carry this exact comment calling
@@ -13779,12 +13838,16 @@
     }
     .day-nav-gear::after { inset: -5px; }
 
-    /* ---- .meter -> .dcx-meter (both rows, deliberately identical) ---- */
-    .dcx-meter { gap: 9px; padding: 7px 0; }
-    .dcx-meter-lbl { width: 50px; font-size: 9px; letter-spacing: 0.8px; font-weight: 800; }
-    .dcx-meter-track { height: 6px; border-radius: 4px; min-width: 0; }
-    .dcx-meter-fill { border-radius: 4px; }
-    .dcx-meter-val { font-size: 10px; font-weight: 700; white-space: nowrap; }
+    /* ---- .meter -> .dcx-meter (both boxes, deliberately identical) ----
+       2026-08-18 (stat-box redesign): was a horizontal label-bar-value row's narrow-width
+       sizing (fixed 50px label column, 6px hairline bar, tiny 4px bar radius) — the label
+       has no column to fix a width to any more (it's the box's top line now) and the bar
+       stays the base's thick pill shape, just a touch more compact than the 1024px+ box
+       so two of them still fit a 360px screen side by side. */
+    .dcx-meter { gap: 4px; padding: 8px 10px; }
+    .dcx-meter-lbl { font-size: 9px; letter-spacing: 0.06em; }
+    .dcx-meter-val { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dcx-meter-track { height: 8px; min-width: 0; }
 
     /* ---- .wakeNote -> #sleepBand's one-line "Slept until 6am" (renderSleepBand) ----
        type/colour/gap only. It stays absolutely positioned against the grid rather than
@@ -15290,7 +15353,7 @@
         <label for="rtnTitle">Name</label>
         <div class="rtn-name-row">
           <input type="text" id="rtnIcon" class="rtn-icon-input" placeholder="＋" maxlength="8" autocomplete="off" aria-label="Icon (optional, tap to type an emoji)">
-          <input type="text" id="rtnTitle" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
+          <input type="text" id="rtnTitle" class="field-bare" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
         </div>
       </div>
       <!-- 2026-08-07 (Routines page rebuild spec, "tessellate the inline editor into
@@ -15455,10 +15518,14 @@
           <div class="rtn-pair rtn-g4" id="rtnTimeRangeGroup">
             <div class="field" id="rtnStartField">
               <label for="rtnStart">Start</label>
-              <input type="time" id="rtnStart">
+              <input type="time" id="rtnStart" class="field-bare">
             </div>
-            <span class="rtn-dur-readout" id="rtnDurReadout" hidden></span>
+            <div class="field" id="rtnEndField">
+              <label for="rtnEnd">End</label>
+              <input type="time" id="rtnEnd" class="field-bare">
+            </div>
           </div>
+          <span class="rtn-dur-readout" id="rtnDurReadout" hidden></span>
           <!-- 2026-08-09 (Linh: "allow option to input duration time for routine"):
                hours+minutes boxes plus quick chips, same "How long" picker built for
                the event/task form (#durPicker), reusing its .dur-picker/.dur-boxes/
@@ -15467,7 +15534,7 @@
                WRITES #rtnEnd (Start + duration, wrapping past midnight the same way
                rtnDurFromRange already does) -- #rtnDur is a hidden bookkeeping field
                only (mirrors #fDur); the submit handler still just reads #rtnEnd. -->
-          <div class="field" id="rtnDurPickerField">
+          <div class="field" id="rtnDurPickerField" hidden>
             <label>How long <span class="field-hint">optional — fills in End</span></label>
             <div class="dur-picker" id="rtnDurPicker">
               <div class="dur-boxes">
@@ -15525,12 +15592,9 @@
              of #rtnAddForm.rtn-inline-mode exactly like its siblings, not nested
              inside a box. -->
         <div class="rtn-sectitle"><span>Details</span><span class="rtn-sectitle-ln"></span></div>
-        <!-- 2026-08-17 (Linh, "simplify" brief): exact End time -- the alternate to
-             "How long" on the main surface -- lives here now, same id/handlers. -->
-        <div class="field" id="rtnEndField">
-          <label for="rtnEnd">End <span class="field-hint">optional</span></label>
-          <input type="time" id="rtnEnd">
-        </div>
+        <!-- End time moved to the main "When" surface, next to Start (Linh, "Google-style
+             Start/End, no H/M boxes" round) — see #rtnEndField up near #rtnStartField.
+             Was briefly here per the 2026-08-17 "simplify" brief; superseded now. -->
         <!-- 2026-08-09 (Linh, chains+startDate spec): the recurrence's own start
              boundary -- no occurrences before it, for any repeat type OR a chain-
              granted day (see chainGrantsOn). Hidden for One-off same as Ends.
@@ -23833,6 +23897,14 @@
     document.querySelectorAll(".tl-item.tl-selected").forEach(el => el.classList.remove("tl-selected"));
     sheet.style.position = ""; sheet.style.left = ""; sheet.style.top = "";
     sheet.style.width = ""; sheet.style.margin = "";
+    // 2026-08-18 (side-panel round): the routine panel is CSS-docked (full-height,
+    // right-edge, via .tl-routine-panel + the overlay's own :has() rule) -- this
+    // function's own inline position/left/top/width (an anchored-flyout-near-the-click
+    // system, for every OTHER popup type) would win over that CSS by sitting directly
+    // on the element's style attribute, so it's skipped here. Cleared above either way,
+    // same as always, so switching from a routine back to a plain item on the same
+    // click cycle never leaves a stale inline position behind.
+    if (sheet.classList.contains("tl-routine-panel")) return;
     if (!anchorEl || window.innerWidth <= 640) return;
     anchorEl.classList.add("tl-selected");
     const r = anchorEl.getBoundingClientRect();
@@ -23854,6 +23926,11 @@
     tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
     document.getElementById("tlDetailOverlay").hidden = false;
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
+    // Routines get the right-docked side panel (Linh, "make it side display" round) —
+    // scoped to e.rtTaskId, the same flag renderTlDetailHeadActions already branches on
+    // for "this is a routine occurrence". A plain event/task/recurring-event/fitness
+    // session keeps the existing bottom sheet untouched.
+    document.getElementById("tlDetailSheet").classList.toggle("tl-routine-panel", !!e.rtTaskId);
     renderTlDetailHeadActions(e);
     renderTlDetailBody(e);
     positionTlDetail(anchorEl);
@@ -26777,10 +26854,19 @@
     // (planetMarkHtml, same treatment as the moon) and the same day-ruler popover the
     // desktop chip below gets — one pair of builders, both strips, so they can't drift.
     const pl = planetOf(d);
-    chips.push({ ic: planetMarkHtml(pl.planet, "dcx-chip-ic"), val: pl.planet, pop: dayRulerPopoverHtml(pl) });
+    // 2026-08-18 (Day-view top redesign, chip tint): each chip's own colour, at a subtle
+    // 15% wash (see the .dcx-chip[data-chip]/.ddh-chip[data-chip] CSS rule) rather than
+    // flat --raised — data-chip identifies which, --chip-tint carries the actual token so
+    // one shared CSS rule paints all four instead of four one-off background rules. Planet
+    // varies day to day (its own --planet-* accent, same lookup planetMarkHtml itself
+    // uses); moon/sign/cycle are fixed tokens (moon's own pale --planet-moon, the app's
+    // --cosmic-gold, and --flow-med — the same "the cycle's colour" default the cycle
+    // dot/bar already fall back to elsewhere). Birthday chip is deliberately untouched —
+    // only these four were asked for.
+    chips.push({ ic: planetMarkHtml(pl.planet, "dcx-chip-ic"), val: pl.planet, pop: dayRulerPopoverHtml(pl), chip: "planet", tint: `--planet-${PLANET_SLUG[pl.planet] || "sun"}` });
     // 2026-08-16 (item 2): same popovers as the desktop #ddhChips copy — one pair of
     // builders, both strips, so the two can't drift apart.
-    chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx], pop: moonChipPopHtml(d) });
+    chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx], pop: moonChipPopHtml(d), chip: "moon", tint: "--planet-moon" });
     // 2026-08-16 (mobile Day tightening, item 1): SUN SIGN joins the strip. It used to
     // print only in the header's own #numGroupStrip (#dayAstroBits' bare ♌ glyph) —
     // that whole strip is hidden on mobile now (see its CSS gate), so the strip carries
@@ -26788,7 +26874,7 @@
     // call renderDay()'s header and #ddhChips already make; no new calculation, and the
     // strip now matches the desktop day header chip-for-chip.
     const a = astroFor(d);
-    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name, pop: signChipPopHtml(a.sign) });
+    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name, pop: signChipPopHtml(a.sign), chip: "sign", tint: "--cosmic-gold" });
     const q = cycleQuickInfo(TODAY);
     // 2026-08-16 (item 1): two changes, both so this ONE chip can replace the retired
     // 5am grid marker (renderSleepBand) outright.
@@ -26803,11 +26889,12 @@
         ic: `<span class="dcx-chip-ic" aria-hidden="true">${(q.info && q.info.icon) || "🌸"}</span>`,
         val: `CD ${q.cd}${phaseLbl ? ` · ${phaseLbl}` : ""}`,
         tap: true,
+        chip: "cycle", tint: "--flow-med",
       });
     }
     const bdays = birthdaysOn(d);
     if (bdays.length) chips.push({ ic: `<span class="dcx-chip-ic" aria-hidden="true">🎂</span>`, val: bdays.length === 1 ? bdays[0].name : `${bdays[0].name} +${bdays.length - 1}` });
-    return chips.map(c => `<span class="dcx-chip${c.pop ? " num-hover-trigger" : ""}"${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}${c.pop ? ` tabindex="0"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span>${c.pop || ""}</span>`).join("");
+    return chips.map(c => `<span class="dcx-chip${c.pop ? " num-hover-trigger" : ""}"${c.chip ? ` data-chip="${c.chip}" style="--chip-tint:var(${c.tint})"` : ""}${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}${c.pop ? ` tabindex="0"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span>${c.pop || ""}</span>`).join("");
   }
   // fills the chip strip + the progress row (both cheap, non-ticking -- called once
   // per renderDay()). The fasting row is deliberately a separate function/container
@@ -35955,10 +36042,14 @@
     // the drawn emblem (same treatment/size as the drawn moon, .pl-mark beside .moon in
     // CSS); dayRulerPopoverHtml is the same span-safe builder dcxChipsHtml's mobile copy
     // now uses, so the two strips read the ruling planet from one shared source.
+    // 2026-08-18 (Day-view top redesign, chip tint): same data-chip/--chip-tint pairing
+    // dcxChipsHtml()'s mobile copy uses, and the same shared CSS rule paints both — see
+    // that function's own comment for the token choices (one pair of builders, one tint
+    // rule, so they can't drift).
     const chips = [
-      `<span class="ddh-chip num-hover-trigger">${planetMarkHtml(pl.planet)}<span>${esc(pl.planet)}</span>${dayRulerPopoverHtml(pl, "num-hover-pop--right")}</span>`,
-      `<span class="ddh-chip num-hover-trigger">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span>${moonChipPopHtml(d, "num-hover-pop--right")}</span>`,
-      `<span class="ddh-chip num-hover-trigger">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span>${signChipPopHtml(a.sign, "num-hover-pop--right")}</span>`,
+      `<span class="ddh-chip num-hover-trigger" data-chip="planet" style="--chip-tint:var(--planet-${PLANET_SLUG[pl.planet] || "sun"})">${planetMarkHtml(pl.planet)}<span>${esc(pl.planet)}</span>${dayRulerPopoverHtml(pl, "num-hover-pop--right")}</span>`,
+      `<span class="ddh-chip num-hover-trigger" data-chip="moon" style="--chip-tint:var(--planet-moon)">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span>${moonChipPopHtml(d, "num-hover-pop--right")}</span>`,
+      `<span class="ddh-chip num-hover-trigger" data-chip="sign" style="--chip-tint:var(--cosmic-gold)">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span>${signChipPopHtml(a.sign, "num-hover-pop--right")}</span>`,
     ];
     // cycle is a live fact about today, not a property of whichever day she's
     // browsing — same TODAY-not-state.anchor rule #numGrpCd/dcxChipsHtml already
@@ -35971,7 +36062,7 @@
       // (renderSleepBand) — desktop-day1 hides #dayCtxChips, so this is the chip that
       // has to carry "tapping the CD opens CH5" at this breakpoint. Same attribute,
       // same global delegate, no new handler.
-      chips.push(`<span class="ddh-chip" role="button" tabindex="0" data-cd-log title="Log this day"><span class="ddh-cycle-dot" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span>CD ${q.cd}${phaseLbl ? " · " + esc(phaseLbl) : ""}</span></span>`);
+      chips.push(`<span class="ddh-chip" role="button" tabindex="0" data-cd-log title="Log this day" data-chip="cycle" style="--chip-tint:var(--flow-med)"><span class="ddh-cycle-dot" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span>CD ${q.cd}${phaseLbl ? " · " + esc(phaseLbl) : ""}</span></span>`);
     }
     chipsEl.innerHTML = chips.join("");
   }
