@@ -13412,6 +13412,36 @@
   .wr-boost-label { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); }
   .wr-boost-val { flex: none; font-size: 11px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
 
+  /* 2026-08-18 (Day-view top redesign, "keep its warm gold-tinted look"): the retired
+     #tlAlldayRow .bday-ribbon banner's own background recipe, ported onto this card's
+     shell as-is rather than reinvented -- black warmed by a sliver of the gold accent
+     plus a soft radial glow, opaque and reliably dark in BOTH themes (same reasoning
+     the banner's own comment gave: var(--raised) alone reads near-white under the Day
+     page and the light-gold text below would go unreadable on it). Everything below
+     (.wr-bday-item/.bd-open/.bd-txt/.tlac-*/.bd-acts/.bd-act-*) is the banner's own
+     markup/classes reused verbatim -- only the layout around them is new: vertical
+     (name row, then its two actions below) instead of the banner's horizontal strip,
+     to fit a ~260px rail column, and a divider between entries on a 2-birthday day
+     instead of the banner's old one-row-per-item stack. */
+  .wr-card-bday {
+    position: relative; overflow: hidden;
+    background: radial-gradient(120% 160% at 18% -40%, color-mix(in oklab, var(--accent-seed) 30%, transparent), transparent 62%), color-mix(in oklab, black, var(--accent-seed) 6%);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-seed) 32%, transparent);
+  }
+  .wr-card-bday .wr-label { color: color-mix(in oklab, var(--accent-seed), white 55%); }
+  .wr-bday-item + .wr-bday-item { margin-top: 12px; padding-top: 12px; border-top: 1px solid color-mix(in oklab, var(--accent-seed) 24%, transparent); }
+  .wr-bday-item .bd-open { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; padding: 0; text-align: left; cursor: pointer; }
+  .wr-bday-item .tlac-ic { font-size: 22px; line-height: 1; }
+  .wr-bday-item .bd-txt { min-width: 0; display: flex; flex-direction: column; }
+  .wr-bday-item .tlac-ttl { white-space: normal; font-size: 13px; font-weight: 800; color: color-mix(in oklab, var(--accent-seed), white 22%); line-height: 1.15; }
+  .wr-bday-item .tlac-turns { font-size: 11px; font-weight: 600; color: color-mix(in oklab, var(--accent-seed), white 40%); margin-top: 2px; }
+  /* the base .bd-acts (margin-left:auto, meant for the banner's own horizontal strip)
+     would shove this row against the card's right edge instead of sitting under the
+     name -- overridden here at 2-class specificity so it wins at every width, the
+     ≤640px "" .bd-acts/.bd-act rules included. */
+  .wr-bday-item .bd-acts { margin-left: 0; margin-top: 10px; }
+  .wr-bday-item .bd-act { flex: 1; justify-content: center; }
+
   /* Arrange popover — scoped to this rail only, per-widget visibility checkbox */
   .wr-arrange-pop {
     position: absolute; top: 40px; right: 12px; z-index: 80; width: 220px;
@@ -13701,7 +13731,11 @@
     #wrMobileCards > [data-wr-id="streaksWidget"],
     /* boostWidget (2026-08-16): three rows, same "taller than a single stat" shape as
        the three above — Numerology/Cycle stay 2-up, everything list-shaped goes full width. */
-    #wrMobileCards > [data-wr-id="boostWidget"] { grid-column: 1 / -1; }
+    #wrMobileCards > [data-wr-id="boostWidget"],
+    /* birthdayWidget (2026-08-18): a name row + two full-label buttons needs its own
+       full-width line same as the other list-shaped cards above, not a squeezed 50%
+       column — same reasoning, same treatment. */
+    #wrMobileCards > [data-wr-id="birthdayWidget"] { grid-column: 1 / -1; }
     /* the streak chips move INTO the block's own Streaks card here, so the copy inside
        the merged progress component would be a second printing of the same chips —
        same reasoning (and same one-line treatment) as [data-desk-day1] #dayCtxStreaks
@@ -27156,10 +27190,20 @@
     // calendar on/off switch there (Linh 2026-07-27): if she's left it on, she wants
     // to see it, timed or not — that's what "on the calendar" means to her, and hiding
     // it silently here is exactly what made an added routine look like it "did not add".
-    // birthdays (and belled person-dates, same category) now get their own all-day
-    // banner above the timeline (Linh 2026-08-11: "i want to see the birthday in day
-    // calendar as an all day event") instead of the To-Do's box below — see
-    // renderAlldayRow() and its call site near buildHours().
+    // birthdays (and belled person-dates, same category) still need this same split —
+    // alldayBdays feeds renderDayAlldayRow() below (the mobile "All day" pill row,
+    // LEFT ALONE per the 2026-08-18 redesign brief) as well as #dayCtxChips' birthday
+    // chip's data. What's retired is the OLD desktop banner this list used to feed too:
+    // 2026-08-18 (Day-view top redesign, "remove the birthday banner from above the
+    // calendar, move it into the widget rail"): the renderAlldayRow(alldayBdays) call
+    // that used to sit right after this block is gone — #tlAlldayRow is never populated
+    // any more, so it stays permanently empty and collapses to zero height via the
+    // existing .tl-allday-row:empty rule, same as any other empty banner in this app.
+    // The birthday card now lives in the widget rail instead (WR_WIDGET_IDS
+    // "birthdayWidget", see wrCardHtml()) — same data (generatedFor(d)'s Birthdays-
+    // category items), same Message/Gift buttons, just a new home. renderAlldayRow()
+    // itself and its CSS are left in place, unreferenced, rather than torn out along with
+    // every comment elsewhere that explains its history — it is simply never called now.
     const alldayBdays = dayEvents.filter(e => (e.allDay || !e.start) && e.category === "Birthdays");
     const allDay = dayEvents.filter(e =>
       (e.allDay || !e.start) && e.category !== "Birthdays" &&
@@ -27167,7 +27211,6 @@
     // anything with a real time goes on the calendar, whatever its life-area —
     // personal/family timed items also stay in their sidebar lists for ticking off
     const timed = dayEvents.filter(e => !e.allDay && e.start);
-    renderAlldayRow(alldayBdays);
     // item 6 (2026-08-15 corrections pass): must run BEFORE computeCompactHours,
     // which is what actually turns hourRange into real 0-height rows via
     // compactH(h) — see its own comment.
@@ -36203,8 +36246,15 @@
   // railTodo joins the default order right after railPatients (another
   // action-oriented "things to do today" card) -- fully draggable to wherever she
   // wants via Arrange after that, same as every other card here.
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "pileupBox", "streaksWidget", "boostWidget"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost" };
+  // 2026-08-18 (Day-view top redesign, "move the birthday banner into the widget
+  // rail"): birthdayWidget joins at the end of the default order -- no stated
+  // preference, and it's trivially draggable to wherever she wants via Arrange, same
+  // as railTodo/boostWidget when they joined. Unlike every other card here it can be
+  // legitimately ABSENT some days (wrCardHtml returns "" when nothing's on state.anchor)
+  // -- same "omit entirely, don't show an empty state" rule the old #tlAlldayRow banner
+  // and the day-context birthday chip both already followed.
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "pileupBox", "streaksWidget", "boostWidget", "birthdayWidget"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", birthdayWidget: "Birthday" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -36324,6 +36374,39 @@
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's boost</span>
         ${row("💪", "Physical", boosts.physical)}${row("🧠", "Cognitive", boosts.cognitive)}${row("🙂", "Emotional", boosts.emotional)}
+      </div>`;
+    }
+    if (id === "birthdayWidget") {
+      // 2026-08-18 (Day-view top redesign, "move the birthday banner into the widget
+      // rail"): same generatedFor(d) read + Birthdays-category filter the old
+      // #tlAlldayRow banner used (alldayBdays, retired from renderDay() -- see its own
+      // comment there) -- not a second calculation, just read here instead. Omitted
+      // entirely on a day with none (return ""), same "nothing to show, don't print an
+      // empty state" rule the old banner and the day-context birthday chip both already
+      // followed -- a birthday card on a birthday-less day isn't a state worth naming.
+      const bdays = generatedFor(d).filter(e => (e.allDay || !e.start) && e.category === "Birthdays");
+      if (!bdays.length) return "";
+      // markup/classes ported verbatim from the retired banner (.bd-open/.bd-txt/
+      // .tlac-ic/.tlac-ttl/.tlac-turns/.bd-acts/.bd-act-solid/.bd-act-ghost) -- same tap
+      // behaviour (data-bday-person, the document-level delegate that opens the person;
+      // data-bday-act is carried over too though nothing currently reads it, same as
+      // before), same full "✍ Message"/"🎁 Gift idea" labels, just this card's own
+      // vertical layout (see .wr-card-bday CSS) instead of the banner's horizontal one.
+      return `<div class="wr-card wr-card-bday" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Birthday${bdays.length > 1 ? ` · ${bdays.length}` : ""}</span>
+        ${bdays.map(e => {
+          const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
+          return `<div class="wr-bday-item">
+            <button type="button" class="bd-open"${pd} aria-label="Open ${esc(e.title)}">
+              ${e.icon ? `<span class="tlac-ic">${e.icon}</span>` : ""}
+              <span class="bd-txt"><span class="tlac-ttl">${esc(e.title)}</span>${e.note ? `<span class="tlac-turns">${esc(e.note)}</span>` : ""}</span>
+            </button>
+            <div class="bd-acts">
+              <button type="button" class="bd-act bd-act-solid"${pd} data-bday-act="message">✍ Message</button>
+              <button type="button" class="bd-act bd-act-ghost"${pd} data-bday-act="gift">🎁 Gift idea</button>
+            </div>
+          </div>`;
+        }).join("")}
       </div>`;
     }
     return "";
