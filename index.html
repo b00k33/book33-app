@@ -17677,7 +17677,22 @@
   // untouched; it was already built to work anywhere, just never switched on here.
   function compactH(h) {
     if (hourTrimActive() && typeof h === "number" && (h < hourRange.start || h >= hourRange.end)) return 0;
-    return Math.min(22, HOUR_H());
+    const base = Math.min(22, HOUR_H());
+    return typeof h === "number" ? Math.max(base, powerHourFloor(h)) : base;
+  }
+  // 2026-08-18 (Linh, "hour rows vary in height based on how good/bad that hour is"):
+  // the row height ACTUALLY drawn for hour `h` right now — an empty hour goes through
+  // compactH() (which already carries the Best/Worst/Money floor, above), a busy hour
+  // stays at the normal HOUR_H() UNLESS a power-hour floor is taller than that (Best/
+  // 2nd Best/Money at 80px vs. a ~46-60px busy baseline) — a floor, never a cap, so a
+  // real event's own block height (drawn separately, see renderTimeline) is never
+  // constrained by this. Single source of truth for buildHoursHtml (the real render,
+  // feeding BOTH #hours and #mdHours — see its own comment), repositionRows (live
+  // pinch-zoom preview), and bonusBeforeHour/minForTop (topForMin's own inverse math)
+  // so the single-day rail, the multi-day rail, the live-drag preview, and the
+  // position math itself never disagree about how tall a row actually is.
+  function hourRowH(h) {
+    return state.compactHours.has(h) ? compactH(h) : Math.max(HOUR_H(), powerHourFloor(h));
   }
   const isBlockStartHour = h => (h - ANIMAL_BAND_START) % 2 === 0;
   // pixel adjustment already "banked" strictly BEFORE this hour (i.e. from hours that
@@ -17685,10 +17700,16 @@
   // its own internal layout, only what comes after it. Every hour is independently
   // eligible (not just zodiac-band starts; isBlockStartHour is unrelated, it only marks
   // where an animal icon/boundary sits).
+  // 2026-08-18: reads hourRowH() (compact shrink OR power-hour floor) instead of only
+  // checking state.compactHours — a busy Best/Money hour now also needs banking (it
+  // renders TALLER than HOUR_H(), not shorter), or every event after it would render
+  // under-shifted by exactly the same misalignment bug fixed elsewhere this session
+  // (desk-grid's hour-height race). hourRowH(h) - HOUR_H() is 0 for any ordinary hour,
+  // so this is a no-op everywhere it always was.
   function bonusBeforeHour(hour) {
     let sum = 0;
     for (let h = START_HOUR; h + 1 <= hour && h < END_HOUR; h++) {
-      if (state.compactHours.has(h)) sum += compactH(h) - HOUR_H();
+      sum += hourRowH(h) - HOUR_H();
     }
     return sum;
   }
@@ -17737,10 +17758,9 @@
   // inverse of topForMin — walks the same row boundaries so a click/drag at pixel `y`
   // maps back to the right minute even inside/after a compact hour
   function minForTop(y) {
-    const H = HOUR_H();
     let mins = START_MIN, pxSoFar = layerTopOffset();
     for (let h = START_HOUR; h < END_HOUR; h++) {
-      const rowH = state.compactHours.has(h) ? compactH(h) : H;
+      const rowH = hourRowH(h);
       if (y < pxSoFar + rowH || h === END_HOUR - 1) {
         return mins + (y - pxSoFar) / rowH * 60;
       }
@@ -22175,6 +22195,20 @@
     { k: "bad",   label: "2nd Worst",  time: "18:22" },
     { k: "money", label: "💰 28 Money", time: "20:22" },   // her nightly 28 personal hour — bills, payments, purchases
   ];
+  // 2026-08-18 (Linh, "hour rows vary in height based on how good/bad that hour is"):
+  // Best/2nd Best share Money's own "big" tier (80px — Linh: "Money hour, also 80px,
+  // same large tier as Best — not average"), Worst/2nd Worst get a "small" tier (28px).
+  // Read by compactH()/hourRowH() (near HOUR_H(), further up) so this is the one place
+  // the two numbers live — changing POWER_HOURS' own times above automatically moves
+  // which hour gets which floor, nothing else to keep in sync.
+  const POWER_HOUR_TIER_H = { good: 80, money: 80, bad: 28 };
+  function powerHourFloor(h) {
+    let floor = 0;
+    POWER_HOURS.forEach(p => {
+      if (Math.floor(toMin(p.time) / 60) === h) floor = Math.max(floor, POWER_HOUR_TIER_H[p.k] || 0);
+    });
+    return floor;
+  }
   // 2026-08-04: the "preset power hours larger" seeding that used to live here relied
   // entirely on state.expandedBlocks, which no longer exists now hours size to their
   // own event content instead of a manually-seeded/dragged bonus (see computeCompactHours
@@ -22347,7 +22381,7 @@
   // buildHours() (below, unchanged behaviour, still writes to #hours) so the new
   // multi-day grid's OWN shared hour rail (#mdHours, see renderMultiDayGrid()) can
   // render from the exact same rows/heights instead of a second copy of this loop --
-  // both read the same state.compactHours + compactH()/hourLabel(), so a rail is
+  // both read the same state.compactHours + hourRowH()/hourLabel(), so a rail is
   // never one px out of step with the other.
   function buildHoursHtml() {
     let html = "";
@@ -22360,7 +22394,13 @@
       // plain lookup against the Set computeCompactHours() just built, no dragging,
       // no per-hour user state at all. "has"/"empty" per her own reference wording.
       const compact = state.compactHours.has(h);
-      const style = compact ? ` style="height:${compactH(h).toFixed(0)}px"` : "";
+      // 2026-08-18: only emit an inline height when it actually differs from the plain
+      // CSS var(--hour-h) a busy row would otherwise get — keeps every ordinary busy
+      // hour exactly as live-reactive to --hour-h (pinch-zoom, desktop's 60px override)
+      // as before; only a compact row or a power-hour floor override (a busy Best/2nd
+      // Best/Money hour, whose floor of 80px usually exceeds HOUR_H()) needs its own.
+      const rowH = hourRowH(h);
+      const style = (compact || rowH !== HOUR_H()) ? ` style="height:${rowH.toFixed(0)}px"` : "";
       // item 6: marks the row so CSS can drop its own .hour-label (a 0-height
       // row alone still leaves that absolutely-positioned label floating, see
       // [data-desk-day1] .hour-row[data-out-of-range] CSS) — only ever true
@@ -42327,10 +42367,13 @@
     // be recomputed from the CURRENT HOUR_H() every frame, same as the real one
     // buildHours() would produce, or empty hours would drift out of sync with busy ones
     // mid-pinch instead of just snapping to the right size on release.
+    // 2026-08-18: reads hourRowH() (not just the compact branch) so a Best/2nd Best/
+    // Money power hour's 80px floor stays pinned through the gesture too, even while
+    // she's actively pinched down below 80px everywhere else.
     const repositionRows = () => {
       document.querySelectorAll("#hours .hour-row[data-hour]").forEach(row => {
         const hh = parseInt(row.dataset.hour, 10);
-        row.style.height = state.compactHours.has(hh) ? `${compactH(hh).toFixed(0)}px` : "";
+        row.style.height = `${hourRowH(hh).toFixed(0)}px`;
       });
     };
     scroller.addEventListener("touchstart", e => {

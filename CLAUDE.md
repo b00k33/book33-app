@@ -39,9 +39,16 @@ plain white (#FFFFFF), not the old blue-grey/gold mix. Day mode is untouched —
 palette map further down. Gold for numbers/accents; colour = category.
 
 ### 5. Proportional & aligned
-Calendar: one fixed scale — every hour same height, blocks sized to real duration, snapped
-to hour lines (no auto-fit rows); overlaps split into side-by-side columns. Everything
-aligns to a shared grid/column edge.
+Calendar: one fixed SCALE (--hour-h) — blocks are always sized to real duration and
+snapped to hour lines off that one scale, overlaps split into side-by-side columns, and
+everything aligns to a shared grid/column edge. Row HEIGHT itself is not uniform, by
+design, on two layered rules (2026-08-18 supersedes the old "every hour same height, no
+auto-fit rows" wording, which predates both): an empty hour compacts down to fit no
+content (`computeCompactHours`/`compactH()`, 2026-08-04) while a busy hour stays full
+height, and on top of that, five fixed clock times get their own floor regardless of
+content — Best/2nd Best/💰 Money hours (`POWER_HOURS`) floor at 80px, Worst/2nd Worst
+floor at 28px, both via `hourRowH()`. Both are floors, never caps — a real event's block
+height still comes only from its own duration and is never constrained by its row.
 
 ### 6. Consistency
 One component identical everywhere (button, chip, card, dropdown, toggle). Reuse existing
