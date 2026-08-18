@@ -211,6 +211,29 @@ original spec — the file moves fast under concurrent sessions); every bare dec
 into one of the three tokens except the two `1.9` sites above, `line-height: 1`, and
 px-based geometry values, which are all permanently exempt, not "not yet migrated."
 
+## Standing pattern — multi-trigger hover card (2026-08-19)
+Linh: "let me hover a row to see the breakdown" (Today's boost widget). Every prior
+`.num-hover-trigger`/`.wcard-hover-pop` card (biomechTip, railBday, the desktop tools)
+makes the WHOLE card one trigger with one popover. Today's boost needed three
+independent breakdowns — Physical/Cognitive/Emotional each need their own — so each
+`.wr-boost-row` is its own `.num-hover-trigger` with its own `.wcard-hover-pop` child,
+inside a card that is itself NOT a trigger. No new JS: the existing delegated
+hover/tap/dismiss/viewport-clamp handlers already key off any element carrying
+`.num-hover-trigger`, generically, so per-row triggers inside one card "just work."
+Reuse this shape — several small triggers in one card, not one big one — the next time
+a card needs more than one independent breakdown rather than a single whole-card one.
+- `computeTodayBoosts()`'s `why[axis]` used to push a bare reason string (pts were
+  added into the running total and discarded otherwise) — now pushes `{reason, pts}`,
+  same call sites, same order, same scoring untouched. The widget-rail `boostWidget`
+  branch destructures `why` alongside `boosts` and renders it into each row's popover;
+  an axis with nothing logged yet shows the shared italic empty-state text instead of
+  an empty popover.
+- Each score also gets a muted "/100" suffix (`.wr-boost-val-max`) next to the bold
+  gold value, and the card's `.wr-label` gained a one-line `.wr-boost-sub` explaining
+  what the widget is — both header lines sit in a `.wr-boost-head` flex column with
+  `.wr-label`'s own margin zeroed there only (every other wr-card's label keeps its
+  normal 8px).
+
 ## Fit the screen
 - Design for a phone ~360px wide. Nothing wider than the screen or overflowing.
 - Any popup/dropdown/panel/menu MUST fit the visible screen; if taller, it

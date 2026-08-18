@@ -3410,7 +3410,8 @@
      type treatment lives here once. .cbd-empty is intentionally separate -- it's the
      icon+CTA empty-state pattern, a different (correct) treatment, not a duplicate to fold in. */
   .us-empty, .wr-pop-empty, .shop-empty, .fam-empty, .rtb-empty, .wk-empty,
-  .fridge-empty-shelf, .fridge-empty, .h-empty, .goal-empty, .pg-empty, .bd-empty {
+  .fridge-empty-shelf, .fridge-empty, .h-empty, .goal-empty, .pg-empty, .bd-empty,
+  .wr-boost-pop-empty {
     font-family: var(--font-body); font-style: italic; color: var(--ink-faint); font-size: 13px;
   }
   .us-empty { padding: 4px 0; }
@@ -14008,6 +14009,27 @@
   .wr-boost-emoji { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; line-height: 1; }
   .wr-boost-label { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); }
   .wr-boost-val { flex: none; font-size: 11px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+  /* 2026-08-19 (Linh, "bare numbers with no context"): "/100" makes the unit explicit
+     without competing with the score itself for attention -- smaller, muted, riding
+     right after the bold gold value rather than a second same-weight number. */
+  .wr-boost-val-max { font-size: 10px; font-weight: 600; color: var(--ink-faint); }
+  /* the subtitle sits as a second line under the card's own .wr-label -- a flex column
+     with its own gap replaces .wr-label's usual margin-bottom (zeroed here only, every
+     OTHER wr-card's label keeps its normal 8px) so the two lines read as one header
+     block rather than the label + an oddly-spaced third element. */
+  .wr-boost-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .wr-boost-head .wr-label { margin-bottom: 0; }
+  .wr-boost-sub { font-size: 11px; color: var(--ink-faint); line-height: var(--lh-snug); }
+  /* each row is its own .num-hover-trigger (not the whole card, unlike biomechTip/
+     railBday above) -- Physical/Cognitive/Emotional each need their OWN breakdown, so
+     each row carries its own .wcard-hover-pop child; the shared hover/tap/dismiss/
+     viewport-clamp delegate (search ".num-hover-trigger" in the click/pointerup
+     listeners) already handles this generically, no new JS needed beyond the markup. */
+  .wr-boost-row.num-hover-trigger { cursor: help; }
+  .wr-boost-pop { display: flex; flex-direction: column; gap: 4px; }
+  .wr-boost-pop-title { font-family: var(--font-display); font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+  .wr-boost-pop-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--ink-soft); }
+  .wr-boost-pop-pts { flex: none; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
 
   /* 2026-08-18 (Day-view top redesign, "keep its warm gold-tinted look"): the retired
      #tlAlldayRow .bday-ribbon banner's own background recipe, ported onto this card's
@@ -31144,7 +31166,13 @@
   function computeTodayBoosts() {
     const boosts = { physical: 0, cognitive: 0, emotional: 0 };
     const why = { physical: [], cognitive: [], emotional: [] };
-    const add = (axis, pts, reason) => { if (!pts) return; boosts[axis] += pts; why[axis].push(reason); };
+    // 2026-08-19 (Linh, "let me hover a row to see the breakdown"): why[axis] used to
+    // push the bare reason string, with pts only ever added into the running boosts[axis]
+    // total -- fine while nothing read why beyond truthiness, but the widget-rail hover
+    // breakdown needs each reason's OWN point value alongside it. Same push, same call
+    // sites, same order -- just carrying {reason, pts} instead of a bare string. Not a
+    // scoring change: every add() call site and every pts value is untouched below.
+    const add = (axis, pts, reason) => { if (!pts) return; boosts[axis] += pts; why[axis].push({ reason, pts }); };
     (NUT_MEALS[keyOf(TODAY)] || []).forEach(m => {
       add("physical", 5, "Logged a meal");
       (m.tags || []).forEach(tag => {
@@ -37635,15 +37663,35 @@
       // side (too wide for a ~260px rail) to three compact rows matching this rail's own
       // .wr-pat-row grammar: a small ring stands in for .wr-pat-row's fixed-width time
       // column, the label takes the flexible middle, the value sits gold on the right.
-      const { boosts } = computeTodayBoosts();
-      const row = (icon, label, val) => `<div class="wr-boost-row">
+      // 2026-08-19 (Linh, "bare numbers with no context ... let me hover a row to see
+      // the breakdown"): `why` was already computed alongside `boosts` (see
+      // computeTodayBoosts() above) but thrown away here -- now destructured and wired
+      // into a per-row .wcard-hover-pop, same hover-desktop/tap-mobile convention as
+      // every other .num-hover-trigger in the app (see the CSS comment above
+      // .wr-boost-row.num-hover-trigger). computeTodayBoosts()'s own scoring is
+      // untouched; this only surfaces data it was already producing.
+      const { boosts, why } = computeTodayBoosts();
+      const row = (icon, label, val, axis) => {
+        const reasons = why[axis] || [];
+        const popBody = reasons.length
+          ? reasons.map(r => `<div class="wr-boost-pop-row"><span>${esc(r.reason)}</span><span class="wr-boost-pop-pts">+${r.pts}</span></div>`).join("")
+          : `<div class="wr-boost-pop-empty">Nothing logged yet today.</div>`;
+        return `<div class="wr-boost-row num-hover-trigger" tabindex="0">
           <span class="wr-boost-ring">${nutRingSVG(val / 100, false, 20, 3)}<span class="wr-boost-emoji">${icon}</span></span>
           <span class="wr-boost-label">${label}</span>
-          <span class="wr-boost-val">${val}</span>
+          <span class="wr-boost-val">${val}<span class="wr-boost-val-max">/100</span></span>
+          <div class="wcard-hover-pop wr-boost-pop">
+            <div class="wr-boost-pop-title">${label}</div>
+            ${popBody}
+          </div>
         </div>`;
+      };
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
-        <span class="wr-label">Today's boost</span>
-        ${row("💪", "Physical", boosts.physical)}${row("🧠", "Cognitive", boosts.cognitive)}${row("🙂", "Emotional", boosts.emotional)}
+        <div class="wr-boost-head">
+          <span class="wr-label">Today's boost</span>
+          <span class="wr-boost-sub">Builds up as you log meals, workouts, sleep &amp; tasks</span>
+        </div>
+        ${row("💪", "Physical", boosts.physical, "physical")}${row("🧠", "Cognitive", boosts.cognitive, "cognitive")}${row("🙂", "Emotional", boosts.emotional, "emotional")}
       </div>`;
     }
     if (id === "railBday") {
