@@ -9515,26 +9515,17 @@
 
   /* ============================================================
      MOBILE DAY-VIEW DRAWERS (2026-08-18) — "show only the calendar by default."
-     Two new drawers (#dayTopDrawer slides down, #dayRightDrawer slides in from the
-     right) alongside the existing #navPanel (left) -- single-Day mobile view only
-     (JS gate: mobileDayDrawersActive()). Same visual family as .nav-panel: fixed +
-     solid --paper + a directional transform + 0.25s ease, sharing its own backdrop
-     (#navPanelBackdrop) and z-index tier (300s) rather than inventing a new one.
-     Content in both is the SAME existing elements (day-step-row/calDaysRow/
-     numGroupStrip for top, #wrMobile for right), reparented in by placeDayDrawers()
-     -- nothing here duplicates markup or logic, only WHERE it mounts changes. */
-  .day-top-drawer {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 301;
-    max-height: 80vh; overflow-y: auto;
-    background: var(--paper);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
-    transform: translateY(-100%);
-    transition: transform 0.25s ease;
-    padding-top: env(safe-area-inset-top);
-  }
-  .day-top-drawer.open { transform: translateY(0); }
-  .day-top-drawer-body { padding: 8px 16px 16px; }
+     #dayRightDrawer slides in from the right, alongside the existing #navPanel
+     (left) -- single-Day mobile view only (JS gate: mobileDayDrawersActive()). Same
+     visual family as .nav-panel: fixed + solid --paper + a directional transform +
+     0.25s ease, sharing its own backdrop (#navPanelBackdrop) and z-index tier (300s)
+     rather than inventing a new one. Content is the SAME existing elements
+     (#wrMobile), reparented in by placeDayDrawers() -- nothing here duplicates
+     markup or logic, only WHERE it mounts changes.
+     2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
+     built): the THIRD zone (date-nav/1-3-5-7/mood chips/quick-add) is no longer part
+     of this fixed-overlay family at all -- #dayTopDrawer moved in-flow, see its own
+     rule below and its markup's own comment (inside .day-main). */
   .day-right-drawer {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
     width: min(320px, 85vw);
@@ -9549,28 +9540,70 @@
   }
   .day-right-drawer.open { transform: translateX(0); }
   .day-right-drawer-body { padding: 16px; }
-  /* the only always-visible cue a drawer swipes in from each edge -- faint gold
+  /* the only always-visible cue a drawer swipes in from an edge -- faint gold
      hairline pills, mobile single-Day-view only (dd-drawers-active, JS-toggled on
      <body>). Each also carries a real ~44px tap target via padding, per design44
      §7, without the visible hairline itself growing past a "just enough to signal"
      3px. z-index sits below the drawers/backdrop (300+) but above the calendar
-     (timeline's own stacking tops out at 6, see placeDayDrawers()'s own note). */
+     (timeline's own stacking tops out at 6, see placeDayDrawers()'s own note).
+     2026-08-18 pt.3: was left/right/TOP -- the top hint is gone, see #ddGrab below,
+     the in-flow zone's own equivalent affordance now. */
   .dd-edge-hint {
     display: none; position: fixed; z-index: 250;
     background: color-mix(in oklab, var(--margin-rule) 55%, transparent);
     border-radius: 999px; cursor: pointer;
   }
   body.dd-drawers-active .dd-edge-hint { display: block; }
-  .dd-edge-hint-top {
-    top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-    width: 56px; height: 4px; padding: 12px 20px; background-clip: content-box;
-  }
   .dd-edge-hint-left, .dd-edge-hint-right {
     top: 50%; transform: translateY(-50%); width: 4px; height: 56px;
     padding: 20px 12px; background-clip: content-box;
   }
   .dd-edge-hint-left { left: 0; }
   .dd-edge-hint-right { right: 0; }
+  /* 2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
+     built): #dayTopDrawer is now an IN-FLOW collapsible zone (max-height toggle),
+     not a fixed overlay -- opening it pushes .day-main's own content down instead of
+     covering it, so no backdrop/z-index/transform needed, just a plain block that
+     grows. overflow-y:auto only turns on once .open, so nothing scrolls while
+     collapsed. 420px comfortably fits quick-add + date-nav + 1/3/5/7 + mood chips
+     with room to spare; real content scrolls internally past that rather than
+     clipping. */
+  .day-top-drawer {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.26s ease, opacity 0.2s ease;
+  }
+  .day-top-drawer.open { max-height: 420px; overflow-y: auto; opacity: 1; }
+  .day-top-drawer-body { padding: 4px 0 12px; }
+  /* the pull handle -- always in flow (never fixed/absolute), directly below the
+     collapsible zone, so it's still reachable via drag/tap even once she's scrolled
+     the calendar down (the bottom-edge flick-up gesture, JS, covers that same case
+     without needing to scroll back up first). Plain button, not one of the
+     .dd-edge-hint pills -- those mark screen EDGES; this marks a spot IN the page. */
+  .dd-grab {
+    display: none; width: 100%; border: none; background: none; cursor: grab;
+    touch-action: none; padding: 10px 0 14px; margin: 0 0 4px;
+    flex-direction: column; align-items: center; gap: 6px;
+  }
+  body.dd-drawers-active .dd-grab { display: flex; }
+  .dd-grab::before {
+    content: ""; width: 52px; height: 4px; border-radius: 999px;
+    background: color-mix(in oklab, var(--margin-rule) 55%, transparent);
+    transition: background 0.15s ease;
+  }
+  .dd-grab:active::before { background: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
+  .dd-grab-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+  /* bottom-edge flick-up confirmation toast (JS: bottom-edge gesture block) -- fixed
+     just above the safe area, faded in/out via .on, never intercepts touches itself. */
+  .dd-flash {
+    display: none; position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    transform: translate(-50%, 8px); z-index: 302; pointer-events: none;
+    background: var(--paper); color: var(--ink); border: 1px solid var(--margin-rule);
+    border-radius: 999px; padding: 8px 16px; font-size: 12px; font-weight: 700;
+    box-shadow: 0 10px 28px -6px rgba(0,0,0,0.5);
+    opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  body.dd-drawers-active .dd-flash { display: block; }
+  .dd-flash.on { opacity: 1; transform: translate(-50%, 0); }
 
   /* ============================================================
      §8 ICON LANGUAGE — 2026-08-15
@@ -12719,10 +12752,29 @@
       25% { box-shadow: 0 0 0 2px var(--gold-bright), 0 0 22px -4px var(--gold-bright); }
     }
     /* --- 3. star rating on the block face + click-to-select --- */
+    /* 2026-08-18 (Linh: "make the stars more golden", then "make it more gold"):
+       --gold (#C9A227) is the most saturated gold token in this file — --gold-bright
+       resolves to #EAC24E in dark theme (a pale lemon) and --accent-seed to #D4AF37,
+       both of which read as washed-out against the saturated block fills. Rendered all
+       three side by side at real size to pick this rather than reasoning about hex.
+       15px, not 11px: measured in that same render, colour depth barely registered at
+       11px because the glyphs were too small to carry it — the size is doing as much
+       work here as the hue. 15px is also the CEILING, measured not guessed: a 45-min
+       block is 42px tall (topForMin - 3 at --hour-h:60) and after 4px padding plus the
+       13px/1.25 title line, 17px stars clipped against the block's overflow:hidden.
+       Anything bigger needs the block's padding reduced, which is a different change.
+       .tl-rate-off (further down) is the third lever.
+       The absolute positioning still applies to TIGHT blocks (under 28px, meta hidden,
+       no second line to wrap onto); the desktop-1-day rule below takes it out of
+       absolute flow for normal blocks — see its own comment. */
     .tl-rate {
-      display: block; position: absolute; right: 8px; top: 3px; font-size: 11px;
-      letter-spacing: 1px; color: var(--gold-bright); pointer-events: none;
+      display: block; position: absolute; right: 8px; top: 3px; font-size: 15px;
+      letter-spacing: 2px; color: var(--gold); pointer-events: none;
     }
+    /* the unfilled remainder of the rating. Same hue at low alpha rather than a grey:
+       a grey would introduce a second colour into a one-colour component, and the point
+       is for the FILLED stars to be the thing the eye lands on. */
+    .tl-rate-off { color: color-mix(in oklab, var(--gold) 34%, transparent); }
     .tl-item.tl-selected { outline: 1.5px solid rgba(216, 185, 121, 0.5); outline-offset: 1px; }
     /* --- 4. event popup: flat dark card, actions in ONE wrapping row --- */
     .tl-detail-overlay { background: transparent; }
@@ -13541,6 +13593,21 @@
   }
   [data-desk-day1] #dayTimelineWrap .tl-block:not(.tl-tight) .tl-meta {
     flex: none; white-space: nowrap; margin-left: auto;
+  }
+  /* 2026-08-18 (Linh: "move it to the second line keeping it on the right"): the stars
+     were OVERLAPPING the time, not merely crowding it — .tl-rate is position:absolute
+     (right:8px, top:3px), i.e. out of the flex flow, and the 2026-08-17 "time on the
+     same line as the name, far right" change above moved .tl-meta into exactly that
+     corner. Two things claiming the same 8px inset, one of them absolute, so they
+     painted over each other on every rated block.
+     position:static puts it back in the flow; flex-basis 100% makes it claim a whole
+     row of the wrapping flex container, which is what pushes it onto line two by
+     itself — no hand-set top offset to drift if this block's layout changes again.
+     text-align:right (not margin-left:auto) because the row IS full width, so the
+     alignment has to happen to the inline stars inside it. */
+  [data-desk-day1] #dayTimelineWrap .tl-block:not(.tl-tight) .tl-rate {
+    position: static; flex: 0 0 100%; text-align: right;
+    line-height: 1; margin-top: -1px;
   }
   /* item 11: chain anchor/pin dots (renderChainLayer -> #chainLayer) read as
      clutter in the left gutter at 1 day, where every chain is a single block
@@ -14795,25 +14862,22 @@
        with state.view/PREFS on every render(). -->
   <div class="nav-tab-strip" id="navTabStrip" hidden></div>
   <!-- 2026-08-18 (mobile Day-view drawers, "show only the calendar by default"):
-       #navPanelBackdrop is now shared by THREE drawers -- this one, plus the two new
-       ones just below (#dayTopDrawer/#dayRightDrawer) -- since only one is ever open
-       at a time, one dimmed backdrop covers all three; see dayDrawersCloseAll(). -->
+       #navPanelBackdrop is shared by these TWO overlay drawers -- since only one is
+       ever open at a time, one dimmed backdrop covers both; see closeAllDayDrawers().
+       2026-08-18 pt.3: #dayTopDrawer is NO LONGER part of this overlay/backdrop
+       system -- it moved in-flow (see its own markup, inside .day-main) and is no
+       longer a modal, so it dropped out of this group. -->
   <div class="nav-panel-backdrop" id="navPanelBackdrop" hidden></div>
-  <!-- top-drop: mobile single-Day-view only. Content (date-nav/1-3-5-7 picker/mood
-       chips) is the SAME existing elements, just reparented in by placeDayDrawers()
-       -- not a second copy of any of it. See that function's own comment. -->
-  <div class="day-top-drawer" id="dayTopDrawer" role="dialog" aria-modal="true" aria-label="Day header" aria-hidden="true">
-    <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
-  </div>
-  <!-- right-drawer: same mobile single-Day-view scope, holds the existing #wrMobile
+  <!-- right-drawer: mobile single-Day-view scope, holds the existing #wrMobile
        widget block (Birthday/To-do/Boost/Streaks/Cycle) reparented in whole. -->
   <div class="day-right-drawer" id="dayRightDrawer" role="dialog" aria-modal="true" aria-label="Today's widgets" aria-hidden="true">
     <div class="day-right-drawer-body" id="dayRightDrawerBody"></div>
   </div>
-  <!-- faint gold hairline hints -- the only always-visible cue that a drawer swipes
-       in from each edge (mobile single-Day-view only, see CSS gate). Each is also a
-       tap target (her "or tap its hint"), not decoration only. -->
-  <div class="dd-edge-hint dd-edge-hint-top" id="ddEdgeHintTop" role="button" tabindex="0" aria-label="Show day header"></div>
+  <!-- faint gold hairline hints -- the only always-visible cue a drawer swipes in
+       from each edge (mobile single-Day-view only, see CSS gate). Each is also a tap
+       target (her "or tap its hint"), not decoration only.
+       2026-08-18 pt.3: the TOP hint is gone -- #ddGrab (inside .day-main, see its own
+       markup) is the equivalent affordance for the new in-flow top zone now. -->
   <div class="dd-edge-hint dd-edge-hint-left" id="ddEdgeHintLeft" role="button" tabindex="0" aria-label="Show calendar and numerology"></div>
   <div class="dd-edge-hint dd-edge-hint-right" id="ddEdgeHintRight" role="button" tabindex="0" aria-label="Show today's widgets"></div>
   <div class="nav-panel" id="navPanel" role="dialog" aria-modal="true" aria-label="Navigate" aria-hidden="true">
@@ -16820,6 +16884,28 @@
              (tablet AND mobile share this single stacked column, so no separate
              per-breakpoint logic is needed there) they simply render in this
              order already, no JS involved. -->
+        <!-- 2026-08-18 pt.3 (Linh, replacing the top-edge swipe drawer with a
+             pull-handle demo she built): #dayTopDrawer is now an IN-FLOW collapsible
+             zone -- first child of .day-main -- instead of a fixed overlay, so
+             opening it pushes the stat boxes/all-day row/hour grid down instead of
+             covering them. Content (quick-add bar + date-nav/1-3-5-7 picker/mood
+             chips) is the SAME existing elements, reparented in by placeDayDrawers()
+             -- #qaSlotDay is the one addition to what moves in vs. the original
+             overlay version, matching her demo's addbar. Empty + collapsed (0
+             height) whenever nothing's reparented into it (desktop, or any non-
+             mobile-Day-1 state), so it's harmless dead weight the rest of the time --
+             same "cheap and safe" reasoning as #wrMobile's own note. #ddGrab (the
+             pull handle) is a separate, ALWAYS-in-flow sibling right after it -- drag
+             or tap to toggle, or flick up from the bottom edge; see that JS block. -->
+        <div class="day-top-drawer" id="dayTopDrawer">
+          <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
+        </div>
+        <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header">
+          <span class="dd-grab-lbl" id="ddGrabLbl">Pull down</span>
+        </button>
+        <!-- brief confirmation toast for the bottom-edge flick-up gesture (its own JS
+             block) -- fades in/out via the .on class, auto-hidden after 850ms. -->
+        <div class="dd-flash" id="ddBackToTopFlash" aria-hidden="true">↑ back to the top</div>
         <div id="qaSlotDayHome" hidden></div>
         <div class="qa-slot" id="qaSlotDay"><div id="qaZone">
         <form class="quick-add" id="quickAdd">
@@ -23417,7 +23503,12 @@
       // row writes (resolveFitSessionFor), so the two can never disagree.
       const fitR = resolveFitSessionFor(e);
       const rated = fitR && fitR.sess.rating ? fitR.sess.rating : 0;
-      const rateHtml = rated ? `<span class="tl-rate" aria-hidden="true">${"★".repeat(rated)}${"☆".repeat(5 - rated)}</span>` : "";
+      // 2026-08-18 (Linh, "make it more gold"): the filled ★ and the unfilled ☆ were the
+      // same colour, so a 4-of-5 rating read as one uniform row of glyphs rather than as
+      // four gold stars. Wrapping just the remainder lets CSS fade it (.tl-rate-off) so
+      // the filled ones carry the colour. Still aria-hidden on the parent — the rating is
+      // announced properly in the detail sheet, this is decoration on the block face.
+      const rateHtml = rated ? `<span class="tl-rate" aria-hidden="true">${"★".repeat(rated)}<span class="tl-rate-off">${"☆".repeat(5 - rated)}</span></span>` : "";
       // every item — event, task or routine — can be ticked off (Linh 2026-07-27)
       // fitLink/date ride along on the dataset so tickTask() can auto-log a fitness
       // session without needing to reverse-parse the id (2026-08-02, see applyFitLink)
@@ -34930,18 +35021,20 @@
     host.innerHTML = NAV_ITEMS.map(navTabRowHtml).join("");
   }
   function navPanelIsOpen() { return document.getElementById("navPanel").classList.contains("open"); }
-  // 2026-08-18 (mobile Day-view drawers): #navPanelBackdrop is now shared by THREE
-  // drawers (see its own markup comment) — visible whenever ANY of them is open,
-  // rather than each drawer owning its own hidden/shown toggle directly.
-  function dayTopDrawerIsOpen() { return document.getElementById("dayTopDrawer").classList.contains("open"); }
+  // 2026-08-18 (mobile Day-view drawers): #navPanelBackdrop is shared by these TWO
+  // overlay drawers — visible whenever either is open, rather than each drawer
+  // owning its own hidden/shown toggle directly.
+  // 2026-08-18 pt.3: #dayTopDrawer dropped out of this group entirely (see its own
+  // open/close pair further down) — it's in-flow now, not a modal, so it no longer
+  // needs the backdrop or the "only one at a time" rule.
   function dayRightDrawerIsOpen() { return document.getElementById("dayRightDrawer").classList.contains("open"); }
   function updateDayDrawersBackdrop() {
-    document.getElementById("navPanelBackdrop").hidden = !(navPanelIsOpen() || dayTopDrawerIsOpen() || dayRightDrawerIsOpen());
+    document.getElementById("navPanelBackdrop").hidden = !(navPanelIsOpen() || dayRightDrawerIsOpen());
   }
   function openNavPanel() {
     const panel = document.getElementById("navPanel");
     renderNavSyncFooter();   // 2026-08-15 fix (E2) — see that function
-    closeDayTopDrawer(); closeDayRightDrawer();   // only one drawer open at a time
+    closeDayRightDrawer();   // only one overlay drawer open at a time
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
     updateDayDrawersBackdrop();
@@ -34954,23 +35047,10 @@
     updateDayDrawersBackdrop();
     document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
   }
-  // top-drop + right-drawer (2026-08-18): same open/close shape as #navPanel above,
-  // sharing its backdrop and its "only one at a time" rule.
-  function openDayTopDrawer() {
-    closeNavPanel(); closeDayRightDrawer();
-    const panel = document.getElementById("dayTopDrawer");
-    panel.classList.add("open");
-    panel.setAttribute("aria-hidden", "false");
-    updateDayDrawersBackdrop();
-  }
-  function closeDayTopDrawer() {
-    const panel = document.getElementById("dayTopDrawer");
-    panel.classList.remove("open");
-    panel.setAttribute("aria-hidden", "true");
-    updateDayDrawersBackdrop();
-  }
+  // right-drawer (2026-08-18): same open/close shape as #navPanel above, sharing its
+  // backdrop and its "only one at a time" rule.
   function openDayRightDrawer() {
-    closeNavPanel(); closeDayTopDrawer();
+    closeNavPanel();
     const panel = document.getElementById("dayRightDrawer");
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
@@ -34982,7 +35062,24 @@
     panel.setAttribute("aria-hidden", "true");
     updateDayDrawersBackdrop();
   }
-  function closeAllDayDrawers() { closeNavPanel(); closeDayTopDrawer(); closeDayRightDrawer(); }
+  // 2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
+  // built): the in-flow top zone -- plain class toggle, no backdrop, no interlock
+  // with the other two (it doesn't overlay anything, so nothing to fight over).
+  // #ddGrab's own label/aria-expanded double as the only "is it open" indicator she
+  // needs, so those live here rather than in the drag/tap gesture code.
+  function dayTopZoneIsOpen() { return document.getElementById("dayTopDrawer").classList.contains("open"); }
+  function openDayTopZone() {
+    document.getElementById("dayTopDrawer").classList.add("open");
+    document.getElementById("ddGrab").setAttribute("aria-expanded", "true");
+    document.getElementById("ddGrabLbl").textContent = "Pull up";
+  }
+  function closeDayTopZone() {
+    document.getElementById("dayTopDrawer").classList.remove("open");
+    document.getElementById("ddGrab").setAttribute("aria-expanded", "false");
+    document.getElementById("ddGrabLbl").textContent = "Pull down";
+  }
+  function toggleDayTopZone() { if (dayTopZoneIsOpen()) closeDayTopZone(); else openDayTopZone(); }
+  function closeAllDayDrawers() { closeNavPanel(); closeDayRightDrawer(); }
   // shows/hides #navDrawerBtn vs #navTabStrip per PREFS.navMode; called from
   // render() (every navigation) and from the Settings toggle for instant switching.
   function applyNavMode() {
@@ -35015,11 +35112,13 @@
     if (PREFS.navMode !== "drawer" || window.innerWidth >= 1024) return;
     if (navPanelIsOpen()) closeNavPanel(); else openNavPanel();
   });
-  // 2026-08-18: closes whichever of the three drawers the shared backdrop is
-  // currently covering, not just #navPanel.
+  // 2026-08-18: closes whichever of the two overlay drawers the shared backdrop is
+  // currently covering, not just #navPanel. (#dayTopDrawer dropped out of this
+  // group pt.3 -- it's in-flow now, closed separately via closeDayTopZone().)
   document.getElementById("navPanelBackdrop").addEventListener("click", closeAllDayDrawers);
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && (navPanelIsOpen() || dayTopDrawerIsOpen() || dayRightDrawerIsOpen())) closeAllDayDrawers();
+    if (e.key === "Escape" && (navPanelIsOpen() || dayRightDrawerIsOpen())) closeAllDayDrawers();
+    if (e.key === "Escape" && dayTopZoneIsOpen()) closeDayTopZone();
   });
   document.getElementById("navPanelBody").addEventListener("click", e => {
     const btn = e.target.closest("[data-view]");
@@ -35094,38 +35193,56 @@
     }, { passive: true });
     document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
   })();
-  // 2026-08-18 (mobile Day-view drawers): top-drop + right-drawer swipes, same
-  // shape/constants as #navPanel's own two IIFEs just above -- swipe-to-close bound
-  // to the drawer itself, edge-swipe-to-open bound to document.body with its own
-  // start-position edge check. Gated on mobileDayDrawersActive() instead of
-  // PREFS.navMode/state.view/window.innerWidth individually (same underlying
-  // conditions, already combined there).
+  // 2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
+  // built): #ddGrab is dragged open/closed like a bottom-sheet handle -- touchmove
+  // (not just start/end, unlike the edge-swipes above) so the label can flip the
+  // instant intent is clear, matching her demo's own drag feel.
+  // A tap toggles instead -- deliberately handled via the ONE native "click" event
+  // rather than also firing on touchend/mouseup: a real touch tap fires a synthetic
+  // click ~immediately after touchend on every mobile browser, and this element is a
+  // real <button> (needs Enter/Space keyboard activation too), so any second listener
+  // that also toggled on touchend/mouseup would double-fire and instantly re-close
+  // whatever the tap just opened -- a real hardware-only bug, invisible to synthetic
+  // touch events in a test harness. `dragged` just tells click "skip it, the drag
+  // above already changed the state."
   (function () {
-    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50;
-    const panel = document.getElementById("dayTopDrawer");
-    let sx = 0, sy = 0, tracking = false;
-    panel.addEventListener("touchstart", e => {
-      if (e.touches.length !== 1) { tracking = false; return; }
-      sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
-    }, { passive: true });
-    panel.addEventListener("touchend", e => {
+    const DRAG_MIN = 24;
+    const grab = document.getElementById("ddGrab");
+    let sy = 0, dragged = false, tracking = false;
+    function start(y) {
+      if (!mobileDayDrawersActive()) { tracking = false; return; }
+      sy = y; dragged = false; tracking = true;
+    }
+    function move(y) {
       if (!tracking) return;
-      tracking = false;
-      const t = e.changedTouches && e.changedTouches[0];
-      if (!t) return;
-      const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (Math.abs(dy) < SWIPE_MIN_PX || Math.abs(dx) > SWIPE_MAX_OFF_AXIS) return;
-      if (dy < 0) closeDayTopDrawer();   // swipe UP closes
-    }, { passive: true });
-    panel.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+      const dy = y - sy;
+      if (Math.abs(dy) < DRAG_MIN) return;
+      dragged = true;
+      if (dy > 0 && !dayTopZoneIsOpen()) openDayTopZone();
+      else if (dy < 0 && dayTopZoneIsOpen()) closeDayTopZone();
+    }
+    function end() { tracking = false; }
+    grab.addEventListener("touchstart", e => { if (e.touches.length === 1) start(e.touches[0].clientY); }, { passive: true });
+    grab.addEventListener("touchmove", e => { if (e.touches.length === 1) move(e.touches[0].clientY); }, { passive: true });
+    grab.addEventListener("touchend", end, { passive: true });
+    grab.addEventListener("touchcancel", end, { passive: true });
+    grab.addEventListener("mousedown", e => { start(e.clientY); e.preventDefault(); });
+    document.addEventListener("mousemove", e => { if (tracking) move(e.clientY); });
+    document.addEventListener("mouseup", end);
+    grab.addEventListener("click", () => { if (!dragged) toggleDayTopZone(); dragged = false; });
   })();
+  // bottom-edge flick-up (Linh's demo): opens the top zone AND scrolls back to the
+  // top of the page, since the whole point is jumping back to it from deep in the
+  // hour grid -- window is the real scroll container here (the page itself scrolls,
+  // .day-main doesn't have its own inner scrollbox), confirmed against how the
+  // existing hour-grid / all-day-row markup sits directly in document flow.
   (function () {
-    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, BOTTOM_EDGE_PX = 28;
     let sx = 0, sy = 0, tracking = false;
     document.body.addEventListener("touchstart", e => {
-      if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayTopDrawerIsOpen()) { tracking = false; return; }
+      if (e.touches.length !== 1 || !mobileDayDrawersActive()) { tracking = false; return; }
       const y = e.touches[0].clientY;
-      if (y > EDGE_ZONE_PX) { tracking = false; return; }
+      if (y < window.innerHeight - BOTTOM_EDGE_PX) { tracking = false; return; }
       sx = e.touches[0].clientX; sy = y; tracking = true;
     }, { passive: true });
     document.body.addEventListener("touchend", e => {
@@ -35134,8 +35251,15 @@
       const t = e.changedTouches && e.changedTouches[0];
       if (!t) return;
       const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (dy < SWIPE_MIN_PX || Math.abs(dx) > SWIPE_MAX_OFF_AXIS) return;
-      openDayTopDrawer();   // swipe DOWN from the top edge opens
+      if (-dy < SWIPE_MIN_PX || Math.abs(dx) > SWIPE_MAX_OFF_AXIS) return;
+      openDayTopZone();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      const flash = document.getElementById("ddBackToTopFlash");
+      if (flash) {
+        flash.classList.add("on");
+        clearTimeout(flash._t);
+        flash._t = setTimeout(() => flash.classList.remove("on"), 850);
+      }
     }, { passive: true });
     document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
   })();
@@ -35187,7 +35311,6 @@
       el.addEventListener("click", fn);
       el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
     }
-    bindTapAndKey("ddEdgeHintTop", () => { if (mobileDayDrawersActive()) openDayTopDrawer(); });
     bindTapAndKey("ddEdgeHintLeft", () => { if (mobileDayDrawersActive()) openNavPanel(); });
     bindTapAndKey("ddEdgeHintRight", () => { if (mobileDayDrawersActive()) openDayRightDrawer(); });
   })();
@@ -36375,7 +36498,7 @@
       if (dayStepRowHome && dayStepRow && dayStepRowHome.nextElementSibling !== dayStepRow && !inDayDrawers(dayStepRow)) dayStepRowHome.after(dayStepRow);
       // STEP 5: return each piece to its own home anchor inside .day-main —
       // independent of dayMain's own move below, same as every other anchor pair here.
-      if (qaHome && qa && qaHome.nextElementSibling !== qa) qaHome.after(qa);
+      if (qaHome && qa && qaHome.nextElementSibling !== qa && !inDayDrawers(qa)) qaHome.after(qa);
       if (progHome && prog && progHome.nextElementSibling !== prog) progHome.after(prog);
       if (addRowHome && addRowEl && addRowHome.nextElementSibling !== addRowEl) addRowHome.after(addRowEl);
       if (fastHome && fastEl && fastHome.nextElementSibling !== fastEl) fastHome.after(fastEl);
@@ -36426,6 +36549,13 @@
     const numGroupStrip = document.getElementById("numGroupStrip");
     const numGroupStripHome = document.getElementById("numGroupStripHome");
     const topBody = document.getElementById("dayTopDrawerBody");
+    // 2026-08-18 pt.3 (Linh's grab-handle demo folded #qaSlotDay's exact content into
+    // its collapsing zone) -- placeDeskGrid()'s own "on" branch already gives this
+    // element a desktop home (colL), so the inactive-branch return below needs the
+    // same !deskGridMq.matches guard as dayStepRow just above, for the identical
+    // reason (see that line's own 2026-08-18 FIX comment).
+    const qa = document.getElementById("qaSlotDay");
+    const qaHome = document.getElementById("qaSlotDayHome");
     const wrMobile = document.getElementById("wrMobile");
     const wrMobileHome = document.getElementById("wrMobileHome");
     const rightBody = document.getElementById("dayRightDrawerBody");
@@ -36441,6 +36571,7 @@
       if (dayStepRow && topBody && dayStepRow.parentElement !== topBody) topBody.appendChild(dayStepRow);
       if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
       if (numGroupStrip && topBody && numGroupStrip.parentElement !== topBody) topBody.appendChild(numGroupStrip);
+      if (qa && topBody && qa.parentElement !== topBody) topBody.appendChild(qa);
       if (wrMobile && rightBody && wrMobile.parentElement !== rightBody) rightBody.appendChild(wrMobile);
       // both confirmed viewport-agnostic (just fill whatever element currently holds
       // their target ids) -- normally called from placeDeskGrid()'s desktop branch /
@@ -36466,6 +36597,7 @@
       // reappeared as a visible duplicate of the topbar's own Today/‹/› nav.
       if (!deskGridMq.matches && dayStepRowHome && dayStepRow && calDaysRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow, calDaysRow);
       if (numGroupStripHome && numGroupStrip && numGroupStripHome.nextElementSibling !== numGroupStrip) numGroupStripHome.after(numGroupStrip);
+      if (!deskGridMq.matches && qaHome && qa && qaHome.nextElementSibling !== qa) qaHome.after(qa);
       if (wrMobileHome && wrMobile && wrMobileHome.nextElementSibling !== wrMobile) wrMobileHome.after(wrMobile);
       // leaving drawer mode (resize past 1024px, or navigating off the Day page)
       // while #dayTopDrawer/#dayRightDrawer was open would otherwise strand it
@@ -36476,7 +36608,7 @@
       // mid-browse on another page with the nav menu open must not slam it shut.
       // The 1024px-crossing case that genuinely should close it is already handled
       // by the navMobileMq change listener a few hundred lines up (closeAllDayDrawers).
-      closeDayTopDrawer(); closeDayRightDrawer();
+      closeDayTopZone(); closeDayRightDrawer();
     }
   }
   window.addEventListener("resize", placeDayDrawers);
