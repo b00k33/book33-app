@@ -2510,16 +2510,19 @@
   }
   .todo-panel-convert:hover, .todo-panel-convert:focus-visible { color: var(--gold-bright); background: var(--desk-btn-bg); }
   /* 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling where i can
-     select a day and time quickly and easily" + "add duration as well, keep it
-     compact" + "narrow the line space even more"): a second small button per row, a
+     select a day and time quickly and easily"): a second small button per row, a
      shortcut around the full Add/Edit form the arrow (.todo-panel-convert) opens --
-     tap it, a tiny inline day+time+length picker drops open right under that one
-     row, tap the gold ✓ and it's scheduled without ever leaving this panel. Same
-     size as the now-tightened .todo-panel-convert (not a second visual language);
-     .on marks it while its picker is open so the row it belongs to stays obvious
-     once several are open. The picker itself (.todo-panel-qs and children, below)
-     is deliberately NOT shrunk to match the tightened rows -- her explicit call,
-     it already fits on one line as-is. */
+     tap it, a tiny inline day+time picker drops open right under that one row, tap
+     the gold ✓ and it's scheduled without ever leaving this panel. Same size as the
+     tightened .todo-panel-convert (not a second visual language); .on marks it
+     while its picker is open so the row it belongs to stays obvious once several
+     are open. The picker itself (.todo-panel-qs and children, below) is
+     deliberately NOT shrunk to match the tightened rows -- her explicit call, it
+     already fits on one line as-is.
+     2026-08-19, simplified: dropped the length dropdown a sibling pass had added
+     here -- "no end time to pick, keeps this quick," a fixed 30-minute default
+     instead (open the item afterward to change its length the normal way). Date
+     and time now split the row evenly. */
   .todo-panel-sched-btn {
     flex: none; border: none; background: none; color: var(--ink-faint);
     font-size: 13px; padding: 4px; cursor: pointer; border-radius: 999px;
@@ -2531,15 +2534,12 @@
   }
   .todo-panel-qs { display: flex; align-items: center; gap: 5px; margin: 2px 2px 0; padding: 7px 8px; background: var(--raised); border-radius: var(--radius-sm); }
   .todo-panel-qs[hidden] { display: none; }
-  .todo-panel-qs-date, .todo-panel-qs-time, .todo-panel-qs-dur {
-    min-width: 0; font: inherit; font-size: 11.5px; color: var(--ink);
+  .todo-panel-qs-date, .todo-panel-qs-time {
+    flex: 1; min-width: 0; font: inherit; font-size: 11.5px; color: var(--ink);
     background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
     padding: 5px 6px; outline: none;
   }
-  .todo-panel-qs-date { flex: 1.3; }
-  .todo-panel-qs-time { flex: 1; }
-  .todo-panel-qs-dur { flex: 0 0 54px; }
-  .todo-panel-qs-date:focus, .todo-panel-qs-time:focus, .todo-panel-qs-dur:focus { border-color: var(--gold); }
+  .todo-panel-qs-date:focus, .todo-panel-qs-time:focus { border-color: var(--gold); }
   .todo-panel-qs-go {
     flex: none; border: none; background: var(--gold); color: #2A2205;
     font: inherit; font-size: 12px; font-weight: 700; width: 27px; height: 27px;
@@ -40209,15 +40209,6 @@
       <form class="todo-panel-qs" hidden data-todopanel-qs-form="${t.id}">
         <input type="date" class="todo-panel-qs-date" value="${keyOf(TODAY)}" aria-label="Day for ${esc(t.title)}">
         <input type="time" class="todo-panel-qs-time" aria-label="Time for ${esc(t.title)} (leave blank for all-day)">
-        <select class="todo-panel-qs-dur" aria-label="Length for ${esc(t.title)}">
-          <option value="15">15m</option>
-          <option value="30" selected>30m</option>
-          <option value="45">45m</option>
-          <option value="60">1h</option>
-          <option value="90">1h30</option>
-          <option value="120">2h</option>
-          <option value="180">3h</option>
-        </select>
         <button type="submit" class="todo-panel-qs-go" aria-label="Confirm schedule for ${esc(t.title)}">✓</button>
       </form>
     </div>`).join("");
@@ -40255,7 +40246,7 @@
       return;
     }
     // 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling"): opens/
-    // closes this ONE row's inline day+time+length picker in place -- no re-render,
+    // closes this ONE row's inline day+time picker in place -- no re-render,
     // just a hidden-attribute flip, so any other picker already open elsewhere in
     // the list stays open too (she can queue up several before submitting any).
     const qsToggle = e.target.closest("[data-todopanel-qs-toggle]");
@@ -40272,12 +40263,14 @@
     if (mk) { closeTodoPanel(); openFormFromTodo(mk.dataset.todopanelEvent); return; }
   });
   document.addEventListener("submit", e => {
-    // 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling" + "add
-    // duration as well"): the inline day+time+length picker's own submit -- creates
-    // the SAME kind of plain EVENTS row the full Add/Edit form's own submit handler
-    // does for a converted to-do, just skipping every field that form asks for
-    // beyond day/time/length. No time picked -> allDay (length dropdown is ignored
-    // in that case, same as the full form has no length for an all-day item).
+    // 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling"): the
+    // inline day+time picker's own submit -- creates the SAME kind of plain EVENTS
+    // row the full Add/Edit form's own submit handler does for a converted to-do,
+    // just skipping every field that form asks for beyond day/time. No time picked
+    // -> allDay, same convention the full form uses everywhere else. Fixed 30-minute
+    // default length ("no end time to pick, keeps this quick... you can always open
+    // the item afterward and change its length the normal way") -- SUPERSEDES a
+    // sibling pass's length dropdown here, deliberately simplified back out.
     const qsForm = e.target.closest("[data-todopanel-qs-form]");
     if (qsForm) {
       e.preventDefault();
@@ -40286,12 +40279,11 @@
       if (!t) return;
       const dateVal = qsForm.querySelector(".todo-panel-qs-date").value || keyOf(TODAY);
       const timeVal = qsForm.querySelector(".todo-panel-qs-time").value;
-      const durMin = parseInt(qsForm.querySelector(".todo-panel-qs-dur").value, 10) || 30;
       const allDay = !timeVal;
       EVENTS.push({
         id: uid(), date: dateVal, track: t.track || "personal", title: t.title, kind: "event",
         category: t.category || "", locPath: [], allDay,
-        start: allDay ? "" : timeVal, end: allDay ? "" : minToTime(Math.min(timeToMin(timeVal) + durMin, 1439)),
+        start: allDay ? "" : timeVal, end: allDay ? "" : minToTime(Math.min(timeToMin(timeVal) + 30, 1439)),
         ...(t.note ? { note: t.note } : {}),
       });
       saveEvents(EVENTS);
