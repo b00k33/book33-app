@@ -362,14 +362,15 @@ about before adding a fourth tightened dock:
   field set that doesn't map onto `#addForm`/`#rtnAddForm`'s fields. Left
   untouched rather than force-fit into the slide panel.
 
-### Standing pattern — mobile Day-view swipe drawers (2026-08-18)
+### Standing pattern — mobile Day-view swipe drawers (2026-08-18, top zone revised pt.3 same day)
 Linh: "the Day view should show ONLY the calendar by default... hidden and
 only appear when I swipe for it." Below 1024px, single-Day view only
 (`mobileDayDrawersActive()` = `!deskGridMq.matches && state.view==="day" &&
 calDaysActive()===1`), the calendar renders full-width/edge-to-edge and three
-things that live in normal flow on desktop instead live in swipe-in drawers:
-- **Top** (`#dayTopDrawer`, slides down): `.day-step-row` (Today/‹/›),
-  `#calDaysRow` (1/3/5/7 picker), `#numGroupStrip` (mood/zodiac chips).
+things that live in normal flow on desktop instead move elsewhere:
+- **Top** (`#dayTopDrawer`, IN-FLOW collapsible, not an overlay — pt.3 revision,
+  see below): `.day-step-row` (Today/‹/›), `#calDaysRow` (1/3/5/7 picker),
+  `#numGroupStrip` (mood/zodiac chips), `#qaSlotDay` (quick-add bar).
 - **Left** (existing `#navPanel`, extended — NOT a new drawer): `#navPanelExtras`
   now sits above `#navPanelRows` (the page-nav links) and holds the WHOLE
   `#deskSidebar` reparented in as one unit (mini-month calendar, the
@@ -410,34 +411,86 @@ things that live in normal flow on desktop instead live in swipe-in drawers:
   opens a dropdown with just Today/‹/›/Today's Patients, no calendar grid —
   reachable via the left-edge swipe instead. A deliberate consolidation, not
   an oversight.
-- **Gestures**: swipe-down-from-top-edge / swipe-right-from-right-edge open;
-  swipe-up-on-open-top-drawer / swipe-right-on-open-right-drawer close; tap a
-  `.dd-edge-hint` (faint gold hairline, ~44px real tap target via padding) does
-  the same as its swipe. All reuse the exact `SWIPE_MIN_PX`/`SWIPE_MAX_OFF_AXIS`/
-  `EDGE_ZONE_PX` constants and touchstart/touchend/passive shape `#navPanel`'s
-  own two IIFEs already used — each gesture is its own small IIFE with its own
-  copy of those constants (this file's convention is per-IIFE, not shared
-  module-scope, despite an older comment elsewhere claiming otherwise).
-- **Mutual exclusivity + shared backdrop**: `#navPanelBackdrop` now covers all
-  three drawers (only one open at a time) — `openNavPanel()`/`openDayTopDrawer()`/
-  `openDayRightDrawer()` each close the other two first;
-  `updateDayDrawersBackdrop()` shows it whenever any is open. Backdrop tap and
-  Escape both close whichever is open. `placeDayDrawers()`'s own "leaving
-  drawer mode" cleanup force-closes only the two NEW drawers, never `#navPanel`
-  — it runs on every resize/render regardless of page, and `#navPanel` is
-  legitimate on every mobile page, not just Day; force-closing it there would
-  slam it shut on an unrelated resize while she's mid-browse elsewhere with the
-  nav menu open. The one case that genuinely should close `#navPanel` too (a
-  resize crossing 1024px) is handled separately by the pre-existing
-  `navMobileMq` change listener.
-- **Scope note (disclosed, not silent)**: only the 3 desktop-mapped zones
-  (header row, sidebar, widget rail) move into drawers. The quick-add bar,
-  fire-shortcut button, and `#tilesAbove`/`#tilesBelow` tile shelves aren't
-  part of any of those 3 zones and stay in normal in-flow visibility below the
-  calendar — not hidden-by-omission, a judgment call against a strictly literal
-  "nothing else on screen" reading.
+- **Gestures — left/right overlay drawers**: swipe-right-from-right-edge opens
+  `#dayRightDrawer`, `#navPanel`'s own pre-existing left-edge swipe is unchanged;
+  swipe-right-on-open-right-drawer / swipe-left-anywhere-on-open-nav-panel
+  close; tap a `.dd-edge-hint` (faint gold hairline, ~44px real tap target via
+  padding) does the same as its swipe. Reuse the exact `SWIPE_MIN_PX`/
+  `SWIPE_MAX_OFF_AXIS`/`EDGE_ZONE_PX` constants and touchstart/touchend/passive
+  shape `#navPanel`'s own IIFEs already used — each gesture is its own small
+  IIFE with its own copy of those constants (this file's convention is
+  per-IIFE, not shared module-scope, despite an older comment elsewhere
+  claiming otherwise).
+- **Gestures — top zone (pt.3 revision, replacing the original top-edge swipe)**:
+  Linh pasted a self-contained demo of an in-flow "collapsing top row" pattern
+  with a draggable pull-handle and asked to replace the top-drawer with it. The
+  content stayed real (Today/‹/›/1-3-5-7/mood chips, PLUS `#qaSlotDay` folded in
+  since her demo explicitly included an addbar) but the mechanism changed
+  completely:
+  - `#dayTopDrawer` is no longer `position:fixed` — it's a normal in-flow block
+    that collapses via `max-height:0/opacity:0` ↔ `.open{max-height:420px}`,
+    pushing the calendar down instead of overlaying it.
+  - `#ddGrab`, a 52×4px pull-handle pill, sits directly below it, always in
+    flow, `body.dd-drawers-active`-gated visible. Drag it down/up past
+    `DRAG_MIN=24px` to open/close mid-gesture (the label flips "Pull down" ↔
+    "Pull up" as it does); an untouched tap toggles instead. Tap-toggle is
+    wired through the single native `click` event ONLY (not touchend/mouseup)
+    — a real touch tap fires a synthetic click ~immediately after touchend on
+    every mobile browser, and `#ddGrab` is a real `<button>` needing
+    Enter/Space keyboard support too, so any second listener that also
+    toggled on touchend/mouseup would double-fire and instantly re-close
+    whatever the tap just opened. A `dragged` flag tells the click handler to
+    skip when the drag above already changed state. This exact double-fire
+    trap is real hardware behavior, invisible to synthetic touch events in a
+    test harness — verify taps on a real phone, not just simulated events.
+  - A separate bottom-edge (`BOTTOM_EDGE_PX=28px`) flick-up gesture, bound to
+    `document.body`, opens the zone AND scrolls the page back to `window`
+    top (`behavior:"smooth"`) with a brief "↑ back to the top" toast
+    (`#ddBackToTopFlash`, `.on` class, auto-hidden after 850ms) — the point is
+    jumping back to the top from deep in the hour grid without scrolling up
+    first.
+  - No backdrop, no modal, no mutual exclusivity with the other two drawers —
+    it doesn't overlay anything, so there's nothing to fight over. Escape
+    still closes it (checked separately from the other two).
+- **Mutual exclusivity + shared backdrop (left/right overlay drawers only)**:
+  `#navPanelBackdrop` covers `#navPanel` and `#dayRightDrawer` (only one open
+  at a time) — `openNavPanel()`/`openDayRightDrawer()` each close the other
+  first; `updateDayDrawersBackdrop()` shows it whenever either is open.
+  Backdrop tap and Escape both close whichever is open. `placeDayDrawers()`'s
+  own "leaving drawer mode" cleanup force-closes the top zone (`closeDayTopZone()`)
+  and `#dayRightDrawer`, never `#navPanel` — it runs on every resize/render
+  regardless of page, and `#navPanel` is legitimate on every mobile page, not
+  just Day; force-closing it there would slam it shut on an unrelated resize
+  while she's mid-browse elsewhere with the nav menu open. The one case that
+  genuinely should close `#navPanel` too (a resize crossing 1024px) is handled
+  separately by the pre-existing `navMobileMq` change listener.
+- **`#qaSlotDay` needs the same desktop-regression guard as `.day-step-row`**:
+  `placeDeskGrid()`'s "on" branch gives `#qaSlotDay` a real desktop home
+  (`colL`), same as `.day-step-row`/`.section-head` — so both
+  `placeDayDrawers()`'s inactive-branch return AND `placeDeskGrid()`'s own
+  "off" branch return line for it need the matching guard
+  (`!deskGridMq.matches` / `!inDayDrawers(qa)` respectively). See the
+  2026-08-18 regression below — this is the SAME bug class, just caught before
+  shipping this time instead of after.
+- **Scope note (disclosed, not silent)**: the fire-shortcut button and
+  `#tilesAbove`/`#tilesBelow` tile shelves stay in normal in-flow visibility
+  below the calendar — not hidden-by-omission, a judgment call against a
+  strictly literal "nothing else on screen" reading.
 - Desktop (`deskGridMq`, ≥1024px) and the 3/5/7-day mobile views are
   completely untouched — this is single-Day mobile only.
+- **Regression already hit once (2026-08-18, same day, before pt.3)**: an
+  earlier version of `placeDayDrawers()`'s inactive branch unconditionally
+  returned `.day-step-row`/`#calDaysRow` to their mobile home marker even on
+  desktop, undoing `placeDeskGrid()`'s desktop placement inside `.section-head`
+  — the ONE place the pre-existing `#dayPage .day-main > .section-head
+  .day-step-row { display:none }` rule (Linh, pre-dates this build: "too many
+  arrows") actually hides it. Result: a visible duplicate "Today ‹ ›" row on
+  every desktop load. Fixed with a `!deskGridMq.matches` guard on that one
+  line. Any future "return X to its mobile home" line in this function's
+  inactive branch needs the same guard if `placeDeskGrid()`'s "on" branch also
+  gives that element a real desktop home — it fires on EVERY sub-1024px
+  render, which is not the same set of renders as "not desktop" once you
+  remember `active` can be false on tablet-width too.
 
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
