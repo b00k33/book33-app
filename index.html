@@ -43432,6 +43432,36 @@
       if (!item || e.target.closest(".tl-tick") || e.target.closest(".tl-resize-handle")) return;
       pressX = e.clientX; pressY = e.clientY;
       const id = item.dataset.tlDetail, pointerId = e.pointerId;
+      // 2026-08-18 (Linh: "there are two events at the same time but they are not
+      // displayed side by side"): never ARM a drag on an item that can't actually be
+      // moved. A hair wash / birthday / supplement falls through every savable branch in
+      // rescheduleItem() and hits its bare `return` — which saved nothing AND re-rendered
+      // nothing, leaving the block parked at the drop position with the inline top the
+      // drag preview put there. A parked block never went through the overlap/column
+      // pass, so it sat full-width on top of whatever was really at that time and read as
+      // "two events not splitting". Reproduced live before fixing: dragging Regular wash
+      // onto Morning made both render full-width and overlapping while the stored time
+      // stayed 08:15. tlItemCanMove() alone isn't strict enough for THIS gate, though:
+      // it returns true for hair-wash too, since hair-wash also satisfies
+      // fromRoutine && rtTaskId, same as a real routine occurrence — confirmed by
+      // testing this fix live, where the drag still armed. rescheduleItem() additionally
+      // needs parseOccId(id) to resolve (to compute its per-date override key), and
+      // hair-wash's id ("hair-<date>") never matches parseOccId's required
+      // "rt-<taskId>-<date>" shape. The Move panel works around exactly this with its
+      // own same-day special case (commitTlMove, ~2026-08-15/16); drag has no such
+      // workaround since it calls rescheduleItem() directly, so it needs the stricter
+      // test the file already uses elsewhere for this same reason (isRtnOcc, ~line
+      // 23579): the routine branch also requires parseOccId(id) to succeed. The resize
+      // handles and the detail sheet's Move row deliberately keep using the looser
+      // tlItemCanMove() — hair-wash's Move row genuinely works via that panel special
+      // case, only the raw drag needs the tighter check.
+      // A tap still opens the detail sheet exactly as before: only the DRAG is skipped.
+      const dragEv = TL_ITEMS_BY_ID[id];
+      const dragOk = dragEv && (!dragEv.generated
+        || (dragEv.fromRoutine && !!dragEv.rtTaskId && !!parseOccId(dragEv.id))
+        || (dragEv.fromRecurringEvent && !!dragEv.recurId)
+        || dragEv.id.indexOf("fitcal-") === 0);
+      if (dragEv && !dragOk) return;
       if (e.pointerType === "mouse") candidate = { id, item, pointerId };
       else timer = setTimeout(() => { timer = null; arm(id, item, pointerId, false); }, LONG_PRESS_MS);
     });
@@ -43483,6 +43513,13 @@
       let minutes = Math.round(minForTop(d.origTop + (e.clientY - pressY)) / step) * step;
       minutes = Math.max(START_MIN, Math.min(END_MIN - step, minutes));
       const ev = TL_ITEMS_BY_ID[d.id];
+      // 2026-08-18 (same report): put the block back at its real position FIRST, then ask
+      // for the move. rescheduleItem() re-renders the whole layer on success so this is
+      // invisible when the move works; when it refuses (any of its early returns — not
+      // movable, no occurrence id, fitness session move failed) the block is already back
+      // where it belongs instead of staying parked at the drop point on top of whatever
+      // is genuinely at that time. Cheap: one style write, no extra render pass.
+      d.el.style.top = `${d.origTop}px`;
       if (ev) rescheduleItem(ev, ev.date, minToTime(minutes)); else renderDay();
     }
     layer.addEventListener("pointerup", endDrag);
