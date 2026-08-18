@@ -327,6 +327,41 @@ navigating away from where you are" need that comes up next.
 - Next editor that needs this: dock it into `.slide-panel-overlay`/
   `.slide-panel-sheet` directly rather than writing a fourth bespoke overlay.
 
+**Follow-on — tightening pass (2026-08-18 pt.2)**. Linh: "the fields inside
+that panel need to sit much closer together than the first version." Both
+docks tightened (fields, not layout — same ask as `.dp-t-row` above, second
+instance same day): `#addForm` (2-up `.when .row` gap 12px→8px, `.field` gap
+4px→2px, `.field-bare` padding 8-10px→6px 10px) and `#editPanelBody #rtnAddForm`
+(same `.field` gap, boxed-input height 38px→34px/padding→0 10px, `.rtn-pair`
+gap→6px, Steps deboxed to a hairline-divided list instead of individually-
+boxed tiles). Three cascade traps hit and fixed along the way, worth knowing
+about before adding a fourth tightened dock:
+  1. The app-wide "ONE FIELD LANGUAGE" rule (~line 12293) sets input/select
+     padding with `!important` — a plain (non-`!important`) override never
+     wins regardless of id count. Any future per-dock padding override on a
+     real `<input>`/`<select>` needs `!important` too, scoped tight so the
+     shared rule itself stays untouched everywhere else.
+  2. `#rtnAddForm.rtn-inline-mode .rtn-sub-row` (background/border, further
+     down the file) and `#addForm .when .row` (display/gap/wrap, also further
+     down) both already existed as later, equal-or-higher-specificity rules —
+     an earlier same-specificity override loses on source order alone. Fixed
+     by either matching the full `#rtnAddForm.rtn-inline-mode` chain (Steps
+     rows) or editing the later rule's value directly instead of shadowing it
+     (`.when .row`'s own `gap` literal, cleaner than a duplicate). When
+     retightening a dock, check whether a later rule already owns the
+     property before adding a new override for it.
+  3. `#rtnAdvancedField`'s Steps/Chain-it looked "broken" (0×0) mid-check —
+     it wasn't a CSS bug. It sits inside `#rtnAddFormMore` ("More options"),
+     a separate collapsed `hidden` container; open that toggle first, then
+     the Advanced disclosure. Noted here since it cost real time to rule out
+     as a regression.
+- The `fitcal-` prefixed occurrence editor (fitness session Time/Duration/
+  Location/Notes, `data-tl-toggle-edit` → `fitSessionHtml`, in the detail
+  popup) is a separate, smaller pre-existing reveal from 2026-08-04 — already
+  in-place (no page nav) before this pattern existed, with its own compact
+  field set that doesn't map onto `#addForm`/`#rtnAddForm`'s fields. Left
+  untouched rather than force-fit into the slide panel.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
