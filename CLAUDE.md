@@ -729,6 +729,69 @@ things that live in normal flow on desktop instead move elsewhere:
   render, which is not the same set of renders as "not desktop" once you
   remember `active` can be false on tablet-width too.
 
+**Follow-on -- left panel becomes an icon rail + expandable calendar panel
+(2026-08-18 pt.8)**. Linh: the old left drawer opened one tall sheet (mini-
+cal/numerology/Parts-of-life stacked above the full labelled page list) --
+replaced with a narrow 52px icon-only rail (same `NAV_ITEMS`, same order as
+the desktop rail) where tapping any page icon navigates straight there as
+before, EXCEPT the Calendar icon, which now expands a second panel beside
+the rail holding that same mini-cal/numerology/Parts-of-life block instead
+of navigating anywhere. Scoped entirely to `body.dd-drawers-active` (mobile
+single-Day view) -- every other mobile page keeps the old full list,
+desktop's 214px sidebar is untouched.
+- `#navPanelExtras` moved to be a direct child of `#navPanel` (sibling of
+  `.nav-panel-scroll`, not nested inside it) specifically so it could become
+  `position:fixed` without `.nav-panel-scroll`'s own `overflow-x:hidden`
+  clipping it -- a transformed ancestor (`.nav-panel`, for its own slide-in)
+  makes itself the containing block for a `position:fixed` descendant, which
+  is exactly like an absolutely-positioned child for clipping purposes, not
+  like a normal viewport-escaping fixed element. With that move,
+  `#navPanelExtras`'s `left: 52px` resolves against `.nav-panel`'s own box
+  (0-52px when the rail is open), landing it flush beside the rail rather
+  than needing any JS-computed offset.
+- `#navIconRail`/`renderNavIconRail()`/`navIconRailRowHtml()` are a THIRD
+  presentation of the same `NAV_ITEMS ` array `navPanelRowHtml()`
+  (`#navPanelRows`, still what every other mobile page shows) already reads
+  -- one source of truth for what's in the nav, not a fork of it.
+  `#navPanel`'s new `.cal-open` class (toggled by a second, independent click
+  delegate on `#navPanelBody`, gated on `data-cal-toggle` rather than
+  `data-view` so it never collides with the existing per-page nav clicks)
+  drives `#navPanelExtras`'s width via CSS; `closeNavPanel()` clears
+  `.cal-open` too, so the calendar panel never reopens pre-expanded from a
+  previous visit.
+- **Live-state bug found and fixed during verification, not part of the
+  original spec**: `navIconRailRowHtml()`'s Calendar button initially
+  hardcoded `aria-expanded="false"` and no `.cal-active` tint unconditionally
+  -- correct only the instant the rail first opens. `renderNavExtras()` (and
+  therefore `renderNavIconRail()`) reruns on every navigation/render pass,
+  not only on open, so any re-render while the calendar panel was left open
+  silently reset the icon's gold tint even though the panel itself stayed
+  expanded (`.cal-open` lives on the persistent `#navPanel` element, unlike
+  the rail buttons which get fully rebuilt). Fixed by reading
+  `#navPanel`'s actual `.cal-open` state at render time instead of assuming
+  false. Worth remembering for any future toggle-style rail button: derive
+  its rendered state from the real DOM/model state, never hardcode the
+  "just-opened" case as if it were the only case.
+- **Verification note for this environment specifically**: this Browser pane
+  doesn't composite frames when not the focused/visible surface (confirmed
+  via a failed screenshot call), so CSS transitions here can report a
+  `getComputedStyle` reading that's frozen at the transition's START value
+  indefinitely, even seconds after the class change and even with
+  `getAnimations()` showing `playState: "running"`. Not a real bug --
+  temporarily setting `element.style.transition = "none"` before toggling
+  the class (then re-reading) snaps straight to the true end-state for
+  verification. Don't mistake a frozen mid-transition reading for a broken
+  toggle in this environment; disable the transition and re-measure before
+  concluding something doesn't work. Also: the `resize_window` "desktop"
+  preset resets to "native size," which in a not-currently-visible pane can
+  report `window.innerWidth === 0` -- pass explicit `width`/`height` for a
+  reliable desktop-width check instead.
+- The Month-page link that the old list's "Calendar" row provided is now
+  unreachable from this rail (tapping 🗓 only expands the mini-cal panel, it
+  doesn't navigate) -- a known, deliberate gap flagged rather than
+  worked around with a guessed-at second control; revisit if she asks for a
+  way back to the full Month overview from here.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
