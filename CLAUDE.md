@@ -498,6 +498,86 @@ apply there):
   day-button rows render pixel-identical bg/color/border in both pressed and
   unpressed states across both themes, and nothing overflows at 375px.
 
+**Follow-on — Fasting: a THIRD, reparenting occupant (2026-08-19)**. Linh:
+"tapping the FASTING stat box... should open a slide-out side panel instead
+of navigating to the Health page... reuse the existing slide-panel
+component... rather than building a new one." `#dayCtxFasting`/`#fastStatus`/
+`#fastLine`/weekPage's `[data-fast-history]` all still share one function,
+`jumpToFastHistory()` — its BODY now calls `openFastPanel()` instead of
+`state.view="health"`+scrollIntoView, so repointing it there repoints every
+call site at once, same one-function-many-callers shape the old comment
+already documented. `fastPanelOpen` joins `todoPanelOpen` in the shared
+close-chrome branch chain (`editPanelClose`/backdrop/Escape) exactly as
+instructed — checked first, since only one occupant is ever open.
+- **Different shape from the To-do panel**: To-do builds its markup fresh
+  from `TODOS` each render. The fasting panel instead REPARENTS the Health
+  page's own live `.fast-log-tuck` (the manual Start/End log form) and
+  `#fastChart`/`#fastHistory` into `#editPanelBody` and back to `#bdyCardFast`
+  on close (`fastLogTuckHome`/`fastChartHome`/`fastHistoryHome` markers, same
+  traveling-node idiom as `#rtnAddForm`/`#deskSidebar`/`#dayRow2`) — "reads/
+  writes the exact same fasting data/functions the Health page already uses"
+  ruled out a second implementation. The status card is the one exception:
+  `fastCardHTML()` was already a multi-mount component (`#fastLive`/
+  `#dayFastCard`/`#todayFastCard`), so a 4th mount (`#fastPanelLive`, wired
+  into `renderFastEverywhere()` alongside the other three) fit that existing
+  pattern better than reparenting `#fastLive` itself off the Health page.
+- **Reparenting broke click/input delegation once, fixed once**: `#fastHistory`'s
+  edit/delete UI and `#fastManualForm`'s adjacent live-duration recompute were
+  delegated on `document.getElementById("healthPage")`, not `document` — once
+  reparented outside `#healthPage`, clicks/input inside them stopped bubbling
+  to that listener. Both widened to plain `document.addEventListener(...)`;
+  neither handler body ever referenced `#healthPage` itself, so this changed
+  nothing about what they match. Any future reparent-into-a-panel of content
+  that currently lives under a page-scoped delegate needs the same check.
+- **Freshness while the panel is open on a non-Health page**: actions that
+  mutate `HEALTH.fasts`/`fastGoalHours` (start/stop, resume, goal chip) used
+  to read `if (state.view==="health") renderHealth(); else
+  renderFastEverywhere();` — the `else` branch never touched `#fastChart`/
+  `#fastHistory`, so those would go stale with the panel open elsewhere.
+  Fixed at the ONE shared point rather than at each call site:
+  `renderFastEverywhere()` itself now ends with `if (fastPanelOpen) {
+  renderFastChart(); renderFastStatsAndHistory(); renderFastPanelStats(); }` —
+  every one of those call sites already funnels through it. The history/
+  delete/edit handlers were already unconditional `renderHealth()` calls and
+  needed no change.
+- **`renderFastStatsAndHistory()`** is a pure extraction of what used to be
+  inline in `renderHealth()` (writes `#fastStats`/`#fastHistory`, returns the
+  KPI-strip fragment `renderHealth()` still folds into `#bdyKpis`) — no
+  behaviour change, just made independently callable.
+- **The panel's 3-stat row is deliberately NOT `#fastStats`**: she named
+  exactly "Avg, Goal met, Streak" scoped to the "Last 7 fasts" chart, not the
+  Health page's own all-time 6-stat block (current/best streak, longest fast,
+  best week avg, fasts logged, average) — so `#fastStats` is left alone,
+  untouched and unreparented, and the panel gets its own compact
+  `fastPanelStatsHTML()` built from the same `fastedHoursPerDay()`/
+  `fastRecords()` helpers, not a new data source.
+- **`--fast` accents, scoped so the Health page stays exactly as it is**: her
+  spec named `--fast` (`--cat-personal-fitness`, `#37AF65` — a real, already-
+  green token) for the status number/progress fill/"Log fast" button/history
+  durations. The existing ring/clock/button already use a DIFFERENT green,
+  `--fast-green` (`#3DDC84`) — recolouring that shared component globally
+  would have changed the Health/Day/Today mounts too, so every override is
+  scoped to only apply while physically inside the panel: `#fastPanelLive
+  .fast-ring-prog`/`.fast-clock` (a distinct 4th mount, never touches the
+  other three), and `#editPanelBody .fast-log-tuck .btn-save` / `#editPanelBody
+  #fastHistory .log-row .val` (plain ancestor selectors that stop matching the
+  instant `closeFastPanel()` moves those nodes back out — no JS class
+  toggling needed). Confirmed live: Health page's own ring/button still read
+  `--fast-green`/default after the panel closes.
+- **One deliberate exception, NOT recoloured**: `#fastChart`'s bars are
+  coloured by CYCLE PHASE (`fastChartPhaseCol()`), not decoration — real
+  information her own spec's "no changes to how fasts are... calculated"
+  line already rules out removing. Flattening them to `--fast` would delete
+  that encoding, so the reparented chart keeps its existing colours as-is;
+  disclosed here rather than silently deviating from her accent list.
+- Verified live: all 4 real tap points open the panel (`#fastHistoryLink` is
+  a pre-existing dead `?.`-guarded listener with no matching element in
+  current markup — not a regression, didn't touch it); Start/Stop, manual
+  log, and history edit/delete all work from inside the panel and refresh
+  the chart/stats/history immediately while parked on the Day page (state.view
+  never becomes "health"); closing returns all three nodes to their exact
+  original DOM order; both themes; no horizontal overflow at 375px.
+
 ### Standing pattern — mobile Day-view swipe drawers (2026-08-18, top zone revised pt.3 same day)
 Linh: "the Day view should show ONLY the calendar by default... hidden and
 only appear when I swipe for it." Below 1024px, single-Day view only
