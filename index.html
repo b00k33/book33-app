@@ -933,8 +933,21 @@
   #miniCalTitle .mini-cal-pm {
     font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
     text-transform: uppercase; color: var(--cosmic-gold); opacity: 0.85; margin-left: 8px;
+    cursor: pointer; position: relative;
   }
+  /* invisible hit-area pad, same "grow the target not the art" idiom .day-nav-gear::after
+     and .tl-block .tl-tick::after already use -- the visible badge stays tiny/subtle,
+     the tap target doesn't. */
+  #miniCalTitle .mini-cal-pm::before { content: ""; position: absolute; inset: -8px -4px; }
   #miniCalTitle .mini-cal-pm small { font-size: 11px; color: var(--ink-faint); font-weight: 700; }
+  /* 2026-08-18 (Linh: "make the pm collapsable from clicking pm"): same fold indicator
+     as the six energy cards' .t-head::after (search "each energy card folds on its
+     own") -- ▾ open, ▸ collapsed. */
+  #miniCalTitle .mini-cal-pm::after {
+    content: "▾"; margin-left: 4px; font-size: 8px; opacity: 0.75;
+  }
+  #miniCalTitle .mini-cal-pm.mc-pm-collapsed::after { content: "▸"; }
+  .mini-cal-theme.mc-collapsed { display: none; }
   /* 2026-08-11 (Linh: "improve this dropdown"): the PM theme is a tidy strip between the
      month nav and the calendar grid now — no longer a hover popover on top of the dates. */
   .mini-cal-theme {
@@ -28032,6 +28045,30 @@
     if (mobileDayMq.matches) renderDeskWidgetRail();
   }
 
+  // 2026-08-18 (Linh: "make the pm collapsable from clicking pm"): the Initiate & Lead
+  // theme strip folds away on tap of the PM badge, leaving just the month + badge --
+  // same persisted-localStorage / class-toggle idiom the six energy cards already use
+  // (search "DF_KEY"/"applyFocusCards"), just a single boolean since there's only one
+  // PM strip here. #miniCalTitle's innerHTML is fully rebuilt on every renderMiniCal()
+  // call (new month, new day, etc.), which would silently drop the indicator class off
+  // the freshly-created .mini-cal-pm span -- applyMiniCalPmCollapse() is called at the
+  // end of renderMiniCal() below to reapply it every time, same reasoning applyFocusCards()
+  // gets re-run after any #focusTile rebuild.
+  const MC_PM_KEY = "book33-minical-pm-collapsed";
+  let mcPmCollapsed = (() => { try { return localStorage.getItem(MC_PM_KEY) === "1"; } catch (e) { return false; } })();
+  function applyMiniCalPmCollapse() {
+    const theme = document.getElementById("miniCalTheme");
+    if (theme) theme.classList.toggle("mc-collapsed", mcPmCollapsed);
+    const pmEl = document.querySelector("#miniCalTitle .mini-cal-pm");
+    if (pmEl) pmEl.classList.toggle("mc-pm-collapsed", mcPmCollapsed);
+  }
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#miniCalTitle .mini-cal-pm")) return;
+    mcPmCollapsed = !mcPmCollapsed;
+    try { localStorage.setItem(MC_PM_KEY, mcPmCollapsed ? "1" : "0"); } catch (e) {}
+    applyMiniCalPmCollapse();
+  });
+
   // quick-jump mini month calendar, toggled from the month pill in the Day page header
   function renderMiniCal() {
     const anchor = state.miniCalAnchor;
@@ -28057,6 +28094,7 @@
         ${pmTitleFocus.blurb ? `<div class="mct-blurb">${esc(pmTitleFocus.blurb)}</div>` : ""}
         <div class="mct-chips theme-acts">${(pmTitleFocus.lean || []).slice(0, 3).map(x => `<span data-add-action="${esc(x)}" role="button" tabindex="0" title="Add “${esc(x)}” to this day">${esc(x)}</span>`).join("")}</div>
       ` : "";
+    applyMiniCalPmCollapse();
     const gridStart = startOfWeek(new Date(y, m, 1));
     const selectedKey = keyOf(state.anchor), todayKey = keyOf(TODAY);
     let html = "";
