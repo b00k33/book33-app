@@ -21163,6 +21163,18 @@
     // tracking: ticking, skipping, resizing, or moving any one of a routine's
     // same-day blocks affects the whole routine for that day, exactly as it always
     // has, just with every scheduled time now actually showing up).
+    // 2026-08-18 (Linh, "still missing" -- same Wednesday, same routine, AFTER the
+    // fix above): a day with an old per-day override sitting on it (t.overrides
+    // [date].start -- e.g. left over from once dragging or resizing that block,
+    // back before this multi-layer pass existed) still bailed out of this WHOLE
+    // pass, so a leftover custom time on just the PRIMARY slot silently hid every
+    // OTHER layer's block again, same symptom as the original bug just one layer
+    // deeper. ovr.start no longer bails here: the primary block above still
+    // honours it exactly as before (unchanged), this pass now always draws the
+    // OTHER matching layers at their own natural times alongside it. Only a
+    // genuine skip or move-to-another-day still bails below -- those really do
+    // replace the day with a single ghost, so a per-layer split has nothing left
+    // to attach to.
     // Deliberately narrow, skipped entirely when:
     //  - only one layer matches (the loop above already covered it in full)
     //  - the routine is chain-anchored (its time comes from the anchor, not the
@@ -21171,15 +21183,11 @@
     //  - today is skipped or moved to another day (that override already fully
     //    replaces the occurrence with a single ghost above; a ghost per layer
     //    would be wrong -- there's one place this routine went, not several)
-    //  - today has a manually-set custom start time (ovr.start) -- a specific
-    //    time picked for one day doesn't have a natural per-layer split to honor,
-    //    so every block would collapse onto that same time; falls back to the
-    //    pre-fix single-block behaviour on that one day only
     routinesOn(date).forEach(t => {
       if (!(Array.isArray(t.schedules) && t.schedules.length > 1)) return;
       if (t.anchorTo && chainAnchorOf(t)) return;
       const ovr = rtnOvr(t, k);
-      if (ovr && (ovr.skipped || ovr.start || (ovr.movedTo && ovr.movedTo !== k))) return;
+      if (ovr && (ovr.skipped || (ovr.movedTo && ovr.movedTo !== k))) return;
       const hits = t.schedules.filter(l => layerOccursOn(l, date));
       if (hits.length < 2) return;
       const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
