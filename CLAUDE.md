@@ -384,8 +384,10 @@ only appear when I swipe for it." Below 1024px, single-Day view only
 calDaysActive()===1`), the calendar renders full-width/edge-to-edge and three
 things that live in normal flow on desktop instead move elsewhere:
 - **Top** (`#dayTopDrawer`, IN-FLOW collapsible, not an overlay — pt.3 revision,
-  see below): `.day-step-row` (Today/‹/›), `#calDaysRow` (1/3/5/7 picker),
-  `#numGroupStrip` (mood/zodiac chips), `#qaSlotDay` (quick-add bar).
+  see below): `#dayRow2` (weekday/date/UD-badge/moon-phase line, pt.4), `.day-step-row`
+  (Today/‹/›), `#calDaysRow` (1/3/5/7 picker), `#numGroupStrip` (mood/zodiac chips),
+  `#qaSlotDay` (quick-add bar) — in that DOM order, `#dayRow2` first since it reads
+  as the drawer's own header.
 - **Left** (existing `#navPanel`, extended — NOT a new drawer): `#navPanelExtras`
   now sits above `#navPanelRows` (the page-nav links) and holds the WHOLE
   `#deskSidebar` reparented in as one unit (mini-month calendar, the
@@ -447,8 +449,11 @@ things that live in normal flow on desktop instead move elsewhere:
     pushing the calendar down instead of overlaying it.
   - `#ddGrab`, a 52×4px pull-handle pill, sits directly below it, always in
     flow, `body.dd-drawers-active`-gated visible. Drag it down/up past
-    `DRAG_MIN=24px` to open/close mid-gesture (the label flips "Pull down" ↔
-    "Pull up" as it does); an untouched tap toggles instead. Tap-toggle is
+    `DRAG_MIN=24px` to open/close mid-gesture (`aria-expanded` flips, no
+    visible text — pt.4 dropped the "Pull down"/"Pull up" label entirely,
+    Linh: "shrink the fixed space at the top to the smallest it can be";
+    `padding:20px 0` around the 4px pill keeps a real 44px tap target even
+    with the visible mark this slim); an untouched tap toggles instead. Tap-toggle is
     wired through the single native `click` event ONLY (not touchend/mouseup)
     — a real touch tap fires a synthetic click ~immediately after touchend on
     every mobile browser, and `#ddGrab` is a real `<button>` needing
@@ -467,6 +472,22 @@ things that live in normal flow on desktop instead move elsewhere:
   - No backdrop, no modal, no mutual exclusivity with the other two drawers —
     it doesn't overlay anything, so there's nothing to fight over. Escape
     still closes it (checked separately from the other two).
+- **Cross-closure conflict #2 — `#dayRow2` (pt.4)**: same shape as `.mini-cal-wrap`
+  above, different element. `#dayRow2` (weekday/date/UD/moon) is normally
+  reparented by `placeDateLine()` (sync-module closure) into `#navDateSlot` on
+  true mobile, or left at `#dayRow2Home` above 640px. `placeDayDrawers()` (main
+  closure) now ALSO reparents it, into `#dayTopDrawerBody` while
+  `mobileDayDrawersActive()`. `placeDateLine()` got the matching one-line guard
+  (`row.closest("#dayTopDrawer")`, checked before both its mobile-branch
+  `slot.appendChild` and its desktop-branch `home...insertBefore` lines) so it
+  stops fighting for ownership while the drawer holds it. Unlike `.day-step-row`/
+  `#qaSlotDay`, `#dayRow2` needs NO `!deskGridMq.matches` guard on the
+  drawer-deactivation return — confirmed `placeDeskGrid()`'s "on" branch never
+  touches `#dayRow2` at all, so there's no competing desktop home to protect
+  against. Deactivation always hands it back to `#navDateSlot` (not straight to
+  `#dayRow2Home`); `placeDateLine()`'s own next run resolves the TRUE final spot
+  from there — same two-step handoff `#miniCalWrap` already uses via
+  `#dsbSideHome`.
 - **Mutual exclusivity + shared backdrop (left/right overlay drawers only)**:
   `#navPanelBackdrop` covers `#navPanel` and `#dayRightDrawer` (only one open
   at a time) — `openNavPanel()`/`openDayRightDrawer()` each close the other
