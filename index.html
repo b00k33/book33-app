@@ -2426,7 +2426,22 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--note-line); flex: none;
   }
-  .slide-panel-head b { font-size: 13px; }
+  .slide-panel-head b { font-size: 13px; flex: 1; min-width: 0; }
+  /* 2026-08-19 (Linh, "i really like the stocktake function... help me design that"):
+     the Review/List toggle lives in the shared panel header (same header the routine
+     form and fasting panel also use) but only ever shows in todo-panel-mode -- hidden
+     by default, unhidden by the .todo-panel-mode rule below. Giving the title `flex:1`
+     is what keeps it snug against this new middle button instead of the old two-child
+     space-between spreading a gap between them. */
+  #todoReviewToggle {
+    display: none; flex: none; width: auto; min-width: 0; height: auto; min-height: 36px;
+    border: 1px solid var(--gold); border-radius: 999px; background: none; color: var(--gold-bright);
+    font: inherit; font-size: 11.5px; font-weight: 700; padding: 0 12px; margin-right: 4px;
+    align-items: center; gap: 4px; cursor: pointer;
+  }
+  .slide-panel-sheet.todo-panel-mode #todoReviewToggle { display: inline-flex; }
+  #todoReviewToggle:hover, #todoReviewToggle:focus-visible { background: color-mix(in oklab, var(--gold) 14%, transparent); }
+  #todoReviewToggle.active { background: var(--gold); color: #2A2205; border-color: var(--gold); }
   .slide-panel-head button {
     border: none; background: none; color: var(--ink-faint); font-size: 20px; cursor: pointer;
     min-width: 44px; min-height: 44px; border-radius: 999px;
@@ -2546,6 +2561,70 @@
     border-radius: 50%; cursor: pointer; display: inline-grid; place-content: center;
   }
   .todo-panel-qs-go:hover, .todo-panel-qs-go:focus-visible { background: var(--gold-bright); }
+  /* ---- To-do Review (flashcard) mode -- see startTodoReview() and neighbours ---- */
+  .todo-review { display: flex; flex-direction: column; align-items: center; padding-top: 4px; }
+  .tdrv-top { width: 100%; display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .tdrv-progress { font-size: 11px; color: var(--ink-faint); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .tdrv-streak {
+    font-size: 11px; font-weight: 700; color: var(--gold-bright); opacity: 0; transform: translateY(2px);
+    transition: opacity .2s ease, transform .2s ease;
+  }
+  .tdrv-streak.show { opacity: 1; transform: none; }
+  .tdrv-track { width: 100%; height: 3px; background: var(--raised); border-radius: 2px; margin-bottom: 12px; overflow: hidden; }
+  .tdrv-track-fill { height: 100%; background: var(--gold); border-radius: 2px; transition: width .3s ease; }
+  .tdrv-tally { display: flex; gap: 12px; margin-bottom: 16px; font-size: 11px; color: var(--ink-faint); font-weight: 700; }
+  .tdrv-tally span { display: flex; align-items: center; gap: 3px; }
+  .tdrv-tally b { color: var(--ink); font-size: 12px; }
+  .tdrv-card {
+    width: 100%; background: var(--raised); border: 1px solid var(--note-line); border-radius: var(--radius-lg);
+    padding: 24px 20px 20px; text-align: center; min-height: 168px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px; animation: tdrvCardIn .22s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes tdrvCardIn { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .tdrv-card.pulse-complete { animation: tdrvPulseGreen .32s ease; }
+  .tdrv-card.pulse-schedule { animation: tdrvPulseGold .32s ease; }
+  .tdrv-card.pulse-remove { animation: tdrvPulseRed .32s ease; }
+  @keyframes tdrvPulseGreen { 40% { box-shadow: 0 0 0 7px rgba(111,174,122,0.3); border-color: #6FAE7A; } }
+  @keyframes tdrvPulseGold { 40% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--gold) 30%, transparent); border-color: var(--gold); } }
+  @keyframes tdrvPulseRed { 40% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--danger) 30%, transparent); border-color: var(--danger); } }
+  .tdrv-title { font-size: 18px; font-weight: 800; line-height: 1.35; color: var(--ink); word-break: break-word; }
+  .tdrv-title-edit {
+    width: 100%; font: inherit; font-size: 16px; font-weight: 700; color: var(--ink); text-align: center;
+    background: var(--paper); border: 1px solid var(--gold); border-radius: var(--radius-sm); padding: 10px 12px; outline: none;
+  }
+  .tdrv-sched { display: flex; align-items: center; gap: 6px; width: 100%; }
+  .tdrv-sched[hidden] { display: none; }
+  .tdrv-sched-date, .tdrv-sched-time {
+    flex: 1; min-width: 0; font: inherit; font-size: 12px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
+    padding: 7px 7px; outline: none;
+  }
+  .tdrv-sched-go {
+    flex: none; border: none; background: var(--gold); color: #2A2205; font: inherit; font-size: 13px;
+    font-weight: 700; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  }
+  .tdrv-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+  .tdrv-actions button {
+    border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
+    font: inherit; font-size: 12px; font-weight: 700; padding: 9px 13px; border-radius: 999px; cursor: pointer;
+    display: flex; align-items: center; gap: 5px; transition: background .12s ease, border-color .12s ease;
+  }
+  .tdrv-actions button:hover { border-color: var(--gold); }
+  .tdrv-actions .act-complete { border-color: #6FAE7A; color: #6FAE7A; }
+  .tdrv-actions .act-complete:hover { background: rgba(111,174,122,0.14); }
+  .tdrv-actions .act-remove { border-color: var(--danger); color: var(--danger); }
+  .tdrv-actions .act-remove:hover { background: color-mix(in oklab, var(--danger) 14%, transparent); }
+  .tdrv-actions .act-schedule.active { background: var(--gold); color: #2A2205; border-color: var(--gold); }
+  .tdrv-empty { text-align: center; padding: 30px 10px; width: 100%; }
+  .tdrv-empty-big { font-size: 32px; margin-bottom: 8px; }
+  .tdrv-empty-head { font-size: 15px; font-weight: 800; color: var(--ink); }
+  .tdrv-streak-note { color: var(--gold-bright); font-size: 12px; font-weight: 700; margin-top: 6px; }
+  .tdrv-empty-stats { color: var(--ink-faint); font-size: 13px; margin: 14px 0 20px; line-height: 1.7; }
+  .tdrv-empty-stats b { color: var(--ink); }
+  .tdrv-empty-back {
+    border: none; background: var(--gold); color: #2A2205; font: inherit; font-size: 13px; font-weight: 700;
+    padding: 11px 22px; border-radius: 999px; cursor: pointer;
+  }
   /* a solid gold fill, not the app's usual dashed-outline .add-btn -- her explicit
      spec, and flat (no gradient) to match the header band + design44 §4. */
   .todo-panel-add { margin-top: 14px; }
@@ -15449,7 +15528,7 @@
        .slide-panel-sheet restyle in place instead (see that CSS). -->
   <div class="slide-panel-overlay" id="editPanelOverlay" hidden>
     <div class="slide-panel-sheet" id="editPanelSheet" role="dialog" aria-modal="true" aria-labelledby="editPanelTitle">
-      <div class="slide-panel-head"><b id="editPanelTitle">Routine</b><button type="button" id="editPanelClose" aria-label="Close editor">×</button></div>
+      <div class="slide-panel-head"><b id="editPanelTitle">Routine</b><button type="button" id="todoReviewToggle" aria-label="Review your to-dos one at a time">🗂 Review</button><button type="button" id="editPanelClose" aria-label="Close editor">×</button></div>
       <div class="slide-panel-body" id="editPanelBody"></div>
     </div>
   </div>
@@ -40183,6 +40262,110 @@
   // rtnCalendarOpen/openRtnFormFromCalendar just above, a parallel flag+open/close
   // pair for this panel's OTHER possible occupant.
   let todoPanelOpen = false;
+  // 2026-08-19 (Linh, "i really like the stocktake function... bring up the task, i
+  // can edit it, or schedule it, or ignore, or remove, or mark complete"): a one-card-
+  // at-a-time review session for the To-do panel, same idea as the pharmacy app's
+  // Stocktake mode -- work through every PENDING to-do one at a time instead of
+  // scanning the flat list. Reuses TODOS/EVENTS directly (no new data model, same
+  // precedent as the panel itself and the fasting panel) -- Schedule creates the
+  // exact same EVENTS row the list's own 🗓 picker does, Complete/Remove/Ignore are
+  // just the existing tick/delete/no-op semantics, one card at a time.
+  let todoReviewing = false;
+  let todoReviewQueue = [];              // to-do ids, snapshotted when review starts
+  let todoReviewPos = 0;
+  let todoReviewStats = { completed: 0, scheduled: 0, removed: 0, ignored: 0 };
+  // "resolving" a card (Complete/Schedule/Remove) builds a streak; Ignore breaks it --
+  // a light nudge toward actually deciding on each card instead of just clicking through
+  let todoReviewStreak = 0, todoReviewBestStreak = 0;
+  const TODO_REVIEW_TALLY = { completed: "✓", scheduled: "🗓", removed: "🗑", ignored: "⏭" };
+
+  function startTodoReview() {
+    todoReviewQueue = TODOS.filter(t => !t.done).map(t => t.id);
+    todoReviewPos = 0;
+    todoReviewStats = { completed: 0, scheduled: 0, removed: 0, ignored: 0 };
+    todoReviewStreak = 0; todoReviewBestStreak = 0;
+    todoReviewing = true;
+    renderTodoPanel();
+  }
+  function stopTodoReview() {
+    todoReviewing = false;
+    renderTodoPanel();
+  }
+  function todoReviewAdvance(statKey, resolved) {
+    if (statKey) todoReviewStats[statKey]++;
+    if (resolved) { todoReviewStreak++; todoReviewBestStreak = Math.max(todoReviewBestStreak, todoReviewStreak); }
+    else if (statKey === "ignored") { todoReviewStreak = 0; }
+    todoReviewPos++;
+    renderTodoPanel();
+  }
+  // resolving gets a brief colour pulse on the card before moving on, so the action
+  // reads as a small win instead of an instant jump-cut -- Ignore stays immediate,
+  // deliberately less "rewarding" than actually deciding on a card
+  function todoReviewPulseAdvance(pulseClass, statKey) {
+    const card = document.querySelector("[data-todoreview-card]");
+    if (card) {
+      card.classList.add(pulseClass);
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+    }
+    setTimeout(() => todoReviewAdvance(statKey, true), 260);
+  }
+  function todoReviewBodyHtml() {
+    const total = todoReviewQueue.length;
+    if (todoReviewPos >= total) {
+      const resolved = todoReviewStats.completed + todoReviewStats.scheduled + todoReviewStats.removed;
+      const doneCount = resolved + todoReviewStats.ignored;
+      if (doneCount === 0) {
+        return `<div class="tdrv-empty">
+          <div class="tdrv-empty-big">🗂</div>
+          <div class="tdrv-empty-head">Nothing to review</div>
+          <div class="tdrv-empty-stats">Every to-do is already done.</div>
+          <button type="button" class="tdrv-empty-back" data-todoreview-act="finishback">Back to list</button>
+        </div>`;
+      }
+      // headline reacts to how the session actually went, instead of one static message
+      const headline = todoReviewStats.ignored === 0 ? ["✨", "Perfect clear!"]
+        : resolved === 0 ? ["👋", "No rush — they'll be here next time."]
+        : resolved >= todoReviewStats.ignored ? ["💪", "Nice work — most of these are handled."]
+        : ["👀", "A few handled — the rest are still on your list."];
+      return `<div class="tdrv-empty">
+        <div class="tdrv-empty-big">${headline[0]}</div>
+        <div class="tdrv-empty-head">${headline[1]}</div>
+        ${todoReviewBestStreak >= 3 ? `<div class="tdrv-streak-note">🔥 Best streak: ${todoReviewBestStreak} in a row</div>` : ""}
+        <div class="tdrv-empty-stats">
+          Reviewed ${total} · <b>${todoReviewStats.completed}</b> completed · <b>${todoReviewStats.scheduled}</b> scheduled ·
+          <b>${todoReviewStats.removed}</b> removed · <b>${todoReviewStats.ignored}</b> ignored
+        </div>
+        <button type="button" class="tdrv-empty-back" data-todoreview-act="finishback">Back to list</button>
+      </div>`;
+    }
+    const id = todoReviewQueue[todoReviewPos];
+    const t = TODOS.find(x => x.id === id);
+    if (!t) { todoReviewPos++; return todoReviewBodyHtml(); }   // safety: item vanished some other way
+    const tally = k => `<span>${TODO_REVIEW_TALLY[k]} <b>${todoReviewStats[k]}</b></span>`;
+    return `
+      <div class="tdrv-top">
+        <div class="tdrv-progress">${todoReviewPos + 1} of ${total}</div>
+        <div class="tdrv-streak${todoReviewStreak >= 2 ? " show" : ""}">🔥 ${todoReviewStreak} in a row</div>
+      </div>
+      <div class="tdrv-track"><div class="tdrv-track-fill" style="width:${(todoReviewPos / total) * 100}%"></div></div>
+      <div class="tdrv-tally">${tally("completed")}${tally("scheduled")}${tally("removed")}${tally("ignored")}</div>
+      <div class="tdrv-card" data-todoreview-card>
+        <div class="tdrv-title" data-todoreview-title>${esc(t.title)}</div>
+        <input type="text" class="tdrv-title-edit" data-todoreview-title-edit value="${esc(t.title)}" hidden>
+        <div class="tdrv-sched" data-todoreview-sched hidden>
+          <input type="date" class="tdrv-sched-date" value="${keyOf(TODAY)}">
+          <input type="time" class="tdrv-sched-time">
+          <button type="button" class="tdrv-sched-go" data-todoreview-act="schedulego">✓</button>
+        </div>
+        <div class="tdrv-actions">
+          <button type="button" data-todoreview-act="edit">✏️ Edit</button>
+          <button type="button" class="act-schedule" data-todoreview-act="schedule">🗓 Schedule</button>
+          <button type="button" data-todoreview-act="ignore">⏭ Ignore</button>
+          <button type="button" class="act-remove" data-todoreview-act="remove">🗑 Remove</button>
+          <button type="button" class="act-complete" data-todoreview-act="complete">✓ Complete</button>
+        </div>
+      </div>`;
+  }
   // mirrors resolveEventColorHex()'s own resolution order (sub-category colour if it
   // has one, else the part-of-life colour) -- same rule the calendar block fill and
   // the widget-rail digest already use, just returning the live var() reference
@@ -40220,20 +40403,33 @@
     const pending = TODOS.filter(t => !t.done).length;
     const title = document.getElementById("editPanelTitle");
     if (title) title.textContent = `To-do · ${pending}`;
+    const reviewBtn = document.getElementById("todoReviewToggle");
+    if (reviewBtn) {
+      reviewBtn.textContent = todoReviewing ? "☰ List" : "🗂 Review";
+      reviewBtn.classList.toggle("active", todoReviewing);
+    }
     const body = document.getElementById("editPanelBody");
-    if (body) body.innerHTML = `<div class="todo-panel-list">${todoPanelListHtml()}</div>
+    if (!body) return;
+    // 2026-08-19 (Linh, "help me design that" -- the stocktake-style review mode):
+    // this single render function now covers BOTH panel bodies -- the plain list
+    // (unchanged) and the one-card review view (todoReviewBodyHtml()) -- so every
+    // existing call site that already calls renderTodoPanel() after a mutation
+    // (tick, add, etc.) keeps working for review mode too, with no new call sites.
+    body.innerHTML = todoReviewing ? `<div class="todo-review">${todoReviewBodyHtml()}</div>` : `<div class="todo-panel-list">${todoPanelListHtml()}</div>
       <form class="todo-panel-add" data-todopanel-add>
         <input type="text" class="todo-panel-add-input field-bare" placeholder="+ Add a to-do" autocomplete="off" aria-label="Add a to-do">
       </form>`;
   }
   function openTodoPanel() {
     todoPanelOpen = true;
+    todoReviewing = false;   // always opens on the list, never mid-review from a prior session
     document.getElementById("editPanelSheet")?.classList.add("todo-panel-mode");
     renderTodoPanel();
     document.getElementById("editPanelOverlay").hidden = false;
   }
   function closeTodoPanel() {
     todoPanelOpen = false;
+    todoReviewing = false;
     document.getElementById("editPanelSheet")?.classList.remove("todo-panel-mode");
     document.getElementById("editPanelOverlay").hidden = true;
   }
@@ -40261,6 +40457,88 @@
     }
     const mk = e.target.closest("[data-todopanel-event]");
     if (mk) { closeTodoPanel(); openFormFromTodo(mk.dataset.todopanelEvent); return; }
+
+    // 2026-08-19 (Linh, "i really like the stocktake function... help me design
+    // that"): starts/stops the one-card-at-a-time review session.
+    if (e.target.closest("#todoReviewToggle")) { todoReviewing ? stopTodoReview() : startTodoReview(); return; }
+
+    const rvAct = e.target.closest("[data-todoreview-act]");
+    if (rvAct) {
+      const act = rvAct.dataset.todoreviewAct;
+      if (act === "finishback") { stopTodoReview(); return; }
+      const card = rvAct.closest("[data-todoreview-card]");
+      const id = todoReviewQueue[todoReviewPos];
+      const t = TODOS.find(x => x.id === id);
+      if (!t || !card) return;
+      if (act === "edit") {
+        card.querySelector("[data-todoreview-title]").hidden = true;
+        const editEl = card.querySelector("[data-todoreview-title-edit]");
+        editEl.hidden = false; editEl.focus(); editEl.select();
+        return;
+      }
+      if (act === "schedule") {
+        const schedEl = card.querySelector("[data-todoreview-sched]");
+        const open = schedEl.hidden;
+        schedEl.hidden = !open;
+        rvAct.classList.toggle("active", open);
+        if (open) schedEl.querySelector(".tdrv-sched-time").focus();
+        return;
+      }
+      if (act === "schedulego") {
+        const schedEl = card.querySelector("[data-todoreview-sched]");
+        const dateVal = schedEl.querySelector(".tdrv-sched-date").value || keyOf(TODAY);
+        const timeVal = schedEl.querySelector(".tdrv-sched-time").value;
+        const allDay = !timeVal;
+        EVENTS.push({
+          id: uid(), date: dateVal, track: t.track || "personal", title: t.title, kind: "event",
+          category: t.category || "", locPath: [], allDay,
+          start: allDay ? "" : timeVal, end: allDay ? "" : minToTime(Math.min(timeToMin(timeVal) + 30, 1439)),
+          ...(t.note ? { note: t.note } : {}),
+        });
+        saveEvents(EVENTS);
+        TODOS = TODOS.filter(x => x.id !== id);
+        saveTodos(TODOS);
+        renderDeskWidgetRail(); renderTodoPage();
+        if (dateVal !== keyOf(state.anchor)) { state.anchor = parseKey(dateVal); render(); } else renderDay();
+        todoReviewPulseAdvance("pulse-schedule", "scheduled");
+        return;
+      }
+      if (act === "ignore") { todoReviewAdvance("ignored", false); return; }
+      if (act === "remove") {
+        TODOS = TODOS.filter(x => x.id !== id);
+        saveTodos(TODOS);
+        renderDeskWidgetRail(); renderTodoPage();
+        todoReviewPulseAdvance("pulse-remove", "removed");
+        return;
+      }
+      if (act === "complete") {
+        t.done = true;
+        saveTodos(TODOS);
+        renderDeskWidgetRail(); renderTodoPage();
+        todoReviewPulseAdvance("pulse-complete", "completed");
+        return;
+      }
+    }
+  });
+  // review card's inline title edit -- blur doesn't bubble, so this needs its own
+  // capture-phase listener rather than joining the delegate above. Saves directly to
+  // TODOS/localStorage but does NOT advance or re-render the card -- she's still
+  // deciding what to do with this to-do next (Schedule/Ignore/Remove/Complete).
+  document.addEventListener("blur", e => {
+    const editEl = e.target.matches && e.target.matches("[data-todoreview-title-edit]") ? e.target : null;
+    if (!editEl) return;
+    const id = todoReviewQueue[todoReviewPos];
+    const t = TODOS.find(x => x.id === id);
+    const titleEl = editEl.closest("[data-todoreview-card]")?.querySelector("[data-todoreview-title]");
+    if (t) {
+      const v = editEl.value.trim();
+      if (v) { t.title = v; saveTodos(TODOS); if (titleEl) titleEl.textContent = v; }
+    }
+    if (titleEl) titleEl.hidden = false;
+    editEl.hidden = true;
+  }, true);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.matches && e.target.matches("[data-todoreview-title-edit]")) e.target.blur();
   });
   document.addEventListener("submit", e => {
     // 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling"): the
