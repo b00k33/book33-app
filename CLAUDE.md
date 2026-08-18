@@ -815,6 +815,38 @@ desktop's 214px sidebar is untouched.
   worked around with a guessed-at second control; revisit if she asks for a
   way back to the full Month overview from here.
 
+**Fix -- reparented sidebar content leaking past the closed rail's left edge
+(2026-08-19, found from a live phone screenshot after pt.8 shipped)**. Linh's
+screenshot showed a ~33px vertical strip of legible text ("PARTS OF LIFE",
+a mini-cal weekday letter, calendar dots) pinned to the screen's true left
+edge with the rail fully CLOSED, and the day timeline shifted/clipped to
+its right. Root cause, found by forcing a transition-free re-toggle and
+reading real geometry (screenshots aren't available in this environment,
+so this had to be diagnosed from computed styles + `getBoundingClientRect`
+alone): the BASE `#navPanelExtras { padding: 0 16px 12px; ... }` rule
+(written back when this element was the old always-visible stacked sheet)
+was never zeroed by pt.8's new `width: 0` collapsed state -- 16px+16px of
+horizontal padding plus a 1px border still rendered a real ~33px box even
+at `width: 0`. That box's `left: 52px` is relative to `.nav-panel` (its
+containing block), and `.nav-panel` sits at `x:-52..0` when CLOSED --
+so 52px past ITS left edge lands the box at `x:0..33`, dead center of the
+visible screen, not off past the rail the way it correctly sits at
+`x:52..324` when the rail is OPEN. `overflow:hidden` then clipped the
+reparented `#deskSidebar` content to that 33px sliver instead of hiding it.
+Fix: padding/`border-right` now live ONLY on the `.cal-open` (expanded)
+rule, not the collapsed base rule -- genuinely zero width AND zero padding
+means there's no box left to leak, independent of its exact `left` value.
+Confirmed via computed-style geometry: `width`/`padding`/`border-right` all
+read `0px` when collapsed (both on a fresh load that's never touched the
+drawer, and after a full open-expand-close cycle), and the expanded state
+(`width:272px`, `left:52`, mini-cal `239px` wide) is byte-for-byte
+unchanged from pt.8's own original verification. Lesson for any future
+width-collapsible flyout built from a formerly-always-visible element:
+check EVERY box-model property the base rule sets (padding, border, margin),
+not just the property (here, `width`) the toggle is actually about --
+a leftover box-model property can keep a "hidden" element visually present
+even at zero content width.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
