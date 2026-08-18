@@ -267,6 +267,40 @@ path matters most.
   internal padding only, never a tap-target shrink, same split the Body-page
   exception already established.
 
+### Standing pattern — calendar-triggered editor panel (2026-08-18)
+Linh: "when I tap Edit on an event, routine, or fitness session from the calendar
+(the detail popup, or its deeper 'Edit routine settings' link), the full editor
+should open as a panel on the SAME page — sliding in from the right over the
+calendar — instead of switching the whole app to the Routines page." Not a
+one-off — this is now the standard for any "edit an existing thing without
+navigating away from where you are" need that comes up next.
+- `.slide-panel-overlay`/`.slide-panel-sheet` (CSS, ~line 2360) is the shared
+  recipe: a fixed dark scrim + a sheet that's full-screen (`100vw`/`100vh`)
+  below 1024px and docks to `min(440px, 92vw)` on the right, gold
+  `border-left`, above it. 1024px matches `rtnSideMq` — the Routines page's own
+  existing side-rail breakpoint, reused rather than reinvented — and also where
+  the widgets rail itself starts showing. `.slide-panel-head`/`.slide-panel-body`
+  give the title+close header/scrolling body the same look at every width (the
+  older `.rtn-side-head`/`.rtn-side-body` this was modelled on is only styled
+  inside its own >=1024px media block, so isn't reusable directly below that).
+- Two editors use it today, both their EXISTING fields/JS untouched — only
+  where the form mounts changed: `#addForm` (plain event/task/fitness-calendar-
+  event editor — restyled in place, same id, same script) and the new global
+  `#editPanelOverlay`/`#editPanelSheet`/`#editPanelBody` (a THIRD dock for the
+  existing `#rtnAddForm` traveling element, alongside its Routines-page-internal
+  `#rtnSideBody`/`#rtnFormHome` docks — see `openRtnFormFromCalendar` /
+  `rtnCalendarOpen` / the `rtnCalendarOpen` branches in `placeRtnForm`/
+  `closeRtnForm`).
+- Why a global mount point and not `#rtnSide`: that rail lives inside
+  `#routinesPage`, hidden whenever `state.view` isn't "routines" — the exact
+  redirect bug this pattern replaces. `#editPanelOverlay` sits outside every
+  `.page` so it works no matter which page is open underneath.
+- Save and Cancel both close back to the exact page/day the user was on —
+  never a `state.view` change. A routine Save now also calls `renderDay()`
+  (previously only Delete did), so the calendar reflects the edit immediately.
+- Next editor that needs this: dock it into `.slide-panel-overlay`/
+  `.slide-panel-sheet` directly rather than writing a fourth bespoke overlay.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
