@@ -448,6 +448,56 @@ above: dock straight into the shared chrome, don't write a second overlay.
   pure opt-out marker here (no `#addForm`/`#rtnAddForm`-scoped styling attached
   to it applies outside those forms), not a styling class in its own right.
 
+**Follow-on -- Repeats picker: jump-to-detail + day-button consistency
+(2026-08-19)**. Linh: "I can't get straight to my actual custom schedule...
+I have to click through the plain-language list first even though I already
+have a real custom pattern set." `#rtnAddForm`-only (confirmed `#addForm`'s
+own `fRepeatSummaryBtn` has no step1/step2 split at all, so this doesn't
+apply there):
+- `rtnHasCustomSchedule()` (new, just above `setRtnRepeatPickerOpen`) decides
+  whether opening the picker jumps straight to step2 (the Days grid/Every N
+  weeks/Additional schedule detail view) instead of defaulting to step1's
+  plain-language quick list. Any freq without a step1 quick-pick equivalent
+  (interval/monthly/yearly/once/custom) is unconditionally custom; `weekly`
+  is custom unless it's exactly the Weekdays 5-day pattern or a single day,
+  interval is 1, and there are no `rtnExtraSchedules` rows; `daily` is never
+  custom. Back (unchanged) still reaches step1 on request. A brand-new
+  routine (single default weekday, interval 1, no extras) reads as
+  "not custom," so new/simple routines are unaffected.
+- Day-toggle buttons: the main Days row and each Additional Schedule block's
+  day row both used `.track-opt`, but read as two different controls because
+  the Additional block's row rendered full "Mon"/"Tue" labels (from
+  `WD_FULL[d].slice(0,3)`) with no sizing rule of its own, falling back to
+  the plain padded pill. Fixed by making `renderRtnSchedExtra()` emit the
+  same single-letter labels as the main row (`wd[0]`, full name moved to
+  `aria-label`) and giving `#rtnAddForm .rtn-sched-extra-days .track-opt` the
+  identical `flex:1; height:32px; padding:0; font-weight:700` sizing already
+  used by `#rtnWeekdayPicker .track-opt` -- same rule, reused verbatim rather
+  than re-tuned, so a future change to one applies to both. The near-
+  identical (not pixel-identical) rendered width between the two rows is
+  expected -- both are `flex:1` inside containers with slightly different
+  padding, not a leftover inconsistency.
+- Layout: "every N week(s)" inline with the 7 day buttons overflowed the
+  panel at real mobile width. `#rtnWeekIntervalAutoGroup`/
+  `#rtnRepeatWindowGroup` (both `.rtn-pair`) now get `flex-wrap:wrap`, and
+  `#rtnWeekIntervalAutoGroup #rtnWeeklyField` gets `flex:1 1 100%` so the
+  Days field claims the row outright and "Every N week(s)" is forced onto
+  its own full-width line below -- same one-field-per-line shape the
+  Additional Schedule block's own `.rtn-sched-extra-row2` already used (it
+  already had `flex-wrap:wrap` from its original build, which is why it
+  wrapped safely without a matching change here).
+- Spacing tightened along the same lines as the 2026-08-18 pt.2 pass above:
+  `#editPanelBody #rtnAddForm.rtn-inline-mode` row-gap 4px->2px,
+  `.rtn-sectitle` margin 4px/-4px->2px/-2px, `.rtn-sched-extra-list`
+  gap/margin-bottom 12px->8px, `.rtn-sched-extra-row` padding 12px->8px +
+  inner gap 8px->4px, `.rtn-repeat-step2` gap 12px->8px. Numbers taken from
+  that existing pass rather than invented fresh.
+- Verified via computed-style/geometry checks (no screenshot tooling in this
+  environment): a 4-weekday routine correctly jumps straight to step2 with
+  the right days pre-pressed, a daily routine still defaults to step1, both
+  day-button rows render pixel-identical bg/color/border in both pressed and
+  unpressed states across both themes, and nothing overflows at 375px.
+
 ### Standing pattern — mobile Day-view swipe drawers (2026-08-18, top zone revised pt.3 same day)
 Linh: "the Day view should show ONLY the calendar by default... hidden and
 only appear when I swipe for it." Below 1024px, single-Day view only
