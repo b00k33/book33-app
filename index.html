@@ -9499,6 +9499,79 @@
      that strong reads as a box edge. Down to the spec's .10, still ink-derived. */
   .nav-panel-row-sep { margin-top: 4px; padding-top: 12px; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); }
   .nav-panel-footer { flex: none; padding: 12px 16px; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); font-size: 11px; color: var(--ink-faint); }
+  /* #deskSidebar reparented into #navPanelExtras (mobile drawer mode) needs to
+     actually render -- its only other home is inside #deskGrid[hidden], so nothing
+     already makes it visible outside that. Base rule only (no width/flex override
+     needed -- its own existing column CSS just works once it's not display:none by
+     inheritance); #dsbTab (the "collapse to a thin tab" desktop affordance) has no
+     role inside a drawer that's already open-or-closed as a whole, so it's hidden
+     here specifically -- everything else in the sidebar (mini-cal, numerology,
+     Parts of life incl. its own collapse toggle) is left exactly as it behaves on
+     desktop, per her "only where it appears, not what it does" rule. */
+  #navPanelExtras #deskSidebar { display: flex; position: static; width: 100%; padding: 0; }
+  #navPanelExtras #dsbTab { display: none; }
+  #navPanelExtras { border-bottom: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); }
+  #navPanelExtras:empty { display: none; }
+
+  /* ============================================================
+     MOBILE DAY-VIEW DRAWERS (2026-08-18) — "show only the calendar by default."
+     Two new drawers (#dayTopDrawer slides down, #dayRightDrawer slides in from the
+     right) alongside the existing #navPanel (left) -- single-Day mobile view only
+     (JS gate: mobileDayDrawersActive()). Same visual family as .nav-panel: fixed +
+     solid --paper + a directional transform + 0.25s ease, sharing its own backdrop
+     (#navPanelBackdrop) and z-index tier (300s) rather than inventing a new one.
+     Content in both is the SAME existing elements (day-step-row/calDaysRow/
+     numGroupStrip for top, #wrMobile for right), reparented in by placeDayDrawers()
+     -- nothing here duplicates markup or logic, only WHERE it mounts changes. */
+  .day-top-drawer {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 301;
+    max-height: 80vh; overflow-y: auto;
+    background: var(--paper);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+    transform: translateY(-100%);
+    transition: transform 0.25s ease;
+    padding-top: env(safe-area-inset-top);
+  }
+  .day-top-drawer.open { transform: translateY(0); }
+  .day-top-drawer-body { padding: 8px 16px 16px; }
+  .day-right-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
+    width: min(320px, 85vw);
+    background: var(--paper);
+    display: flex; flex-direction: column; overflow-y: auto;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .day-right-drawer.open { transform: translateX(0); }
+  .day-right-drawer-body { padding: 16px; }
+  /* the only always-visible cue a drawer swipes in from each edge -- faint gold
+     hairline pills, mobile single-Day-view only (dd-drawers-active, JS-toggled on
+     <body>). Each also carries a real ~44px tap target via padding, per design44
+     §7, without the visible hairline itself growing past a "just enough to signal"
+     3px. z-index sits below the drawers/backdrop (300+) but above the calendar
+     (timeline's own stacking tops out at 6, see placeDayDrawers()'s own note). */
+  .dd-edge-hint {
+    display: none; position: fixed; z-index: 250;
+    background: color-mix(in oklab, var(--margin-rule) 55%, transparent);
+    border-radius: 999px; cursor: pointer;
+  }
+  body.dd-drawers-active .dd-edge-hint { display: block; }
+  .dd-edge-hint-top {
+    top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+    width: 56px; height: 4px; padding: 12px 20px; background-clip: content-box;
+  }
+  .dd-edge-hint-left, .dd-edge-hint-right {
+    top: 50%; transform: translateY(-50%); width: 4px; height: 56px;
+    padding: 20px 12px; background-clip: content-box;
+  }
+  .dd-edge-hint-left { left: 0; }
+  .dd-edge-hint-right { right: 0; }
+
   /* ============================================================
      §8 ICON LANGUAGE — 2026-08-15
      ONE shared class for every quiet glyph the app itself hardcodes as UI
@@ -14721,9 +14794,41 @@
        applyNavMode() (JS, near renderNav()'s own click delegate) keep both in sync
        with state.view/PREFS on every render(). -->
   <div class="nav-tab-strip" id="navTabStrip" hidden></div>
+  <!-- 2026-08-18 (mobile Day-view drawers, "show only the calendar by default"):
+       #navPanelBackdrop is now shared by THREE drawers -- this one, plus the two new
+       ones just below (#dayTopDrawer/#dayRightDrawer) -- since only one is ever open
+       at a time, one dimmed backdrop covers all three; see dayDrawersCloseAll(). -->
   <div class="nav-panel-backdrop" id="navPanelBackdrop" hidden></div>
+  <!-- top-drop: mobile single-Day-view only. Content (date-nav/1-3-5-7 picker/mood
+       chips) is the SAME existing elements, just reparented in by placeDayDrawers()
+       -- not a second copy of any of it. See that function's own comment. -->
+  <div class="day-top-drawer" id="dayTopDrawer" role="dialog" aria-modal="true" aria-label="Day header" aria-hidden="true">
+    <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
+  </div>
+  <!-- right-drawer: same mobile single-Day-view scope, holds the existing #wrMobile
+       widget block (Birthday/To-do/Boost/Streaks/Cycle) reparented in whole. -->
+  <div class="day-right-drawer" id="dayRightDrawer" role="dialog" aria-modal="true" aria-label="Today's widgets" aria-hidden="true">
+    <div class="day-right-drawer-body" id="dayRightDrawerBody"></div>
+  </div>
+  <!-- faint gold hairline hints -- the only always-visible cue that a drawer swipes
+       in from each edge (mobile single-Day-view only, see CSS gate). Each is also a
+       tap target (her "or tap its hint"), not decoration only. -->
+  <div class="dd-edge-hint dd-edge-hint-top" id="ddEdgeHintTop" role="button" tabindex="0" aria-label="Show day header"></div>
+  <div class="dd-edge-hint dd-edge-hint-left" id="ddEdgeHintLeft" role="button" tabindex="0" aria-label="Show calendar and numerology"></div>
+  <div class="dd-edge-hint dd-edge-hint-right" id="ddEdgeHintRight" role="button" tabindex="0" aria-label="Show today's widgets"></div>
   <div class="nav-panel" id="navPanel" role="dialog" aria-modal="true" aria-label="Navigate" aria-hidden="true">
-    <div class="nav-panel-scroll" id="navPanelBody"></div>
+    <div class="nav-panel-scroll" id="navPanelBody">
+      <!-- 2026-08-18: mini calendar / numerology / Parts of life -- the EXISTING
+           #deskSidebar element (desktop's own sidebar, all 3 already live inside it)
+           reparented in whole by placeDayDrawers(), same traveling-node idiom as
+           everywhere else in this file, so its collapse/checkbox wiring (scoped to
+           #deskSidebar's own click delegate) keeps working unmodified. Sits above
+           #navPanelRows per her "top of that same panel, above the nav links" ask.
+           renderNavPanel() now targets #navPanelRows, NOT this element directly, so
+           its own innerHTML rebuild never wipes this out. -->
+      <div id="navPanelExtras"></div>
+      <div id="navPanelRows"></div>
+    </div>
     <div class="nav-panel-footer" id="navPanelFooter"></div>
   </div>
 
@@ -16508,6 +16613,11 @@
            Quick add. Filled/reparented by renderDeskSidebar(); #dsbSideHome marks
            #miniCalWrap's true/default home so it can be returned there below this
            breakpoint (same home-marker pattern as every other reparented piece). -->
+      <!-- 2026-08-18: #deskSidebarHome marks #deskSidebar's OWN true/default home
+           (a new anchor -- this element was never reparented outside #deskGrid
+           before) so placeDayDrawers() can return the whole sidebar here when
+           leaving mobile single-Day-view drawer mode. -->
+      <div id="deskSidebarHome" hidden></div>
       <div id="deskSidebar" data-open="true">
         <button type="button" class="dsb-tab" id="dsbTab" title="Show calendar sidebar" aria-label="Show calendar sidebar">CALENDAR</button>
         <div class="dsb-group" id="dsbMiniCalGroup">
@@ -16592,7 +16702,12 @@
                      in a faint empty box" -> "move it into the numerology dropdown"):
                      moved from here into #numGroupStrip below, alongside PM/sign/animal/
                      birthday/imprint -- same panel, same tap-to-expand gating on mobile,
-                     instead of sitting on its own in the always-visible summary line. -->
+                     instead of sitting on its own in the always-visible summary line.
+                     2026-08-18 (mobile Day-view drawers): #numGroupStripHome marks this
+                     as #numGroupStrip's true/default home so placeDayDrawers() can return
+                     it here when leaving mobile single-Day-view drawer mode -- same
+                     home-marker pattern as everywhere else in this file. -->
+                <div id="numGroupStripHome" hidden></div>
                 <div class="num-group-strip" id="numGroupStrip">
                   <div class="moon-badge" id="moonBadge"></div>
                   <span class="date-pm num-hover-trigger" id="pmHover" tabindex="0"></span>
@@ -17022,7 +17137,11 @@
              #deskGrid up at the top of #dayPage (i.e. above everything on mobile), and
              moving it into .day-main would drag it into #deskColMain at desktop widths
              via placeDeskGrid()'s existing dayMain reparent — a desktop change. A second
-             empty div is cheaper and safer than a fifth reparenting dance. -->
+             empty div is cheaper and safer than a fifth reparenting dance.
+             2026-08-18 (mobile Day-view drawers): #wrMobileHome marks this as
+             #wrMobile's true/default home so placeDayDrawers() can return it here
+             when leaving mobile single-Day-view drawer mode. -->
+        <div id="wrMobileHome" hidden></div>
         <div id="wrMobile">
           <div class="wr-head">
             <span class="wr-head-lbl">Today's widgets</span>
@@ -27704,6 +27823,10 @@
     placeMiniCalDesk();
     // after placeMiniCalDesk so the right column already has the calendar at its top
     placeDeskGrid();
+    // 2026-08-18 (mobile Day-view drawers): after placeDeskGrid() so its "off" branch
+    // has already tried (and, via inDayDrawers(), safely skipped) its own return-home
+    // lines for this render before this function decides where things actually go.
+    placeDayDrawers();
     // 2026-08-14 (§2 build): the context chip strip + progress/fasting meters that
     // sit above the grid on mobile (CSS-gated off on desktop, same as calDaysRow/
     // md-wrap below) -- cheap and independent of calDays, so just render unconditionally
@@ -34767,7 +34890,11 @@
       : st === "pending" ? "Waiting to sync" : st === "offline" ? "Offline" : "Sync error";
   }
   function renderNavPanel() {
-    const host = document.getElementById("navPanelBody");
+    // 2026-08-18: targets #navPanelRows, NOT #navPanelBody -- #navPanelBody is now
+    // the outer scroll container shared with #navPanelExtras (mini-cal/numerology/
+    // Parts of life, see placeDayDrawers()); innerHTML-replacing the whole thing on
+    // every render would wipe those reparented elements out from under themselves.
+    const host = document.getElementById("navPanelRows");
     if (!host) return;
     let html = "", lastGroup;
     NAV_ITEMS.forEach(item => {
@@ -34803,21 +34930,59 @@
     host.innerHTML = NAV_ITEMS.map(navTabRowHtml).join("");
   }
   function navPanelIsOpen() { return document.getElementById("navPanel").classList.contains("open"); }
+  // 2026-08-18 (mobile Day-view drawers): #navPanelBackdrop is now shared by THREE
+  // drawers (see its own markup comment) — visible whenever ANY of them is open,
+  // rather than each drawer owning its own hidden/shown toggle directly.
+  function dayTopDrawerIsOpen() { return document.getElementById("dayTopDrawer").classList.contains("open"); }
+  function dayRightDrawerIsOpen() { return document.getElementById("dayRightDrawer").classList.contains("open"); }
+  function updateDayDrawersBackdrop() {
+    document.getElementById("navPanelBackdrop").hidden = !(navPanelIsOpen() || dayTopDrawerIsOpen() || dayRightDrawerIsOpen());
+  }
   function openNavPanel() {
     const panel = document.getElementById("navPanel");
     renderNavSyncFooter();   // 2026-08-15 fix (E2) — see that function
+    closeDayTopDrawer(); closeDayRightDrawer();   // only one drawer open at a time
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
-    document.getElementById("navPanelBackdrop").hidden = false;
+    updateDayDrawersBackdrop();
     document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "true");
   }
   function closeNavPanel() {
     const panel = document.getElementById("navPanel");
     panel.classList.remove("open");
     panel.setAttribute("aria-hidden", "true");
-    document.getElementById("navPanelBackdrop").hidden = true;
+    updateDayDrawersBackdrop();
     document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
   }
+  // top-drop + right-drawer (2026-08-18): same open/close shape as #navPanel above,
+  // sharing its backdrop and its "only one at a time" rule.
+  function openDayTopDrawer() {
+    closeNavPanel(); closeDayRightDrawer();
+    const panel = document.getElementById("dayTopDrawer");
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    updateDayDrawersBackdrop();
+  }
+  function closeDayTopDrawer() {
+    const panel = document.getElementById("dayTopDrawer");
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+    updateDayDrawersBackdrop();
+  }
+  function openDayRightDrawer() {
+    closeNavPanel(); closeDayTopDrawer();
+    const panel = document.getElementById("dayRightDrawer");
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    updateDayDrawersBackdrop();
+  }
+  function closeDayRightDrawer() {
+    const panel = document.getElementById("dayRightDrawer");
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+    updateDayDrawersBackdrop();
+  }
+  function closeAllDayDrawers() { closeNavPanel(); closeDayTopDrawer(); closeDayRightDrawer(); }
   // shows/hides #navDrawerBtn vs #navTabStrip per PREFS.navMode; called from
   // render() (every navigation) and from the Settings toggle for instant switching.
   function applyNavMode() {
@@ -34850,9 +35015,11 @@
     if (PREFS.navMode !== "drawer" || window.innerWidth >= 1024) return;
     if (navPanelIsOpen()) closeNavPanel(); else openNavPanel();
   });
-  document.getElementById("navPanelBackdrop").addEventListener("click", closeNavPanel);
+  // 2026-08-18: closes whichever of the three drawers the shared backdrop is
+  // currently covering, not just #navPanel.
+  document.getElementById("navPanelBackdrop").addEventListener("click", closeAllDayDrawers);
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && navPanelIsOpen()) closeNavPanel();
+    if (e.key === "Escape" && (navPanelIsOpen() || dayTopDrawerIsOpen() || dayRightDrawerIsOpen())) closeAllDayDrawers();
   });
   document.getElementById("navPanelBody").addEventListener("click", e => {
     const btn = e.target.closest("[data-view]");
@@ -34873,7 +35040,7 @@
   // rtnSideMq use elsewhere in this file.
   {
     const navMobileMq = window.matchMedia("(max-width: 1023px)");
-    if (navMobileMq.addEventListener) navMobileMq.addEventListener("change", () => { if (!navMobileMq.matches) closeNavPanel(); });
+    if (navMobileMq.addEventListener) navMobileMq.addEventListener("change", () => { if (!navMobileMq.matches) closeAllDayDrawers(); });
   }
   // swipe-left anywhere on the OPEN panel closes it -- no edge-position requirement
   // (unlike the open gesture below), same single-touch/passive/no-preventDefault
@@ -34926,6 +35093,103 @@
       openNavPanel();
     }, { passive: true });
     document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  // 2026-08-18 (mobile Day-view drawers): top-drop + right-drawer swipes, same
+  // shape/constants as #navPanel's own two IIFEs just above -- swipe-to-close bound
+  // to the drawer itself, edge-swipe-to-open bound to document.body with its own
+  // start-position edge check. Gated on mobileDayDrawersActive() instead of
+  // PREFS.navMode/state.view/window.innerWidth individually (same underlying
+  // conditions, already combined there).
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50;
+    const panel = document.getElementById("dayTopDrawer");
+    let sx = 0, sy = 0, tracking = false;
+    panel.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1) { tracking = false; return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+    }, { passive: true });
+    panel.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dy) < SWIPE_MIN_PX || Math.abs(dx) > SWIPE_MAX_OFF_AXIS) return;
+      if (dy < 0) closeDayTopDrawer();   // swipe UP closes
+    }, { passive: true });
+    panel.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    let sx = 0, sy = 0, tracking = false;
+    document.body.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayTopDrawerIsOpen()) { tracking = false; return; }
+      const y = e.touches[0].clientY;
+      if (y > EDGE_ZONE_PX) { tracking = false; return; }
+      sx = e.touches[0].clientX; sy = y; tracking = true;
+    }, { passive: true });
+    document.body.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (dy < SWIPE_MIN_PX || Math.abs(dx) > SWIPE_MAX_OFF_AXIS) return;
+      openDayTopDrawer();   // swipe DOWN from the top edge opens
+    }, { passive: true });
+    document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50;
+    const panel = document.getElementById("dayRightDrawer");
+    let sx = 0, sy = 0, tracking = false;
+    panel.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1) { tracking = false; return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; tracking = true;
+    }, { passive: true });
+    panel.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > SWIPE_MAX_OFF_AXIS) return;
+      if (dx > 0) closeDayRightDrawer();   // swipe RIGHT closes
+    }, { passive: true });
+    panel.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  (function () {
+    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    let sx = 0, sy = 0, tracking = false;
+    document.body.addEventListener("touchstart", e => {
+      if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayRightDrawerIsOpen()) { tracking = false; return; }
+      const x = e.touches[0].clientX;
+      if (x < window.innerWidth - EDGE_ZONE_PX) { tracking = false; return; }
+      sx = x; sy = e.touches[0].clientY; tracking = true;
+    }, { passive: true });
+    document.body.addEventListener("touchend", e => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (dx > -SWIPE_MIN_PX || Math.abs(dy) > SWIPE_MAX_OFF_AXIS) return;
+      openDayRightDrawer();   // swipe LEFT from the right edge opens
+    }, { passive: true });
+    document.body.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
+  })();
+  // faint gold hairline hints double as real tap targets (~44px via CSS padding) --
+  // "or tap its hint", not swipe-only.
+  (function () {
+    function bindTapAndKey(id, fn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("click", fn);
+      el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } });
+    }
+    bindTapAndKey("ddEdgeHintTop", () => { if (mobileDayDrawersActive()) openDayTopDrawer(); });
+    bindTapAndKey("ddEdgeHintLeft", () => { if (mobileDayDrawersActive()) openNavPanel(); });
+    bindTapAndKey("ddEdgeHintRight", () => { if (mobileDayDrawersActive()) openDayRightDrawer(); });
   })();
   // legacy sub-tabs row is retired but its handler stays harmless if ever repopulated
   document.getElementById("subTabs").addEventListener("click", e => {
@@ -35944,6 +36208,16 @@
   // placeMiniCalDesk()'s own note about exactly this), hence a second declaration
   // rather than a cross-closure call.
   const mobileDayMq = window.matchMedia("(max-width: 640px)");
+  // 2026-08-18 (mobile Day-view drawers): placeDeskGrid()'s "off" branch below
+  // unconditionally tries to return .day-step-row/#railNum+#railCycle+#railPatients/
+  // #miniCalWrap to their desktop-mobile home markers on every sub-1024px render or
+  // resize — which would fight placeDayDrawers() (defined further down) the moment
+  // it reparents those SAME elements into #dayTopDrawer/#dayRightDrawer/
+  // #navPanelExtras. Each of the three "off"-branch return lines checks this first
+  // so a drawer that's currently holding one of these elements keeps it.
+  function inDayDrawers(el) {
+    return !!(el && el.closest && (el.closest("#dayTopDrawer") || el.closest("#dayRightDrawer") || el.closest("#navPanelExtras")));
+  }
   function placeDeskGrid() {
     const grid = document.getElementById("deskGrid");
     const dayLayout = document.querySelector("#dayPage .day-layout");
@@ -36071,7 +36345,17 @@
       }
       if (dropNav && dropPop && dropNav.parentElement !== dropPop) dropPop.insertBefore(dropNav, dropPop.firstChild);
       if (tiles && row2 && tiles.parentElement !== row2) row2.insertBefore(tiles, calHome);
-      if (railHome && rNum && rCyc && rPat && railHome.nextElementSibling !== rNum) railHome.after(rNum, rCyc, rPat);
+      // 2026-08-18: rNum specifically may currently be living inside the mobile
+      // drawer's #dsbNumSlot (placeDayDrawers() moves it there, mirroring what the
+      // "on" branch above does for desktop) — rCyc/rPat are never drawer content, so
+      // they always return; rNum only rejoins them here when it isn't.
+      if (railHome && rCyc && rPat) {
+        if (rNum && !inDayDrawers(rNum)) {
+          if (railHome.nextElementSibling !== rNum) railHome.after(rNum, rCyc, rPat);
+        } else if (railHome.nextElementSibling !== rCyc) {
+          railHome.after(rCyc, rPat);
+        }
+      }
       // Bug 1 fix (2026-08-15): return #miniCalWrap from #dsbMiniCalSlot (the "on"
       // branch's home for it above) back to its true default spot in #dayRow2 — same
       // marker-return pattern as railHome just above. placeMiniCalDesk() (its own,
@@ -36087,8 +36371,8 @@
       // 2026-08-06 comment describes, just via a newer third party. Scoped to the ONE
       // case Bug 1 was actually about — the calendar genuinely stranded inside the
       // (now hidden) desktop sidebar slot — so the dropdown keeps ownership on mobile.
-      if (dsbSideHome && miniCalWrap && miniCalWrap.parentElement === dsbMiniSlot) dsbSideHome.after(miniCalWrap);
-      if (dayStepRowHome && dayStepRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow);
+      if (dsbSideHome && miniCalWrap && miniCalWrap.parentElement === dsbMiniSlot && !inDayDrawers(miniCalWrap)) dsbSideHome.after(miniCalWrap);
+      if (dayStepRowHome && dayStepRow && dayStepRowHome.nextElementSibling !== dayStepRow && !inDayDrawers(dayStepRow)) dayStepRowHome.after(dayStepRow);
       // STEP 5: return each piece to its own home anchor inside .day-main —
       // independent of dayMain's own move below, same as every other anchor pair here.
       if (qaHome && qa && qaHome.nextElementSibling !== qa) qaHome.after(qa);
@@ -36102,6 +36386,92 @@
   window.addEventListener("resize", placeDeskGrid);
   if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDeskGrid);
   if (deskWidgetsMq.addEventListener) deskWidgetsMq.addEventListener("change", placeDeskGrid);
+
+  /* ============================================================
+     MOBILE DAY-VIEW DRAWERS (2026-08-18). Linh: "the Day view should show ONLY the
+     calendar by default... hidden and only appear when I swipe for it." Scoped to
+     single-Day mobile only (same <1024px cutoff #navPanel's own edge-swipe already
+     uses, so all three edge gestures feel consistent) -- 3/5/7-day mobile views are
+     untouched, and desktop (deskGridMq) never runs this. Reparents the SAME existing
+     elements placeDeskGrid()'s desktop branch already knows how to place, just into
+     the two new drawers (+ #navPanel, extended to carry #deskSidebar) instead of
+     #deskGrid's zones -- nothing here duplicates markup, logic, or click wiring. ---
+     ============================================================ */
+  function mobileDayDrawersActive() {
+    return !deskGridMq.matches && state.view === "day" && calDaysActive() === 1;
+  }
+  function placeDayDrawers() {
+    const active = mobileDayDrawersActive();
+    document.body.classList.toggle("dd-drawers-active", active);
+    const sidebar = document.getElementById("deskSidebar");
+    const sidebarHome = document.getElementById("deskSidebarHome");
+    const navExtras = document.getElementById("navPanelExtras");
+    // #railNum (the Universal/Personal/Month numerology card, her "the numerology
+    // cards" ask) -- mirrors placeDeskGrid()'s own desktop "on" branch, which does
+    // this exact move into the SAME slot; that branch never runs on mobile, so
+    // without this line the drawer's numerology would sit empty. rCyc/rPat are
+    // deliberately left out of this move, same as desktop -- Cycle/Patients stay in
+    // the widget rail (#wrMobile) only, per that branch's own comment.
+    const dsbNumSlot = document.getElementById("dsbNumSlot");
+    const rNum = document.getElementById("railNum");
+    // "the mini month calendar" (her wording) -- on true mobile this normally lives
+    // inside the tap-the-date dropdown instead (placeDateLine(), a SEPARATE closure
+    // -- see its own 2026-08-18 guard for the other half of this handoff), so without
+    // this move the drawer would be missing the actual calendar grid.
+    const dsbMiniSlot = document.getElementById("dsbMiniCalSlot");
+    const miniCalWrap = document.getElementById("miniCalWrap");
+    const dayStepRow = document.querySelector("#dayPage .day-step-row");
+    const dayStepRowHome = document.getElementById("dayStepRowHome");
+    const calDaysRow = document.getElementById("calDaysRow");
+    const numGroupStrip = document.getElementById("numGroupStrip");
+    const numGroupStripHome = document.getElementById("numGroupStripHome");
+    const topBody = document.getElementById("dayTopDrawerBody");
+    const wrMobile = document.getElementById("wrMobile");
+    const wrMobileHome = document.getElementById("wrMobileHome");
+    const rightBody = document.getElementById("dayRightDrawerBody");
+    if (active) {
+      // #deskSidebar moves as ONE unit (not picked apart into its mini-cal/numerology/
+      // Parts-of-life children) because its click delegate is scoped to the container
+      // itself (document.getElementById("deskSidebar").addEventListener) -- see that
+      // delegate's own comment. Ahead of #navPanelRows (the page-nav links), per her
+      // "top of that same panel, above the nav links" ask.
+      if (sidebar && navExtras && sidebar.parentElement !== navExtras) navExtras.appendChild(sidebar);
+      if (rNum && dsbNumSlot && rNum.parentElement !== dsbNumSlot) dsbNumSlot.appendChild(rNum);
+      if (miniCalWrap && dsbMiniSlot && miniCalWrap.parentElement !== dsbMiniSlot) dsbMiniSlot.appendChild(miniCalWrap);
+      if (dayStepRow && topBody && dayStepRow.parentElement !== topBody) topBody.appendChild(dayStepRow);
+      if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
+      if (numGroupStrip && topBody && numGroupStrip.parentElement !== topBody) topBody.appendChild(numGroupStrip);
+      if (wrMobile && rightBody && wrMobile.parentElement !== rightBody) rightBody.appendChild(wrMobile);
+      // both confirmed viewport-agnostic (just fill whatever element currently holds
+      // their target ids) -- normally called from placeDeskGrid()'s desktop branch /
+      // the mobileDayMq-gated line at the bottom of renderDay(), neither of which
+      // fires for the 641-1023px tablet band while a drawer is active, so call
+      // directly here to guarantee fresh content regardless of exact width.
+      renderDeskSidebar();
+      renderDeskWidgetRail();
+    } else {
+      if (sidebarHome && sidebar && sidebarHome.nextElementSibling !== sidebar) sidebarHome.after(sidebar);
+      // same marker also carried .day-step-row before this build (placeDeskGrid's own
+      // "off" branch) -- calDaysRow rejoins it here so the original sibling order
+      // (dayStepRowHome, .day-step-row, #calDaysRow) is exactly reconstructed.
+      if (dayStepRowHome && dayStepRow && calDaysRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow, calDaysRow);
+      if (numGroupStripHome && numGroupStrip && numGroupStripHome.nextElementSibling !== numGroupStrip) numGroupStripHome.after(numGroupStrip);
+      if (wrMobileHome && wrMobile && wrMobileHome.nextElementSibling !== wrMobile) wrMobileHome.after(wrMobile);
+      // leaving drawer mode (resize past 1024px, or navigating off the Day page)
+      // while #dayTopDrawer/#dayRightDrawer was open would otherwise strand it
+      // visibly open but empty, now that its content just moved out from under it.
+      // #navPanel is deliberately NOT touched here (unlike closeAllDayDrawers()) --
+      // this function runs on every resize/render regardless of page, and #navPanel
+      // is legitimate on every mobile page, not just Day; a resize while she's
+      // mid-browse on another page with the nav menu open must not slam it shut.
+      // The 1024px-crossing case that genuinely should close it is already handled
+      // by the navMobileMq change listener a few hundred lines up (closeAllDayDrawers).
+      closeDayTopDrawer(); closeDayRightDrawer();
+    }
+  }
+  window.addEventListener("resize", placeDayDrawers);
+  if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDayDrawers);
+  if (deskWidgetsMq.addEventListener) deskWidgetsMq.addEventListener("change", placeDayDrawers);
 
   /* ============================================================
      FULL-WIDTH CALENDAR (2026-08-16). Linh, repeatedly: the day page should
@@ -46361,6 +46731,15 @@
     var home = document.getElementById("dayRow2Home");
     var calWrap = document.querySelector(".mini-cal-wrap");
     if (!slot || !row || !home || !calWrap) return;
+    // 2026-08-18 (mobile Day-view drawers): when the mobile Day-view left drawer
+    // (placeDayDrawers(), the MAIN app closure -- not reachable from this separate
+    // sync-module one, hence the plain DOM check rather than a cross-closure call,
+    // same reasoning as isMobile()'s own duplicated MOBILE_MQ) currently owns
+    // calWrap -- moved into #dsbMiniCalSlot inside #navPanelExtras -- leave it
+    // alone. This function's own resize listener is registered later (inside go(),
+    // after that drawer's) so without this check every resize would win the fight
+    // and yank the calendar straight back out of the open drawer.
+    var calWrapInDrawer = !!calWrap.closest("#navPanelExtras");
     if (isMobile()) {
       // 2026-08-06 (Linh, dropdown screenshot: "put a mini calendar under today above
       // patients"): SUPERSEDES parking calWrap at #dayRow2Home — on mobile the mini
@@ -46374,8 +46753,10 @@
       // overlapping panels. The nudge's own parent is by definition the live menu.
       var nudge = document.getElementById("patientsNudge");
       var pop = nudge && nudge.closest(".date-drop-pop");
-      if (pop && calWrap.parentElement !== pop) pop.insertBefore(calWrap, nudge);
-      else if (!pop && calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
+      if (!calWrapInDrawer) {
+        if (pop && calWrap.parentElement !== pop) pop.insertBefore(calWrap, nudge);
+        else if (!pop && calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
+      }
       if (row.parentElement !== slot) slot.appendChild(row);
     } else {
       if (row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
@@ -46388,7 +46769,7 @@
       // MAIN app IIFE (this function lives in the separate sync-module IIFE below
       // it), so that reference threw ReferenceError on every resize/go() at desktop
       // widths. Same 901px breakpoint, self-contained so it can't cross a closure.
-      if (!window.matchMedia("(min-width: 901px)").matches && calWrap.parentElement !== row) row.appendChild(calWrap);
+      if (!calWrapInDrawer && !window.matchMedia("(min-width: 901px)").matches && calWrap.parentElement !== row) row.appendChild(calWrap);
     }
   }
   // 2026-08-05 (Linh: "when I swipe down to refresh, the header glitches under the logo

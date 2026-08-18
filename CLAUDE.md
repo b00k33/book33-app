@@ -362,6 +362,83 @@ about before adding a fourth tightened dock:
   field set that doesn't map onto `#addForm`/`#rtnAddForm`'s fields. Left
   untouched rather than force-fit into the slide panel.
 
+### Standing pattern — mobile Day-view swipe drawers (2026-08-18)
+Linh: "the Day view should show ONLY the calendar by default... hidden and
+only appear when I swipe for it." Below 1024px, single-Day view only
+(`mobileDayDrawersActive()` = `!deskGridMq.matches && state.view==="day" &&
+calDaysActive()===1`), the calendar renders full-width/edge-to-edge and three
+things that live in normal flow on desktop instead live in swipe-in drawers:
+- **Top** (`#dayTopDrawer`, slides down): `.day-step-row` (Today/‹/›),
+  `#calDaysRow` (1/3/5/7 picker), `#numGroupStrip` (mood/zodiac chips).
+- **Left** (existing `#navPanel`, extended — NOT a new drawer): `#navPanelExtras`
+  now sits above `#navPanelRows` (the page-nav links) and holds the WHOLE
+  `#deskSidebar` reparented in as one unit (mini-month calendar, the
+  Universal/Personal/Month numerology card via `#railNum`→`#dsbNumSlot`, Parts
+  of life) — moved as a unit, not picked apart, because its click delegate is
+  scoped to `#deskSidebar` itself. `renderNavPanel()` was repointed from
+  `#navPanelBody` to the new inner `#navPanelRows` so its innerHTML rebuild
+  can't wipe the reparented sidebar out from under itself.
+- **Right** (`#dayRightDrawer`, slides in): the WHOLE `#wrMobile` widget block
+  (Birthday/To-do/Boost/Streaks/Cycle — same html as desktop's rail).
+- **Placer**: `placeDayDrawers()` (next to `placeDeskGrid()`), called right
+  after `placeDeskGrid()` in `renderDay()`'s sequence and bound to the same
+  resize/`deskGridMq`/`deskWidgetsMq` listeners. Each moved element has its own
+  home marker (`#dayStepRowHome` also now returns `#calDaysRow` alongside
+  `.day-step-row`; `#numGroupStripHome`, `#wrMobileHome`, `#deskSidebarHome` —
+  same traveling-node/home-marker idiom as everywhere else in this file) so
+  leaving drawer mode returns everything to its exact prior spot.
+- **Conflict guard — `inDayDrawers(el)`**: `placeDeskGrid()`'s "off" branch
+  already unconditionally tries to return `.day-step-row`/`#railNum`+
+  `#railCycle`+`#railPatients`/`#miniCalWrap` to their own mobile homes on
+  every sub-1024px render — which would fight `placeDayDrawers()` the instant
+  it reparents those SAME elements into a drawer. Every such return line now
+  checks `!inDayDrawers(el)` (`el.closest("#dayTopDrawer"/"#dayRightDrawer"/
+  "#navPanelExtras")`) first. `#railNum` specifically is split out of the old
+  combined `railHome.after(rNum, rCyc, rPat)` line — `rCyc`/`rPat` (never
+  drawer content) always return; `rNum` only rejoins them when it isn't
+  currently in a drawer.
+- **Cross-closure conflict — `placeDateLine()`**: the mini-cal grid
+  (`.mini-cal-wrap`) is normally reparented by a SEPARATE function in the
+  sync-module closure (not reachable from the main app closure — same
+  cross-closure limit `isMobile()`'s own duplicated `MOBILE_MQ` already
+  documents), into the tap-the-date dropdown on true mobile. Its resize
+  listener registers later than the drawer's, so without a guard it would win
+  every resize and yank the calendar back out of an open drawer. Fixed with a
+  plain inline check (`calWrap.closest("#navPanelExtras")`) — same duplicate-
+  don't-cross-closure convention, not a shared helper. Net effect: while the
+  drawer owns the calendar (any sub-1024px Day-1 view), tapping the date badge
+  opens a dropdown with just Today/‹/›/Today's Patients, no calendar grid —
+  reachable via the left-edge swipe instead. A deliberate consolidation, not
+  an oversight.
+- **Gestures**: swipe-down-from-top-edge / swipe-right-from-right-edge open;
+  swipe-up-on-open-top-drawer / swipe-right-on-open-right-drawer close; tap a
+  `.dd-edge-hint` (faint gold hairline, ~44px real tap target via padding) does
+  the same as its swipe. All reuse the exact `SWIPE_MIN_PX`/`SWIPE_MAX_OFF_AXIS`/
+  `EDGE_ZONE_PX` constants and touchstart/touchend/passive shape `#navPanel`'s
+  own two IIFEs already used — each gesture is its own small IIFE with its own
+  copy of those constants (this file's convention is per-IIFE, not shared
+  module-scope, despite an older comment elsewhere claiming otherwise).
+- **Mutual exclusivity + shared backdrop**: `#navPanelBackdrop` now covers all
+  three drawers (only one open at a time) — `openNavPanel()`/`openDayTopDrawer()`/
+  `openDayRightDrawer()` each close the other two first;
+  `updateDayDrawersBackdrop()` shows it whenever any is open. Backdrop tap and
+  Escape both close whichever is open. `placeDayDrawers()`'s own "leaving
+  drawer mode" cleanup force-closes only the two NEW drawers, never `#navPanel`
+  — it runs on every resize/render regardless of page, and `#navPanel` is
+  legitimate on every mobile page, not just Day; force-closing it there would
+  slam it shut on an unrelated resize while she's mid-browse elsewhere with the
+  nav menu open. The one case that genuinely should close `#navPanel` too (a
+  resize crossing 1024px) is handled separately by the pre-existing
+  `navMobileMq` change listener.
+- **Scope note (disclosed, not silent)**: only the 3 desktop-mapped zones
+  (header row, sidebar, widget rail) move into drawers. The quick-add bar,
+  fire-shortcut button, and `#tilesAbove`/`#tilesBelow` tile shelves aren't
+  part of any of those 3 zones and stay in normal in-flow visibility below the
+  calendar — not hidden-by-omission, a judgment call against a strictly literal
+  "nothing else on screen" reading.
+- Desktop (`deskGridMq`, ≥1024px) and the 3/5/7-day mobile views are
+  completely untouched — this is single-Day mobile only.
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
