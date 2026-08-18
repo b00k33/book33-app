@@ -84,10 +84,11 @@ side back:
 - **§7 "tap targets ≥ ~24px" vs "Minimum tap target 44px" below.** design44 is the newer
   statement and is the floor now. 44px remains the preferred size for a primary control
   she uses one-handed; anything between 24 and 44 is acceptable rather than a bug.
-- **§1 spacing scale vs the three approved exception blocks** (mobile Day view and mobile
-  Body page, both dated 2026-08-16; mobile Routines, dated 2026-08-17; all documented
-  below). The first two are stylesheets she approved verbatim; Routines is Claude's own
-  judgment call under her explicit pre-authorization to go off-scale if needed. All three
+- **§1 spacing scale vs the four approved exception blocks** (mobile Day view and mobile
+  Body page, both dated 2026-08-16; mobile Routines, dated 2026-08-17; `.dp-t-row` dense
+  list rows, dated 2026-08-18; all documented below). The first two are stylesheets she
+  approved verbatim; Routines and `.dp-t-row` are Claude's own judgment call under her
+  explicit pre-authorization to go off-scale if needed. All four
   win inside their own scope only.
 - **§3 "Today tinted gold in every view"** vs the §3-fasting spec that removed the Day
   grid's today gold wash. Unresolved — ask before re-adding the wash to the day grid;
@@ -266,6 +267,31 @@ path matters most.
   repeat-sum, `.chain-unlink`) is untouched — this pass is font-size/line-height/
   internal padding only, never a tap-target shrink, same split the Body-page
   exception already established.
+
+### Approved exception — `.dp-t-row` dense list rows (2026-08-18)
+- Linh: "too much empty space between rows [in the Today checklist] ... shrink each
+  row from the current 44px minimum height down to roughly 33px ... reduce the row's
+  internal padding to match (currently 4px 4px) so the row height change actually
+  shows up as less visual gap." Explicit pre-authorization to go off-scale if the
+  target required it, same standing precedent as the Routines exception above.
+- Values used: `min-height: 33px` (was 44px), `padding: 2px 4px` (was `4px 4px`) —
+  the `2px` is off the 4/8/12/16/24/32 scale on purpose. The 33px height itself is
+  NOT a scale violation to begin with — it lands inside the §7 24–44px acceptable
+  tap-target band above, just below the 44px *preferred* size for a control she
+  taps once. `.dp-t-row` is a scrolling list of many small toggles, not a single
+  primary control, so density wins here the same way it does for the Routines
+  mobile exception's sub-rows.
+- Scope, and nothing beyond it: the single shared `.dp-t-row` rule (index.html).
+  Checked all three real consumers before shrinking, not just the one Linh named:
+  the Today/day-recap checklist (`dayRecapHTML`), the chain phase-band rows
+  (`.phase-t-row`, which only adds a trailing time column and inherits this rule
+  as-is), and nothing else — a repo-wide grep found no other `.dp-t-row` user and
+  no per-consumer height/padding override. `.dp-t-label` was already
+  `white-space: nowrap` + ellipsis in every consumer before this change (no wrap
+  path existed to begin with), so a long title truncates instead of growing the
+  row — the "don't cramp a multi-line label" risk she flagged doesn't apply.
+- Untouched: the dot indicator, done-state strike-through/opacity, the 12px
+  dot-to-label gap, and the "N left for today" footer/progress bar above the list.
 
 ### Standing pattern — calendar-triggered editor panel (2026-08-18)
 Linh: "when I tap Edit on an event, routine, or fitness session from the calendar
