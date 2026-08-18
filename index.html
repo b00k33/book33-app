@@ -932,8 +932,25 @@
      it reads as a footnote to the title, not a second headline. */
   #miniCalTitle .mini-cal-pm {
     font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-    text-transform: uppercase; color: var(--cosmic-gold); opacity: 0.75; margin-left: 8px;
+    text-transform: uppercase; color: var(--cosmic-gold); opacity: 0.85; margin-left: 8px;
   }
+  #miniCalTitle .mini-cal-pm small { font-size: 11px; color: var(--ink-faint); font-weight: 700; }
+  /* 2026-08-11 (Linh: "improve this dropdown"): the PM theme is a tidy strip between the
+     month nav and the calendar grid now — no longer a hover popover on top of the dates. */
+  .mini-cal-theme {
+    margin: 4px 0 6px; padding: 8px 10px; border-radius: 10px;
+    /* dark-biased gold backing so the cosmic (always-light) ink stays readable in BOTH
+       themes — the mini-cal re-scopes its palette to cosmic-gold, so a plain tint would
+       go faint on the light-mode card. */
+    background: color-mix(in oklab, var(--margin-rule) 14%, rgba(0,0,0,0.34));
+    border: 1px solid color-mix(in oklab, var(--margin-rule) 26%, transparent);
+  }
+  .mini-cal-theme:empty { display: none; }
+  .mct-head { display: flex; align-items: center; gap: 7px; }
+  .mct-em { font-size: 14px; line-height: 1; }
+  .mct-title { font-weight: 800; font-size: 12.5px; color: var(--ink); }
+  .mct-blurb { font-size: 10.5px; color: var(--ink-soft); margin: 3px 0 6px; line-height: 1.35; }
+  .mct-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
   .mini-cal-dow {
     display: grid; grid-template-columns: repeat(7, 1fr); font-size: 11px; text-transform: uppercase;
     color: var(--ink-faint); text-align: center; margin-bottom: 4px; letter-spacing: 0.04em;
@@ -2343,6 +2360,54 @@
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
     .tl-detail-sheet { border-radius: var(--radius-md); max-height: 74vh; }
   }
+  /* ================= SHARED SLIDE PANEL (2026-08-18, "editor opens on the same page,
+     not a Routines-page redirect" round) =================
+     One right-docked (desktop) / full-screen (mobile) recipe, reused by #addForm
+     (event/task editor, restyled below) and #rtnAddForm's new calendar-triggered dock
+     (#editPanelOverlay/#editPanelSheet, see openRtnFormFromCalendar). Same visual
+     language as .tl-routine-panel (the routine POPUP's own side panel, shipped
+     separately just above) but its own class rather than reusing that one directly --
+     .tl-routine-panel is coupled to #tlDetailOverlay's own render lifecycle
+     (renderTlDetailBody/refreshOpenTlDetail can re-render it mid-interaction), and
+     mounting a live editable form inside that same re-rendering sheet risks a re-render
+     silently wiping out in-progress field values. A fully separate, static overlay
+     avoids that coupling entirely.
+     1024px matches rtnSideMq, the existing breakpoint the routine editor's OWN
+     desktop side-rail already uses -- same threshold, not a new one; also where the
+     widgets rail itself starts showing (wrFallback), matching "overlaying the widgets
+     rail" being a desktop-only description. Below it: full width/height, no docked
+     sliver -- "no room for a sidebar" per the brief. */
+  .slide-panel-overlay {
+    position: fixed; inset: 0; z-index: 62; background: color-mix(in oklab, black 68%, transparent);
+    backdrop-filter: blur(3px); display: flex; align-items: stretch; justify-content: flex-end;
+  }
+  .slide-panel-overlay[hidden] { display: none; }
+  .slide-panel-sheet {
+    width: 100vw; height: 100vh; max-height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    background: var(--paper); border: none; box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
+  }
+  @media (min-width: 1024px) {
+    .slide-panel-sheet { width: min(440px, 92vw); border-left: 1px solid var(--margin-rule); }
+  }
+  /* title+close header/scrolling body, same values as .rtn-side-head/-body (the
+     Routines page's own desktop side rail) but NOT that class directly -- that one
+     is only ever styled inside its own >=1024px media block (phones there keep the
+     old swap-in-place form instead), and #editPanelSheet needs to look right at
+     every width, mobile included. */
+  .slide-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 8px 8px 16px; border-bottom: 1px solid var(--note-line); flex: none;
+  }
+  .slide-panel-head b { font-size: 13px; }
+  .slide-panel-head button {
+    border: none; background: none; color: var(--ink-faint); font-size: 20px; cursor: pointer;
+    min-width: 44px; min-height: 44px; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .slide-panel-head button:hover { color: var(--margin-rule); background: var(--desk-btn-bg); }
+  .slide-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
+  .slide-panel-body .add-form { grid-template-columns: 1fr; margin-top: 8px; border: none; box-shadow: none; background: none; padding: 4px; }
   /* delete confirm (2026-08-08, design44) — every delete in the Day popup (plain
      item, routine occurrence, recurring event, fitness session) opens this same
      small sheet; same overlay/sheet chrome as the detail sheet it opens from,
@@ -6003,23 +6068,40 @@
   @media (min-width: 641px) {
     .add-form { max-width: var(--content-max); margin-left: auto; margin-right: auto; }
   }
-  /* 2026-08-02 ("this is too busy, make it more compact, let it hover over the
+  /* 2026-08-18 (Linh, "edit opens as a panel on the same page" round): was a centered
+     floating card (own comment below this one, kept for history) -- now the same
+     right-docked-panel/full-screen-sheet recipe as .slide-panel-sheet just above
+     (#addForm keeps its OWN rule rather than switching to that shared class: it's an
+     ID selector with ~30 #addForm-scoped child rules already depending on it existing
+     as a real position:fixed element in its current DOM slot, so restating the same
+     values here is lower-risk than restructuring the HTML to nest it inside a new
+     wrapper). Covers BOTH Add and Edit -- they're the same form/DOM node, and the
+     routine editor's own side-rail already treats Add the same as Edit for placement
+     (see placeRtnForm's own "+ Add routine also docks" note), so this matches that
+     established precedent rather than special-casing Edit alone.
+     2026-08-02 ("this is too busy, make it more compact, let it hover over the
      calendar when adding events"): the Day page's own add-event form only — every
      other page's .add-form (Goals, People, Family, Routines, Recipes, Work Manual)
-     is untouched. Floats over the timeline instead of pushing the whole page down;
-     the box-shadow does the visual dimming (kept for the drop-shadow + glow), but
-     2026-08-02 update (book44, "one click outside if nothing filled; a small warning
-     if something was filled") added a REAL backdrop element (#addFormBackdrop, below)
-     since "click outside to dismiss" needs something to actually click. */
+     is untouched. */
   #addForm {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    z-index: 60; width: min(480px, 92vw); max-height: 82vh; overflow-y: auto;
-    margin-top: 0; padding: 16px 16px; gap: 12px 16px;
-    box-shadow: 0 24px 60px -16px rgba(0,0,0,0.6), 0 0 0 100vmax rgba(5,4,2,0.55);
+    position: fixed; top: 0; right: 0; bottom: 0; left: auto; transform: none;
+    z-index: 60; width: 100vw; height: 100vh; max-height: 100vh; overflow-y: auto;
+    margin-top: 0; padding: 16px 16px; gap: 12px 16px; border-radius: 0;
+    box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
+  }
+  @media (min-width: 1024px) {
+    #addForm { width: min(440px, 92vw); border-left: 1px solid var(--margin-rule); }
   }
   #addForm .field { gap: 4px; }
   #addForm .field label { font-size: 11px; }
-  .addform-backdrop { position: fixed; inset: 0; z-index: 59; background: transparent; }
+  /* the old centered-card look's own dimming used to be a giant 100vmax box-shadow
+     (no separate visible backdrop existed) -- now that #addForm has a real edge to
+     dock against, #addFormBackdrop carries the dimming itself instead, same recipe as
+     .slide-panel-overlay just above, so both panels read as one system. */
+  .addform-backdrop {
+    position: fixed; inset: 0; z-index: 59;
+    background: color-mix(in oklab, black 68%, transparent); backdrop-filter: blur(3px);
+  }
   .addform-backdrop[hidden] { display: none; }
   /* small popup, her book44 pick: "Discard / Keep editing / Save" over a dimmed form
      rather than an inline banner or the browser's native confirm() */
@@ -14677,6 +14759,29 @@
     <button type="button" class="undo-snackbar-btn" id="undoSnackbarBtn">Undo</button>
   </div>
 
+  <!-- 2026-08-18 (Linh, "editor opens as a panel on the same page, not a Routines-page
+       redirect"): global calendar-triggered routine-editor dock. #rtnAddForm is a
+       traveling element (see placeRtnForm) that already reparents between #rtnSideBody
+       and after #rtnFormHome depending on width -- this is a THIRD possible parent,
+       living here outside every .page on purpose, so it still exists no matter what
+       state.view currently is (the actual bug #rtnSide had: nested inside #routinesPage,
+       so hidden whenever that wasn't the active view -- see openRtnFormFromCalendar).
+       Same title+close header LOOK as the Routines page's own side rail (.rtn-side-head/
+       -body) but its own .slide-panel-head/-body classes rather than reusing those
+       directly -- .rtn-side-head/-body are only ever styled inside the >=1024px media
+       block (the phone width keeps the swap-in-place form there, so they were never
+       given a standalone look) and this panel needs to look right below 1024px too. See
+       the matching CSS just above .slide-panel-overlay.
+       #addForm (plain event/task edit) needs none of this -- it already lives on
+       #dayPage, the only page a calendar edit can start from -- it got its own
+       .slide-panel-sheet restyle in place instead (see that CSS). -->
+  <div class="slide-panel-overlay" id="editPanelOverlay" hidden>
+    <div class="slide-panel-sheet" id="editPanelSheet" role="dialog" aria-modal="true" aria-labelledby="editPanelTitle">
+      <div class="slide-panel-head"><b id="editPanelTitle">Routine</b><button type="button" id="editPanelClose" aria-label="Close editor">×</button></div>
+      <div class="slide-panel-body" id="editPanelBody"></div>
+    </div>
+  </div>
+
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
     <div class="bd-head">
@@ -16474,6 +16579,10 @@
             <span id="miniCalTitle"></span>
             <button type="button" class="nav-arrow" id="miniCalNext" aria-label="Next month">›</button>
           </div>
+          <!-- 2026-08-11 (Linh: "improve this dropdown"): the PM theme used to open as a
+               hover popover ON TOP of the calendar — now it's a tidy strip here, above the
+               grid, so nothing overlaps. Filled by renderMiniCal(). -->
+          <div class="mini-cal-theme" id="miniCalTheme"></div>
           <div class="mini-cal-dow">
             <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
           </div>
@@ -27519,7 +27628,19 @@
     // the horse-mascot row (see #numGrpUy) — this title is just the month now, and PM
     // gets the same focusPopoverHtml treatment as every other PM/UD/PY badge.
     const pmTitleFocus = pmForTitle != null ? focusFor(masterLabel(pmForTitle)) : null;
-    document.getElementById("miniCalTitle").innerHTML = `${esc(MONTHS[m])}${pmForTitle != null ? `<span class="mini-cal-pm num-hover-trigger" tabindex="0">PM ${esc(String(masterLabel(pmForTitle)))}${focusPopoverHtml(`Personal Month · ${MONTHS[state.anchor.getMonth()]}`, masterLabel(pmForTitle), pmTitleFocus, "num-hover-pop--right")}</span>` : ""}`;
+    // 2026-08-11 (Linh: "it is a 28/1 PM"): show the COMPOUND (PY digit-sum + month)
+    // alongside the root — "PM 28/1" — instead of just the reduced "1".
+    const pmComp = personalMonthCompound(state.anchor);
+    const pmRoot = pmForTitle != null ? String(masterLabel(pmForTitle)) : "";
+    const pmLabel = pmComp != null ? `${pmComp}<small>/${esc(pmRoot)}</small>` : esc(pmRoot);
+    document.getElementById("miniCalTitle").innerHTML = `${esc(MONTHS[m])}${pmForTitle != null ? `<span class="mini-cal-pm">PM ${pmLabel}</span>` : ""}`;
+    // the PM theme is a clean strip now (no longer a popover overlapping the grid)
+    const themeEl = document.getElementById("miniCalTheme");
+    if (themeEl) themeEl.innerHTML = pmTitleFocus ? `
+        <div class="mct-head"><span class="mct-em">${pmTitleFocus.em}</span><span class="mct-title">${esc(pmTitleFocus.title)}</span></div>
+        ${pmTitleFocus.blurb ? `<div class="mct-blurb">${esc(pmTitleFocus.blurb)}</div>` : ""}
+        <div class="mct-chips theme-acts">${(pmTitleFocus.lean || []).slice(0, 3).map(x => `<span data-add-action="${esc(x)}" role="button" tabindex="0" title="Add “${esc(x)}” to this day">${esc(x)}</span>`).join("")}</div>
+      ` : "";
     const gridStart = startOfWeek(new Date(y, m, 1));
     const selectedKey = keyOf(state.anchor), todayKey = keyOf(TODAY);
     let html = "";
@@ -31480,6 +31601,20 @@
     const pm = personalMonth(date);
     if (pm == null) return null;
     return reduceKeepMaster(toSingleDigit(pm) + toSingleDigit(date.getDate()));
+  }
+  // 2026-08-11 (Linh: "it is a 28/1 PM. PM = PY + Month; PY = 20; 20 + 8 = 28"): the
+  // COMPOUND personal-month number for display — the Personal Year's full digit-sum (kept
+  // as its two-digit compound, e.g. 20) plus the calendar month, matching her GG33 method.
+  // Reduces (mod 9) to the exact same root personalMonth() already returns, so this is a
+  // display-only companion to that value, never a replacement. Uses personalMonth()'s own
+  // birth-day rollover so the compound tracks the same PM window.
+  function personalMonthCompound(date) {
+    if (!PROFILE || !PROFILE.birthDate) return null;
+    const b = parseKey(PROFILE.birthDate);
+    let y = date.getFullYear(), m = date.getMonth() + 1;
+    if (date.getDate() < b.getDate()) { m -= 1; if (m < 1) { m = 12; y -= 1; } }
+    const pyCompound = digitSum(`${pad(b.getMonth() + 1)}${pad(b.getDate())}${y}`);
+    return pyCompound + m;
   }
 
   // Shared numerology/astrology chip set (Linh 2026-08-16, "the sidebar and header
@@ -38043,6 +38178,13 @@
   // redock the (reused, never duplicated) #rtnAddForm rather than losing it.
   let rtnInlineId = null;
   let rtnInlineView = null;
+  // 2026-08-18 (Linh, "editor opens as a panel on the same page, not a Routines-page
+  // redirect"): true while #rtnAddForm is docked into the global #editPanelBody (see
+  // openRtnFormFromCalendar) rather than any of its Routines-page-internal docks --
+  // checked first by placeRtnForm/closeRtnForm so this new path can't collide with
+  // rtnInlineId (a calendar-triggered edit is never "inline under a table row") or
+  // rtnSideMq (the calendar panel's own width behavior lives in its CSS, not this flag).
+  let rtnCalendarOpen = false;
   const RTN_NEW = "__new__";   // sentinel rtnInlineId for the Table view's "+ Add routine" inline row (see rtnInlineRedock/openRtnFormInlineNew)
   // 2026-08-09 (STEP 2 fix): mirrors task.calOn now (was autoCalendar, which only
   // ever gated .ics export -- see the switch's own comment below), defaulting ON
@@ -38700,6 +38842,19 @@
   // reparent-with-anchor move, so listeners ride along and phones are untouched.
   const rtnSideMq = window.matchMedia("(min-width: 1024px)");
   function placeRtnForm(editing) {
+    // 2026-08-18: a calendar-triggered edit (openRtnFormFromCalendar) docks into the
+    // global #editPanelBody instead -- completely bypasses #rtnSide/#rtnFormHome
+    // (both live inside #routinesPage, which this open never touches, so state.view
+    // stays whatever it already was). Checked first so this never fights the
+    // Routines-page-internal placement logic below it.
+    if (rtnCalendarOpen) {
+      const panelBody = document.getElementById("editPanelBody");
+      if (panelBody && rtnForm.parentElement !== panelBody) panelBody.appendChild(rtnForm);
+      rtnForm.classList.toggle("rtn-inline-mode", editing);
+      const pt = document.getElementById("editPanelTitle");
+      if (pt) pt.textContent = rtnEditId ? "Edit routine" : "New routine";
+      return;
+    }
     const side = document.getElementById("rtnSide");
     const body = document.getElementById("rtnSideBody");
     const home = document.getElementById("rtnFormHome");
@@ -38732,6 +38887,13 @@
   // every width, exactly like the mobile "stay at #rtnFormHome" branch already does.
   if (rtnSideMq.addEventListener) rtnSideMq.addEventListener("change", () => { if (!rtnInlineId) placeRtnForm(!rtnForm.hidden); });
   document.getElementById("rtnSideClose")?.addEventListener("click", () => closeRtnForm());
+  // 2026-08-18: the global calendar-triggered panel's own close (✕) + backdrop-click
+  // -- same "tap outside the sheet" convention as every other overlay in this file
+  // (see e.g. #tlDetailOverlay's own listener).
+  document.getElementById("editPanelClose")?.addEventListener("click", () => closeRtnForm());
+  document.getElementById("editPanelOverlay")?.addEventListener("click", e => {
+    if (!e.target.closest(".slide-panel-sheet")) closeRtnForm();
+  });
   // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
   // that row -- instead of opening the separate slide-over drawer"): #rtnAddForm is
   // reparented into a dock immediately after the clicked row/card -- the SAME
@@ -38878,7 +39040,27 @@
     setRtnMoreOptionsOpen(false);
     setRtnRepeatPickerOpen(false);
     rtnTimeOpen = false; syncRtnTimeOpen();
-    if (rtnInlineId != null) rtnCloseInline(); else placeRtnForm(false);   // undock inline row OR the side rail, return the form to its anchor
+    // 2026-08-18: a calendar-triggered edit closes the global panel and returns the
+    // form to its normal #rtnFormHome anchor -- never inline, never the Routines-page
+    // side rail (placeRtnForm's own rtnCalendarOpen branch never touched either of
+    // those), so neither of the other two branches applies here.
+    if (rtnCalendarOpen) {
+      rtnCalendarOpen = false;
+      document.getElementById("editPanelOverlay").hidden = true;
+      const home = document.getElementById("rtnFormHome");
+      if (home && rtnForm.previousElementSibling !== home) home.after(rtnForm);
+    } else if (rtnInlineId != null) rtnCloseInline(); else placeRtnForm(false);   // undock inline row OR the side rail, return the form to its anchor
+  }
+  // 2026-08-18 (Linh, "editor opens as a panel on the same page, not a Routines-page
+  // redirect"): entry point for "Edit" on a routine from the Day/calendar popup (or
+  // its deeper "Edit routine settings" link) -- opens the exact same #rtnAddForm
+  // openRtnForm() always has, just docked into the global panel instead of first
+  // navigating state.view to "routines" (the old data-rt-open handler's redirect,
+  // now removed -- see that delegate). The calendar page underneath never changes.
+  function openRtnFormFromCalendar(task) {
+    rtnCalendarOpen = true;
+    document.getElementById("editPanelOverlay").hidden = false;
+    openRtnForm(task);   // its own trailing placeRtnForm(true) call docks into #editPanelBody, see that guard
   }
   // splits a routine's stored title into its leading emoji "icon" (her existing
   // hand-typed convention, e.g. sunrise-emoji-space-"A - Before Pilates") and the plain
@@ -39445,7 +39627,11 @@
       if (HAIRD.pos >= HAIRD.rotation.length) HAIRD.pos = 0;
       saveHairData();
     }
-    saveRoutines(); closeRtnForm(); renderRoutines();
+    // 2026-08-18: renderDay() added to match the Delete handler just below, which has
+    // always refreshed the Day timeline unconditionally on its own success path -- Save
+    // never did, so a calendar-triggered edit (openRtnFormFromCalendar) closed back onto
+    // a stale timeline until some unrelated re-render happened to catch it up.
+    saveRoutines(); closeRtnForm(); renderRoutines(); renderDay();
   });
   rtnForm.addEventListener("keydown", e => { if (e.key === "Escape") closeRtnForm(); });
   document.getElementById("rtnDeleteBtn").addEventListener("click", () => {
@@ -40498,16 +40684,16 @@
       render();
       return;
     }
-    // edit a routine straight from its calendar block — jump to the Routines form
+    // 2026-08-18 (Linh, "editor opens as a panel on the same page, not a Routines-page
+    // redirect"): edit a routine straight from its calendar block, the "Piling up"
+    // widget's ✎, or the detail popup's own "Edit routine settings" link -- used to
+    // jump state.view to "routines" and scroll to the form there; now opens the SAME
+    // #rtnAddForm docked into the global panel instead, so whatever page/day she was
+    // looking at never changes underneath it. See openRtnFormFromCalendar.
     const rtOpen = e.target.closest("[data-rt-open]");
     if (rtOpen) {
       const task = ROUTINE_TASKS.find(t => t.id === rtOpen.dataset.rtOpen);
-      if (task) {
-        state.view = "routines"; render();
-        openRtnForm(task);
-        const form = document.getElementById("rtnAddForm");
-        if (form && !rtnSideMq.matches) form.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      if (task) openRtnFormFromCalendar(task);
       return;
     }
     // 2026-08-06 (chain UX): "Chain it" / "Change" from an event popup — jump to the
