@@ -207,11 +207,26 @@ path matters most.
   a thick pill-radius bar) — see `.dcx-meter`/`meterHtml()` in index.html — and that
   shape applies at every width, this mobile exception included. The 4px-cornered thin
   bar this bullet used to describe no longer exists anywhere in the file.
-- Known gap, measured, left as-is: her single-line block threshold is 28px but her
-  two-line block needs ~33px at `--hour-h: 46px`. A 41–47 minute block therefore renders
-  two lines in a slightly-too-short box. The NAME is protected (`flex: none` on
-  `.tl-title`, so it never squeezes); the time line is what runs into the bottom padding.
-  Raising the threshold from 28 to 33 in `renderTimeline()` closes it if she asks.
+- 2026-08-18 ("rearrange the first two lines"): non-tight blocks (`.tl-block:not(.tl-tight)`)
+  now put title+time on ONE row instead of stacked (`flex-direction:row`, `.tl-title`
+  grows/wraps, `.tl-meta` pins right via `margin-left:auto`) — mirrors desktop's own
+  `[data-desk-day1] ... :not(.tl-tight)` pattern (search "move time to same line as
+  event name" in index.html), just at mobile widths too. This also RETIRES the old
+  "known gap" that used to live here: title+meta used to stack (needing ~33px) while
+  the single-line threshold was 28px, so a 28–33px block rendered a cramped 2nd line.
+  Now that title+meta share one row, that squeeze is gone for the common case.
+- `.tl-rate` (the star-rating row) is switched on for mobile in the same rule set, as a
+  THIRD line under title+time, right-aligned, flex-basis:100% forcing the wrap — only
+  present when a real rating exists (`rateHtml` generation itself is untouched, device-
+  agnostic). This reopens a smaller version of the old gap, scoped to rated blocks only:
+  a block just above the 28px tight cutoff (roughly 28–35px, a ~35–46min session at
+  `--hour-h: 46px`) may not have room for all 3 lines and can clip a couple px off the
+  bottom of the star row — `.tl-rate` is kept deliberately compact (9px, line-height:1,
+  zero row-gap) to push that floor as low as practical without touching block sizing
+  (out of scope per her "leave block sizing alone" instruction). Raising the tight
+  threshold, or giving rated blocks their own taller floor, would close it fully if she
+  asks — not done here since it wasn't asked for and block-height math is explicitly
+  hers to change, not this task's.
 
 ### Approved exception — mobile Body page (2026-08-16)
 - Linh supplied `mobile-body-reference.html` (a side-by-side "now vs compact"
