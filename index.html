@@ -9548,18 +9548,33 @@
      (timeline's own stacking tops out at 6, see placeDayDrawers()'s own note).
      2026-08-18 pt.3: was left/right/TOP -- the top hint is gone, see #ddGrab below,
      the in-flow zone's own equivalent affordance now. */
+  /* 2026-08-18 pt.5 (Linh: "i have difficulty swiping the side panels"). These are
+     already tap targets (bindTapAndKey, JS) -- the reason they never read as buttons is
+     that they never rendered as designed. The old rules asked for a 4px pill centred in
+     a larger padded target: `width: 4px; padding: 20px 12px; background-clip:
+     content-box`. Under this file's global `* { box-sizing: border-box }` the 24px of
+     horizontal padding IS the element's whole width, so the declared 4px is discarded
+     and the content box collapses to zero -- what actually painted was a dull 24x56px
+     blob, not a 4px hairline, and at --margin-rule 55% over a near-black page it was
+     barely visible at all.
+     Fix: the pill becomes a ::before so its size is independent of the button's, and
+     the button gets a real 44x120px box -- 44px being this app's own tap-target floor
+     (design44 §7). --accent-seed at 70% instead of --margin-rule at 55% so the line is
+     findable; still a hairline, just one that can be seen. */
   .dd-edge-hint {
-    display: none; position: fixed; z-index: 250;
-    background: color-mix(in oklab, var(--margin-rule) 55%, transparent);
-    border-radius: 999px; cursor: pointer;
+    display: none; position: fixed; z-index: 250; cursor: pointer;
+    background: none; border: none; padding: 0;
   }
-  body.dd-drawers-active .dd-edge-hint { display: block; }
+  body.dd-drawers-active .dd-edge-hint { display: flex; align-items: center; }
   .dd-edge-hint-left, .dd-edge-hint-right {
-    top: 50%; transform: translateY(-50%); width: 4px; height: 56px;
-    padding: 20px 12px; background-clip: content-box;
+    top: 50%; transform: translateY(-50%); width: 44px; height: 120px;
   }
-  .dd-edge-hint-left { left: 0; }
-  .dd-edge-hint-right { right: 0; }
+  .dd-edge-hint-left { left: 0; justify-content: flex-start; }
+  .dd-edge-hint-right { right: 0; justify-content: flex-end; }
+  .dd-edge-hint::before {
+    content: ""; width: 4px; height: 72px; border-radius: 999px;
+    background: color-mix(in oklab, var(--accent-seed) 70%, transparent);
+  }
   /* 2026-08-18 fix (found live against her "BOOK33 logo ... in the top drawer" list,
      "nothing else on screen by default"): #navDrawerBtn (the gold "B33" wordmark) was
      staying permanently visible even with every drawer closed -- it was never moved
@@ -9570,6 +9585,17 @@
      DIFFERENT drawer) keeps one opener per drawer and actually delivers "only the
      calendar" rather than leaving one piece of chrome exempted from it. */
   body.dd-drawers-active #navDrawerBtn { display: none; }
+  /* 2026-08-18 pt.5 (Linh: "the blank space at top is too large"): with the drawers
+     active this bar holds ONE thing — the 12px #b33Live sync dot — because
+     #navDrawerBtn is hidden just above, #navDateSlot's date row moved into the drawer
+     (placeDayDrawers), and #categoryTabs/#subTabs are already out of flow or empty
+     here. Its padding is still sized for the wordmark + date line it used to carry.
+     Vertical only: the horizontal padding differs per breakpoint (14px ≤640px, 12px
+     above) and there's no reason to disturb it. */
+  body.dd-drawers-active .nav-tiers {
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: 2px;
+  }
   /* 2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
      built): #dayTopDrawer is now an IN-FLOW collapsible zone (max-height toggle),
      not a fixed overlay -- opening it pushes .day-main's own content down instead of
@@ -9595,9 +9621,17 @@
      target (her own floor for a one-handed primary control, design44 §7) while the
      VISIBLE mark stays a slim 4px line -- tap-target size and visual footprint are
      no longer the same number. */
+  /* 2026-08-18 pt.5 (Linh: "the blank space at top is too large"): margin-top:-16px,
+     NOT less padding. The 20px+20px around the 4px pill is what makes this a 44px tap
+     target (design44 §7's floor for a one-handed primary control) and shrinking it
+     would trade a real accessibility number for cosmetics. The top padding is empty
+     space, and the bar above it is now nearly empty too, so the two can overlap: the
+     handle rises 16px, the target stays exactly 44px. Only the TOP margin is negative
+     — a negative bottom margin would slide this button's hit area over the chip strip
+     below it and start stealing taps meant for the chips. */
   .dd-grab {
     display: none; width: 100%; border: none; background: none; cursor: grab;
-    touch-action: none; padding: 20px 0; margin: 0;
+    touch-action: none; padding: 20px 0; margin: -16px 0 0;
     align-items: center; justify-content: center;
   }
   body.dd-drawers-active .dd-grab { display: flex; }
@@ -35232,7 +35266,15 @@
   // start-position edge check, since the shared skeleton this is adapted from has
   // none built in.
   (function () {
-    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    // 2026-08-18 pt.5 (Linh: "i have difficulty swiping the side panels"): the old
+    // 24/60/50 asked for a precise, deliberately-horizontal movement starting almost
+    // exactly on the screen edge. 40px zone matches the app's own 44px target floor
+    // rather than a number picked for looks; 40px of travel is still ~4x a tap's own
+    // slop so a stationary press can't trigger it; 80px of vertical tolerance is the
+    // real unlock — a natural thumb arc is a diagonal, and 50px was rejecting it.
+    // Same numbers on both edges deliberately: two different feels for the same
+    // gesture on opposite sides of one screen is worse than either number alone.
+    const SWIPE_MIN_PX = 40, SWIPE_MAX_OFF_AXIS = 80, EDGE_ZONE_PX = 40;
     let sx = 0, sy = 0, tracking = false;
     document.body.addEventListener("touchstart", e => {
       if (e.touches.length !== 1 || PREFS.navMode !== "drawer" || window.innerWidth >= 1024
@@ -35342,7 +35384,15 @@
     panel.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
   })();
   (function () {
-    const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, EDGE_ZONE_PX = 24;
+    // 2026-08-18 pt.5 (Linh: "i have difficulty swiping the side panels"): the old
+    // 24/60/50 asked for a precise, deliberately-horizontal movement starting almost
+    // exactly on the screen edge. 40px zone matches the app's own 44px target floor
+    // rather than a number picked for looks; 40px of travel is still ~4x a tap's own
+    // slop so a stationary press can't trigger it; 80px of vertical tolerance is the
+    // real unlock — a natural thumb arc is a diagonal, and 50px was rejecting it.
+    // Same numbers on both edges deliberately: two different feels for the same
+    // gesture on opposite sides of one screen is worse than either number alone.
+    const SWIPE_MIN_PX = 40, SWIPE_MAX_OFF_AXIS = 80, EDGE_ZONE_PX = 40;
     let sx = 0, sy = 0, tracking = false;
     document.body.addEventListener("touchstart", e => {
       if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayRightDrawerIsOpen()) { tracking = false; return; }
