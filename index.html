@@ -2425,6 +2425,51 @@
   .slide-panel-head button:hover { color: var(--margin-rule); background: var(--desk-btn-bg); }
   .slide-panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
   .slide-panel-body .add-form { grid-template-columns: 1fr; margin-top: 8px; border: none; box-shadow: none; background: none; padding: 4px; }
+  /* 2026-08-19 (Linh, "+N more -> opens a slide-out panel... warm, appealing look"):
+     the To-do rail widget's overflow view -- mounted into the SAME #editPanelOverlay/
+     -sheet/-body chrome the calendar-triggered routine editor uses (see
+     openTodoPanel/closeTodoPanel), not a second panel system. .todo-panel-mode is the
+     one class that swaps the shared header's look for this content; the row/tick/add
+     styling below is scoped to its own classes so it can't leak onto the routine form. */
+  .slide-panel-sheet.todo-panel-mode .slide-panel-head {
+    background: color-mix(in oklab, var(--gold) 10%, var(--paper));
+    border-bottom-color: color-mix(in oklab, var(--gold) 25%, var(--note-line));
+  }
+  .todo-panel-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .todo-panel-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); }
+  .todo-panel-row.done { opacity: 0.55; }
+  .todo-panel-row.done .todo-panel-name { text-decoration: line-through; }
+  .todo-panel-name {
+    flex: 1; min-width: 0; font-size: 13px; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* a small gold-ringed circle, not the app's usual square .tick -- her explicit spec */
+  .todo-panel-tick {
+    appearance: none; -webkit-appearance: none; margin: 0; flex: none; cursor: pointer;
+    width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--gold);
+    background: transparent; display: inline-grid; place-content: center;
+    transition: background .12s ease;
+  }
+  .todo-panel-tick:checked { background: var(--gold); }
+  .todo-panel-tick:checked::after {
+    content: ""; width: 5px; height: 9px; border: solid #2A2205; border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .todo-panel-convert {
+    flex: none; border: none; background: none; color: var(--ink-faint);
+    font: inherit; font-size: 13px; padding: 6px 8px; cursor: pointer; border-radius: 999px;
+    min-width: 32px; min-height: 32px;
+  }
+  .todo-panel-convert:hover, .todo-panel-convert:focus-visible { color: var(--gold-bright); background: var(--desk-btn-bg); }
+  /* a solid gold fill, not the app's usual dashed-outline .add-btn -- her explicit
+     spec, and flat (no gradient) to match the header band + design44 §4. */
+  .todo-panel-add { margin-top: 14px; }
+  .todo-panel-add-input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; font-weight: 600;
+    color: #2A2205; background: var(--gold); border: none; border-radius: 999px;
+    padding: 10px 16px; outline: none;
+  }
+  .todo-panel-add-input::placeholder { color: rgba(42, 34, 5, 0.65); font-weight: 600; opacity: 1; }
   /* delete confirm (2026-08-08, design44) — every delete in the Day popup (plain
      item, routine occurrence, recurring event, fitness session) opens this same
      small sheet; same overlay/sheet chrome as the detail sheet it opens from,
@@ -37270,7 +37315,7 @@
             <span class="wr-pile-name">${esc(t.title)}</span>
             <button type="button" class="wr-pile-edit" data-wr-todo-event="${t.id}" title="Convert to event" aria-label="Convert ${esc(t.title)} to an event">→</button>
           </div>`).join("") : `<div class="wr-pat-empty">Nothing on your to-do list.</div>`}
-        ${hiddenCount > 0 ? `<button type="button" class="wr-pile-more" data-jump-view="todo">+${hiddenCount} more →</button>` : ""}
+        ${hiddenCount > 0 ? `<button type="button" class="wr-pile-more" data-open-todo-panel>+${hiddenCount} more →</button>` : ""}
         <form class="wr-todo-add" data-wr-todo-add>
           <input type="text" class="wr-todo-add-input" placeholder="+ Add a to-do" autocomplete="off" aria-label="Add a to-do">
         </form>
@@ -39694,9 +39739,92 @@
   // 2026-08-18: the global calendar-triggered panel's own close (✕) + backdrop-click
   // -- same "tap outside the sheet" convention as every other overlay in this file
   // (see e.g. #tlDetailOverlay's own listener).
-  document.getElementById("editPanelClose")?.addEventListener("click", () => closeRtnForm());
+  // 2026-08-19: #editPanelOverlay now has a SECOND possible occupant (the To-do
+  // overflow list, see todoPanelOpen below) -- these three shared triggers branch on
+  // which one is actually open rather than always calling the routine-form close.
+  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (todoPanelOpen) closeTodoPanel(); else closeRtnForm(); });
   document.getElementById("editPanelOverlay")?.addEventListener("click", e => {
-    if (!e.target.closest(".slide-panel-sheet")) closeRtnForm();
+    if (e.target.closest(".slide-panel-sheet")) return;
+    if (todoPanelOpen) closeTodoPanel(); else closeRtnForm();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && todoPanelOpen) closeTodoPanel();
+  });
+  // 2026-08-19 (Linh, "+N more -> a slide-out panel... warm, appealing look, instead
+  // of navigating to the full To-do page"): the rail To-do widget's overflow view.
+  // Reuses #editPanelOverlay/-sheet/-body verbatim (see the CSS's own comment on
+  // .todo-panel-mode) rather than a second overlay system -- same shape as
+  // rtnCalendarOpen/openRtnFormFromCalendar just above, a parallel flag+open/close
+  // pair for this panel's OTHER possible occupant.
+  let todoPanelOpen = false;
+  // mirrors resolveEventColorHex()'s own resolution order (sub-category colour if it
+  // has one, else the part-of-life colour) -- same rule the calendar block fill and
+  // the widget-rail digest already use, just returning the live var() reference
+  // (a real CSS engine is available here, unlike that hex-string workaround).
+  function todoPanelColor(t) {
+    if (!t || !t.track) return "var(--ink-faint)";
+    const sub = catSubFor(t.track, t.category);
+    if (sub && sub.color) return sub.color;
+    const life = CAT_BY_ID[t.track];
+    return (life && life.color) || "var(--ink-faint)";
+  }
+  // done items sink to the bottom, same as renderTodoPage() -- "the full to-do list",
+  // not just the rail card's pending-only cap of 5.
+  function todoPanelListHtml() {
+    const sorted = TODOS.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    if (!sorted.length) return `<div class="wr-pat-empty">Nothing on your to-do list.</div>`;
+    return sorted.map(t => `<div class="todo-panel-row${t.done ? " done" : ""}" style="background:color-mix(in oklab, ${todoPanelColor(t)} 7%, var(--paper))">
+        <input type="checkbox" class="todo-panel-tick" data-todopanel-tick="${t.id}" ${t.done ? "checked" : ""} aria-label="Mark ${esc(t.title)} done">
+        <span class="todo-panel-name">${esc(t.title)}</span>
+        <button type="button" class="todo-panel-convert" data-todopanel-event="${t.id}" title="Convert to event" aria-label="Convert ${esc(t.title)} to an event">→</button>
+      </div>`).join("");
+  }
+  // re-render just this panel's own content -- called after every tick/add so it never
+  // goes stale while open; the title's count matches the rail card's own "To-do · N"
+  // label (pending only), since this panel is that same count's overflow.
+  function renderTodoPanel() {
+    const pending = TODOS.filter(t => !t.done).length;
+    const title = document.getElementById("editPanelTitle");
+    if (title) title.textContent = `To-do · ${pending}`;
+    const body = document.getElementById("editPanelBody");
+    if (body) body.innerHTML = `<div class="todo-panel-list">${todoPanelListHtml()}</div>
+      <form class="todo-panel-add" data-todopanel-add>
+        <input type="text" class="todo-panel-add-input field-bare" placeholder="+ Add a to-do" autocomplete="off" aria-label="Add a to-do">
+      </form>`;
+  }
+  function openTodoPanel() {
+    todoPanelOpen = true;
+    document.getElementById("editPanelSheet")?.classList.add("todo-panel-mode");
+    renderTodoPanel();
+    document.getElementById("editPanelOverlay").hidden = false;
+  }
+  function closeTodoPanel() {
+    todoPanelOpen = false;
+    document.getElementById("editPanelSheet")?.classList.remove("todo-panel-mode");
+    document.getElementById("editPanelOverlay").hidden = true;
+  }
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-open-todo-panel]")) { openTodoPanel(); return; }
+    const tick = e.target.closest("[data-todopanel-tick]");
+    if (tick) {
+      const t = TODOS.find(x => x.id === tick.dataset.todopanelTick);
+      if (t) { t.done = tick.checked; saveTodos(TODOS); renderTodoPanel(); renderDeskWidgetRail(); renderTodoPage(); }
+      return;
+    }
+    const mk = e.target.closest("[data-todopanel-event]");
+    if (mk) { closeTodoPanel(); openFormFromTodo(mk.dataset.todopanelEvent); return; }
+  });
+  document.addEventListener("submit", e => {
+    const form = e.target.closest("[data-todopanel-add]");
+    if (!form) return;
+    e.preventDefault();
+    const input = form.querySelector(".todo-panel-add-input");
+    const title = input.value.trim();
+    if (!title) return;
+    TODOS.push({ id: uid(), title, track: "personal", category: "", note: "", done: false, createdAt: keyOf(TODAY) });
+    saveTodos(TODOS);
+    input.value = "";
+    renderTodoPanel(); renderDeskWidgetRail(); renderTodoPage();
   });
   // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
   // that row -- instead of opening the separate slide-over drawer"): #rtnAddForm is
