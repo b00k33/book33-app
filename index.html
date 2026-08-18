@@ -9029,8 +9029,15 @@
      empirically (getBoundingClientRect): with the base 4px gap, .ad-cols started 4px
      right of #eventsLayer's own real content start. Zeroing it here, on top of the
      border-left compensation below, lines the two up exactly. */
-  #dayAlldayRow { border-left: 1px solid transparent; gap: 0; }
-  #dayAlldayRow .ad-gutter { width: var(--gutter); }
+  /* 2026-08-18 (Linh: "all day chips need to be centred"): align-items:center is the
+     VERTICAL half — the chip's middle lines up with the middle of the "ALL DAY" label
+     rather than both hanging off the top. Scoped to this row, NOT .ad-row: #mdAlldayRow
+     needs its default stretch so each day-column fills the row's height. */
+  #dayAlldayRow { border-left: 1px solid transparent; gap: 0; align-items: center; }
+  /* padding-top:0 undoes the base .ad-gutter's own 4px nudge, which existed only to
+     approximate vertical centring by hand — now that the row centres for real, that
+     nudge would push the label 4px BELOW centre. */
+  #dayAlldayRow .ad-gutter { width: var(--gutter); padding-top: 0; }
   #mdAlldayRow .ad-gutter { width: 30px; }
   .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
   .ad-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -9069,6 +9076,9 @@
      with no ellipsis. Capping against the chip's real content box restores the ellipsis.
      (Verified by measuring offsetWidth/scrollWidth on a real chip, not by reasoning.) */
   .ad-chip-t { flex: 1; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* flex:none so the glyph never gets squeezed when .ad-chip-t ellipsises a long name.
+     margin-right rather than a gap on the chip, so chips with no icon are untouched. */
+  .ad-chip-ic { flex: none; font-size: 12px; line-height: 1; margin-right: 5px; }
   /* the following day(s) of a real multi-day span (see mdAlldayColsHtml() in JS) —
      same colour, no title text (set by JS, not here), 50% opacity per spec. */
   .ad-chip-cont { opacity: 0.5; }
@@ -9082,11 +9092,23 @@
      with #mdAlldayRow, where the column direction is load-bearing — one column
      per visible day, each stacking that day's own items. Unscoping any line here
      would collapse the 3/5/7-day row into one undifferentiated wrap. */
-  #dayAlldayRow .ad-cols { flex-wrap: wrap; gap: 6px; }
-  #dayAlldayRow .ad-col { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  /* 2026-08-18 (same brief): the HORIZONTAL half. .ad-col is the flex container the
+     chips actually live in, so it carries the centring; .ad-cols gets it too so a
+     wrapped second line of chips centres as well rather than left-aligning under a
+     centred first line. */
+  #dayAlldayRow .ad-cols { flex-wrap: wrap; gap: 6px; justify-content: center; }
+  #dayAlldayRow .ad-col { flex-direction: row; flex-wrap: wrap; gap: 6px; justify-content: center; }
+  /* 2026-08-18 (Linh: "make it a square with soft corners instead of oval"): 6px, not a
+     new invented number — it's the radius the shared .ad-chip.tl-item base rule already
+     uses (a few lines up) and the same corner every timeline block wears, so an all-day
+     chip and a timed block now read as one family instead of two shapes. The 999px this
+     replaces came from the 2026-08-16 "Google-Calendar pills" pass; the pill shape is
+     the only thing being reverted — the compact size, wrapping and track colours from
+     that pass all stay exactly as they are. Applies to every chip in this row on
+     purpose: one square chip beside two ovals reads as a bug, not a highlight. */
   #dayAlldayRow .ad-chip.tl-item {
     width: auto; max-width: 260px; flex: 0 0 auto; min-height: 0;
-    border-radius: 999px; padding: 4px 12px;
+    border-radius: 6px; padding: 4px 12px;
   }
   /* each track wears its own timeline fill/ink — the same --tl-*-bg / --tl-*-title
      pair the timeline blocks use, so an all-day item and a timed one of the same
@@ -9094,6 +9116,20 @@
   #dayAlldayRow .ad-chip[data-track="work"] { background: var(--tl-work-bg); color: var(--tl-work-title); }
   #dayAlldayRow .ad-chip[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
   #dayAlldayRow .ad-chip[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
+  /* 2026-08-18 (Linh: "make the birthday squares slightly larger to be more noticeable"):
+     SIZE only — no colour, fill or border touched, so it stays the same gold it has
+     always been (that was the explicit ask). Being physically bigger than its neighbours
+     is what makes it stand out, which is the one lever left once colour is off the table.
+     8px rather than section 3's 6px: a bigger box needs a slightly bigger corner to read
+     as the same softness — same ratio, not a second shape.
+     MUST sit after the three data-track rules above: this selector and
+     `#dayAlldayRow .ad-chip.tl-item` (which sets the base 4px/12px padding a few lines
+     up) have IDENTICAL specificity (1,2,0), so source order is the only thing deciding
+     the winner. Moved above them, none of this would apply. */
+  #dayAlldayRow .ad-chip[data-category="Birthdays"] {
+    padding: 7px 14px; font-size: 12.5px; border-radius: 8px;
+  }
+  #dayAlldayRow .ad-chip[data-category="Birthdays"] .ad-chip-ic { font-size: 14px; margin-right: 6px; }
 
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
@@ -26831,7 +26867,15 @@
     const label = cont ? "" : `<span class="ad-chip-t">${esc(e.title)}</span>`;
     if (e.category === "Birthdays") {
       const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
-      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(e.title)}">${label}</span>`;
+      // 2026-08-18 (Linh, "improve the birthday all day view"): e.icon is the person's
+      // own glyph, the SAME field renderAlldayRow()'s banner already reads — 🎂 only as
+      // the fallback when a person has none, so the two surfaces never disagree about
+      // which icon this birthday wears. A continuation chip stays bare (no title, no
+      // icon) exactly as before. Tooltip now carries the note ("— Bouldering") too,
+      // matching the banner's own subtitle, without adding anything to the chip itself.
+      const bdIc = cont ? "" : `<span class="ad-chip-ic" aria-hidden="true">${e.icon || "🎂"}</span>`;
+      const bdTitle = e.note ? `${e.title} — ${e.note}` : e.title;
+      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${bdIc}${label}</span>`;
     }
     return `<span class="${cls}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
   }
