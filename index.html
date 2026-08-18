@@ -2445,6 +2445,38 @@
     background: color-mix(in oklab, var(--gold) 10%, var(--paper));
     border-bottom-color: color-mix(in oklab, var(--gold) 25%, var(--note-line));
   }
+  /* 2026-08-19 (Linh: "tapping the FASTING stat box... should open a slide-out side
+     panel instead of navigating to the Health page... same minimal-header language
+     as the To-do panel, just fasting green instead of gold"): the panel's THIRD
+     occupant (see openFastPanel/closeFastPanel/jumpToFastHistory) -- reparents the
+     Health page's own live .fast-log-tuck/#fastChart/#fastHistory into
+     #editPanelBody rather than rebuilding them, same "no new data model" reasoning
+     as the To-do panel reusing TODOS directly. --fast accents the status ring/clock,
+     "Log fast" button and history durations ONLY while these nodes are physically
+     inside the panel: #fastPanelLive is a dedicated 4th mount of fastCardHTML() (the
+     other three -- #fastLive/#dayFastCard/#todayFastCard -- keep their existing
+     --fast-green untouched), and the .fast-log-tuck/#fastHistory overrides are
+     plain ancestor selectors that stop applying the instant closeFastPanel() moves
+     those nodes back out. One deliberate exception, NOT recoloured: #fastChart's
+     bars are coloured by CYCLE PHASE, not decoration (see fastChartPhaseCol's own
+     comment) -- flattening them to --fast would delete real information, which
+     "no changes to how fasts are... calculated" already rules out. */
+  .slide-panel-sheet.fast-panel-mode .slide-panel-head {
+    background: color-mix(in oklab, var(--fast) 10%, var(--paper));
+    border-bottom-color: color-mix(in oklab, var(--fast) 25%, var(--note-line));
+  }
+  .slide-panel-sheet.fast-panel-mode .slide-panel-head b { color: var(--fast); }
+  #fastPanelLive .fast-ring-track { stroke: color-mix(in srgb, var(--fast) 22%, transparent); }
+  #fastPanelLive .fast-ring-prog { stroke: var(--fast); }
+  #fastPanelLive .fast-clock { color: var(--fast); }
+  #fastPanelLive .fast-encourage { color: var(--fast); }
+  #editPanelBody .fast-log-tuck { padding-top: 8px; margin-top: 12px; }
+  #editPanelBody .fast-log-tuck .btn-save { background: var(--fast); border-color: var(--fast); }
+  #editPanelBody #fastHistory .log-row .val { color: var(--fast); }
+  .fast-panel-stats { display: flex; gap: 8px; margin: 12px 0; }
+  .fast-panel-stat { flex: 1; background: var(--raised); border-radius: var(--radius-sm); padding: 8px 10px; text-align: center; }
+  .fast-panel-stat .n { font-family: var(--font-display); font-size: 16px; color: var(--fast); }
+  .fast-panel-stat .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-top: 2px; }
   .todo-panel-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
   .todo-panel-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); }
   .todo-panel-row.done { opacity: 0.55; }
@@ -15458,6 +15490,15 @@
           <div class="section-head"><h2>Fasting</h2><span class="rule"></span></div>
           <div class="fast-live" id="fastLive"></div>
 
+          <!-- 2026-08-19 (Linh: "tapping the FASTING stat box... should open a
+               slide-out side panel"): markers for openFastPanel()/closeFastPanel()
+               -- .fast-log-tuck/#fastChart/#fastHistory travel into the panel while
+               it's open and return to right after their marker on close, same
+               traveling-node idiom as #dsbSideHome/#railHome/#dayRow2Home elsewhere
+               in this file. #fastStats is NOT reparented -- the panel gets its own
+               compact 3-stat row (fastPanelStatsHTML) instead, see that function's
+               comment for why. -->
+          <div id="fastLogTuckHome" hidden></div>
           <div class="fast-log-tuck">
             <div class="log-head">Log a fast — pick your own start &amp; end</div>
             <form class="fast-manual" id="fastManualForm">
@@ -15468,8 +15509,10 @@
             <div class="fm-error" id="fmError" hidden></div>
           </div>
 
+          <div id="fastChartHome" hidden></div>
           <div id="fastChart"></div>
           <div id="fastStats"></div>
+          <div id="fastHistoryHome" hidden></div>
           <div id="fastHistory"></div>
         </div>
 
@@ -30163,6 +30206,11 @@
     if (day) day.innerHTML = fastCardHTML({ showGoalInput: false, showUdNote: true });
     const today = document.getElementById("todayFastCard");
     if (today) today.innerHTML = fastCardHTML({ showGoalInput: false, showUdNote: false });
+    // 2026-08-19: the fasting slide-out panel's status card -- a 4th mount of this
+    // same multi-mount component (see openFastPanel), showGoalInput:true like the
+    // Health-page one so Start/Stop + goal chips work from the panel too.
+    const panel = document.getElementById("fastPanelLive");
+    if (panel) panel.innerHTML = fastCardHTML({ showGoalInput: true });
     renderDayNotes();
     // 2026-08-06 (fasting indicator 2a/2b): both are safe to call from any page -- #fastLine/
     // #fastStatus are static markup, and topForMin() only reads state/constants + a
@@ -30186,6 +30234,11 @@
     // above -- #dayFastHead/#dayTimelineWrap are static markup regardless of which page
     // is currently visible.
     renderDayFastTint();
+    // 2026-08-19: the fasting slide-out panel (openFastPanel) is its own 4th reader of
+    // this same state, reparented in from the Health page -- same "safe from any page,
+    // needs to reflect immediately" reasoning as every call above. Guarded by
+    // fastPanelOpen so this is a no-op the other 99% of the time the panel is closed.
+    if (fastPanelOpen) { renderFastChart(); renderFastStatsAndHistory(); renderFastPanelStats(); }
   }
   // 2026-08-06 (Linh, fasting indicator 2b): the Day page's own "Fasting" status row,
   // above the grid -- reuses .spend-bar-row/.sb-label/.sb-track/.sb-fill/.sb-amt (the
@@ -30578,20 +30631,15 @@
     </svg>`;
   }
 
-  function renderHealth() {
-    // KPI strip HTML built up as each section below computes its own numbers —
-    // assembled and written to #bdyKpis at the very end of this function.
-    let kpiWeightHTML = "", kpiBfHTML = "", kpiFastHTML = "";
-    // prefill the date fields with today
-    ["weightDate", "bfDate"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el && !el.value) el.value = keyOf(TODAY);
-    });
-
-    /* ---------- fasting ---------- */
-    renderFastEverywhere();
-    renderFastChart();
-
+  // 2026-08-19 extracted out of renderHealth() (was inline there) so the fasting
+  // slide-out panel (openFastPanel/renderFastEverywhere's fastPanelOpen branch) can
+  // refresh #fastStats/#fastHistory too, without needing the rest of renderHealth()'s
+  // weight/body-fat work -- pure move, no behaviour change. Still writes #fastStats
+  // even while the panel (not this page) is what's visible; harmless, and keeps the
+  // Health page's own 6-stat block fresh for whenever she visits it directly. Returns
+  // the KPI-strip fragment so renderHealth() can still fold it into #bdyKpis.
+  function renderFastStatsAndHistory() {
+    let kpiFastHTML = "";
     const fasts = HEALTH.fasts.slice().sort((a, b) => new Date(b.start) - new Date(a.start));
     if (fasts.length) {
       const durs = fasts.map(f => new Date(f.end) - new Date(f.start));
@@ -30638,6 +30686,22 @@
         <div class="bdy-kpi"><div class="v">—</div><div class="k">Fast streak</div><div class="d">not started</div></div>
         <div class="bdy-kpi"><div class="v">—</div><div class="k">Avg fast</div><div class="d">goal ${HEALTH.fastGoalHours || 16}h</div></div>`;
     }
+    return kpiFastHTML;
+  }
+  function renderHealth() {
+    // KPI strip HTML built up as each section below computes its own numbers —
+    // assembled and written to #bdyKpis at the very end of this function.
+    let kpiWeightHTML = "", kpiBfHTML = "", kpiFastHTML = "";
+    // prefill the date fields with today
+    ["weightDate", "bfDate"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.value) el.value = keyOf(TODAY);
+    });
+
+    /* ---------- fasting ---------- */
+    renderFastEverywhere();
+    renderFastChart();
+    kpiFastHTML = renderFastStatsAndHistory();
 
     /* ---------- weight ---------- */
     const ws = HEALTH.weights.slice().sort((a, b) => a.date.localeCompare(b.date));
@@ -36304,7 +36368,13 @@
       </div>
     </div>`;
   }
-  document.getElementById("healthPage").addEventListener("click", e => {
+  // 2026-08-19: widened from #healthPage-scoped to document-scoped -- the fasting
+  // slide-out panel (openFastPanel) reparents .fast-log-tuck/#fastChart/#fastHistory
+  // OUT of #healthPage while it's open, so a listener scoped to that ancestor would
+  // stop receiving their bubbled clicks/input. The handler body itself never reads
+  // #healthPage, purely e.target.closest(...), so widening the scope changes nothing
+  // about what it matches.
+  document.addEventListener("click", e => {
     const fd = e.target.closest("[data-fast-del]");
     if (fd) {
       HEALTH.fasts = HEALTH.fasts.filter(f => f.id !== fd.dataset.fastDel);
@@ -36348,7 +36418,10 @@
   // live duration recompute as Start/End change -- patches just the .fhe-dur span
   // rather than a full renderHealth(), so the datetime-local input never loses focus
   // mid-edit; fastHistDraft is updated here so the value survives an incidental rerender.
-  document.getElementById("healthPage").addEventListener("input", e => {
+  // 2026-08-19: widened from #healthPage-scoped to document-scoped, same reason as
+  // the click delegate just above -- #fastHistory can be reparented into the fasting
+  // panel while its inline fhe-start/fhe-end editor is open.
+  document.addEventListener("input", e => {
     const inp = e.target.closest("[data-fhe-start],[data-fhe-end]");
     if (!inp) return;
     if (inp.matches("[data-fhe-start]")) fastHistDraft.start = inp.value;
@@ -39849,16 +39922,17 @@
   // 2026-08-18: the global calendar-triggered panel's own close (✕) + backdrop-click
   // -- same "tap outside the sheet" convention as every other overlay in this file
   // (see e.g. #tlDetailOverlay's own listener).
-  // 2026-08-19: #editPanelOverlay now has a SECOND possible occupant (the To-do
-  // overflow list, see todoPanelOpen below) -- these three shared triggers branch on
-  // which one is actually open rather than always calling the routine-form close.
-  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (todoPanelOpen) closeTodoPanel(); else closeRtnForm(); });
+  // 2026-08-19: #editPanelOverlay now has a THIRD possible occupant (the fasting
+  // panel, see fastPanelOpen below, added after the To-do overflow list) -- these
+  // three shared triggers branch on which one is actually open rather than always
+  // calling the routine-form close. Any FOURTH occupant joins this same chain.
+  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeRtnForm(); });
   document.getElementById("editPanelOverlay")?.addEventListener("click", e => {
     if (e.target.closest(".slide-panel-sheet")) return;
-    if (todoPanelOpen) closeTodoPanel(); else closeRtnForm();
+    if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeRtnForm();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && todoPanelOpen) closeTodoPanel();
+    if (e.key === "Escape" && (fastPanelOpen || todoPanelOpen)) { if (fastPanelOpen) closeFastPanel(); else closeTodoPanel(); }
   });
   // 2026-08-19 (Linh, "+N more -> a slide-out panel... warm, appealing look, instead
   // of navigating to the full To-do page"): the rail To-do widget's overflow view.
@@ -39936,6 +40010,77 @@
     input.value = "";
     renderTodoPanel(); renderDeskWidgetRail(); renderTodoPage();
   });
+  // 2026-08-19 (Linh: "tapping the FASTING stat box (and anywhere else that does the
+  // same thing)... should open a slide-out side panel instead of navigating to the
+  // Health page... reuse the existing slide-panel component... rather than building a
+  // new one"): #editPanelOverlay's THIRD occupant, same shape as todoPanelOpen above --
+  // a parallel flag + open/close pair. Unlike the To-do panel (which builds its own
+  // markup from TODOS), this one REPARENTS the Health page's own live fasting subtree
+  // (.fast-log-tuck, #fastChart, #fastHistory) into the panel body and back to
+  // #bdyCardFast on close -- same traveling-node idiom #rtnAddForm/#deskSidebar/
+  // #dayRow2 already use elsewhere, chosen over a second implementation because "reads/
+  // writes the exact same fasting data/functions the Health page already uses" ruled a
+  // parallel build out. The status card is the one exception: fastCardHTML() is already
+  // a multi-mount component (#fastLive/#dayFastCard/#todayFastCard each get their own
+  // instance already), so a 4th mount (#fastPanelLive) fits that existing pattern
+  // instead of reparenting #fastLive itself away from the Health page.
+  // Reusing #fastManualForm/#fastChart/#fastHistory's OWN click/input delegates needed
+  // widening from #healthPage-scoped to document-scoped (see those two listeners near
+  // "health" below) since a reparented node is no longer a descendant of #healthPage.
+  let fastPanelOpen = false;
+  // "Last 7 fasts... Avg, Goal met, Streak" is a compact trio scoped to the last 7
+  // days specifically -- deliberately NOT the Health page's own #fastStats 6-stat
+  // all-time block (current/best streak, longest fast, best week avg, fasts logged,
+  // average), which stays exactly as it is and isn't reparented at all. Built fresh
+  // from the same fastedHoursPerDay()/fastRecords() helpers the Health page already
+  // uses, not a new data source.
+  function fastPanelStatsHTML() {
+    const days = fastedHoursPerDay(7);
+    const goalH = HEALTH.fastGoalHours || 16;
+    const logged = days.filter(d => d.hrs > 0);
+    const avg = logged.length ? logged.reduce((a, d) => a + d.hrs, 0) / logged.length : 0;
+    const met = days.filter(d => d.hrs >= goalH).length;
+    const rec = fastRecords();
+    return `
+      <div class="fast-panel-stat"><div class="n">${logged.length ? fmtHrs(avg * 3600000) : "—"}</div><div class="l">Avg</div></div>
+      <div class="fast-panel-stat"><div class="n">${met}/7</div><div class="l">Goal met</div></div>
+      <div class="fast-panel-stat"><div class="n">${rec ? rec.current : 0}</div><div class="l">Streak</div></div>`;
+  }
+  function renderFastPanelStats() {
+    const el = document.getElementById("fastPanelStats");
+    if (el) el.innerHTML = fastPanelStatsHTML();
+  }
+  function openFastPanel() {
+    fastPanelOpen = true;
+    document.getElementById("editPanelSheet")?.classList.add("fast-panel-mode");
+    const title = document.getElementById("editPanelTitle");
+    if (title) title.textContent = "Fasting";
+    const body = document.getElementById("editPanelBody");
+    body.innerHTML = `<div class="fast-live" id="fastPanelLive"></div>
+      <div id="fastPanelLogSlot"></div>
+      <div id="fastPanelChartSlot"></div>
+      <div class="fast-panel-stats" id="fastPanelStats"></div>
+      <div id="fastPanelHistSlot"></div>`;
+    document.getElementById("fastPanelLogSlot").appendChild(document.querySelector(".fast-log-tuck"));
+    document.getElementById("fastPanelChartSlot").appendChild(document.getElementById("fastChart"));
+    document.getElementById("fastPanelHistSlot").appendChild(document.getElementById("fastHistory"));
+    // "Last 7 fasts" -- always open on the week view, never wherever the Health
+    // page's own Week/Month toggle was last left.
+    fastChartRange = "week";
+    document.getElementById("editPanelOverlay").hidden = false;
+    renderFastEverywhere(); // fastPanelOpen is already true, so its own tail refreshes chart/stats/history/panel-stats
+  }
+  function closeFastPanel() {
+    fastPanelOpen = false;
+    document.getElementById("editPanelSheet")?.classList.remove("fast-panel-mode");
+    document.getElementById("editPanelOverlay").hidden = true;
+    const tuckHome = document.getElementById("fastLogTuckHome"), tuck = document.querySelector(".fast-log-tuck");
+    if (tuckHome && tuck) tuckHome.after(tuck);
+    const chartHome = document.getElementById("fastChartHome"), chart = document.getElementById("fastChart");
+    if (chartHome && chart) chartHome.after(chart);
+    const histHome = document.getElementById("fastHistoryHome"), hist = document.getElementById("fastHistory");
+    if (histHome && hist) histHome.after(hist);
+  }
   // 2026-08-06 (Linh: "clicking edit expands a compact editor INLINE, directly under
   // that row -- instead of opening the separate slide-over drawer"): #rtnAddForm is
   // reparented into a dock immediately after the clicked row/card -- the SAME
@@ -43705,10 +43850,16 @@
     document.getElementById("dpTypes").innerHTML = DP_TYPES.map(t =>
       `<button type="button" data-dp-type="${t.id}" aria-pressed="${t.id === dpType}">${t.label}</button>`).join("");
   }
-  // fasting widgets (Day header + Week strip) → jump straight to the fasting history editor
+  // fasting widgets (Day header + Week strip) → open the fasting slide-out panel.
+  // 2026-08-19 (Linh: "tapping the FASTING stat box... should open a slide-out side
+  // panel instead of navigating to the Health page"): SUPERSEDES the old
+  // state.view="health"+scrollIntoView behaviour -- every call site below
+  // (fastHistoryLink, weekPage's [data-fast-history], and fastTapNav's 3 wrapped
+  // triggers) still just calls this one function, so repointing it here repoints
+  // every one of them at once, same "doesn't invent a new route" reasoning
+  // fastTapNav's own comment below already documents.
   function jumpToFastHistory() {
-    state.view = "health"; render();
-    document.getElementById("fastManualForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    openFastPanel();
   }
   document.getElementById("fastHistoryLink")?.addEventListener("click", jumpToFastHistory);
   document.getElementById("weekPage").addEventListener("click", e => {
