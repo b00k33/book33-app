@@ -198,8 +198,14 @@ path matters most.
   chips, the command bar, the merged day-nav row, the two meters, the sleep note, the
   hour grid and the calendar blocks. The scale still governs every other page and every
   other width, including desktop.
-- Two consequences of her sheet that ARE deliberate and should not be "fixed": chips are
-  7px-cornered (not 999px) and the meter bars are 4px-cornered (not 999px) on that view.
+- One consequence of her sheet that IS still deliberate and should not be "fixed": chips
+  are 7px-cornered (not 999px) on that view.
+- 2026-08-18 (Day-view top redesign, "stat boxes instead of thin line bars") SUPERSEDES
+  this exception's meter-bar radius specifically: the meters are no longer a thin
+  label-bar-value row but a vertical stat box (uppercase tinted label, big bold value,
+  a thick pill-radius bar) — see `.dcx-meter`/`meterHtml()` in index.html — and that
+  shape applies at every width, this mobile exception included. The 4px-cornered thin
+  bar this bullet used to describe no longer exists anywhere in the file.
 - Known gap, measured, left as-is: her single-line block threshold is 28px but her
   two-line block needs ~33px at `--hour-h: 46px`. A 41–47 minute block therefore renders
   two lines in a slightly-too-short box. The NAME is protected (`flex: none` on
