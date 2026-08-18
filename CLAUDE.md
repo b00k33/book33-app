@@ -377,6 +377,39 @@ about before adding a fourth tightened dock:
   field set that doesn't map onto `#addForm`/`#rtnAddForm`'s fields. Left
   untouched rather than force-fit into the slide panel.
 
+**Follow-on — the panel gets a second, non-form occupant (2026-08-19)**. Linh:
+"'+N more →' on the rail To-do widget should open a slide-out panel... instead
+of navigating to the full To-do page." First consumer of `#editPanelOverlay`
+that ISN'T `#rtnAddForm` — confirms the "next editor that needs this" line
+above: dock straight into the shared chrome, don't write a second overlay.
+- `todoPanelOpen` (new flag, mirrors `rtnCalendarOpen`) + `openTodoPanel()`/
+  `closeTodoPanel()`/`renderTodoPanel()` are a parallel pair to
+  `openRtnFormFromCalendar()`/`closeRtnForm()` — same shape, second occupant.
+  Because the panel chrome (`#editPanelClose`, `#editPanelOverlay` backdrop
+  click, and a new Escape handler) is a SHARED singleton, all three triggers
+  now branch on `todoPanelOpen` first and fall through to the routine flow
+  otherwise — any THIRD occupant added later must join that same branch chain,
+  not add a fourth independent close path.
+- New named convention for tinting panel content by part-of-life/category —
+  reusable wherever a list inside this panel (or a future one) needs it:
+  header band = `color-mix(in oklab, var(--gold) 10%, var(--paper))`, flat, no
+  gradient; row tint = `color-mix(in oklab, <resolved colour> 7%, var(--paper))`,
+  `var(--radius-sm)` corners (nested-in-a-card, per the Component reference
+  above). "Resolved colour" follows the SAME rule `resolveEventColorHex()`
+  already documents for calendar blocks — sub-category colour if the item has
+  one, else its part-of-life colour — just kept as a live `var()` reference
+  (`todoPanelColor()`) instead of that function's hex-string workaround, since
+  a real DOM/CSS engine is available here.
+- `.todo-panel-tick` (gold-ringed circle) and `.todo-panel-add-input` (solid
+  gold pill) are deliberately NOT `.tick`/`.add-btn` — she asked for a warmer,
+  more appealing look than those existing plain components, not a reskin of
+  them. `.todo-panel-add-input` needs the `field-bare` class to even show its
+  own background/color — the app-wide "ONE FIELD LANGUAGE" rule (§ note above)
+  out-specifies a plain `.todo-panel-add-input` rule via its own
+  `:not(.field-bare)` clause regardless of source order; `field-bare` is a
+  pure opt-out marker here (no `#addForm`/`#rtnAddForm`-scoped styling attached
+  to it applies outside those forms), not a styling class in its own right.
+
 ### Standing pattern — mobile Day-view swipe drawers (2026-08-18, top zone revised pt.3 same day)
 Linh: "the Day view should show ONLY the calendar by default... hidden and
 only appear when I swipe for it." Below 1024px, single-Day view only
