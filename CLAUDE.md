@@ -173,6 +173,44 @@ still-open rather than silently disappearing. Catching up after a gap should nev
 effortful than logging on time would have been — that's exactly when the lowest-friction
 path matters most.
 
+## Line-spacing law (standing rule, adopted 2026-08-18)
+Applies to every surface in index.html. Book33 has **three** line-heights and no others,
+declared once on `:root` next to the `body` rule:
+```css
+:root { --lh-tight: 1.1; --lh-snug: 1.25; --lh-read: 1.4; }
+body { ...; line-height: var(--lh-snug); }
+```
+| Token | Value | Use for |
+|---|---|---|
+| `--lh-tight` | `1.1` | Single-line chrome: chips, pills, badges, calendar-block titles, big numbers, tab labels |
+| `--lh-snug` | `1.25` | **The default.** Labels, list rows, card text, buttons, form fields, nav rows, meta lines |
+| `--lh-read` | `1.4` | Multi-line prose only: notes, descriptions, help text, explanation cards |
+
+**How to decide which token** — ask what the element *is*, not how it currently looks:
+will it ever be more than one line of sentences → `--lh-read`; a single word/short phrase
+in a box → `--lh-tight`; everything else → `--lh-snug`. If a surface looks cramped after
+applying this, promote that one site to `--lh-read` — don't invent a fourth value.
+
+**The two exceptions**, both still legal:
+- `line-height: 1` for centring a glyph/icon inside a fixed-size box (~81 sites, e.g.
+  `#b33OverlayClose`'s × glyph). Any other bare number is a bug — use a token.
+- `line-height` in **px**, where it's doing geometry rather than typography (fixed-height
+  rows, SVG ring labels, `.nut-ring-center`, etc.) — unaffected by this sweep.
+
+**One documented override**: `.tl-item .tl-title` is pinned to `--lh-snug` rather than the
+mechanical `--lh-tight` its category (calendar-block title) would otherwise get — a
+`[data-desk-day1]` comment nearby depends on it staying exactly 1.25 for a ≥15px line box
+in a 27px 30-min timeline block; `--lh-tight` (1.1) would reopen a title-clipping bug.
+
+**Left pending, review individually**: two `line-height: 1.9` sites (`.cmd-eg-list`,
+`.p-steps`) — well outside the three-tier scale, likely deliberate, not folded into any
+token by this sweep.
+
+2026-08-18 sweep: 195 raw `line-height:` declarations found (up from the ~193 in the
+original spec — the file moves fast under concurrent sessions); every bare decimal folded
+into one of the three tokens except the two `1.9` sites above, `line-height: 1`, and
+px-based geometry values, which are all permanently exempt, not "not yet migrated."
+
 ## Fit the screen
 - Design for a phone ~360px wide. Nothing wider than the screen or overflowing.
 - Any popup/dropdown/panel/menu MUST fit the visible screen; if taller, it
