@@ -9588,11 +9588,17 @@
      collapsible zone, so it's still reachable via drag/tap even once she's scrolled
      the calendar down (the bottom-edge flick-up gesture, JS, covers that same case
      without needing to scroll back up first). Plain button, not one of the
-     .dd-edge-hint pills -- those mark screen EDGES; this marks a spot IN the page. */
+     .dd-edge-hint pills -- those mark screen EDGES; this marks a spot IN the page.
+     2026-08-18 pt.4 (Linh: "shrink the fixed space at the top to the smallest it can
+     be"): the text label (.dd-grab-lbl) is gone -- just the drag-pill now, so this
+     is padding-only height. 20px top+bottom around the 4px pill = 44px real tap
+     target (her own floor for a one-handed primary control, design44 §7) while the
+     VISIBLE mark stays a slim 4px line -- tap-target size and visual footprint are
+     no longer the same number. */
   .dd-grab {
     display: none; width: 100%; border: none; background: none; cursor: grab;
-    touch-action: none; padding: 10px 0 14px; margin: 0 0 4px;
-    flex-direction: column; align-items: center; gap: 6px;
+    touch-action: none; padding: 20px 0; margin: 0;
+    align-items: center; justify-content: center;
   }
   body.dd-drawers-active .dd-grab { display: flex; }
   .dd-grab::before {
@@ -9601,7 +9607,6 @@
     transition: background 0.15s ease;
   }
   .dd-grab:active::before { background: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
-  .dd-grab-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
   /* bottom-edge flick-up confirmation toast (JS: bottom-edge gesture block) -- fixed
      just above the safe area, faded in/out via .on, never intercepts touches itself. */
   .dd-flash {
@@ -16910,9 +16915,13 @@
         <div class="day-top-drawer" id="dayTopDrawer">
           <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
         </div>
-        <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header">
-          <span class="dd-grab-lbl" id="ddGrabLbl">Pull down</span>
-        </button>
+        <!-- 2026-08-18 pt.4 (Linh: "drop the word 'Pull down' from the grab handle
+             itself... shrink the fixed space at the top to the smallest it can be"):
+             no visible text label any more -- just the drag-pill (::before). State is
+             still conveyed to assistive tech via aria-expanded (toggled in JS), so
+             nothing is lost for screen-reader users, only the always-on printed word
+             for everyone else. -->
+        <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header"></button>
         <!-- brief confirmation toast for the bottom-edge flick-up gesture (its own JS
              block) -- fades in/out via the .on class, auto-hidden after 850ms. -->
         <div class="dd-flash" id="ddBackToTopFlash" aria-hidden="true">↑ back to the top</div>
@@ -35075,18 +35084,16 @@
   // 2026-08-18 pt.3 (Linh, replacing the top-edge swipe with a pull-handle demo she
   // built): the in-flow top zone -- plain class toggle, no backdrop, no interlock
   // with the other two (it doesn't overlay anything, so nothing to fight over).
-  // #ddGrab's own label/aria-expanded double as the only "is it open" indicator she
-  // needs, so those live here rather than in the drag/tap gesture code.
+  // #ddGrab's own aria-expanded doubles as the only "is it open" indicator (pt.4
+  // dropped the visible text label -- see #ddGrab's own markup comment).
   function dayTopZoneIsOpen() { return document.getElementById("dayTopDrawer").classList.contains("open"); }
   function openDayTopZone() {
     document.getElementById("dayTopDrawer").classList.add("open");
     document.getElementById("ddGrab").setAttribute("aria-expanded", "true");
-    document.getElementById("ddGrabLbl").textContent = "Pull up";
   }
   function closeDayTopZone() {
     document.getElementById("dayTopDrawer").classList.remove("open");
     document.getElementById("ddGrab").setAttribute("aria-expanded", "false");
-    document.getElementById("ddGrabLbl").textContent = "Pull down";
   }
   function toggleDayTopZone() { if (dayTopZoneIsOpen()) closeDayTopZone(); else openDayTopZone(); }
   function closeAllDayDrawers() { closeNavPanel(); closeDayRightDrawer(); }
@@ -36577,6 +36584,21 @@
     // reason (see that line's own 2026-08-18 FIX comment).
     const qa = document.getElementById("qaSlotDay");
     const qaHome = document.getElementById("qaSlotDayHome");
+    // 2026-08-18 pt.4 (Linh, screenshot of a live phone view: "the date/weekday/UD/
+    // moon-phase row that still sits above the pull-handle needs to move INTO the
+    // drawer too... shrink the fixed space at the top to the smallest it can be"):
+    // #dayRow2 (the weekday/date/UD-badge/moon-phase line) is normally reparented by
+    // placeDateLine() -- a SEPARATE closure (the sync module, not reachable from
+    // here -- same cross-closure limit as everywhere else in this function) -- into
+    // #navDateSlot on true mobile (isMobile(), <=640px), or left at #dayRow2Home on
+    // wider widths. Unlike dayStepRow/qaSlotDay, placeDeskGrid()'s "on" branch never
+    // touches #dayRow2 at all, so there's no competing desktop home to guard against
+    // here -- only placeDateLine() to avoid fighting (its own guard added below, in
+    // that function itself). Grabbed with plain getElementById exactly like every
+    // sibling above, so it's found no matter which of its three possible homes
+    // (dayRow2Home / navDateSlot / this drawer) it currently sits in.
+    const dayRow2 = document.getElementById("dayRow2");
+    const navDateSlot = document.getElementById("navDateSlot");
     const wrMobile = document.getElementById("wrMobile");
     const wrMobileHome = document.getElementById("wrMobileHome");
     const rightBody = document.getElementById("dayRightDrawerBody");
@@ -36589,6 +36611,10 @@
       if (sidebar && navExtras && sidebar.parentElement !== navExtras) navExtras.appendChild(sidebar);
       if (rNum && dsbNumSlot && rNum.parentElement !== dsbNumSlot) dsbNumSlot.appendChild(rNum);
       if (miniCalWrap && dsbMiniSlot && miniCalWrap.parentElement !== dsbMiniSlot) dsbMiniSlot.appendChild(miniCalWrap);
+      // dayRow2 goes in FIRST (append order = DOM order) -- the big date/weekday/UD/
+      // moon display reads naturally as the drawer's own header, ahead of the Today/
+      // ‹/› nav row and the rest.
+      if (dayRow2 && topBody && dayRow2.parentElement !== topBody) topBody.appendChild(dayRow2);
       if (dayStepRow && topBody && dayStepRow.parentElement !== topBody) topBody.appendChild(dayStepRow);
       if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
       if (numGroupStrip && topBody && numGroupStrip.parentElement !== topBody) topBody.appendChild(numGroupStrip);
@@ -36619,6 +36645,14 @@
       if (!deskGridMq.matches && dayStepRowHome && dayStepRow && calDaysRow && dayStepRowHome.nextElementSibling !== dayStepRow) dayStepRowHome.after(dayStepRow, calDaysRow);
       if (numGroupStripHome && numGroupStrip && numGroupStripHome.nextElementSibling !== numGroupStrip) numGroupStripHome.after(numGroupStrip);
       if (!deskGridMq.matches && qaHome && qa && qaHome.nextElementSibling !== qa) qaHome.after(qa);
+      // dayRow2 doesn't need the !deskGridMq.matches guard the two lines above do --
+      // placeDeskGrid()'s "on" branch never touches #dayRow2 at all (verified: no
+      // competing desktop home to fight), so it's always safe to hand it back to
+      // #navDateSlot here. placeDateLine() (separate closure) sorts out the TRUE
+      // final resting spot on its own next run: stays in the slot if genuinely mobile
+      // (isMobile(), <=640px), or moves on to #dayRow2Home if not -- same two-step
+      // handoff already used for #miniCalWrap via #dsbSideHome elsewhere in this file.
+      if (navDateSlot && dayRow2 && dayRow2.parentElement !== navDateSlot) navDateSlot.appendChild(dayRow2);
       if (wrMobileHome && wrMobile && wrMobileHome.nextElementSibling !== wrMobile) wrMobileHome.after(wrMobile);
       // leaving drawer mode (resize past 1024px, or navigating off the Day page)
       // while #dayTopDrawer/#dayRightDrawer was open would otherwise strand it
@@ -46903,6 +46937,13 @@
     // after that drawer's) so without this check every resize would win the fight
     // and yank the calendar straight back out of the open drawer.
     var calWrapInDrawer = !!calWrap.closest("#navPanelExtras");
+    // 2026-08-18 pt.4 (same cross-closure conflict, this time for #dayRow2 itself):
+    // placeDayDrawers() (main closure) now also reparents #dayRow2 into the mobile
+    // Day top zone. Its own resize listener is registered even later than this
+    // function's, so without this guard it would win the very next resize and yank
+    // #dayRow2 straight back out into #navDateSlot while the drawer still thinks it
+    // owns it -- leaving the drawer's own header slot silently empty.
+    var rowInDrawer = !!row.closest("#dayTopDrawer");
     if (isMobile()) {
       // 2026-08-06 (Linh, dropdown screenshot: "put a mini calendar under today above
       // patients"): SUPERSEDES parking calWrap at #dayRow2Home — on mobile the mini
@@ -46920,9 +46961,9 @@
         if (pop && calWrap.parentElement !== pop) pop.insertBefore(calWrap, nudge);
         else if (!pop && calWrap.parentElement === row) home.parentElement.insertBefore(calWrap, home.nextSibling);
       }
-      if (row.parentElement !== slot) slot.appendChild(row);
+      if (!rowInDrawer && row.parentElement !== slot) slot.appendChild(row);
     } else {
-      if (row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
+      if (!rowInDrawer && row.parentElement === slot) home.parentElement.insertBefore(row, home.nextSibling);
       // 2026-08-05 (Linh's giant-calendar screenshot): return the calendar to its
       // row2 home ONLY below 901px. Above that, placeMiniCalDesk()/placeDeskGrid()
       // own the calendar (rail / right column) — grabbing it back here raced those
