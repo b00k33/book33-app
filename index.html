@@ -3117,6 +3117,17 @@
     color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .tl-move-btn:hover { background: color-mix(in oklab, var(--ink) 18%, var(--paper)); }
+  /* 2026-08-19 (hair-wash snooze): same size/shape as .tl-move-confirm (the block-
+     width, 44px, pill-radius recipe) so it lines up in the same panel, but .tl-move-
+     btn's NEUTRAL palette, not gold -- §0's "one primary action per surface, gold"
+     still belongs to Save new time below it; this is the secondary option. */
+  .tl-move-snooze {
+    display: block; width: 100%; min-height: 44px; padding: 8px 16px; border: none; border-radius: 999px;
+    background: color-mix(in oklab, var(--ink) 12%, var(--paper));
+    color: var(--ink); font-family: var(--font-body); font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .tl-move-snooze:hover { background: color-mix(in oklab, var(--ink) 18%, var(--paper)); }
+  .tl-move-snooze:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
   /* 2026-08-15 (§6 mobile redesign): the old bottom "Delete" row (.tl-del-row/
      .tl-del-trigger) is RETIRED, not just restyled — Zone 3 (.tl-detail-manage,
      see near .tl-detail-head) now owns mobile Delete as a labelled row, wired to
@@ -21302,7 +21313,14 @@
   // due once cadenceDays have passed since the last logged wash -- STAYS due (never
   // resets on its own) until she actually Logs or Skips, so a late day never quietly
   // loses its turn the way a fixed calendar pattern would
-  function hairDueDate() { return HAIRD.lastDone ? addDays(parseKey(HAIRD.lastDone), hairCadenceDays()) : TODAY; }
+  // 2026-08-19 (Linh, "snooze for the next day"): a snoozeDate, when it's still in
+  // the future, wins over the normal lastDone+cadence maths -- lets "not today,
+  // tomorrow instead" push the due date out by exactly one day without touching
+  // HAIRD.lastDone (which would shift the whole rotation's future cadence too).
+  function hairDueDate() {
+    if (HAIRD.snoozeDate && keyOf(TODAY) < HAIRD.snoozeDate) return parseKey(HAIRD.snoozeDate);
+    return HAIRD.lastDone ? addDays(parseKey(HAIRD.lastDone), hairCadenceDays()) : TODAY;
+  }
   function hairIsDue(date) { return keyOf(date) >= keyOf(hairDueDate()); }
   // ✓ Log: stamp today done, append history, advance the pointer to the next wash.
   function hairLogWash(date) {
@@ -21314,6 +21332,7 @@
     if (HAIRD.history.length > 200) HAIRD.history = HAIRD.history.slice(-200);
     HAIRD.lastDone = k;
     HAIRD.pos = (HAIRD.pos + 1) % HAIRD.rotation.length;
+    HAIRD.snoozeDate = null;
     saveHairData();
   }
   // Skip: advance the pointer WITHOUT stamping lastDone -- the clock doesn't reset,
@@ -21321,6 +21340,15 @@
   function hairSkipWash() {
     if (!HAIRD.rotation.length) return;
     HAIRD.pos = (HAIRD.pos + 1) % HAIRD.rotation.length;
+    HAIRD.snoozeDate = null;
+    saveHairData();
+  }
+  // 2026-08-19 (Linh, "snooze for the next day"): the one-tap alternative to typing a
+  // date hair wash was never going to accept (see hairDueDate() above + the
+  // HAIR_ROUTINE_ID note in commitTlMove, further down). Always exactly tomorrow, not
+  // an arbitrary day -- matches what she actually asked for.
+  function hairSnoozeTomorrow() {
+    HAIRD.snoozeDate = keyOf(addDays(TODAY, 1));
     saveHairData();
   }
   // un-ticking the checkbox reverses a same-day Log exactly (rewinds pos, restores
@@ -21900,7 +21928,7 @@
     // don't carry a hair cell; Log/Skip on today's occurrence is the one place this
     // is decided, same as the acceptance spec's "today's wash + steps + due status".
     const hrt = hairRoutine();
-    if (hrt && hrt.calOn !== false && k === keyOf(TODAY)) {
+    if (hrt && hrt.calOn !== false && (k === keyOf(TODAY) || (HAIRD.snoozeDate && k === HAIRD.snoozeDate))) {
       const w = hairWashById(hairWashIdFor(date));
       if (w) {
         const due = hairIsDue(date);
@@ -25150,6 +25178,15 @@
   function refreshTlMoveConfirm() {
     const btn = document.getElementById("tlMoveConfirm");
     if (!btn) return;
+    // 2026-08-19 (hair-wash snooze, found live): this live-refresh path is shared by
+    // every item's move panel, so it needs the SAME hair-wash check renderTlDetailBody
+    // used for the button's initial label (isHairWashMove there) -- without it, typing
+    // a time silently overwrote "Save new time" back to routine-scope wording ("Move
+    // the routine to 7:30am") on the very first keystroke, even though there's no
+    // #tlMoveDate field left in this panel to make that wording correct. Reads the
+    // open item off the button's own data-tl-move-go rather than adding new state.
+    const openEv = TL_ITEMS_BY_ID[btn.dataset.tlMoveGo];
+    if (openEv && openEv.rtTaskId === HAIR_ROUTINE_ID) { btn.textContent = "Save new time"; return; }
     const dEl = document.getElementById("tlMoveDate");
     const tEl = document.getElementById("tlMoveTime");
     btn.textContent = tlMoveConfirmText(dEl ? dEl.value : "", tEl ? tEl.value : "", tlDetailPanel === "copy", !!dEl);
@@ -25516,6 +25553,13 @@
     const moveScopeable = moveOpen && isRtnOcc && !!rtnT;
     const moveDayScope = !moveScopeable || tlMoveScope !== "routine";
     const moveVerb = copyOpen ? "Add to" : "Move to";
+    // 2026-08-19 (Linh, "reschedule to a later time same day or snooze for the next
+    // day"): hair wash never accepted an arbitrary date anyway -- it always lands on
+    // its own next-due day (hairDueDate(), above) -- so the date field here was a dead
+    // end dressed up as a real control. Swapped for the one thing that IS real: a
+    // one-tap "not today, tomorrow instead" snooze. The time fields below are
+    // untouched -- changing today's time still works exactly as before.
+    const isHairWashMove = moveOpen && !copyOpen && e.rtTaskId === HAIR_ROUTINE_ID;
     const moveField = (id, cls, type, label, value, extra) => `<label class="tl-move-fld">
           <span class="tl-move-fld-lbl">${esc(label)}</span>
           <!-- .field-bare is the ONE FIELD LANGUAGE law's own documented escape hatch (see
@@ -25536,7 +25580,9 @@
           <button type="button" class="ovr-scope-opt" data-move-scope="routine" aria-pressed="${!moveDayScope}">The routine<span class="sub">${esc(schedLbl)}</span></button>
         </div>
         <div class="tl-move-hint">${esc(moveScopeHint(e, rtnT, occDateD, moveDayScope))}</div>` : ""}
-        ${moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
+        ${isHairWashMove ? `<button type="button" class="tl-move-snooze" data-tl-hair-snooze="1">😴 Not today — remind me tomorrow instead</button>
+        <div class="tl-move-hint">It always lands on its own next-due day, so this is the one thing that can move — everything below just changes today's time.</div>`
+          : moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
         <div class="tl-detail-move-row">
           ${moveField("tlMoveTime", "tl-move-time", "time", "Starts", moveDayScope ? e.start : (rtnT && rtnT.start) || e.start)}
           ${moveField("tlMoveEnd", "tl-move-time", "time", "Ends", moveDayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : ((rtnT && rtnT.end) || e.end || ""))}
@@ -25547,7 +25593,7 @@
              (Cancel/reopen) always starts clean; .tl-detail-extra's own flex gap spaces
              it without an extra margin. -->
         <div class="tl-move-error" id="tlMoveError" hidden></div>
-        <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
+        <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${isHairWashMove ? "Save new time" : esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
       </div>` : "";
     // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
     // only renders once a real FIT_LOG session exists for this item (resolveFitSessionFor)
@@ -26472,6 +26518,18 @@
       refreshOpenTlDetail();
       return;
     }
+    // 2026-08-19 (Linh, "snooze for the next day"): today's occurrence stops showing
+    // as due, tomorrow's shows up due instead (see hairDueDate() + the generatedFor
+    // gate above) -- no date to type, no confirm step beyond this one tap.
+    const hairSnooze = e.target.closest("[data-tl-hair-snooze]");
+    if (hairSnooze) {
+      e.stopPropagation();
+      hairSnoozeTomorrow();
+      tlDetailPanel = null;
+      closeTlDetail();
+      renderDay();
+      return;
+    }
     const moveGo = e.target.closest("[data-tl-move-go]");
     if (moveGo) { e.stopPropagation(); commitTlMove(moveGo.dataset.tlMoveGo); return; }
     // the routine-template deep-edit link inside the edit panel (see editFieldsHtml) —
@@ -26581,29 +26639,16 @@
       renderDay();
       return;
     }
-    const dateVal = document.getElementById("tlMoveDate")?.value || "";
-    // was a bare `return` -- same silent no-op.
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { showTlMoveError("Pick a valid date to move this to."); return; }
-    // 2026-08-18 (Linh: "my move button doesn't work" -- reproduced on the hair-wash
-    // block specifically): hair wash isn't a normal routine occurrence -- it's
-    // generated fresh for TODAY ONLY, off its own cadence (HAIRD.lastDone), never a
-    // calendar pattern (generatedFor's `k === keyOf(TODAY)` gate, untouched here), so
-    // its id ("hair-<date>") never matches parseOccId's "rt-<taskId>-<date>" shape. It
-    // still passes tlItemCanMove (fromRoutine + rtTaskId) so Reschedule shows for it,
-    // but rescheduleItem's routine branch then computes p=null and quietly returns --
-    // exactly the silent no-op this whole fix exists to kill. There's no per-date
-    // occurrence for setRtnOvr to write an override onto, so route it to what CAN
-    // change instead: the routine's own Start/End fields, the same source Segment H's
-    // timed-block fix already made authoritative for this item's calendar time. A
-    // genuinely different date has no meaning for it (it always lands on its own next
-    // due day), so that's reported, not silently dropped either. rescheduleItem/
-    // setRtnOvr themselves are still untouched -- this only adds a case they were
-    // never wired to handle.
+    // 2026-08-19 (Linh, "reschedule to a later time same day or snooze for the next
+    // day"): hair wash's date field is gone from the panel now (see moveHtml, and the
+    // new snooze button/hairSnoozeTomorrow() for the "different day" case) -- this
+    // branch only ever needs to save the new time, so it has to run BEFORE the
+    // date-format check below, which would otherwise always fail since #tlMoveDate no
+    // longer exists in the DOM for this item. SUPERSEDES the 18 Aug fix just below,
+    // which taught this branch to show an error instead of silently failing when the
+    // date changed -- now there's no date field for it to disagree with in the first
+    // place.
     if (!copy && rt && rt.id === HAIR_ROUTINE_ID) {
-      if (dateVal !== ev.date) {
-        showTlMoveError("Hair wash always lands on its next due day — this can only change today's time, not the date.");
-        return;
-      }
       rt.start = startVal;
       if (endVal) rt.end = endVal;
       saveRoutines();
@@ -26612,6 +26657,9 @@
       renderDay();
       return;
     }
+    const dateVal = document.getElementById("tlMoveDate")?.value || "";
+    // was a bare `return` -- same silent no-op.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) { showTlMoveError("Pick a valid date to move this to."); return; }
     tlDetailPanel = null;
     if (copy) duplicateItem(ev, dateVal, startVal, endVal);
     else rescheduleItem(ev, dateVal, startVal, endVal);
