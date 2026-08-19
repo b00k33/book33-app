@@ -14259,6 +14259,51 @@
     padding: 8px 0 0; outline: none;
   }
   .wr-todo-add-input::placeholder { color: var(--gold-bright); font-weight: 700; opacity: 1; }
+  /* Upkeep day-suggestions (2026-08-19): LEFT date block / MIDDLE emoji+title+time+
+     chips / RIGHT accept+dismiss -- one row per suggestion, 3px left border in the
+     system's own dial colour (UPKEEP_DIAL_COLOR, set inline per row since it's data,
+     not a class). "must never grow past two lines of chips" -> max-height + hidden
+     overflow on .upk-chips is the hard guarantee, on top of the 4-chip cap the JS
+     itself already applies. */
+  .upk-list { display: flex; flex-direction: column; gap: 8px; }
+  .upk-row {
+    display: flex; align-items: stretch; gap: 8px; padding: 8px; border-radius: var(--radius-sm);
+    border-left: 3px solid; background: color-mix(in oklab, var(--cosmic-gold) 4%, transparent);
+  }
+  .upk-date {
+    flex: none; width: 56px; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 2px; padding: 6px 4px; border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--cosmic-gold) 10%, transparent);
+  }
+  .upk-wd { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-faint); line-height: var(--lh-tight); }
+  .upk-dnum { font-size: 20px; font-weight: 800; color: var(--gold-bright); line-height: var(--lh-tight); }
+  .upk-ud { font-size: 10px; font-weight: 700; color: var(--ink-soft); line-height: var(--lh-tight); }
+  .upk-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .upk-title { font-size: 13px; font-weight: 700; color: var(--ink); line-height: var(--lh-snug); }
+  .upk-when { font-size: 11px; font-weight: 700; color: var(--gold-bright); line-height: var(--lh-tight); }
+  .upk-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; max-height: 44px; overflow: hidden; }
+  .upk-chip {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; line-height: var(--lh-snug);
+    background: color-mix(in oklab, var(--ink-faint) 14%, transparent); color: var(--ink-soft);
+  }
+  .upk-chip-gold { background: color-mix(in oklab, var(--gold-bright) 16%, transparent); color: var(--gold-bright); }
+  .upk-chip-bad { background: color-mix(in oklab, var(--danger) 16%, transparent); color: var(--danger); }
+  .upk-chip-warn { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn); }
+  .upk-actions { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .upk-btn {
+    width: 40px; height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--margin-rule);
+    background: none; font-size: 16px; line-height: 1; cursor: pointer; color: var(--ink-soft);
+  }
+  .upk-accept { border-color: var(--gold-bright); color: var(--gold-bright); }
+  .upk-accept:hover { background: color-mix(in oklab, var(--gold-bright) 12%, transparent); }
+  .upk-dismiss:hover { background: color-mix(in oklab, var(--danger) 12%, transparent); color: var(--danger); }
+  @media (max-width: 640px) {
+    .upk-date { width: 40px; padding: 4px 2px; }
+    .upk-dnum { font-size: 16px; }
+    .upk-wd, .upk-ud { font-size: 9px; }
+    .upk-chip:nth-child(4) { display: none; }
+    .upk-btn { width: 36px; height: 36px; font-size: 14px; }
+  }
   /* Streaks */
   .wr-streaks { display: flex; flex-wrap: wrap; gap: 4px 8px; }
   /* Today's boost (2026-08-16, moved from a standalone bottom-of-page card into this
@@ -21185,6 +21230,81 @@
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
   })();
 
+  /* 2026-08-19 (upkeep day-suggestions foundation): a "system" here is anything that
+     decays over time and can fall behind -- distinct from a daily-compliance routine
+     (skincare AM/PM) or a continuous metric (the Health page). Hair reuses HAIRD's own
+     existing lastDone/cadence untouched (its own Log/Skip flow owns that). Nails and
+     Blow-dry have no tracked cadence at all today -- they're `asNeeded` on purpose
+     ("manicure stays asNeeded -- that one really is occasional", see
+     migrateSkincareDaily's comment above) -- so rather than repurposing freq/
+     intervalDays (which would start auto-generating real recurring calendar
+     occurrences, exactly what this whole feature's own "a suggestion never writes to
+     the calendar on its own" rule says not to do), they get a small dedicated store
+     just for lastDone, with cadence as a fixed default for now (not yet wired into the
+     routine editor -- flagged to Linh as a scoping call, not a silent omission).
+     needsBooking exists so a future salon-type system can produce the spec's "two
+     suggestions: booking call + appointment" shape without new code -- none of these
+     three need it today (all three are real home-DIY routines per BEAUTY_ROUTINES). */
+  const UPKEEP_SYSTEMS = [
+    { id: "hair", label: "Hair", emoji: "💧", routineId: HAIR_ROUTINE_ID, needsBooking: false },
+    { id: "nails", label: "Nails", emoji: "💅", routineId: "beauty-manicure", cadenceDays: 14, needsBooking: false },
+    { id: "blowdry", label: "Blow-dry", emoji: "💨", routineId: "beauty-blowdry", cadenceDays: 7, needsBooking: false },
+  ];
+  // all three are Beauty-categorised routines (hair-wash literally, nails/blow-dry via
+  // Skin & Nails under the same "personal" parent) -- one shared, real token, not a
+  // guessed hex, per the app's colour rules.
+  const UPKEEP_DIAL_COLOR = "var(--cat-personal-beauty)";
+  const UPKEEP_KEY = "book33-upkeep";
+  function loadUpkeep() {
+    try { const v = JSON.parse(localStorage.getItem(UPKEEP_KEY)); if (v && typeof v === "object") return v; } catch (e) {}
+    return {};
+  }
+  function saveUpkeep() { try { localStorage.setItem(UPKEEP_KEY, JSON.stringify(UPKEEP)); } catch (e) {} }
+  let UPKEEP = loadUpkeep(); // { [sysId]: { lastDone: "YYYY-MM-DD" } } -- nails/blow-dry only
+
+  function upkeepCadenceDays(sys) { return sys.id === "hair" ? hairCadenceDays() : sys.cadenceDays; }
+  function upkeepLastDoneDate(sys) {
+    if (sys.id === "hair") return HAIRD.lastDone ? parseKey(HAIRD.lastDone) : null;
+    const rec = UPKEEP[sys.id];
+    return rec && rec.lastDone ? parseKey(rec.lastDone) : null;
+  }
+  // pct is a FRESHNESS score -- 100 right after lastDone, decaying linearly to 0 by the
+  // time the system's own cadence has fully elapsed (then clamped, never negative on
+  // screen -- behindDays below still carries the real "how much past due" number).
+  // Never-done systems start fully behind (daysSince defaults to cadenceDays -> pct 0).
+  function upkeepStatus(sys) {
+    const cadenceDays = upkeepCadenceDays(sys);
+    const lastDone = upkeepLastDoneDate(sys);
+    const daysSince = lastDone ? dayDiff(TODAY, lastDone) : cadenceDays;
+    const pct = Math.max(0, Math.min(100, Math.round(100 - (daysSince / cadenceDays) * 100)));
+    return {
+      sys, pct, daysSince, cadenceDays, lastDone,
+      dueDate: lastDone ? addDays(lastDone, cadenceDays) : TODAY,
+      behindDays: Math.max(0, daysSince - cadenceDays),
+    };
+  }
+  // called as a side effect of the generic event-done tick when that event carries
+  // upkeepSysId (see the [data-tick] delegate) -- hair is excluded, its own Log/Skip
+  // flow is the only thing that ever touches HAIRD.lastDone, per the LEAVE ALONE spec.
+  function upkeepMarkDone(sysId, dateKey) {
+    if (sysId === "hair") return;
+    UPKEEP[sysId] = { lastDone: dateKey };
+    saveUpkeep();
+  }
+  // a system counts as "behind" (worth a suggestion, and the same threshold reminders
+  // use by default via NOTIF.upkeep.minSystemScore) once its freshness drops under 60%.
+  const UPKEEP_BEHIND_THRESHOLD = 60;
+  // shared "how late is it" phrasing -- one place so the widget chip and the reminder
+  // body can't drift. "due today" for the boundary day (daysSince === cadenceDays
+  // exactly), not "due in 0 days".
+  function upkeepLateText(st) {
+    if (st.behindDays > 0) return { text: `${st.behindDays} day${st.behindDays === 1 ? "" : "s"} late`, tone: "bad" };
+    const daysLeft = st.cadenceDays - st.daysSince;
+    return daysLeft <= 0
+      ? { text: "due today", tone: "warn" }
+      : { text: `due in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`, tone: "warn" };
+  }
+
   // one-time (2026-08-17, Linh "quieten Routines" brief): 10 always-there basic
   // routines -- water/teeth/shower/meals/supplements/wind-down -- seeded once as
   // real ROUTINE_TASKS entries in the new Daily essentials sub-category so they're
@@ -22810,6 +22930,13 @@
       return;
     }
     const ev = EVENTS.find(x => x.id === id);
+    // 2026-08-19 (upkeep suggestions): an event created by accepting an upkeep
+    // suggestion carries upkeepSysId -- ticking it done is the only thing that stamps
+    // that system's lastDone (accepting only schedules it, doesn't complete it).
+    // Un-ticking deliberately does not revert lastDone -- reverting would need the
+    // PREVIOUS lastDone, which isn't tracked, so a one-way stamp on completion is the
+    // simplest correct behaviour here.
+    if (ev && ev.upkeepSysId && on) upkeepMarkDone(ev.upkeepSysId, ev.date);
     const st = stagedOf(ev);
     if (st) {
       if (on && st.at < st.n - 1) { ev.stageAt = st.at + 1; saveEvents(EVENTS); return; }
@@ -38060,8 +38187,8 @@
   // legitimately ABSENT some days (wrCardHtml returns "" when nothing's on state.anchor)
   // -- same "omit entirely, don't show an empty state" rule the old #tlAlldayRow banner
   // and the day-context birthday chip both already followed.
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "pileupBox", "streaksWidget", "boostWidget", "railBday", "biomechTip"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", railBday: "Birthday", biomechTip: "Biomechanics" };
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "pileupBox", "streaksWidget", "boostWidget", "railBday", "biomechTip"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", railBday: "Birthday", biomechTip: "Biomechanics" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -38260,6 +38387,44 @@
               title="Less like this — retires this tip and swaps in another">✕ less like this</button>
           </div>
         </div>
+      </div>`;
+    }
+    if (id === "upkeepSuggest") {
+      // 2026-08-19 (upkeep day-suggestions): buildUpkeepSuggestions() only ever
+      // reads state (dpScoreDay/qaFreeSlots, both untouched) -- rebuilding it fresh on
+      // every render is cheap (3 systems, 14-day lookahead each) and keeps this card
+      // trivially correct after an accept/dismiss without a separate cache to bust.
+      const suggestions = buildUpkeepSuggestions();
+      if (!suggestions.length) {
+        return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+          <span class="wr-label">Suggestions</span>
+          <div class="wr-pat-empty">Nothing needs a day right now.</div>
+        </div>`;
+      }
+      const rows = suggestions.map(s => {
+        const bd = parseKey(s.bestDate);
+        const wd = WD_FULL[dowIndex(bd)].slice(0, 3);
+        const ud = universalDay(bd).value;
+        return `<div class="upk-row" style="border-left-color:${UPKEEP_DIAL_COLOR}">
+          <div class="upk-date">
+            <span class="upk-wd">${esc(wd)}</span>
+            <span class="upk-dnum">${bd.getDate()}</span>
+            <span class="upk-ud">UD ${esc(String(ud))}</span>
+          </div>
+          <div class="upk-mid">
+            <div class="upk-title">${esc(s.title)}</div>
+            <div class="upk-when">${fmtTime(s.bestStart)} · ${s.durMin} min</div>
+            <div class="upk-chips">${s.chips.map(c => `<span class="upk-chip upk-chip-${c.tone}">${esc(c.text)}</span>`).join("")}</div>
+          </div>
+          <div class="upk-actions">
+            <button type="button" class="upk-btn upk-accept" data-upk-accept="${esc(s.id)}" aria-label="Schedule ${esc(s.title)}">✓</button>
+            <button type="button" class="upk-btn upk-dismiss" data-upk-dismiss="${esc(s.id)}" aria-label="Not now — ${esc(s.title)}">✕</button>
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Suggestions</span>
+        <div class="upk-list">${rows}</div>
       </div>`;
     }
     return "";
@@ -42753,6 +42918,54 @@
     // 2026-08-06 (drag-and-drop): swallow the one click a mouse drag/resize leaves
     // trailing behind it — see suppressNextItemClick's declaration for why.
     if (suppressNextItemClick) { suppressNextItemClick = false; return; }
+    // 2026-08-19 (upkeep day-suggestions): ✓ is the ONLY thing that ever schedules —
+    // rebuilds the suggestion list fresh (cheap, deterministic, same inputs it was
+    // rendered from) to recover the full object from the row's id rather than
+    // round-tripping every field through data-attributes. Routine-sourced suggestions
+    // (sourceRoutineId set) would move an existing occurrence via setRtnOvr, same
+    // mechanism a drag-to-move already writes; none of today's real suggestions are
+    // routine-sourced (hair has no future occurrence to move, nails/blow-dry have no
+    // occurrence at all), so every one of them takes the plain-EVENT branch today —
+    // both branches exist so a future routine-backed system lights up for free.
+    const upkAccept = e.target.closest("[data-upk-accept]");
+    if (upkAccept) {
+      const id = upkAccept.dataset.upkAccept;
+      const s = buildUpkeepSuggestions().find(x => x.id === id);
+      if (!s) return;
+      if (s.sourceRoutineId) {
+        setRtnOvr(s.sourceRoutineId, s.originDateKey, { movedTo: s.bestDate, start: s.bestStart, end: s.bestEnd });
+        showUndoSnackbar(`Scheduled "${s.title}" for ${qaDayLbl(parseKey(s.bestDate))}`, () => {
+          setRtnOvr(s.sourceRoutineId, s.originDateKey, { movedTo: undefined, start: undefined, end: undefined });
+          renderDay();
+        });
+      } else {
+        const newEv = {
+          id: uid(), date: s.bestDate, track: s.track, category: s.category, kind: "event",
+          title: s.title, allDay: false, start: s.bestStart, end: s.bestEnd,
+          upkeepSysId: s.sysId,
+        };
+        EVENTS.push(newEv);
+        saveEvents(EVENTS);
+        showUndoSnackbar(`Scheduled "${s.title}" for ${qaDayLbl(parseKey(s.bestDate))}`, () => {
+          EVENTS = EVENTS.filter(x => x.id !== newEv.id);
+          saveEvents(EVENTS);
+          renderDay();
+        });
+      }
+      renderDay();
+      return;
+    }
+    // ✕ hides this exact overdue cycle (id is cycle-scoped, see upkeepSuggestionId) —
+    // it returns on its own once lastDone actually changes, so no dismiss-until math
+    // is needed here beyond storing the cycle key that's already on the suggestion.
+    const upkDismiss = e.target.closest("[data-upk-dismiss]");
+    if (upkDismiss) {
+      const id = upkDismiss.dataset.upkDismiss;
+      const cycleKey = id.split(":").slice(-1)[0];
+      dismissUpkeepSuggestion(id, cycleKey);
+      renderDay();
+      return;
+    }
     // Skip this wash (Also-today row) — advances the rotation pointer WITHOUT
     // logging/stamping lastDone, so it's still due right after, just with the next
     // wash in the queue up next. See hairSkipWash's own comment for why this doesn't
@@ -44915,6 +45128,7 @@
     { id: "peace",    label: "🤝 Negotiate & peace", best: [2],  good: [6, 9, 33],    avoid: [1, 5] },
     { id: "travel",   label: "🧭 Travel & change",   best: [5],  good: [3, 1],        avoid: [4, 6, 11] },   // 11 = no flying
     { id: "manifest", label: "✨ Manifest & vision", best: [11], good: [3, 7, 33],    avoid: [4] },
+    { id: "selfcare", label: "💆 Self-care & beauty", best: [6], good: [2, 3, 5, 33], avoid: [4, 8, 1] },
   ];
   let dpType = "start";
   function dpEnergyScore(n, spec, wB, wG, wA) {
@@ -44950,6 +45164,119 @@
   function renderDpTypes() {
     document.getElementById("dpTypes").innerHTML = DP_TYPES.map(t =>
       `<button type="button" data-dp-type="${t.id}" aria-pressed="${t.id === dpType}">${t.label}</button>`).join("");
+  }
+
+  /* ============================================================
+     UPKEEP DAY-SUGGESTIONS (2026-08-19) -- "WHEN to do the things my upkeep systems
+     are behind on", using the day-scoring above exactly as it already works
+     (dpScoreDay/DP_TYPES/qaFreeSlots untouched, just called -- no second scorer, no
+     second free-time source). buildUpkeepSuggestions() only ever READS state; the
+     [data-upk-accept] delegate further down is the one thing that ever schedules.
+     ============================================================ */
+  const UPKEEP_DISMISS_KEY = "book33-upkeep-dismiss";
+  function loadUpkeepDismiss() {
+    try {
+      const v = JSON.parse(localStorage.getItem(UPKEEP_DISMISS_KEY));
+      if (v && typeof v === "object") {
+        // pure hygiene GC, not the "returns on next cycle" mechanism itself -- that's
+        // the cycle-scoped id below (same lastDone -> same id -> stays dismissed;
+        // lastDone changes -> new due date -> new id -> reappears on its own). This
+        // just bounds storage growth for an id whose cycle never rotated for some
+        // unrelated reason (e.g. she stops tracking a system entirely).
+        const floor = keyOf(addDays(TODAY, -180));
+        const out = {};
+        Object.keys(v).forEach(k => { if (v[k] >= floor) out[k] = v[k]; });
+        return out;
+      }
+    } catch (e) {}
+    return {};
+  }
+  function saveUpkeepDismiss() { try { localStorage.setItem(UPKEEP_DISMISS_KEY, JSON.stringify(UPKEEP_DISMISS)); } catch (e) {} }
+  let UPKEEP_DISMISS = loadUpkeepDismiss(); // { [suggestionId]: "YYYY-MM-DD" dismissed-until }
+  const isUpkeepDismissed = id => Object.prototype.hasOwnProperty.call(UPKEEP_DISMISS, id);
+  function dismissUpkeepSuggestion(id, cycleKey) { UPKEEP_DISMISS[id] = cycleKey; saveUpkeepDismiss(); }
+
+  // the CYCLE a suggestion belongs to (spec's own wording) -- the due date, which only
+  // moves once lastDone actually changes, so the SAME ongoing overdue stretch always
+  // produces the SAME id no matter which day buildUpkeepSuggestions() happens to pick.
+  const upkeepSuggestionId = (sys, kind, cycleKey) => `${sys.id}:${kind}:${cycleKey}`;
+
+  // "🔮 UD n · <focus title>" -- same underlying numerology dpScoreDay itself reads
+  // (universalDay/focusFor), just formatted as a short chip instead of dpScoreDay's
+  // own verbose ✓/✗ why-line.
+  function upkeepUdChip(d) {
+    const udRaw = String(universalDay(d).value);
+    const udv = parseInt(udRaw, 10);
+    const udE = SEMI_MASTERS.has(udv) ? toSingleDigit(udv) : udv;
+    return `🔮 UD ${udRaw} · ${focusFor(udE).title}`;
+  }
+
+  // highest-scoring day in the next 14 (ties -> earliest, via strict > so the first
+  // match chronologically wins) that has a free slot long enough for durMin -- reuses
+  // qaFreeSlots, the app's one real "what's free" source, not a second pass over
+  // EVENTS/routines.
+  function pickUpkeepDay(spec, durMin) {
+    let best = null;
+    for (let i = 0; i < 14; i++) {
+      const d = addDays(TODAY, i);
+      const slot = qaFreeSlots(d).find(([s, e]) => e - s >= durMin);
+      if (!slot) continue;
+      const { score, why } = dpScoreDay(d, spec);
+      if (!best || score > best.score) best = { date: d, score, why, startMin: slot[0], endMin: slot[0] + durMin };
+    }
+    return best;
+  }
+
+  function upkeepDurMin(sys) {
+    if (sys.id === "hair") {
+      const w = hairWashById(hairWashIdFor(TODAY));
+      return w ? roundUp5(w.steps.reduce((a, s) => a + (s.min || 0), 0)) : 20;
+    }
+    const br = BEAUTY_ROUTINES.find(r => "beauty-" + r.id === sys.routineId);
+    return br ? routineTotalMin(br) : 20;
+  }
+
+  function buildUpkeepSuggestions() {
+    const out = [];
+    UPKEEP_SYSTEMS.forEach(sys => {
+      const st = upkeepStatus(sys);
+      if (st.pct >= UPKEEP_BEHIND_THRESHOLD) return; // not behind enough to surface
+      const rt = ROUTINE_TASKS.find(t => t.id === sys.routineId);
+      if (!rt) return;
+      const cycleKey = keyOf(st.dueDate);
+      const lateChip = upkeepLateText(st);
+      // dpType by what the action physically IS (spec's own rule), not which system it
+      // belongs to -- all three real systems today are home-DIY per BEAUTY_ROUTINES, so
+      // "selfcare"; needsBooking (none set today) is the hook for a future salon-type
+      // system to get the spec's "booking call + appointment" two-suggestion shape for
+      // free, without new code here.
+      const pushSuggestion = (kind, dpTypeId, mins, titlePrefix) => {
+        const spec = DP_TYPES.find(t => t.id === dpTypeId);
+        const picked = pickUpkeepDay(spec, mins);
+        if (!picked) return; // couldn't fit it anywhere in 14 days -- never suggest a day it can't fit
+        const id = upkeepSuggestionId(sys, kind, cycleKey);
+        if (isUpkeepDismissed(id)) return;
+        out.push({
+          id, sysId: sys.id, emoji: sys.emoji, title: `${titlePrefix}${rt.title}`, kind, durMin: mins, dpType: dpTypeId,
+          routineId: sys.routineId, track: rt.track, category: rt.category,
+          bestDate: keyOf(picked.date), bestScore: picked.score, why: picked.why,
+          bestStart: minToTime(picked.startMin), bestEnd: minToTime(picked.endMin),
+          chips: [
+            { text: upkeepUdChip(picked.date), tone: "gold" },
+            { text: `${sys.label} ${st.pct}%`, tone: st.pct < 60 ? "bad" : "plain" },
+            lateChip,
+            { text: `${mins} min`, tone: "plain" },
+          ],
+        });
+      };
+      if (sys.needsBooking) {
+        pushSuggestion("call", "social", 10, "Book — ");
+        pushSuggestion("appointment", "travel", upkeepDurMin(sys), "");
+      } else {
+        pushSuggestion("athome", "selfcare", upkeepDurMin(sys), "");
+      }
+    });
+    return out;
   }
   // fasting widgets (Day header + Week strip) → open the fasting slide-out panel.
   // 2026-08-19 (Linh: "tapping the FASTING stat box... should open a slide-out side
@@ -46391,6 +46718,11 @@
                messageMorning: "On the train (coffee) Plan your day or read?",
                messageEvening: "Heading home. Wind down — log habits or just breathe." },
     quietHours: { on: true, from: "22:00", to: "07:00" },
+    // 2026-08-19 (upkeep day-suggestions): one nudge/day at `hour`, when a system's
+    // freshness is under minSystemScore OR a suggestion's picked day is within
+    // leadDays -- same threshold buildUpkeepSuggestions() itself gates on by default
+    // (UPKEEP_BEHIND_THRESHOLD), kept separately configurable here per the spec.
+    upkeep: { on: true, hour: 19, minSystemScore: 60, leadDays: 3 },
     // 2026-08-06 (outcomes spec §4): the "Did this happen?" inline rows on the Day
     // page for past-due open items — explicitly OFF by default, never naggy
     outcomePrompt: { on: false },
@@ -46697,6 +47029,30 @@
           });
         });
       }
+      if (NOTIF.upkeep.on) {
+        // one nudge/day at a fixed hour, not tied to any specific calendar item -- same
+        // "standalone block after the 3-day per-item loop" shape fasting/bills use just
+        // above. Reuses buildUpkeepSuggestions()/upkeepStatus() as-is, no second scan.
+        const fireAt = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate(), NOTIF.upkeep.hour, 0, 0, 0).getTime();
+        const when = fireAt <= now ? fireAt + 86400000 : fireAt;
+        const suggestions = buildUpkeepSuggestions();
+        UPKEEP_SYSTEMS.forEach(sys => {
+          const st = upkeepStatus(sys);
+          const s = suggestions.find(x => x.sysId === sys.id);
+          const withinLead = s && dayDiff(parseKey(s.bestDate), TODAY) <= NOTIF.upkeep.leadDays;
+          if (st.pct >= NOTIF.upkeep.minSystemScore && !withinLead) return;
+          const lateBit = upkeepLateText(st).text;
+          const bd = s ? parseKey(s.bestDate) : null;
+          out.push({
+            when, urgent: false, tag: `upkeep-${sys.id}-${keyOf(st.dueDate)}`,
+            title: `${sys.label} is at ${st.pct}%`,
+            body: s
+              ? `${s.title} · ${WD_FULL[dowIndex(bd)].slice(0, 3)} ${bd.getDate()} · ${upkeepUdChip(bd)} · ${lateBit}`
+              : `${sys.label} needs attention · ${lateBit}`,
+            data: { upkeepSysId: sys.id },
+          });
+        });
+      }
       // quiet hours: non-urgent nudges wait for the window's end; event reminders and
       // the about-to-break warning are time-critical and come through
       out.forEach(r => { if (!r.urgent && inQuiet(r.when)) r.when = quietEndAfter(r.when); });
@@ -46859,6 +47215,8 @@
     "fasting.fastLengthHr": { min: 8, max: 36, step: 1, unit: "h" },
     "commute.fireDelayMin": { min: 0, max: 60, step: 1, unit: "min" },
     "bills.leadDays": { min: 0, max: 7, step: 1, unit: "d" },
+    "upkeep.hour": { min: 6, max: 23, step: 1, unit: "h" },
+    "upkeep.leadDays": { min: 0, max: 7, step: 1, unit: "d" },
   };
   function ntLeadLabel(mins) {
     if (mins % 1440 === 0 && mins >= 1440) { const d = mins / 1440; return d === 1 ? "1 day before" : `${d} days before`; }
@@ -47083,6 +47441,24 @@
           <textarea rows="2" data-nt-msg="messageMorning" aria-label="Morning commute message">${esc(NOTIF.commute.messageMorning)}</textarea>
           <span class="nt-field-lbl">Evening message (heading home)</span>
           <textarea rows="2" data-nt-msg="messageEvening" aria-label="Evening commute message">${esc(NOTIF.commute.messageEvening)}</textarea>
+        </div>` : ""}
+      </div>
+
+      <div class="nt-group">
+        <div class="nt-group-label">🌸 Upkeep nudge</div>
+        <div class="nt-row">
+          <span class="nt-lbl">Upkeep nudges<span class="nt-sub">One check-in a day when Hair, Nails, or Blow-dry are behind or coming up soon</span></span>
+          ${ntSwitch("upkeep.on", NOTIF.upkeep.on)}
+        </div>
+        ${NOTIF.upkeep.on ? `<div class="nt-subwrap">
+          <div class="nt-row">
+            <span class="nt-lbl">Fires at</span>
+            ${ntStepper("upkeep.hour", NOTIF.upkeep.hour)}
+          </div>
+          <div class="nt-row">
+            <span class="nt-lbl">Give me a heads-up this many days ahead</span>
+            ${ntStepper("upkeep.leadDays", NOTIF.upkeep.leadDays)}
+          </div>
         </div>` : ""}
       </div>
 
