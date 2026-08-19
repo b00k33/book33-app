@@ -22847,6 +22847,10 @@
                   // hours currently have no events, recomputed every renderDay() by
                   // computeCompactHours() from the day's real item data, not user input.
                   compactHours: new Set() };
+  // 2026-08-19 (Android back-button navigation): seeds the view-history tracker
+  // render() reads from every pass (see armBackGuard/viewBackStack near
+  // closeAllDayDrawers) so the very first render() doesn't push a spurious entry.
+  let lastPushedView = state.view;
 
   /* ============================================================
      DAY VIEW
@@ -24941,6 +24945,7 @@
     sheet.style.top = (below + h > window.innerHeight - 16 ? Math.max(16, r.top - h - 8) : below) + "px";
   }
   function openTlDetail(id, anchorEl) {
+    armBackGuard();
     const e = TL_ITEMS_BY_ID[id];
     if (!e) return;
     tlDetailPanel = null;
@@ -35199,6 +35204,13 @@
      Render + events
      ============================================================ */
   function render() {
+    // Android back-button: a view change (Day -> Week, etc) counts as a step to
+    // record, same as opening a popup — see armBackGuard/viewBackStack above.
+    if (!suppressViewBackPush && state.view !== lastPushedView) {
+      viewBackStack.push(lastPushedView);
+      armBackGuard();
+    }
+    lastPushedView = state.view;
     // the theme follows whichever day (or month) you're looking at
     applyTheme(state.view === "day" ? state.anchor
              : state.view === "week" ? state.weekAnchor
@@ -35635,6 +35647,7 @@
     document.getElementById("navPanelBackdrop").hidden = !(navPanelIsOpen() || dayRightDrawerIsOpen());
   }
   function openNavPanel() {
+    armBackGuard();
     const panel = document.getElementById("navPanel");
     renderNavSyncFooter();   // 2026-08-15 fix (E2) — see that function
     closeDayRightDrawer();   // only one overlay drawer open at a time
@@ -35655,6 +35668,7 @@
   // right-drawer (2026-08-18): same open/close shape as #navPanel above, sharing its
   // backdrop and its "only one at a time" rule.
   function openDayRightDrawer() {
+    armBackGuard();
     closeNavPanel();
     const panel = document.getElementById("dayRightDrawer");
     panel.classList.add("open");
@@ -35683,6 +35697,54 @@
   }
   function toggleDayTopZone() { if (dayTopZoneIsOpen()) closeDayTopZone(); else openDayTopZone(); }
   function closeAllDayDrawers() { closeNavPanel(); closeDayRightDrawer(); }
+
+  // 2026-08-19 (Android hardware/gesture back-button navigation): self-contained
+  // back-nav module. armBackGuard() pushes one throwaway history entry whenever
+  // something open-able opens or the view changes, so the next real back-press has
+  // something to consume instead of exiting the PWA immediately (standalone display
+  // mode + no history.pushState anywhere else = back always had nothing to eat).
+  // Extend later by: (1) calling armBackGuard() as the first line of a new popup's
+  // open function, (2) adding a matching close-check to the popstate list below,
+  // same priority order (innermost overlay first).
+  let guardArmed = false, rootBackArmedAt = 0;
+  let viewBackStack = [], suppressViewBackPush = false;
+  function armBackGuard() {
+    if (guardArmed) return;
+    guardArmed = true;
+    history.pushState({ b33Back: true }, "");
+  }
+  function showBackExitHint() {
+    document.querySelectorAll(".nt-toast").forEach(el => el.remove());
+    const el = document.createElement("div");
+    el.className = "nt-toast";
+    el.innerHTML = `<div class="nt-toast-title">Press back again to exit</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.classList.add("bye"); setTimeout(() => el.remove(), 450); }, 1600);
+  }
+  window.addEventListener("popstate", () => {
+    guardArmed = false;   // the real history entry that armed this just got consumed
+    if (!document.getElementById("tlDetailOverlay").hidden) { closeTlDetail(); armBackGuard(); return; }
+    if (!document.getElementById("addForm").hidden) { closeForm(); armBackGuard(); return; }
+    if (todoPanelOpen) { closeTodoPanel(); armBackGuard(); return; }
+    if (fastPanelOpen) { closeFastPanel(); armBackGuard(); return; }
+    if (!document.getElementById("editPanelOverlay").hidden) { closeRtnForm(); armBackGuard(); return; }
+    if (!document.getElementById("jumpOverlay").hidden) { closeJump(); armBackGuard(); return; }
+    if (dayRightDrawerIsOpen()) { closeDayRightDrawer(); armBackGuard(); return; }
+    if (navPanelIsOpen()) { closeNavPanel(); armBackGuard(); return; }
+    if (viewBackStack.length) {
+      suppressViewBackPush = true;
+      state.view = viewBackStack.pop();
+      render();
+      suppressViewBackPush = false;
+      armBackGuard();
+      return;
+    }
+    const now = Date.now();
+    if (now - rootBackArmedAt < 2000) return;   // 2nd press within 2s: let it actually exit, don't re-arm
+    rootBackArmedAt = now;
+    showBackExitHint();
+    armBackGuard();
+  });
   // shows/hides #navDrawerBtn vs #navTabStrip per PREFS.navMode; called from
   // render() (every navigation) and from the Settings toggle for instant switching.
   function applyNavMode() {
@@ -35962,6 +36024,7 @@
       : `<div class="jump-empty">No page matches.</div>`;
   }
   function openJump() {
+    armBackGuard();
     const ov = document.getElementById("jumpOverlay");
     ov.hidden = false;
     const inp = document.getElementById("jumpInput");
@@ -40443,6 +40506,7 @@
       </form>`;
   }
   function openTodoPanel() {
+    armBackGuard();
     todoPanelOpen = true;
     todoReviewing = false;   // always opens on the list, never mid-review from a prior session
     document.getElementById("editPanelSheet")?.classList.add("todo-panel-mode");
@@ -40647,6 +40711,7 @@
     if (el) el.innerHTML = fastPanelStatsHTML();
   }
   function openFastPanel() {
+    armBackGuard();
     fastPanelOpen = true;
     document.getElementById("editPanelSheet")?.classList.add("fast-panel-mode");
     const title = document.getElementById("editPanelTitle");
@@ -40780,6 +40845,7 @@
   // one editor open at a time (toggle-close on a second click of the same row's ✎;
   // opening a different row's editor closes whichever one was already open)
   function openRtnFormInline(task, view) {
+    armBackGuard();
     if (!task) return;
     if (rtnInlineId === task.id && rtnInlineView === view) { closeRtnForm(); return; }
     if (rtnInlineId != null) closeRtnForm();
@@ -40793,6 +40859,7 @@
   // a real task id, since there's no existing row to dock under yet (see
   // rtnInlineRedock's RTN_NEW branch).
   function openRtnFormInlineNew(view = "table") {
+    armBackGuard();
     if (rtnInlineId === RTN_NEW) { closeRtnForm(); return; }
     if (rtnInlineId != null) closeRtnForm();
     rtnInlineId = RTN_NEW; rtnInlineView = view;
@@ -40841,6 +40908,7 @@
   // navigating state.view to "routines" (the old data-rt-open handler's redirect,
   // now removed -- see that delegate). The calendar page underneath never changes.
   function openRtnFormFromCalendar(task) {
+    armBackGuard();
     rtnCalendarOpen = true;
     document.getElementById("editPanelOverlay").hidden = false;
     openRtnForm(task);   // its own trailing placeRtnForm(true) call docks into #editPanelBody, see that guard
@@ -40865,6 +40933,7 @@
     return { icon: cluster, rest: title.slice(cluster.length).replace(/^\s+/, "") };
   }
   function openRtnForm(task, focusField) {
+    armBackGuard();
     // 2026-08-11 ("edit routine from hair page, it glitches"): a DIRECT open (Hair
     // page, calendar block, fitness link) can land while a DIFFERENT routine is still
     // inline-docked in the table/list/board from before this navigation -- openRtnFormInline
@@ -42933,6 +43002,7 @@
     document.querySelectorAll("#trackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === state.track)));
   }
   function openForm(prefStart, prefLoc, prefWho) {
+    armBackGuard();
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
@@ -42948,6 +43018,7 @@
     fTitle.focus();
   }
   function openFormForEdit(ev) {
+    armBackGuard();
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
@@ -42985,6 +43056,7 @@
   // editing a recurring-event TEMPLATE (the ✎ on any of its occurrences) — always
   // the whole series, same all-occurrences semantics as editing a routine
   function openFormForRecurEdit(t) {
+    armBackGuard();
     addRow.hidden = true; form.hidden = false;
     document.getElementById("addFormBackdrop").hidden = false;
     formDirty = false;
@@ -44544,6 +44616,7 @@
   document.getElementById("addBtn").addEventListener("click", () => openForm(null));
   // Daily Focus lean-in actions → pre-fill the add form as an all-day Personal task, ready to save/tweak
   function openFormWithAction(title) {
+    armBackGuard();
     form.reset(); eventEditId = null;
     addRow.hidden = true; form.hidden = false;
     fTitle.value = title;
@@ -44560,6 +44633,7 @@
   // a beauty routine arriving as a task: timed (not all-day), personal track, duration
   // pre-summed from its steps — she only chooses when it starts
   function openFormForRoutine(title, minutes) {
+    armBackGuard();
     state.view = "day"; render();
     form.reset(); eventEditId = null;
     addRow.hidden = true; form.hidden = false;
@@ -46933,6 +47007,7 @@
   // (declared up by fRepeatChoice) tells the form's submit handler to remove this
   // item once a save actually completes, not just on open.
   function openFormFromTodo(id) {
+    armBackGuard();
     const t = TODOS.find(x => x.id === id);
     if (!t) return;
     state.view = "day"; render();
