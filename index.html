@@ -3142,6 +3142,7 @@
     .tl-detail-body .phase-bands { order: 40; }
     .tl-detail-body .tl-detail-steps { order: 50; }
     .tl-detail-body .tl-detail-row-repeats { order: 60; }
+    .tl-detail-body .tl-detail-row-origin { order: 61; }
     /* 2026-08-15 (§6 mobile redesign, Pass B): new info rows slotted between
        Repeats and In-a-chain, matching the spec's "Repeats · Next after this ·
        Streak · In a chain · Where · Note" order -- existing entries below are
@@ -3958,6 +3959,29 @@
        own user-select:none exists — kill both on the block itself so the hold stays a
        hold. Block text was never selectable-by-design anyway (tap = open detail). */
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  /* Origin rail (her spec 2026-08-20): a 4px left-edge mark so she can tell what
+     kind of block this is -- and predict what touching it does -- without
+     opening it. .tl-item::before was unused before this (only .md-bar.tl-item::
+     after exists, the hit-pad from 2026-08-15, untouched). Every .tl-item that
+     carries data-origin is already position:absolute except .ad-chip.tl-item
+     (its own rule below gets position:relative to match). Scoped to
+     [data-origin] specifically so the drag-ghost (.tl-block.tl-ghost, which
+     deliberately does NOT get data-origin -- it's a transient "item is being
+     moved" placeholder, already dashed for that reason, not a real block to
+     classify) never grows a second, conflicting rail. */
+  .tl-item[data-origin]::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 4px; pointer-events: none;
+  }
+  .tl-item[data-origin="once"]::before { background: rgba(255,255,255,.55); }
+  .tl-item[data-origin="generated"]::before { background: rgba(255,255,255,.18); }
+  .tl-item[data-origin="routine"]::before {
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,.55) 0, rgba(255,255,255,.55) 4px, transparent 4px, transparent 8px);
+  }
+  .tl-item[data-origin="repeat"]::before {
+    background-image: repeating-linear-gradient(to bottom,
+      rgba(255,255,255,.55) 0, rgba(255,255,255,.55) 9px, transparent 9px, transparent 13px);
   }
   /* A marker floating on top of a session it doesn't narrow (see isMarkerOverlay, JS) —
      a border in the page's own background colour reads as "cut out and pinned on top"
@@ -9380,6 +9404,10 @@
     padding: 4px 4px; overflow: hidden; display: flex; flex-direction: column; gap: 4px; cursor: pointer;
     background: var(--cat-c); color: var(--cat-t);
   }
+  /* the origin rail sits inside every OTHER .tl-item's own left padding without
+     adjustment, but this card's base 4px is flush against a 4px rail -- title
+     text would start right where the rail ends. */
+  .md-item.tl-item[data-origin] { padding-left: 8px; }
   .md-item.tl-item.done { opacity: 0.55; }
   .md-item-title { display: flex; align-items: center; gap: 4px; overflow: hidden; }
   .md-item-title .tl-life-dot { margin-right: 0; }
@@ -9510,7 +9538,11 @@
      moved into its own .ad-chip-t span because text-overflow:ellipsis does not apply to
      a flex container's anonymous text item. */
   .ad-chip.tl-item {
-    position: static; display: flex; align-items: center; border-radius: 6px;
+    /* was position:static -- relative (no visual change on its own, no
+       top/left/etc set here) so its origin-rail ::before below has a
+       containing block instead of positioning against some ancestor further
+       up the page. */
+    position: relative; display: flex; align-items: center; border-radius: 6px;
     min-height: 44px; padding: 0 8px; overflow: hidden;
     font-size: 11px; font-weight: 700; color: var(--blk-txt); background: var(--cat-c);
     cursor: pointer;
@@ -10745,6 +10777,39 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.15s ease;
   }
   .theme-toggle:hover { transform: scale(1.08); }
+
+  /* Origin filter (her spec 2026-08-20): docked directly under .theme-toggle
+     just above -- same right edge/safe-area formula, the one existing
+     top-right-floating fixed element in the whole file, rather than inventing
+     a second floating position. z-index below it (200) so nothing here can
+     ever sit above a real overlay/modal. */
+  .tl-origin-filter {
+    position: fixed; z-index: 190;
+    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px);
+    right: max(14px, env(safe-area-inset-right));
+    display: none; padding: 3px; border-radius: 999px;
+    background: var(--paper); box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  /* day-only, not week/month too: confirmed live that #weekPage/#monthPage
+     never render a single .tl-item -- renderWeek()'s own .wk-ev rows and
+     renderMonth()'s .mo-chip/.mo-bd grid are separate, older components (see
+     itemOrigin()'s own report on this). Every .tl-item this spec covers,
+     compact "week grid" bars included, only ever appears inside the Day
+     page's own calDays>1 mode -- renderCalDaysUI()/renderMultiDayGrid() both
+     assert state.view==="day" before doing anything. */
+  body[data-view="day"] .tl-origin-filter { display: flex; }
+  .tl-origin-filter .track-opt { flex: none; min-height: 0; padding: 5px 10px; font-size: 10.5px; border-radius: 999px; }
+  .tl-origin-hidden-pill {
+    position: fixed; z-index: 190;
+    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px);
+    right: max(14px, env(safe-area-inset-right));
+    padding: 6px 12px; border-radius: 999px; border: none;
+    background: var(--gold); color: #1a1408; font-size: 11px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  @media (max-width: 640px) {
+    .tl-origin-filter .track-opt { padding: 5px 8px; font-size: 9.5px; }
+  }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -15887,6 +15952,27 @@
       <div class="slide-panel-body" id="editPanelBody"></div>
     </div>
   </div>
+
+  <!-- Origin filter (her spec 2026-08-20): global chrome, a sibling of every .page
+       rather than nested inside #dayPage/#weekPage/#monthPage, so it's ONE piece
+       of markup instead of three near-duplicates and doesn't need to be threaded
+       through each page's own mobile/desktop reparenting rules -- same "global,
+       not per-page" reasoning #editPanelOverlay just above and renderDeskNavRail()
+       (JS) already use. Shown only on the three calendar views (CSS, keyed off
+       body[data-view]). Reuses .track-picker/.track-opt verbatim -- the exact
+       component #evlTrackPicker (All Events page) already uses for a track
+       filter -- rather than a new button style; toggling here does NOT persist
+       (state.tlOriginHidden only, see that field's own comment). -->
+  <div class="track-picker tl-origin-filter" id="tlOriginFilter" role="group" aria-label="Filter by type">
+    <button type="button" class="track-opt" data-origin-toggle="once" aria-pressed="true">One-off</button>
+    <button type="button" class="track-opt" data-origin-toggle="routine" aria-pressed="true">Routine</button>
+    <button type="button" class="track-opt" data-origin-toggle="repeat" aria-pressed="true">Repeating</button>
+    <button type="button" class="track-opt" data-origin-toggle="generated" aria-pressed="true">Generated</button>
+  </div>
+  <!-- her spec, non-negotiable: "Whenever anything is hidden, show a small
+       persistent pill... Tapping it restores everything." Empty/hidden whenever
+       nothing is hidden -- see renderTlOriginFilter(). -->
+  <button type="button" class="tl-origin-hidden-pill" id="tlOriginHiddenPill" hidden></button>
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
@@ -23548,6 +23634,14 @@
                   cycAnchor: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1),
                   cycSelectedDate: keyOf(TODAY),
                   moShowEvents: true, evlTrack: "all",
+                  // her spec 2026-08-20: which of once/routine/repeat/generated are
+                  // hidden from the calendar right now. A plain Set on `state`, same
+                  // "lives on state, never written to a store" shape every other
+                  // session-only field here already has -- deliberately NOT PREFS
+                  // (that IS persisted, see trackVisible()'s own tracksOff): her
+                  // explicit ask was "I should never open the app tomorrow wondering
+                  // where half my day went."
+                  tlOriginHidden: new Set(),
                   track: "work", year: TODAY.getFullYear(),
                   habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
@@ -24568,6 +24662,10 @@
     // always empty everywhere else, see trackVisible()'s own comment) hide a
     // life category from the grid without touching the underlying data.
     items = items.filter(e => trackVisible(e.track));
+    // her spec 2026-08-20: same call shape as trackVisible just above, one line
+    // down -- a hidden origin type disappears from this view exactly the way a
+    // hidden track already does.
+    items = items.filter(tlOriginVisible);
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -24847,7 +24945,7 @@
       // a sub-category's fill (e.g. Fitness green) still needs to read as its parent
       // (Personal) at a glance, so this carries the parent's own colour, never the sub's.
       const lifeDot = `<span class="tl-life-dot" style="background:${catDotColor(e)}" title="${esc(trackLabel(e.track))}" aria-hidden="true"></span>`;
-      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-kind="${kind}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
+      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
         <span class="tl-title">${tick}${ovrDot}${lifeDot}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}${ocNoteIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
@@ -24944,6 +25042,61 @@
   function tlItemCanMove(e) {
     return !e.generated || (e.fromRoutine && !!e.rtTaskId) || (e.fromRecurringEvent && !!e.recurId) || e.id.indexOf("fitcal-") === 0;
   }
+  // itemOrigin(e) -- her spec 2026-08-20: ONE classifier, tied to tlItemCanMove
+  // (the app's real "can this be dragged" test) rather than a fresh guess, so a
+  // mark on a block can never promise a drag that doesn't work. "generated" is
+  // defined as the exact negation of tlItemCanMove -- anything movable then
+  // splits by the SAME two field pairs tlItemCanMove itself reads
+  // (fromRecurringEvent+recurId, fromRoutine+rtTaskId), never a second
+  // hand-copied test living somewhere else.
+  //
+  // Hair-wash lands on the MOVABLE side, in "routine" -- decided, not
+  // guessed. tlItemCanMove(hair) is TRUE: it carries fromRoutine+rtTaskId,
+  // exactly the pair that branch checks -- even though renderTlDetailBody's
+  // OWN isRtnOcc test is FALSE for it (parseOccId(e.id) fails on
+  // "hair-<date>", which isn't a real "rt-<taskId>-<date>" occurrence id, see
+  // that function's own 2026-08-15 fix C4 comment). Those are two different
+  // questions: isRtnOcc asks "does this have a resolvable per-occurrence
+  // routine record for streak/schedule detail" (narrower, detail-sheet-only);
+  // itemOrigin asks "what happens when I drag this" (tlItemCanMove's own
+  // question). Dragging hair genuinely goes through the routine-reschedule
+  // path, so marking it "generated" would be exactly the lie her spec warns
+  // against ("if the mark says routine but dragging does nothing, it's worse
+  // than no mark") -- here it would run the other way, under-promising a
+  // capability the block actually has.
+  function itemOrigin(e) {
+    if (!tlItemCanMove(e)) return "generated";
+    if (e.fromRecurringEvent && e.recurId) return "repeat";
+    if (e.fromRoutine && e.rtTaskId) return "routine";
+    return "once";
+  }
+  // her spec 2026-08-20: same shape as trackVisible()/PREFS.tracksOff just below
+  // (a one-line predicate consulted right where each renderer's item list is
+  // built), backed by state.tlOriginHidden instead of a persisted preference.
+  function tlOriginVisible(e) { return !state.tlOriginHidden.has(itemOrigin(e)); }
+  // her spec, non-negotiable: "Whenever anything is hidden, show a small
+  // persistent pill... Tapping it restores everything." Global chrome, called
+  // from render() itself (see that function's own renderDeskNavRail() line) so
+  // it stays current on every navigation, not only a calendar re-render.
+  function renderTlOriginFilter() {
+    const bar = document.getElementById("tlOriginFilter");
+    if (bar) bar.querySelectorAll("[data-origin-toggle]").forEach(b => {
+      b.setAttribute("aria-pressed", String(!state.tlOriginHidden.has(b.dataset.originToggle)));
+    });
+    const pill = document.getElementById("tlOriginHiddenPill");
+    if (!pill) return;
+    const n = state.tlOriginHidden.size;
+    pill.hidden = n === 0;
+    if (n) pill.textContent = `${n} type${n === 1 ? "" : "s"} hidden · show all`;
+  }
+  // Every .tl-item this filter touches -- single-day timeline, the compact
+  // "week grid" bars, the wider multi-day cards -- lives inside renderDay()
+  // (confirmed: renderCalDaysUI()/renderMultiDayGrid() both bail unless
+  // state.view==="day"; #weekPage/#monthPage render their own separate,
+  // non-.tl-item widgets and are untouched by this spec). The filter bar
+  // itself is CSS-gated to state.view==="day" too, so this only ever runs
+  // from there -- one call, not a page-name switch.
+  function rerenderDayForOriginFilter() { renderDay(); }
   /* ---- §6 "Move / Reschedule — scope first" (2026-08-15) ----
      The three small pieces the move panel needs. Kept out of renderTlDetailBody so the
      confirm label can be recomputed live (refreshTlMoveConfirm, below) from the same
@@ -25540,6 +25693,22 @@
     // words with one-tap Change/Unchain; an unchained routine/recurring event gets a
     // quiet "Chain it →" that opens the Chains builder prefilled with this item.
     const chainT = chainTemplateOf(e);
+    // 2026-08-20 (her spec, "show origin at a glance + let me filter by type"): one
+    // plain-words line naming WHERE this item came from and whether it can move —
+    // reads the SAME itemOrigin(e) classifier that drives the new left-edge rail and
+    // the origin filter, so this line can never disagree with either of those. Names
+    // the real template via chainT (just resolved above for the chain row) rather
+    // than rtnT/isRtnOcc — chainTemplateOf reads fromRoutine+rtTaskId directly, the
+    // same "which side does hair land on" bypass documented at itemOrigin's own
+    // "routine" branch, so a hair-wash occurrence resolves its real routine name
+    // here too even though isRtnOcc (the narrower, occurrence-only test) is false
+    // for it.
+    const originKind = itemOrigin(e);
+    const originLineHtml = originKind === "once" ? "Just this once"
+      : originKind === "generated" ? "Generated — nothing to move"
+      : originKind === "routine" ? (chainT && chainT.title ? `Repeats — from your ${esc(chainT.title)} routine` : "Repeats — from a routine")
+      : (chainT && chainT.title ? `Repeats — from your ${esc(chainT.title)} series` : "Repeats — a recurring event");
+    const originRowHtml = `<div class="tl-detail-row tl-detail-row-origin">${glyphHtml("🧭", "tl-detail-em")}<span>${originLineHtml}</span></div>`;
     let chainRowHtml = "";
     if (chainT) {
       const chainA = chainT.anchorTo ? chainAnchorOf(chainT) : null;
@@ -25607,6 +25776,7 @@
       ${path.length ? `<div class="tl-detail-row tl-detail-row-where">${glyphHtml("📍", "tl-detail-em")}<span>${path.map(esc).join(" › ")}</span></div>` : ""}
       ${e.track ? `<div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
       ${repeatsRowHtml}
+      ${originRowHtml}
       ${nextAfterHtml}
       ${streakRowHtml}
       ${chainRowHtml}
@@ -28311,7 +28481,7 @@
     const colStyle = cols > 1
       ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
       : "";
-    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
       style="top:${top}px;height:${h}px;${colStyle}">
       <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span></span>
       <span class="md-item-time">${fmtTime(e.start)}</span>
@@ -28327,7 +28497,7 @@
     const colStyle = cols > 1
       ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
       : "";
-    return `<div class="md-bar tl-item" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+    return `<div class="md-bar tl-item" data-track="${e.track}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
       aria-label="${esc(e.title)} — ${fmtTime(e.start)}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
   function mdColumnHtml(d, items, compact) {
@@ -28381,6 +28551,7 @@
   // long title would hard-clip mid-word instead of ellipsising.
   function alldayChipHtml(e, cont) {
     const cls = `ad-chip tl-item${cont ? " ad-chip-cont" : ""}`;
+    const origin = itemOrigin(e);
     const label = cont ? "" : `<span class="ad-chip-t">${esc(e.title)}</span>`;
     if (e.category === "Birthdays") {
       const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
@@ -28392,9 +28563,9 @@
       // matching the banner's own subtitle, without adding anything to the chip itself.
       const bdIc = cont ? "" : `<span class="ad-chip-ic" aria-hidden="true">${e.icon || "🎂"}</span>`;
       const bdTitle = e.note ? `${e.title} — ${e.note}` : e.title;
-      return `<span class="${cls}" data-track="${e.track}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${bdIc}${label}</span>`;
+      return `<span class="${cls}" data-track="${e.track}" data-origin="${origin}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${bdIc}${label}</span>`;
     }
-    return `<span class="${cls}" data-track="${e.track}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
+    return `<span class="${cls}" data-track="${e.track}" data-origin="${origin}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
   }
   // one visible day's worth of stacked chips, no continuation (that concept only
   // exists across MULTIPLE simultaneously-visible columns — see mdAlldayColsHtml()).
@@ -28443,6 +28614,10 @@
   // anchor, is static markup, so the row lands in the same place either way.)
   // Same isGhostItem guard as every other seeding site, for the same reason.
   function renderDayAlldayRow(bdays, others) {
+    // her spec 2026-08-20: same filter, same reasoning as renderTimeline()'s own
+    // tlOriginVisible line -- birthdays/all-day events hide the same way timed
+    // blocks do.
+    bdays = bdays.filter(tlOriginVisible); others = others.filter(tlOriginVisible);
     if (calDaysActive() > 1) { document.getElementById("dayAlldayRow")?.remove(); return; }
     const others2 = others.concat(closedDaysOn(state.anchor));
     [...bdays, ...others2].forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
@@ -28497,7 +28672,14 @@
   // Removed from the DOM entirely (see alldayRowMount()) the moment NO visible day
   // has any all-day item at all.
   function renderMdAlldayRow(dayList) {
-    const perDay = dayList.map(({ d }) => ({ d, dk: keyOf(d), ...alldayItemsFor(d) }));
+    // her spec 2026-08-20: same filter as the single-day all-day row and the
+    // multi-day timed grid just above -- applied here rather than inside
+    // alldayItemsFor() itself, which has no other caller today but is written
+    // as a general per-day item source, not a display-only one.
+    const perDay = dayList.map(({ d }) => {
+      const a = alldayItemsFor(d);
+      return { d, dk: keyOf(d), bdays: a.bdays.filter(tlOriginVisible), others: a.others.filter(tlOriginVisible) };
+    });
     const count = perDay.reduce((n, p) => n + p.bdays.length + p.others.length, 0);
     alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), count, () =>
       `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${mdAlldayColsHtml(perDay)}</div>`);
@@ -28525,7 +28707,10 @@
     const dayList = [];
     for (let i = 0; i < days; i++) {
       const d = addDays(state.anchor, i);
-      dayList.push({ d, items: dayItemsFor(d) });
+      // her spec 2026-08-20: filtered here, not inside dayItemsFor() itself --
+      // that function is also read for real, unfiltered counts elsewhere (see
+      // its own callers), which must stay true regardless of what's hidden.
+      dayList.push({ d, items: dayItemsFor(d).filter(tlOriginVisible) });
     }
     let shared = null;
     dayList.forEach(({ items }) => {
@@ -36022,6 +36207,11 @@
     // just above, so its active row follows every navigation, not only a Day-page
     // renderDay() pass.
     renderDeskNavRail();
+    // her spec 2026-08-20: same "global chrome, current on every navigation"
+    // hook point -- keeps the origin-filter toggles' pressed state and the
+    // hidden-pill right even after a page switch that didn't itself touch
+    // state.tlOriginHidden.
+    renderTlOriginFilter();
     document.getElementById("dayPage").hidden = state.view !== "day";
     document.getElementById("weekPage").hidden = state.view !== "week";
     document.getElementById("monthPage").hidden = state.view !== "month";
@@ -43168,6 +43358,22 @@
     state.evlTrack = b.dataset.evltrack;
     document.querySelectorAll("#evlTrackPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
     renderEventsPage();
+  });
+  // her spec 2026-08-20: independent toggles, not a single-choice picker like
+  // evlTrackPicker just above -- each button flips its own membership in
+  // state.tlOriginHidden. Session-only; nothing here is written to any store.
+  document.getElementById("tlOriginFilter").addEventListener("click", e => {
+    const b = e.target.closest("[data-origin-toggle]"); if (!b) return;
+    const k = b.dataset.originToggle;
+    if (state.tlOriginHidden.has(k)) state.tlOriginHidden.delete(k); else state.tlOriginHidden.add(k);
+    renderTlOriginFilter();
+    rerenderDayForOriginFilter();
+  });
+  // "Tapping it restores everything" -- her spec, non-negotiable.
+  document.getElementById("tlOriginHiddenPill").addEventListener("click", () => {
+    state.tlOriginHidden.clear();
+    renderTlOriginFilter();
+    rerenderDayForOriginFilter();
   });
   document.getElementById("evlFrom").addEventListener("change", renderEventsPage);
   document.getElementById("evlTo").addEventListener("change", renderEventsPage);
