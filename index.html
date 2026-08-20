@@ -15745,6 +15745,13 @@
   #notifyPage .nt-val { color: var(--gold-bright); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
   /* indented sub-screen under a group's master toggle */
   #notifyPage .nt-subwrap { padding: 0 0 4px 12px; border-left: 1px solid var(--margin-rule); margin: 4px 0 0 4px; }
+  /* 2026-08-20 ("a place to actually SEE all your Modes"): a read-only summary row per
+     mode -- swatch dot + emoji/name + today's count, same .nt-row rhythm as every other
+     group on this page. .accent is per-mode DATA (not a design token), same "raw hex is
+     fine in swatch/preview/picker markup only" rule the Categories page's own comment
+     above already documents -- see line ~15636. */
+  #notifyPage .nt-mode-note { font-size: 12px; color: var(--ink-faint); margin: 0 0 8px; line-height: var(--lh-read); }
+  #notifyPage .nt-mode-swatch { flex: none; width: 10px; height: 10px; border-radius: 50%; }
   /* green switch — track fills --fast-green when on */
   #notifyPage .nt-switch {
     flex: none; width: 46px; height: 26px; border-radius: 999px; border: 0; cursor: pointer;
@@ -37396,6 +37403,27 @@
     const item = activeModeItem(now);
     return item ? modeById(modeOf(item)) : MODE_HOME;
   }
+  // 2026-08-20 ("a place to actually SEE all your Modes"): the Settings/Notifications
+  // page's read-only summary list -- every real mode (in .order) + Home last, each
+  // with its own accent swatch (a neutral dot for Home, which has none) and today's
+  // real usage. Counts modeOf(e) over the SAME dayEventsRawFor(TODAY) list
+  // activeModeItem() already scans above -- not a second scan. Home is never a mode an
+  // item can carry (it's the ambient default, not a picker option -- see
+  // #todoModePicker/#fModePicker/#rtnModePicker, none list it), so its row counts
+  // today's UNTAGGED blocks instead (the ones that fall back to Home when active) --
+  // a disclosed judgment call, not a literal "tagged Home" count like the other rows.
+  function modesSummaryRowsHtml() {
+    const today = dayEventsRawFor(TODAY);
+    const rows = [...MODES].sort((a, b) => a.order - b.order).map(m => {
+      const n = today.filter(e => modeOf(e) === m.id).length;
+      return { m, n };
+    });
+    rows.push({ m: MODE_HOME, n: today.filter(e => !modeOf(e)).length, untagged: true });
+    return rows.map(({ m, n, untagged }) => `<div class="nt-row">
+      <i class="nt-mode-swatch" style="background:${esc(m.accent || "var(--ink-faint)")}"></i>
+      <span class="nt-lbl">${m.emoji || ""} ${esc(m.name)} — ${n} block${n === 1 ? "" : "s"}${untagged ? " untagged" : ""} today</span>
+    </div>`).join("");
+  }
   // §2 "Filtering the day" (2026-08-20, stage 2). ONE predicate, reused by both
   // renderTimeline's filter (below) and renderModeHiddenPill (below) so the pill's
   // own "what's hidden" text can never disagree with what's actually filtered.
@@ -51430,6 +51458,13 @@
             ${ntStepper("upkeep.leadDays", NOTIF.upkeep.leadDays)}
           </div>
         </div>` : ""}
+      </div>
+
+      <div class="nt-group">
+        <div class="nt-group-label">🎯 Modes</div>
+        <p class="nt-mode-note">Set a block's mode when you create or edit it — look for
+          the Mode picker in the event or routine editor.</p>
+        ${modesSummaryRowsHtml()}
       </div>
 
       <div class="nt-test-row">
