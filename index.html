@@ -2370,6 +2370,21 @@
   .sc-row .tick { flex: none; }
   .sc-empty { font-size: 12px; font-style: italic; color: var(--ink-faint); }
   .sc-streak { font-size: 11px; color: var(--ink-faint); padding-top: 8px; border-top: 1px dashed var(--note-line); }
+  /* §3.3 mid-session add. No .field-bare -- the plain input deliberately inherits the
+     app-wide ONE FIELD LANGUAGE pill treatment (--field-bg/--note-line/999px) as-is;
+     only sizing needed here, the look itself is already handled globally. */
+  .sc-extra-add { margin: 0; }
+  .sc-extra-input { width: 100%; box-sizing: border-box; font-size: 13px; }
+  /* §3.4 the three ending actions -- equal-weight plain buttons, not one gold "primary"
+     pick: Extend/Book another/Move to next are three genuinely different next steps,
+     not a preferred-vs-alternate pair, so no accent singles one out over the others. */
+  .sc-end-choices { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sc-end-btn {
+    flex: 1 1 auto; min-height: 44px; font: inherit; font-size: 12px; font-weight: 700;
+    color: var(--ink); background: var(--raised); border: 1px solid var(--note-line);
+    border-radius: 999px; padding: 0 14px; cursor: pointer;
+  }
+  .sc-end-btn:hover, .sc-end-btn:focus-visible { border-color: var(--margin-rule); color: var(--margin-rule); }
 
   /* Cycle page — hormone rhythm chart (LH/FSH/Estrogen/Progesterone + uterine lining) */
   .cyc-hormone-wrap {
@@ -37259,23 +37274,32 @@
   function sessionIsActive() { return !!currentSession(); }
   // startedAt/endsAt are real epoch ms (not HH:MM strings) so the countdown
   // is a plain subtraction every tick, no per-tick date parsing.
-  function startSession(mode, coveringEvent) {
-    if (currentSession()) return;   // never a silent swap -- stage 4's prompt owns that decision
-    const endMin = itemEndMin(coveringEvent);
+  // durationMs is optional -- omitted, startSession derives endsAt from the covering
+  // event's own scheduled end (the normal auto-start path); passed explicitly, it
+  // starts a fresh-length session from right now instead (bookAnotherSession's own
+  // job below -- a "round 2" of the same block keeps its ORIGINAL length, not the
+  // block's now-already-passed clock end time, which would read as instantly expired).
+  function startSession(mode, coveringEvent, durationMs) {
+    if (currentSession()) return;   // never a silent swap -- the mode-swap prompt is a later stage's job
     let endsAt;
-    if (endMin != null) {
-      const d = new Date();
-      d.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
-      endsAt = d.getTime();
+    if (durationMs != null) {
+      endsAt = Date.now() + durationMs;
     } else {
-      endsAt = Date.now() + 25 * 60000;   // no resolvable end -- fallback only, never hit by a real timed block
+      const endMin = itemEndMin(coveringEvent);
+      if (endMin != null) {
+        const d = new Date();
+        d.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
+        endsAt = d.getTime();
+      } else {
+        endsAt = Date.now() + 25 * 60000;   // no resolvable end -- fallback only, never hit by a real timed block
+      }
     }
     const planIds = Array.isArray(coveringEvent.steps)
       ? coveringEvent.steps.map((s, i) => `${coveringEvent.id}::step::${i}`) : [];
     SESSIONS.push({
       id: uid(), modeId: mode.id, eventId: coveringEvent.id, date: keyOf(TODAY),
       startedAt: Date.now(), endsAt, extendedMin: 0,
-      planIds, extraIds: [], endedAt: null,
+      planIds, extras: [], endedAt: null,
     });
     saveSessions();
   }
@@ -37285,6 +37309,54 @@
     s.endedAt = Date.now();
     saveSessions();
   }
+  function sessionCoveringItem(s) {
+    return TL_ITEMS_BY_ID[s.eventId] || dayEventsRawFor(parseKey(s.date)).find(o => o.id === s.eventId);
+  }
+  // §3.3 mid-session add -- "picked up along the way" items are genuinely new entities
+  // (no EVENTS/ROUTINE_TASKS row anywhere else references them), so unlike the plan
+  // list they don't inherit an existing id from somewhere else. They still go through
+  // the shared DONE store / toggleDone rather than a bespoke done flag on the record,
+  // though -- same "no parallel completion store" reasoning §3.2 already applies here:
+  // toggleDone is also the ONE place the reward layer hooks in (fireReward), so a
+  // hand-rolled done flag would silently opt extras out of XP/streaks every other
+  // tickable thing gets. Ticking uses its own data-session-extra-tick attribute
+  // rather than data-step-tick specifically to avoid that delegate's hardcoded
+  // "check if all N siblings under this parent are done" follow-up (renderSessionCard's
+  // own plan/extra split has no such sibling-set for a standalone extra item).
+  function addSessionExtra(label) {
+    const s = currentSession();
+    const text = (label || "").trim();
+    if (!s || !text) return;
+    s.extras.push({ id: uid(), label: text });
+    saveSessions();
+  }
+  // §3.4 the three ending actions -- offered once the countdown reaches 0 and the
+  // plan hasn't already auto-completed the session (renderSessionCard checks that
+  // FIRST, so an ending action is only ever reachable when there's a real decision
+  // to make). All three are one-tap, no confirmation -- book33-support-rules §1,
+  // ending a session has no destructive/hard-to-reverse consequence.
+  function extendSession(min) {
+    const s = currentSession();
+    if (!s) return;
+    s.endsAt += min * 60000;
+    s.extendedMin += min;
+    saveSessions();
+  }
+  function bookAnotherSession() {
+    const s = currentSession();
+    if (!s) return;
+    const item = sessionCoveringItem(s);
+    if (!item) { endSession(); return; }
+    const dur = sessionTotalMs(s), mode = modeById(s.modeId);
+    endSession();
+    // a fresh round starts unticked -- these are the SAME shared ::step:: ids the
+    // just-finished round used (and whatever else on the page reads that same event's
+    // steps), so resetting them here is the one correct place to do it, not a second
+    // per-round completion store layered on top.
+    if (Array.isArray(item.steps)) item.steps.forEach((_, i) => toggleDone(`${item.id}::step::${i}`, false));
+    startSession(mode, item, dur);
+  }
+  function moveToNextSession() { endSession(); }
   // §3 "Sessions start automatically on entering the block. Never press
   // start." -- called from the existing 30s wmTick cadence (see that
   // function's own call to this, below), not a second interval. Reuses
@@ -37369,6 +37441,27 @@
       <span>${esc(label)}</span>
     </label>`;
   }
+  function sessionExtraRowHtml(ex) {
+    const sd = isDone(ex.id);
+    return `<label class="sc-row${sd ? " done" : ""}">
+      <input type="checkbox" class="tick" data-session-extra-tick="${esc(ex.id)}" ${sd ? "checked" : ""} aria-label="Mark ${esc(ex.label)} done">
+      <span>${esc(ex.label)}</span>
+    </label>`;
+  }
+  function sessionCountdownText(s) {
+    const rem = sessionRemainingMs(s);
+    return rem > 0 ? `${sessionTimeFmt(rem)} of ${sessionTimeFmt(sessionTotalMs(s))} left` : "Time's up";
+  }
+  // called every second by sessionTick -- updates ONLY the countdown digits, never
+  // touches the rest of #daySessionCard's markup. A full innerHTML rebuild every
+  // second would work fine for the rings/lists, but would also wipe the mid-session
+  // add input (#scExtraInput) mid-keystroke the instant she started typing into it --
+  // this is the one place a per-second tick and a live text field share the same card,
+  // so the tick has to be surgical rather than the usual full-rebuild render.
+  function updateSessionCountdownText(s) {
+    const el = document.querySelector("#daySessionCard .sc-countdown");
+    if (el) el.textContent = sessionCountdownText(s);
+  }
   function renderSessionCard() {
     const host = document.getElementById("daySessionCard");
     if (!host) return;
@@ -37377,45 +37470,68 @@
     // §3.2 "finishing the plan completes the session, even with extras
     // outstanding" -- checked on every render (covers a tick that just
     // happened via the shared delegate, and a fresh page load resuming an
-    // already-finished plan) rather than a second completion path.
+    // already-finished plan) rather than a second completion path. Takes
+    // priority over the time's-up ending-actions state below: even mid "what
+    // now" decision, finishing the plan still just finishes the session.
     const planDone = s.planIds.filter(isDone).length;
     if (s.planIds.length && planDone === s.planIds.length) { endSession(); host.hidden = true; host.innerHTML = ""; return; }
     host.hidden = false;
     const mode = modeById(s.modeId);
-    const item = TL_ITEMS_BY_ID[s.eventId] || dayEventsRawFor(parseKey(s.date)).find(o => o.id === s.eventId);
+    const item = sessionCoveringItem(s);
     const goal = item && item.goal ? item.goal : "";
-    const extraDone = s.extraIds.filter(isDone).length;
+    const extraDone = s.extras.filter(ex => isDone(ex.id)).length;
     const planPct = s.planIds.length ? planDone / s.planIds.length : 0;
-    const extraPct = s.extraIds.length ? extraDone / s.extraIds.length : 0;
+    const extraPct = s.extras.length ? extraDone / s.extras.length : 0;
     const lightAccent = `color-mix(in oklab, ${mode.accent || "var(--margin-rule)"} 55%, var(--paper))`;
     const planRows = item && Array.isArray(item.steps)
       ? item.steps.map((st, i) => sessionListRowHtml(`${s.eventId}::step::${i}`, s.eventId, item.steps.length, stepLabel(st))).join("")
       : "";
-    const extraRows = s.extraIds.length
-      ? s.extraIds.map(id => sessionListRowHtml(id, id, 1, id)).join("")
+    const extraRows = s.extras.length
+      ? s.extras.map(sessionExtraRowHtml).join("")
       : `<div class="sc-empty">Nothing picked up yet</div>`;
     const streak = sessionStreakLine();
+    // §3.4 -- reachable ONLY once the countdown has actually run out (never from a
+    // manual "stop now" -- no such control exists yet; not part of this stage).
+    const timeUp = sessionRemainingMs(s) === 0;
     host.innerHTML = `
       <div class="sc-head">
         <span class="sc-mode-pill" style="background:${lightAccent};color:${mode.accent || "var(--margin-rule)"}">${mode.emoji || ""} ${esc(mode.name)}</span>
-        <span class="sc-countdown">${sessionTimeFmt(sessionRemainingMs(s))} of ${sessionTimeFmt(sessionTotalMs(s))} left</span>
+        <span class="sc-countdown">${sessionCountdownText(s)}</span>
       </div>
       ${goal ? `<div class="sc-goal">🎯 ${esc(goal)}</div>` : ""}
+      ${timeUp ? `<div class="sc-end-choices">
+        <button type="button" class="sc-end-btn" data-sc-extend="15">+15 min</button>
+        <button type="button" class="sc-end-btn" data-sc-book-another>Book another</button>
+        <button type="button" class="sc-end-btn" data-sc-move-next>Move to next</button>
+      </div>` : ""}
       <div class="sc-rings">
         <div class="exp-ring-wrap" style="width:64px;height:64px">${sessionRingSvg(planPct, mode.accent || "var(--margin-rule)", 64)}<div class="exp-ring-center"><b style="color:${mode.accent || "var(--margin-rule)"}">${planDone}/${s.planIds.length}</b></div></div>
-        <div class="exp-ring-wrap" style="width:38px;height:38px">${sessionRingSvg(extraPct, lightAccent, 38)}<div class="exp-ring-center"><b style="color:${lightAccent};font-size:10px">${extraDone}/${s.extraIds.length}</b></div></div>
+        <div class="exp-ring-wrap" style="width:38px;height:38px">${sessionRingSvg(extraPct, lightAccent, 38)}<div class="exp-ring-center"><b style="color:${lightAccent};font-size:10px">${extraDone}/${s.extras.length}</b></div></div>
       </div>
       <div class="sc-list-label">The plan</div>
       <div class="sc-list">${planRows || `<div class="sc-empty">No checklist on this block</div>`}</div>
       <div class="sc-list-label">Picked up along the way</div>
       <div class="sc-list">${extraRows}</div>
+      <form class="sc-extra-add" data-sc-extra-add>
+        <input type="text" class="sc-extra-input" placeholder="Add something you picked up" maxlength="80" aria-label="Add something you picked up">
+      </form>
       ${streak ? `<div class="sc-streak">${esc(streak)}</div>` : ""}
     `;
   }
   let sessionTickTimer = null;
   function sessionTick() {
     syncSessionAutoStart();
-    if (state.view === "day") renderSessionCard();
+    if (state.view !== "day") return;
+    const s = currentSession();
+    const host = document.getElementById("daySessionCard");
+    if (!s) { if (host && !host.hidden) renderSessionCard(); return; }
+    // a state TRANSITION (countdown just hit 0, or a session just appeared/ended)
+    // needs the full rebuild so the ending-actions row can appear; every other
+    // second only the digits actually changed, so only they get touched (see
+    // updateSessionCountdownText's own comment for why that split matters here).
+    const showingEndChoices = !!host && !!host.querySelector(".sc-end-choices");
+    if (sessionRemainingMs(s) === 0 !== showingEndChoices) renderSessionCard();
+    else updateSessionCountdownText(s);
   }
   sessionTickTimer = setInterval(sessionTick, 1000);
 
@@ -39490,6 +39606,15 @@
       const itemId = stepBox.dataset.item, count = parseInt(stepBox.dataset.stepCount, 10);
       const allStepsDone = Array.from({ length: count }, (_, i) => isDone(`${itemId}::step::${i}`)).every(Boolean);
       toggleDone(itemId, allStepsDone);
+      reRenderCurrent(); return;
+    }
+    // session "picked up along the way" ticks (§3.3) -- deliberately its own attribute,
+    // not [data-step-tick]: that delegate's sibling-count follow-up above assumes a
+    // parent item with N known steps, which a standalone extra doesn't have.
+    const extraBox = e.target.closest("[data-session-extra-tick]");
+    if (extraBox) {
+      celebrateIfDone(extraBox, extraBox.checked);
+      toggleDone(extraBox.dataset.sessionExtraTick, extraBox.checked);
       reRenderCurrent(); return;
     }
     const box = e.target.closest("[data-tick]");
@@ -43883,6 +44008,17 @@
     if (e.key === "Enter" && e.target.matches && e.target.matches("[data-todoreview-title-edit]")) e.target.blur();
   });
   document.addEventListener("submit", e => {
+    // §3.3 mid-session add -- Enter-to-submit, same shape as the To-do panel's own
+    // quick-add form (data-todopanel-add, below) rather than a separate +button.
+    const scExtraForm = e.target.closest("[data-sc-extra-add]");
+    if (scExtraForm) {
+      e.preventDefault();
+      const input = scExtraForm.querySelector(".sc-extra-input");
+      addSessionExtra(input.value);
+      input.value = "";
+      renderSessionCard();
+      return;
+    }
     // 2026-08-19 (Linh, "add a tiny icon next to the arrow for scheduling"): the
     // inline day+time picker's own submit -- creates the SAME kind of plain EVENTS
     // row the full Add/Edit form's own submit handler does for a converted to-do,
@@ -45861,6 +45997,12 @@
     // 2026-08-06 (drag-and-drop): swallow the one click a mouse drag/resize leaves
     // trailing behind it — see suppressNextItemClick's declaration for why.
     if (suppressNextItemClick) { suppressNextItemClick = false; return; }
+    // §3.4 the three ending actions -- only ever rendered once the countdown has
+    // actually hit 0 (see renderSessionCard's timeUp branch), so no extra guard
+    // needed here beyond currentSession() existing at all.
+    if (e.target.closest("[data-sc-extend]")) { extendSession(15); renderSessionCard(); return; }
+    if (e.target.closest("[data-sc-book-another]")) { bookAnotherSession(); reRenderCurrent(); return; }
+    if (e.target.closest("[data-sc-move-next]")) { moveToNextSession(); renderSessionCard(); return; }
     // 2026-08-19 (upkeep day-suggestions): ✓ is the ONLY thing that ever schedules —
     // rebuilds the suggestion list fresh (cheap, deterministic, same inputs it was
     // rendered from) to recover the full object from the row's id rather than
