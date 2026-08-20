@@ -6792,6 +6792,13 @@
   #todoModePicker.track-picker { flex-wrap: wrap; }
   #todoModePicker .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
   #todoModePicker .track-opt::before { display: none; }
+  /* modes stage 10: #fModePicker (event/routine-template form) and #rtnModePicker
+     (routine editor) are the same "None" + live-modes row, same reasoning as
+     #todoModePicker just above -- identical treatment, own selectors since each
+     lives in its own form. */
+  #fModePicker.track-picker, #rtnModePicker.track-picker { flex-wrap: wrap; }
+  #fModePicker .track-opt, #rtnModePicker .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
+  #fModePicker .track-opt::before, #rtnModePicker .track-opt::before { display: none; }
   /* 2026-08-15 fix (B2): Settings → Navigation, §5's own Drawer/Tabs switch. §0 forbids
      outlined controls outright ("No outlined pills, fields or buttons anywhere in this
      build") and the selected state here was drawing a 1.5px inset ring INSIDE the shared
@@ -13732,6 +13739,12 @@
     .tl-desk-del { color: var(--danger); }
     .tl-desk-done { background: var(--gold-bright); color: var(--accent-on); font-weight: 700; }
     .tl-desk-done:hover { background: color-mix(in oklab, var(--gold-bright) 85%, var(--paper)); }
+    /* stage 10 "Start now" -- --margin-rule/--accent-on rather than --gold-bright, so
+       this one button rides the active mode's own accent (stage 6) when one is
+       running, same "start it in its own colour" idea the mobile gold row gets via
+       .tl-detail-manage-gold's identical --margin-rule reference. */
+    .tl-desk-start-mode { background: var(--margin-rule); color: var(--accent-on); font-weight: 700; }
+    .tl-desk-start-mode:hover { background: color-mix(in oklab, var(--margin-rule) 85%, var(--paper)); }
     /* desktop actions live ONLY in the desk row — the phone's Zone-1 drag handle/
        hero (title/breadcrumb/when-line now live in the OLD .tl-detail-title/row
        markup instead, restored below), Zone-3 manage block, big Done button and
@@ -17472,6 +17485,17 @@
           <input type="text" id="rtnCategory" placeholder="Pick a suggestion or type your own" autocomplete="off" list="rtnCatList">
           <datalist id="rtnCatList"></datalist>
         </div>
+        <!-- modes stage 10: mode lives on the routine TEMPLATE, never per-occurrence
+             (stage 1's own spec text) -- same picker shape as #fModePicker/
+             #todoModePicker, its own copy since this is a wholly separate form. -->
+        <div class="field rtn-g4" id="rtnModeField">
+          <label>Mode <span class="field-hint">optional</span></label>
+          <div class="track-picker" id="rtnModePicker" role="group" aria-label="Mode"></div>
+        </div>
+        <div class="field rtn-g8" id="rtnGoalField">
+          <label for="rtnGoal">Goal <span class="field-hint">optional — shown in the session panel</span></label>
+          <input type="text" id="rtnGoal" placeholder="e.g. Finish the migration script" autocomplete="off">
+        </div>
         <!-- 2026-08-17 (Linh, "shrink it, ask me qs" round): a SECOND, nested tier
              inside the existing More-options reveal, for the three fields she flagged
              as rarely used -- Chain, Sub-tasks (+ the hair-routine fields that stand in
@@ -17586,7 +17610,7 @@
            On calendar / More options / footer). Same id/aria-controls, unchanged. -->
       <div class="field full" id="rtnMoreOptsRow">
         <button type="button" class="more-opts-toggle" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
-          <span id="rtnMoreOptsLabel">More options — sub-category · sub-tasks · chain · dates · tracker · note</span><span class="moreopts-chevron">›</span>
+          <span id="rtnMoreOptsLabel">More options — sub-category · mode · goal · sub-tasks · chain · dates · tracker · note</span><span class="moreopts-chevron">›</span>
         </button>
       </div>
       <!-- 2026-08-06 (routines redesign, "delete-with-confirm" in the editor, inline
@@ -19105,6 +19129,14 @@
               <datalist id="catList">
                 <option value="Birthdays"></option><option value="Work"></option>
               </datalist>
+            </div>
+            <div class="field full" id="fModeField">
+              <label>Mode <span class="field-hint">optional</span></label>
+              <div class="track-picker" id="fModePicker" role="group" aria-label="Mode"></div>
+            </div>
+            <div class="field full" id="fGoalField">
+              <label for="fGoal">Goal <span class="field-hint">optional — shown in the session panel</span></label>
+              <input type="text" id="fGoal" class="field-bare" placeholder="e.g. Finish the migration script" autocomplete="off">
             </div>
             <div class="field full" id="fLocField">
               <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
@@ -26268,10 +26300,27 @@
     // again at the bottom — copying was literally indistinguishable from moving, and
     // whichever row she tapped the panel said "New date & time". Each row now declares
     // its own intent, the panel renders for that intent, and its single gold confirm
-    // does what the tapped row promised. "＋ Add to another day" is the gold one.
+    // does what the tapped row promised. "＋ Add to another day" is the gold one --
+    // UNLESS this item's own "Start <Mode> now" is showing (below), which outranks
+    // it: §0 allows exactly one gold primary per surface, and starting the mode
+    // she's looking at is the more decisive action of the two.
+    const startNowMode = modeOf(e);
+    const showStartNow = !!startNowMode && e.date === keyOf(TODAY) && !currentSession();
     if (tlItemCanMove(e)) {
-      actions.push(row(`data-tl-toggle-move="copy"`, "Add to another day", "＋", false, true));
+      actions.push(row(`data-tl-toggle-move="copy"`, "Add to another day", "＋", false, !showStartNow));
       actions.push(row(`data-tl-toggle-move="move"`, "Move this day", "🕑"));
+    }
+    // stage 10, "Start now": the modes spec's one manual override for entering a mode
+    // outside the normal auto-start-on-covering-block path (syncSessionAutoStart).
+    // Scoped to TODAY's real occurrence only -- a session is inherently "right now,
+    // for N minutes," so starting one from a different day's item means nothing --
+    // and only while nothing is already running: starting a SECOND session on top of
+    // a live one is the mode-swap prompt's job, a later stage this build doesn't
+    // guess at. startSession()'s own currentSession() guard makes this belt-and-
+    // braces, not the only thing stopping a double-start.
+    if (showStartNow) {
+      const m = modeById(startNowMode);
+      actions.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, m.emoji || "▶", false, true));
     }
     if (!e.generated) {
       actions.push(row(`data-edit="${e.id}"`, "Edit", "✎"));
@@ -26771,7 +26820,21 @@
       : (e.fromRecurringEvent && e.recurId) ? `data-ev-occ-del="${e.id}"`
       : e.rtTaskId ? `data-rt-occ-del="${e.id}"`
       : e.id.indexOf("fitcal-") === 0 ? `data-fitcal-del="${e.id.slice(7)}"` : "";
+    // stage 10 "Start now" -- own desktop-scoped copy of the same showStartNow test
+    // renderTlDetailHeadActions uses (not shared: that const lives in a sibling
+    // function, out of scope here). No mutual-exclusivity with .tl-desk-done's own
+    // gold ("Mark done") -- that button's always-gold look predates and is
+    // unrelated to Zone 3's "one gold primary" rule (a mobile-only convention, per
+    // its own comment), so it's left exactly as it's always been; Start-mode gets
+    // its own equally-prominent treatment via .tl-desk-start-mode instead of fighting
+    // over which one button gets to be gold.
+    const deskStartNowMode = modeOf(e);
+    const deskShowStartNow = !!deskStartNowMode && e.date === keyOf(TODAY) && !currentSession();
+    const deskStartNowHtml = deskShowStartNow
+      ? `<button type="button" class="tl-desk-btn tl-desk-start-mode" data-tl-start-mode="${e.id}">${modeById(deskStartNowMode).emoji || "▶"} Start ${esc(modeById(deskStartNowMode).name)} now</button>`
+      : "";
     const deskActionsHtml = `<div class="tl-desk-actions">
+        ${deskStartNowHtml}
         ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ Edit</button>` : ""}
         ${canMove && !movePanelOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move="move">🕑 Reschedule</button>
         <button type="button" class="tl-desk-btn" data-tl-toggle-move="copy">⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>` : ""}
@@ -27558,6 +27621,15 @@
     // read as "open move", so cancelling out of the COPY panel silently switched to the
     // move panel instead of closing.
     if (e.target.closest("[data-tl-move-cancel]")) { e.stopPropagation(); tlDetailPanel = null; refreshOpenTlDetail(); return; }
+    // stage 10 "Start now" -- desktop's own copy of #tlDetailHeadActions' identical
+    // branch (deskActionsHtml lives inside #tlDetailBody, a separate listener, same
+    // as every other desktop action button here).
+    const startModeBtn = e.target.closest("[data-tl-start-mode]");
+    if (startModeBtn) {
+      const item = TL_ITEMS_BY_ID[startModeBtn.dataset.tlStartMode] || dayEventsRawFor(TODAY).find(o => o.id === startModeBtn.dataset.tlStartMode);
+      if (item) { startSession(modeById(modeOf(item)), item); closeTlDetail(); renderDay(); }
+      return;
+    }
     // §6 "scope first" — the move panel's own scope toggle. Same stopPropagation-before-
     // rerender discipline as the edit panel's [data-ovr-scope] handler; deliberately its
     // own attribute and its own variable (see tlMoveScope's declaration).
@@ -27795,6 +27867,12 @@
       tlDetailPanel = tlDetailPanel === want ? null : want;
       tlMoveScope = "day";
       refreshOpenTlDetail();
+      return;
+    }
+    const startModeBtn = e.target.closest("[data-tl-start-mode]");
+    if (startModeBtn) {
+      const item = TL_ITEMS_BY_ID[startModeBtn.dataset.tlStartMode] || dayEventsRawFor(TODAY).find(o => o.id === startModeBtn.dataset.tlStartMode);
+      if (item) { startSession(modeById(modeOf(item)), item); closeTlDetail(); renderDay(); }
       return;
     }
     if (e.target.closest("[data-edit]")) closeTlDetail();
@@ -37684,19 +37762,18 @@
   function todayCbdBlock() {
     return dayEventsRawFor(TODAY).find(o => o.track === "work" && o.start != null && normTitle(o.title) === "cbd work") || null;
   }
-  function isInCbdWorkNow() {
-    const cbd = todayCbdBlock();
-    if (!cbd) return false;
-    const cs = toMin(cbd.start), ce = itemEndMin(cbd);
-    if (cs == null || ce == null) return false;
-    const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    return nowMin >= cs && nowMin < ce;
-  }
+  // stage 11 (the §6.2 reconciliation the NOTE above flagged and deliberately
+  // deferred): the fallback now goes through activeMode() -- being inside ANY
+  // event/routine occurrence tagged mode:"work" counts, not just the one
+  // hard-coded CBD Work block (its own time-window check, isInCbdWorkNow(),
+  // is retired along with this -- todayCbdBlock() it built on is still used
+  // by the board rendering below). WORKMODE.override is untouched: it's a
+  // same-day, all-modes manual pin, orthogonal to which mode block she
+  // happens to be standing in.
   function currentWorkMode() {
     const todayKey = keyOf(TODAY);
     if (WORKMODE.override && WORKMODE.override.date === todayKey) return WORKMODE.override.mode;
-    return isInCbdWorkNow() ? "work" : "personal";
+    return activeMode().id === "work" ? "work" : "personal";
   }
   // Day view filter: an item with no real time today is hidden unless its life-track
   // matches the live mode. Anything with a real start time (the `timed` local in
@@ -42910,6 +42987,7 @@
   const rtnAddRow = document.getElementById("rtnAddRow");
   let rtnFreq = "weekly";
   let rtnTrack = "personal";
+  let rtnMode = "";   // modes stage 10 -- "" is "None", same rtnTrack pattern (see openRtnForm/closeRtnForm/the submit handler)
   let rtnPhase = "during";
   let rtnPhaseTouched = false;   // only true once the user actually taps a Phase chip
   let rtnEditId = null;
@@ -43434,6 +43512,23 @@
     document.querySelectorAll("#rtnTrackPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.track === rtnTrack)));
   }
+  // modes stage 10: populates #rtnModePicker from the live MODES list, same
+  // one-time-at-boot reasoning as renderTodoModePicker (stage 5).
+  function renderRtnModePicker() {
+    const host = document.getElementById("rtnModePicker");
+    if (!host) return;
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true">None</button>` +
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+  }
+  renderRtnModePicker();
+  function syncRtnModeButtons() {
+    document.querySelectorAll("#rtnModePicker .track-opt").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.mode === rtnMode)));
+  }
+  document.getElementById("rtnModePicker").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    rtnMode = b.dataset.mode; syncRtnModeButtons();
+  });
   // 2026-08-17 pt 3 (Linh, "allow for routine to be both before and after"): Before
   // and After are now independently toggleable (a routine can bookend an anchor --
   // e.g. "stretch" both before AND after "Workout") while Event stays exclusive with
@@ -43467,7 +43562,7 @@
   // pattern as #addForm's setMoreOptionsOpen() -- closed on every fresh open, but
   // openRtnForm() below re-opens it automatically when the routine being edited already
   // has data tucked inside, so editing never hides something already filled in.
-  const RTN_MORE_OPTS_LABEL = "More options — sub-category · sub-tasks · chain · dates · tracker · note";
+  const RTN_MORE_OPTS_LABEL = "More options — sub-category · mode · goal · sub-tasks · chain · dates · tracker · note";
   function setRtnMoreOptionsOpen(open) {
     const wrap = document.getElementById("rtnAddFormMore");
     const btn = document.getElementById("rtnMoreOptsToggle");
@@ -44434,6 +44529,7 @@
   function closeRtnForm() {
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
+    rtnMode = ""; syncRtnModeButtons();
     rtnCalOn = true; syncRtnAutoToggle();
     rtnDurMode = "steps";
     document.getElementById("rtnFitLink").value = "";
@@ -44536,6 +44632,8 @@
       document.getElementById("rtnIcon").value = icon;
       document.getElementById("rtnTitle").value = rest;
       document.getElementById("rtnCategory").value = task.category || "";
+      rtnMode = task.mode || ""; syncRtnModeButtons();
+      document.getElementById("rtnGoal").value = task.goal || "";
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
       document.getElementById("rtnStartDate").value = task.startDate || "";
@@ -45030,6 +45128,13 @@
     const subtasks = readRtnSubs();
     const task = { id: rtnEditId || uid(), title, track: rtnTrack, category, freq: rtnFreq, note, calOn: rtnCalOn };
     if (fitLink) task.fitLink = fitLink;
+    // modes stage 10: mode lives on the template only (stage 1's own spec text) --
+    // rtnMode mirrors rtnTrack's own module-level-variable pattern, not a live DOM
+    // read, since this whole task object is rebuilt fresh on every save (see the
+    // full ROUTINE_TASKS[idx] = task replace below, not a merge).
+    if (rtnMode) task.mode = rtnMode;
+    const goalVal = document.getElementById("rtnGoal").value.trim();
+    if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
     // 2026-08-10 (How-long duration-source toggle): only worth a flag when there's an
     // actual choice to record -- "steps" is the unwritten default (subtaskDurMin treats
@@ -46652,8 +46757,24 @@
   const fAllDay = document.getElementById("fAllDay");
   const fLoc = document.getElementById("fLoc");
   const fCat = document.getElementById("fCat");
+  const fGoal = document.getElementById("fGoal");
   const fDate = document.getElementById("fDate");
   const parseLocPath = s => s.split(/[›>\/]/).map(x => x.trim()).filter(Boolean);
+
+  // modes stage 10: #fModePicker mirrors #todoModePicker exactly (stage 5) --
+  // own copy since this is a separate form. "None" is a real, common choice and
+  // is the explicit pressed default.
+  function renderFModePicker() {
+    const host = document.getElementById("fModePicker");
+    if (!host) return;
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true">None</button>` +
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+  }
+  renderFModePicker();
+  document.getElementById("fModePicker").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    document.querySelectorAll("#fModePicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
 
   // one shared "Where" dropdown (event form, fitness sessions, birthday plans):
   // her standing places plus every location she's actually used, newest first —
@@ -46967,6 +47088,7 @@
     formDirty = false;
     setMoreOptionsOpen(false);
     setFollowUpsOpen(false);
+    document.querySelectorAll("#fModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === "")));
   }
   function syncTrack() {
     document.querySelectorAll("#trackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === state.track)));
@@ -47001,6 +47123,8 @@
     updateEachWeekdayLabel();
     document.getElementById("fStages").value = (ev.stages || []).join("\n");
     fCat.value = ev.category || "";
+    document.querySelectorAll("#fModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === (ev.mode || ""))));
+    fGoal.value = ev.goal || "";
     fLoc.value = (ev.locPath || []).join(" > ");
     document.getElementById("fNote").value = ev.note || "";
     fAllDay.checked = !!ev.allDay;
@@ -47018,7 +47142,7 @@
     // there (Who/All day/Category/Where) — Ends and duration live on the main
     // form now, and Follow-ups has its own ghost row (see setFollowUpsOpen below),
     // so neither is a reason to open More options any more.
-    const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || (ev.locPath && ev.locPath.length) || ev.note;
+    const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || (ev.locPath && ev.locPath.length) || ev.note || ev.mode || ev.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(!!(ev.stages && ev.stages.length));
     fTitle.focus();
@@ -47036,6 +47160,8 @@
     state.track = t.track; syncTrack();
     formWho = t.who || "me"; syncWho();
     fCat.value = t.category || "";
+    document.querySelectorAll("#fModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === (t.mode || ""))));
+    fGoal.value = t.goal || "";
     fLoc.value = (t.locPath || []).join(" > ");
     document.getElementById("fNote").value = t.note || "";
     document.getElementById("fStages").value = "";
@@ -47059,7 +47185,7 @@
     formKind = "event"; syncKind();
     // duration lives on the main form now (always visible for an event/series),
     // so it's no longer a signal that something "extra" needs surfacing
-    const hasExtra = (t.who && t.who !== "me") || t.category || (t.locPath && t.locPath.length) || t.note;
+    const hasExtra = (t.who && t.who !== "me") || t.category || (t.locPath && t.locPath.length) || t.note || t.mode || t.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(false);   // recurring events are never formKind "task" -- the whole field stays hidden
     fTitle.focus();
@@ -50006,10 +50132,15 @@
     }
     if (start && end && toMin(end) <= toMin(start)) end = "";
     const dateVal = fDate.value || keyOf(state.anchor);
+    const modePressed = document.querySelector("#fModePicker .track-opt[aria-pressed=\"true\"]");
+    const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
+    const goalVal = fGoal.value.trim();
     const task = {
       id: uid(), title, track: state.track, category: fCat.value.trim(),
       note: noteVal, calOn: fFillCalOn, freq: "",
     };
+    if (mode) task.mode = mode;
+    if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
     if (!allDay && start && end) task.end = end;
     if (!computeFRepeatFields(task, dateVal)) return null;
@@ -50040,6 +50171,11 @@
     }
     if (start && end && toMin(end) <= toMin(start)) end = "";
     const dateVal = fDate.value || keyOf(state.anchor);
+    // modes stage 10: same #fModePicker/"None" pressed-default pattern as
+    // #todoModePicker (stage 5) -- read once here, used by every branch below.
+    const modePressed = document.querySelector("#fModePicker .track-opt[aria-pressed=\"true\"]");
+    const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
+    const goalVal = fGoal.value.trim();
     // follow-up stages: one per line, tasks only; edits keep her place in the chain
     const stages = formKind === "task"
       ? document.getElementById("fStages").value.split("\n").map(s => s.trim()).filter(Boolean)
@@ -50101,12 +50237,16 @@
           Object.assign(t, fields);
           if (formWho === "me") delete t.who; else t.who = formWho;
           if (durationMin > 0) t.durationMin = durationMin; else delete t.durationMin;
+          if (mode) t.mode = mode; else delete t.mode;
+          if (goalVal) t.goal = goalVal; else delete t.goal;
         }
       } else {
         RECURRING_EVENTS.push({
           id: uid(), ...fields,
           ...(formWho !== "me" ? { who: formWho } : {}),
           ...(durationMin > 0 ? { durationMin } : {}),
+          ...(mode ? { mode } : {}),
+          ...(goalVal ? { goal: goalVal } : {}),
         });
       }
       saveRecurringEvents(); closeForm();
@@ -50124,6 +50264,8 @@
         if (stages.length) { ev.stages = stages; ev.stageAt = Math.min(ev.stageAt || 0, stages.length); }
         else { delete ev.stages; delete ev.stageAt; }
         if (estVal > 0) ev.estMin = estVal; else delete ev.estMin;
+        if (mode) ev.mode = mode; else delete ev.mode;
+        if (goalVal) ev.goal = goalVal; else delete ev.goal;
       }
     } else {
       EVENTS.push({
@@ -50133,6 +50275,8 @@
         ...(formWho !== "me" ? { who: formWho } : {}),
         ...(stages.length ? { stages, stageAt: 0 } : {}),
         ...(estVal > 0 ? { estMin: estVal } : {}),
+        ...(mode ? { mode } : {}),
+        ...(goalVal ? { goal: goalVal } : {}),
       });
     }
     saveEvents(EVENTS);
