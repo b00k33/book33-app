@@ -2344,6 +2344,33 @@
     animation: bwSavedPulse 1400ms ease forwards;
   }
 
+  /* session card (Modes stage 3) — same "stacked card, gold-on-line-family" idiom as
+     .head-body just above: a mode pill + live countdown, two rings (plan/extra), two
+     ticked lists, and a streak line when there's history to show. Ring centre text
+     colour is set inline per-ring (mode.accent for plan, the lighter extra tint) since
+     .exp-ring-center b is hardcoded to --exp-green-ink for its other (always-green)
+     callers -- overriding here with !important-free specificity would fight that rule
+     instead of coexisting with it. */
+  .session-card {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--note-line);
+  }
+  .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .sc-mode-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+  }
+  .sc-countdown { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .sc-goal { font-size: 12px; color: var(--ink-soft); }
+  .sc-rings { display: flex; align-items: center; gap: 18px; }
+  .sc-list-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .sc-list { display: flex; flex-direction: column; gap: 4px; }
+  .sc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
+  .sc-row.done { color: var(--ink-faint); text-decoration: line-through; }
+  .sc-row .tick { flex: none; }
+  .sc-empty { font-size: 12px; font-style: italic; color: var(--ink-faint); }
+  .sc-streak { font-size: 11px; color: var(--ink-faint); padding-top: 8px; border-top: 1px dashed var(--note-line); }
+
   /* Cycle page — hormone rhythm chart (LH/FSH/Estrogen/Progesterone + uterine lining) */
   .cyc-hormone-wrap {
     background: var(--note-bg); border: 1px solid var(--note-line); border-radius: var(--radius-md);
@@ -18154,6 +18181,11 @@
              styling and renderer all come along unchanged). No group-head wrapper,
              same reason as #dsbNumSlot: the widget carries its own gold title. -->
         <div id="dsbBodySlot"></div>
+        <!-- Modes stage 3 (2026-08-20): desktop home for #daySessionCard, same
+             real-element reparent shape as #dsbBodySlot/#dsbNumSlot just above --
+             right after Weight, before Parts of life, so the live/time-sensitive
+             session sits with the other quick-glance widgets, not buried below. -->
+        <div id="dsbSessionSlot"></div>
         <!-- 2026-08-17 (Linh: "collapse part of life, remove quick add"): Parts of
              life now starts collapsed behind its own head, same tap-to-expand +
              ›/▾ chevron idiom as the Routines page's Chains section
@@ -18629,6 +18661,16 @@
              fastStatusHome just above in .day-main. -->
         <div id="dayBodyCardHome" hidden></div>
         <div id="dayBodyCard" class="head-body"></div>
+        <!-- Modes stage 3 (2026-08-20, "the session panel"): host for the active
+             book33-session -- filled by renderSessionCard(), hidden whenever no
+             session is running (self-hiding, same no-empty-placeholder pattern as
+             #dayFastHead/#dayBodyCard around it). Same STEP-5-style home-marker +
+             desktop-reparent shape as #dayBodyCard just above (placeDeskGrid()) --
+             desktop goes to the sidebar's own #dsbSessionSlot, not #deskColLeft,
+             for the same reason #dayBodyCard's own comment gives (that column is
+             dead chrome since the 4-zone desktop build). -->
+        <div id="daySessionCardHome" hidden></div>
+        <div id="daySessionCard" class="session-card" hidden></div>
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -30347,6 +30389,8 @@
     renderChainLayer(liveChainIds, deadlineMarks);
     renderFastEverywhere();
     renderBodyWidget();
+    syncSessionAutoStart();   // before renderSessionCard so a fresh render (load/date-nav) doesn't wait for the 1s tick
+    renderSessionCard();
     renderDayHealth();
     renderDayProgress();
     renderDayFitLink();
@@ -37062,7 +37106,12 @@
   // already holding one -- defaults to the real clock. Reads dayEventsRawFor
   // (the same shared day-assembly todayCbdBlock/clinicPatientsIn already use,
   // occurrence overrides and chain-resolved times included), not a second scan.
-  function activeMode(now) {
+  // 2026-08-20 (Modes stage 3): factored out of activeMode() itself so
+  // startSession's own auto-start (syncSessionAutoStart, below) can get the
+  // actual WINNING covering item -- not just its mode id -- without a second,
+  // possibly-disagreeing scan. activeMode() below is now a one-line wrapper
+  // around this; its own external behaviour/signature is unchanged.
+  function activeModeItem(now) {
     const n = now instanceof Date ? now : new Date();
     const nowMin = n.getHours() * 60 + n.getMinutes();
     let best = null, bestStart = -1;
@@ -37071,9 +37120,13 @@
       if (!mId || o.allDay || !o.start) return;
       const cs = toMin(o.start), ce = itemEndMin(o);
       if (cs == null || ce == null) return;
-      if (nowMin >= cs && nowMin < ce && cs > bestStart) { best = mId; bestStart = cs; }
+      if (nowMin >= cs && nowMin < ce && cs > bestStart) { best = o; bestStart = cs; }
     });
-    return best ? modeById(best) : MODE_HOME;
+    return best;
+  }
+  function activeMode(now) {
+    const item = activeModeItem(now);
+    return item ? modeById(modeOf(item)) : MODE_HOME;
   }
   // §2 "Filtering the day" (2026-08-20, stage 2). ONE predicate, reused by both
   // renderTimeline's filter (below) and renderModeHiddenPill (below) so the pill's
@@ -37133,6 +37186,214 @@
     const t = findCbdWorkRoutine();
     if (t && t.mode === undefined) { t.mode = "work"; saveRoutines(); }
   })();
+
+  /* ============================================================
+     SESSIONS (2026-08-20, "Modes, Sessions & Everything Attached" §3,
+     STAGE 3: the session panel -- two rings, countdown, two lists)
+     ------------------------------------------------------------
+     Scope, precisely: the store, auto-start, the live panel (rings +
+     countdown + plan/extra lists + streak line), and auto-completing when
+     the plan finishes. Deliberately NOT built here (their own later stages):
+     the mid-session add row and the three end-of-session actions (stage 4),
+     to-do mode-tagging (stage 5), the event-sheet's own Mode/Goal fields +
+     "Start <Mode> now" button + the gold-action rule (stage 10). There is no
+     way to end a session early yet -- that button is stage 4's, and shipping
+     a bare "End" here (with no leftover-options flow behind it) would be
+     the exact kind of guessed half-behaviour her specs warn against.
+
+     THE PLAN, decided (not guessed): "the items the block started with"
+     (§3.2) is read from the covering event's OWN e.steps array, using the
+     EXACT SAME `${id}::step::${i}` id convention/DONE-store/toggleDone path
+     every other stepped item in this file already uses (routines, hair-
+     wash, the cadence walkthrough) -- confirmed live against the existing
+     document-level `[data-step-tick]` change delegate (~line 39201): it
+     already generically ticks ANY id shaped that way and re-renders, so
+     this needs zero new tick-handling JS, exactly her standing rule
+     ("ticking goes through the existing toggleDone path -- no parallel
+     completion store"). An event with no steps starts a session with an
+     empty (0/0) plan -- a real, legitimate state: the session is then just
+     the countdown + goal, nothing to check off, never auto-completed by
+     the "all done" rule below (0/0 is not "all done").
+     ============================================================ */
+  const SESSION_KEY = "book33-session";
+  function loadSessions() {
+    try { const v = JSON.parse(localStorage.getItem(SESSION_KEY)); if (Array.isArray(v)) return v; } catch (e) {}
+    return [];
+  }
+  let SESSIONS = loadSessions();
+  function saveSessions() { try { localStorage.setItem(SESSION_KEY, JSON.stringify(SESSIONS)); } catch (e) {} }
+  // "book33-session -- one at a time" (§3.1): enforced here, at the one place
+  // a session is looked up, rather than by the store's shape. SESSIONS is an
+  // array of past+current records (same array-of-records shape every other
+  // store in this file uses -- EVENTS, FIT_LOG, HAIRD.history) rather than a
+  // single object, specifically so the streak line (§3.2, "4th session
+  // finished this week") has real history to read without a second key --
+  // "one at a time" means at most one record ever has no endedAt.
+  function currentSession() { return SESSIONS.find(s => !s.endedAt) || null; }
+  function sessionTotalMs(s) { return Math.max(0, s.endsAt - s.startedAt); }
+  function sessionRemainingMs(s) { return Math.max(0, s.endsAt - Date.now()); }
+  function sessionIsActive() { return !!currentSession(); }
+  // startedAt/endsAt are real epoch ms (not HH:MM strings) so the countdown
+  // is a plain subtraction every tick, no per-tick date parsing.
+  function startSession(mode, coveringEvent) {
+    if (currentSession()) return;   // never a silent swap -- stage 4's prompt owns that decision
+    const endMin = itemEndMin(coveringEvent);
+    let endsAt;
+    if (endMin != null) {
+      const d = new Date();
+      d.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
+      endsAt = d.getTime();
+    } else {
+      endsAt = Date.now() + 25 * 60000;   // no resolvable end -- fallback only, never hit by a real timed block
+    }
+    const planIds = Array.isArray(coveringEvent.steps)
+      ? coveringEvent.steps.map((s, i) => `${coveringEvent.id}::step::${i}`) : [];
+    SESSIONS.push({
+      id: uid(), modeId: mode.id, eventId: coveringEvent.id, date: keyOf(TODAY),
+      startedAt: Date.now(), endsAt, extendedMin: 0,
+      planIds, extraIds: [], endedAt: null,
+    });
+    saveSessions();
+  }
+  function endSession() {
+    const s = currentSession();
+    if (!s) return;
+    s.endedAt = Date.now();
+    saveSessions();
+  }
+  // §3 "Sessions start automatically on entering the block. Never press
+  // start." -- called from the existing 30s wmTick cadence (see that
+  // function's own call to this, below), not a second interval. Reuses
+  // activeModeItem (the exact same scan activeMode() itself runs) to get the
+  // real covering event, rather than re-deriving it -- her §1.3 rule ("if
+  // this logic appears twice anywhere, it's wrong") applies here too, not
+  // just to activeMode's own definition. Only ever starts a session when
+  // NONE is currently running; if a different mode's block starts while one
+  // is already active, this deliberately does nothing -- stage 4 owns the
+  // swap-prompt, and guessing its behaviour here would risk a silent swap,
+  // exactly what her spec forbids.
+  function syncSessionAutoStart() {
+    if (currentSession()) return;
+    const item = activeModeItem(new Date());
+    if (!item) return;
+    // "starts automatically on ENTERING the block" -- a completed plan ends the session
+    // (below) while the same block may still be covering "now" for another hour; without
+    // this check the very next tick sees no current session, re-enters, instantly re-
+    // completes (plan's already all ticked), and loops forever. Once any session -- live
+    // or finished -- exists for this exact event today, auto-start has already done its
+    // one job for that occurrence; re-starting the SAME finished block is stage 4's
+    // "book another" action, never an automatic decision.
+    const today = keyOf(TODAY);
+    if (SESSIONS.some(s => s.eventId === item.id && s.date === today)) return;
+    startSession(modeById(modeOf(item)), item);
+  }
+  // fmt: total<60min -> M:SS ("24:35 of 25:00 left"), else H:MM (her own
+  // example, "1:12 of 2:00 left" -- a 2-HOUR block, not 2 minutes; a real
+  // calendar mode block is normally well over an hour).
+  function sessionTimeFmt(ms) {
+    const totalSec = Math.round(ms / 1000);
+    if (ms < 3600000) {
+      const m = Math.floor(totalSec / 60), s = totalSec % 60;
+      return `${m}:${String(s).padStart(2, "0")}`;
+    }
+    const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60);
+    return `${h}:${String(m).padStart(2, "0")}`;
+  }
+  // her spec: "4th session finished this week · longest run 6" -- computed
+  // straight from SESSIONS' own history, never a parallel counter to drift
+  // out of sync. "This week" = Mon-Sun containing today (startOfWeek, the
+  // same week boundary every other weekly stat in this file already uses).
+  // "Longest run" = the longest streak of CONSECUTIVE CALENDAR DAYS with at
+  // least one finished session, all-time -- a session-specific measure, not
+  // reused from streakWithGrace (that helper is scoped to routine occurrence
+  // schedules, which a free-form focus session has none of).
+  function sessionStreakLine() {
+    const done = SESSIONS.filter(s => s.endedAt);
+    if (!done.length) return "";
+    const wkStart = keyOf(startOfWeek(TODAY));
+    const thisWeek = done.filter(s => keyOf(startOfWeek(parseKey(s.date))) === wkStart).length;
+    const days = [...new Set(done.map(s => s.date))].sort();
+    let longest = 0, run = 0, prev = null;
+    days.forEach(d => {
+      run = (prev && keyOf(addDays(parseKey(prev), 1)) === d) ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      prev = d;
+    });
+    if (!thisWeek) return "";
+    return `${thisWeek}${thisWeek === 1 ? "st" : thisWeek === 2 ? "nd" : thisWeek === 3 ? "rd" : "th"} session finished this week · longest run ${longest}`;
+  }
+  // colour-neutral ring, same recipe as surfaceRingSvg (~line 48090) with a
+  // SIZE parameter that one doesn't take -- PLAN (large) and EXTRA (small)
+  // need two different sizes, and changing surfaceRingSvg's own signature
+  // risks every one of its existing call sites (Hair/Nails/Shopping) picking
+  // up an unintended default. Small, deliberate duplication over a riskier
+  // shared-signature change.
+  function sessionRingSvg(pct, color, size) {
+    const sw = Math.max(3, Math.round(size / 9)), r = (size - sw) / 2, c = 2 * Math.PI * r;
+    const off = c * (1 - Math.min(Math.max(pct, 0), 1));
+    return `<svg viewBox="0 0 ${size} ${size}" class="exp-ring-svg">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="exp-ring-track"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round"
+        transform="rotate(-90 ${size / 2} ${size / 2})"
+        style="stroke-dasharray:${c.toFixed(1)};stroke-dashoffset:${off.toFixed(1)};transition:stroke-dashoffset .35s ease"/>
+    </svg>`;
+  }
+  function sessionListRowHtml(id, eventId, count, label) {
+    const sd = isDone(id);
+    return `<label class="sc-row${sd ? " done" : ""}">
+      <input type="checkbox" class="tick" data-step-tick="${esc(id)}" data-item="${esc(eventId)}" data-step-count="${count}" ${sd ? "checked" : ""} aria-label="Mark ${esc(label)} done">
+      <span>${esc(label)}</span>
+    </label>`;
+  }
+  function renderSessionCard() {
+    const host = document.getElementById("daySessionCard");
+    if (!host) return;
+    const s = currentSession();
+    if (!s) { host.hidden = true; host.innerHTML = ""; return; }
+    // §3.2 "finishing the plan completes the session, even with extras
+    // outstanding" -- checked on every render (covers a tick that just
+    // happened via the shared delegate, and a fresh page load resuming an
+    // already-finished plan) rather than a second completion path.
+    const planDone = s.planIds.filter(isDone).length;
+    if (s.planIds.length && planDone === s.planIds.length) { endSession(); host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    const mode = modeById(s.modeId);
+    const item = TL_ITEMS_BY_ID[s.eventId] || dayEventsRawFor(parseKey(s.date)).find(o => o.id === s.eventId);
+    const goal = item && item.goal ? item.goal : "";
+    const extraDone = s.extraIds.filter(isDone).length;
+    const planPct = s.planIds.length ? planDone / s.planIds.length : 0;
+    const extraPct = s.extraIds.length ? extraDone / s.extraIds.length : 0;
+    const lightAccent = `color-mix(in oklab, ${mode.accent || "var(--margin-rule)"} 55%, var(--paper))`;
+    const planRows = item && Array.isArray(item.steps)
+      ? item.steps.map((st, i) => sessionListRowHtml(`${s.eventId}::step::${i}`, s.eventId, item.steps.length, stepLabel(st))).join("")
+      : "";
+    const extraRows = s.extraIds.length
+      ? s.extraIds.map(id => sessionListRowHtml(id, id, 1, id)).join("")
+      : `<div class="sc-empty">Nothing picked up yet</div>`;
+    const streak = sessionStreakLine();
+    host.innerHTML = `
+      <div class="sc-head">
+        <span class="sc-mode-pill" style="background:${lightAccent};color:${mode.accent || "var(--margin-rule)"}">${mode.emoji || ""} ${esc(mode.name)}</span>
+        <span class="sc-countdown">${sessionTimeFmt(sessionRemainingMs(s))} of ${sessionTimeFmt(sessionTotalMs(s))} left</span>
+      </div>
+      ${goal ? `<div class="sc-goal">🎯 ${esc(goal)}</div>` : ""}
+      <div class="sc-rings">
+        <div class="exp-ring-wrap" style="width:64px;height:64px">${sessionRingSvg(planPct, mode.accent || "var(--margin-rule)", 64)}<div class="exp-ring-center"><b style="color:${mode.accent || "var(--margin-rule)"}">${planDone}/${s.planIds.length}</b></div></div>
+        <div class="exp-ring-wrap" style="width:38px;height:38px">${sessionRingSvg(extraPct, lightAccent, 38)}<div class="exp-ring-center"><b style="color:${lightAccent};font-size:10px">${extraDone}/${s.extraIds.length}</b></div></div>
+      </div>
+      <div class="sc-list-label">The plan</div>
+      <div class="sc-list">${planRows || `<div class="sc-empty">No checklist on this block</div>`}</div>
+      <div class="sc-list-label">Picked up along the way</div>
+      <div class="sc-list">${extraRows}</div>
+      ${streak ? `<div class="sc-streak">${esc(streak)}</div>` : ""}
+    `;
+  }
+  let sessionTickTimer = null;
+  function sessionTick() {
+    syncSessionAutoStart();
+    if (state.view === "day") renderSessionCard();
+  }
+  sessionTickTimer = setInterval(sessionTick, 1000);
 
   /* ============================================================
      WORK MODE + WORK DAY BOARD (2026-08-20, Linh's Cliniko-safe brief)
@@ -39791,6 +40052,10 @@
     const bodyCard = document.getElementById("dayBodyCard");
     const bodyCardHome = document.getElementById("dayBodyCardHome");
     const dsbBodySlot = document.getElementById("dsbBodySlot");
+    // Modes stage 3: same reparent shape as bodyCard/dsbBodySlot just above.
+    const sessionCard = document.getElementById("daySessionCard");
+    const sessionCardHome = document.getElementById("daySessionCardHome");
+    const dsbSessionSlot = document.getElementById("dsbSessionSlot");
     // 2026-08-10 (Desktop Day page cleanup, "'The day' header + a single compact
     // day-nav on the right, no far-apart gap"): the base .day-step-row rule is
     // justify-content:space-between, fine for mobile's 2-group row but reading as a
@@ -39863,6 +40128,8 @@
       if (fastEl && fastEl.parentElement !== colL) colL.appendChild(fastEl);
       if (bodyCard && dsbBodySlot && bodyCard.parentElement !== dsbBodySlot) dsbBodySlot.appendChild(bodyCard);
       else if (bodyCard && !dsbBodySlot && bodyCard.parentElement !== colL) colL.appendChild(bodyCard);
+      if (sessionCard && dsbSessionSlot && sessionCard.parentElement !== dsbSessionSlot) dsbSessionSlot.appendChild(sessionCard);
+      else if (sessionCard && !dsbSessionSlot && sessionCard.parentElement !== colL) colL.appendChild(sessionCard);
       if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
       // 2026-08-16: rNum (Numerology) now goes to the sidebar's own slot instead of
       // colL — see this function's own header comment. colL still parents it
@@ -39928,6 +40195,7 @@
       if (addRowHome && addRowEl && addRowHome.nextElementSibling !== addRowEl) addRowHome.after(addRowEl);
       if (fastHome && fastEl && fastHome.nextElementSibling !== fastEl) fastHome.after(fastEl);
       if (bodyCardHome && bodyCard && bodyCardHome.nextElementSibling !== bodyCard) bodyCardHome.after(bodyCard);
+      if (sessionCardHome && sessionCard && sessionCardHome.nextElementSibling !== sessionCard) sessionCardHome.after(sessionCard);
       if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
       if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
     }
