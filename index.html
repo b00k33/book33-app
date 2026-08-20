@@ -10994,6 +10994,18 @@
   @media (max-width: 640px) {
     .tl-origin-filter .track-opt { padding: 5px 8px; font-size: 9.5px; }
   }
+  /* Mode-hidden pill, stage 2 of the modes build (2026-08-20): stacks one slot
+     BELOW the origin-hidden pill (top offset +34px+6px again) rather than sharing
+     its spot -- the two filters are independent and can both have something to
+     report at once (origin-hidden and mode-hidden are different sets of items).
+     Same shape, its own accent (--margin-rule instead of --gold) so the two read
+     as related-but-distinct chrome, not one pill mysteriously changing its text. */
+  .tl-mode-hidden-pill {
+    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px + 34px + 6px);
+    background: var(--margin-rule); color: var(--accent-on);
+    max-width: min(280px, calc(100vw - 28px));
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -16344,6 +16356,15 @@
        persistent pill... Tapping it restores everything." Empty/hidden whenever
        nothing is hidden -- see renderTlOriginFilter(). -->
   <button type="button" class="tl-origin-hidden-pill" id="tlOriginHiddenPill" hidden></button>
+
+  <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached" (2026-08-20):
+       her spec's own non-negotiable rule, restated for THIS filter (§2: "this rule
+       applies to every filtered surface in the app, without exception") -- nothing
+       mode-filtering hides is ever silent. Same global-chrome placement as the origin
+       pill just above (a page-agnostic sibling, day-view-only via CSS) and the SAME
+       "tap to reveal everything" shape, but content-driven (names the top few hidden
+       items) rather than a static count, since her spec asks for both. -->
+  <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" hidden></button>
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
@@ -24574,6 +24595,13 @@
                   // explicit ask was "I should never open the app tomorrow wondering
                   // where half my day went."
                   tlOriginHidden: new Set(),
+                  // Modes stage 2 (2026-08-20): "reveal everything" for the active mode's
+                  // filter -- same session-only reasoning as tlOriginHidden just above
+                  // (never PREFS; a mode's filtering is tied to right-now, not a lasting
+                  // preference). Cleared back to false on every real mode CHANGE (see
+                  // modeVisible()'s own comment) so a reveal from an old mode never
+                  // silently carries into a new one.
+                  modeRevealAll: false, modeRevealAllFor: null,
                   track: "work", year: TODAY.getFullYear(),
                   habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
@@ -25610,6 +25638,22 @@
     // down -- a hidden origin type disappears from this view exactly the way a
     // hidden track already does.
     items = items.filter(tlOriginVisible);
+    // Modes stage 2 (2026-08-20, "Filtering the day"): same call shape again,
+    // one line further down. activeMode() is resolved ONCE here (it does a real
+    // day-assembly scan; calling it per-item would be a second scan of the same
+    // data renderTimeline already has), reused for every item's modeVisible()
+    // check AND passed straight to renderModeHiddenPill so the pill's own text
+    // is built from the exact items this filter excluded -- never a second,
+    // possibly-disagreeing pass over the day.
+    const activeM = activeMode();
+    syncModeReveal(activeM);
+    const modeHidden = [];
+    items = items.filter(e => {
+      const ok = modeVisible(e, activeM);
+      if (!ok) modeHidden.push(e);
+      return ok;
+    });
+    renderModeHiddenPill(modeHidden, activeM);
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -37031,6 +37075,55 @@
     });
     return best ? modeById(best) : MODE_HOME;
   }
+  // §2 "Filtering the day" (2026-08-20, stage 2). ONE predicate, reused by both
+  // renderTimeline's filter (below) and renderModeHiddenPill (below) so the pill's
+  // own "what's hidden" text can never disagree with what's actually filtered.
+  // `am` is the already-resolved activeMode() for this render pass -- callers
+  // compute it once, not per item (activeMode() itself does a real day-assembly
+  // scan, and renderTimeline calls this once per item on the day).
+  //   - Home / a mode with no shows object at all: filters nothing (spec: "Home
+  //     filters nothing").
+  //   - the item's OWN mode equals the active mode: always shown -- broader than
+  //     "only the single block that resolved activeMode()", since two blocks
+  //     tagged the same mode hiding each other from one another would read as a
+  //     bug, not a feature; this is a judgment call, not dictated by the spec.
+  //   - otherwise: shown if its track or category is in the mode's shows list.
+  // state.modeRevealAll is the session-only "tapping to reveal everything" escape
+  // hatch her spec requires -- syncModeReveal() (below) clears it the instant the
+  // active mode id itself changes, so a reveal granted in Study doesn't silently
+  // carry into Night an hour later.
+  function syncModeReveal(am) {
+    if (state.modeRevealAllFor !== am.id) { state.modeRevealAll = false; state.modeRevealAllFor = am.id; }
+  }
+  function modeVisible(e, am) {
+    if (state.modeRevealAll) return true;
+    if (am.id === "home" || !am.shows) return true;
+    if (modeOf(e) === am.id) return true;
+    if (e.track && am.shows.tracks && am.shows.tracks.indexOf(e.track) !== -1) return true;
+    if (e.category && am.shows.categories && am.shows.categories.indexOf(e.category) !== -1) return true;
+    return false;
+  }
+  // her spec, same non-negotiable rule as the origin filter's own pill: "Whenever
+  // anything is hidden, show a small persistent pill... naming the top few kinds...
+  // tapping to reveal everything." `hidden` is the exact array modeVisible's own
+  // renderTimeline call site excluded this pass -- never a second, possibly-
+  // disagreeing scan. Named by TITLE (her example: "clinic, dinner, hair wash"),
+  // capped at 3 names + a "+N more" tail so a heavy filter day doesn't overflow
+  // the pill's own max-width.
+  function renderModeHiddenPill(hidden, am) {
+    const pill = document.getElementById("tlModeHiddenPill");
+    if (!pill) return;
+    if (!hidden.length || state.modeRevealAll) { pill.hidden = true; return; }
+    pill.hidden = false;
+    const names = hidden.map(e => e.title).filter(Boolean);
+    const shown = names.slice(0, 3).join(", ");
+    const more = names.length > 3 ? ` +${names.length - 3} more` : "";
+    pill.textContent = `${hidden.length} other thing${hidden.length === 1 ? "" : "s"} today ${hidden.length === 1 ? "is" : "are"} hidden · ${shown}${more}`;
+  }
+  document.getElementById("tlModeHiddenPill").addEventListener("click", () => {
+    state.modeRevealAll = true;
+    renderDay();
+  });
   // spec §1.2: the existing CBD Work routine gets mode:"work" so the clinic day
   // works immediately. Conditional + idempotent: only fires where that routine
   // actually exists (her live device -- this dev copy has none), and only while
