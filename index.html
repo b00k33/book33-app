@@ -17492,6 +17492,15 @@
           <label>Mode <span class="field-hint">optional</span></label>
           <div class="track-picker" id="rtnModePicker" role="group" aria-label="Mode"></div>
         </div>
+        <!-- modes stage 7: the day filter (modeVisible, stage 2) hides anything whose
+             track/category isn't in the active mode's own shows list -- right for most
+             routines, wrong for the few that should cut through regardless (a hydration
+             reminder, a med). This is that per-routine escape hatch, off by default
+             same as #rtnAutoToggle's own switch shape. -->
+        <div class="field full" id="rtnShowField">
+          <label for="rtnShowToggle">Always show<span class="field-hint" id="rtnShowHint"> — off, hidden days a different mode filters it out</span></label>
+          <button type="button" class="rtg-auto-switch" id="rtnShowToggle" role="switch" aria-checked="false" aria-label="Always show, even when a different mode would normally hide this routine"></button>
+        </div>
         <div class="field rtn-g8" id="rtnGoalField">
           <label for="rtnGoal">Goal <span class="field-hint">optional — shown in the session panel</span></label>
           <input type="text" id="rtnGoal" placeholder="e.g. Finish the migration script" autocomplete="off">
@@ -17610,7 +17619,7 @@
            On calendar / More options / footer). Same id/aria-controls, unchanged. -->
       <div class="field full" id="rtnMoreOptsRow">
         <button type="button" class="more-opts-toggle" id="rtnMoreOptsToggle" aria-expanded="false" aria-controls="rtnAddFormMore">
-          <span id="rtnMoreOptsLabel">More options — sub-category · mode · goal · sub-tasks · chain · dates · tracker · note</span><span class="moreopts-chevron">›</span>
+          <span id="rtnMoreOptsLabel">More options — sub-category · mode · always show · goal · sub-tasks · chain · dates · tracker · note</span><span class="moreopts-chevron">›</span>
         </button>
       </div>
       <!-- 2026-08-06 (routines redesign, "delete-with-confirm" in the editor, inline
@@ -17657,6 +17666,10 @@
         <button type="button" class="track-opt" data-rtnview="list" aria-pressed="false">Cards</button>
         <button type="button" class="track-opt" data-rtnview="table" aria-pressed="true">Table</button>
       </div>
+      <!-- modes stage 7: one pass through every routine to flip its "always show"
+           flag (task.show) without opening each one's own editor -- see
+           openModeSortPanel/renderModeSortPanel. -->
+      <button type="button" class="add-btn" id="rtnModeSortBtn">🔀 Sort mode visibility</button>
     </div>
     <div id="rtnManage" hidden></div>
     <div id="rtnTable" hidden></div>
@@ -37224,6 +37237,14 @@
     }
     return null;
   }
+  // modes stage 7: the per-routine exemption from modeVisible()'s track/category
+  // filter -- a routine template's own .show flag, same "read the template, never
+  // the occurrence" shape modeOf() just above uses for .mode.
+  function routineShowAlways(e) {
+    if (!e || !e.rtTaskId) return false;
+    const t = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
+    return !!(t && t.show);
+  }
   // §1.3 activeMode() -- ONE function, the ONLY place "which mode is active" is
   // decided (the spec: "if this logic appears twice anywhere, it's wrong").
   // Finds the timed item containing `now` that carries a mode; when several
@@ -37278,6 +37299,7 @@
     if (state.modeRevealAll) return true;
     if (am.id === "home" || !am.shows) return true;
     if (modeOf(e) === am.id) return true;
+    if (routineShowAlways(e)) return true;
     if (e.track && am.shows.tracks && am.shows.tracks.indexOf(e.track) !== -1) return true;
     if (e.category && am.shows.categories && am.shows.categories.indexOf(e.category) !== -1) return true;
     return false;
@@ -38909,6 +38931,7 @@
     if (!document.getElementById("addForm").hidden) { closeForm(); armBackGuard(); return; }
     if (todoPanelOpen) { closeTodoPanel(); armBackGuard(); return; }
     if (fastPanelOpen) { closeFastPanel(); armBackGuard(); return; }
+    if (modeSortOpen) { closeModeSortPanel(); armBackGuard(); return; }
     if (!document.getElementById("editPanelOverlay").hidden) { closeRtnForm(); armBackGuard(); return; }
     if (!document.getElementById("jumpOverlay").hidden) { closeJump(); armBackGuard(); return; }
     if (dayRightDrawerIsOpen()) { closeDayRightDrawer(); armBackGuard(); return; }
@@ -43011,6 +43034,10 @@
   // to match calOn's own "absent/true = on" convention every reader elsewhere in
   // the app already uses. Same rtnTrack/rtnFreq pattern (see openRtnForm/the submit handler).
   let rtnCalOn = true;
+  // modes stage 7: task.show, off by default (absent = normal mode-filtering
+  // applies) -- same rtnCalOn switch pattern, reset in closeRtnForm, set from
+  // task.show in openRtnForm.
+  let rtnShow = false;
   // 2026-08-10 (How-long duration-source toggle): "steps" matches subtaskDurMin's own
   // unwritten default (durationMode absent behaves as "steps") so a freshly-opened
   // routine with saved sub-tasks shows the toggle already pointed at whichever one is
@@ -43558,11 +43585,25 @@
     rtnCalOn = !rtnCalOn;
     syncRtnAutoToggle();
   });
+  // modes stage 7: same switch shape as syncRtnAutoToggle just above, own
+  // field (task.show) -- see modeVisible()'s routineShowAlways() exemption.
+  function syncRtnShowToggle() {
+    const btn = document.getElementById("rtnShowToggle");
+    const hint = document.getElementById("rtnShowHint");
+    if (!btn) return;
+    btn.classList.toggle("on", rtnShow);
+    btn.setAttribute("aria-checked", String(rtnShow));
+    if (hint) hint.textContent = rtnShow ? " — on, shows even when a different mode's filter would hide it" : " — off, hidden days a different mode filters it out";
+  }
+  document.getElementById("rtnShowToggle").addEventListener("click", () => {
+    rtnShow = !rtnShow;
+    syncRtnShowToggle();
+  });
   // 2026-08-06 (Linh: "fold rarely-used fields into a collapsed More options"): same
   // pattern as #addForm's setMoreOptionsOpen() -- closed on every fresh open, but
   // openRtnForm() below re-opens it automatically when the routine being edited already
   // has data tucked inside, so editing never hides something already filled in.
-  const RTN_MORE_OPTS_LABEL = "More options — sub-category · mode · goal · sub-tasks · chain · dates · tracker · note";
+  const RTN_MORE_OPTS_LABEL = "More options — sub-category · mode · always show · goal · sub-tasks · chain · dates · tracker · note";
   function setRtnMoreOptionsOpen(open) {
     const wrap = document.getElementById("rtnAddFormMore");
     const btn = document.getElementById("rtnMoreOptsToggle");
@@ -43759,15 +43800,16 @@
   // (see e.g. #tlDetailOverlay's own listener).
   // 2026-08-19: #editPanelOverlay now has a THIRD possible occupant (the fasting
   // panel, see fastPanelOpen below, added after the To-do overflow list) -- these
-  // three shared triggers branch on which one is actually open rather than always
-  // calling the routine-form close. Any FOURTH occupant joins this same chain.
-  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeRtnForm(); });
+  // shared triggers branch on which one is actually open rather than always
+  // calling the routine-form close. modeSortOpen (modes stage 7, "one-pass sorting
+  // screen") is the FOURTH; any fifth joins this same chain.
+  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else closeRtnForm(); });
   document.getElementById("editPanelOverlay")?.addEventListener("click", e => {
     if (e.target.closest(".slide-panel-sheet")) return;
-    if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeRtnForm();
+    if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else closeRtnForm();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && (fastPanelOpen || todoPanelOpen)) { if (fastPanelOpen) closeFastPanel(); else closeTodoPanel(); }
+    if (e.key === "Escape" && (fastPanelOpen || todoPanelOpen || modeSortOpen)) { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeModeSortPanel(); }
   });
   // 2026-08-19 (Linh, "+N more -> a slide-out panel... warm, appealing look, instead
   // of navigating to the full To-do page"): the rail To-do widget's overflow view.
@@ -44033,6 +44075,52 @@
     document.getElementById("editPanelSheet")?.classList.remove("todo-panel-mode");
     document.getElementById("editPanelOverlay").hidden = true;
   }
+  // modes stage 7's "one-pass sorting screen": #editPanelOverlay's next occupant
+  // after the fasting panel (see that occupant's own comment -- "any FOURTH
+  // occupant joins this same chain"). Builds its list fresh from ROUTINE_TASKS
+  // (same shape as the To-do overflow panel above, not a reparent like the
+  // fasting panel), so a plain re-render after every toggle is enough to stay
+  // current -- no separate sync step.
+  let modeSortOpen = false;
+  function modeSortListHtml() {
+    const rows = ROUTINE_TASKS.slice().sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    if (!rows.length) return `<div class="log-row">No routines yet.</div>`;
+    return rows.map(t => `<div class="log-row">
+        <span class="val">${esc(t.title)}</span>
+        <button type="button" class="rtn-cal-toggle" data-modesort-toggle="${t.id}" aria-pressed="${!!t.show}"
+          aria-label="${t.show ? "Always shows" : "Filtered by mode"} — ${esc(t.title)}"
+          title="${t.show ? "Always shows — click to let mode filtering decide" : "Filtered by mode — click to always show"}"></button>
+      </div>`).join("");
+  }
+  function renderModeSortPanel() {
+    const body = document.getElementById("editPanelBody");
+    if (!body) return;
+    body.innerHTML = `<p class="field-hint" style="margin:0 0 12px">Routines that always show cut through every mode's filter — go through this list once and flip the ones that shouldn't get hidden.</p>
+      <div class="modesort-list">${modeSortListHtml()}</div>`;
+  }
+  function openModeSortPanel() {
+    armBackGuard();
+    modeSortOpen = true;
+    const title = document.getElementById("editPanelTitle");
+    if (title) title.textContent = "Sort mode visibility";
+    renderModeSortPanel();
+    document.getElementById("editPanelOverlay").hidden = false;
+  }
+  function closeModeSortPanel() {
+    modeSortOpen = false;
+    document.getElementById("editPanelOverlay").hidden = true;
+  }
+  document.getElementById("rtnModeSortBtn")?.addEventListener("click", openModeSortPanel);
+  document.addEventListener("click", e => {
+    const toggle = e.target.closest("[data-modesort-toggle]");
+    if (!toggle) return;
+    const t = ROUTINE_TASKS.find(x => x.id === toggle.dataset.modesortToggle);
+    if (!t) return;
+    if (t.show) delete t.show; else t.show = true;
+    saveRoutines();
+    renderModeSortPanel();
+    renderDay();   // the day's own mode-hidden pill count can change immediately
+  });
   document.addEventListener("click", e => {
     if (e.target.closest("[data-open-todo-panel]")) { openTodoPanel(); return; }
     const tick = e.target.closest("[data-todopanel-tick]");
@@ -44530,6 +44618,7 @@
     rtnForm.hidden = true; rtnAddRow.hidden = false;
     rtnForm.reset(); rtnFreq = "weekly"; rtnTrack = "personal"; rtnWeekdays = [0]; rtnEditId = null;
     rtnMode = ""; syncRtnModeButtons();
+    rtnShow = false; syncRtnShowToggle();
     rtnCalOn = true; syncRtnAutoToggle();
     rtnDurMode = "steps";
     document.getElementById("rtnFitLink").value = "";
@@ -44633,6 +44722,7 @@
       document.getElementById("rtnTitle").value = rest;
       document.getElementById("rtnCategory").value = task.category || "";
       rtnMode = task.mode || ""; syncRtnModeButtons();
+      rtnShow = !!task.show; syncRtnShowToggle();
       document.getElementById("rtnGoal").value = task.goal || "";
       document.getElementById("rtnNote").value = task.note || "";
       document.getElementById("rtnFitLink").value = task.fitLink || "";
@@ -45133,6 +45223,7 @@
     // read, since this whole task object is rebuilt fresh on every save (see the
     // full ROUTINE_TASKS[idx] = task replace below, not a merge).
     if (rtnMode) task.mode = rtnMode;
+    if (rtnShow) task.show = true;
     const goalVal = document.getElementById("rtnGoal").value.trim();
     if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
