@@ -36884,6 +36884,109 @@
   });
 
   /* ============================================================
+     MODES (2026-08-20, Linh's "Modes, Sessions & Everything Attached" spec,
+     STAGE 1: modes + mode-on-event + activeMode)
+     ------------------------------------------------------------
+     Core idea, from the spec's own one-liner: a mode is an EVENT you place on
+     your calendar. Being inside that block IS being in that mode -- no
+     time-of-day rules, no precedence ladder. EVENTS/ROUTINE_TASKS rows gain two
+     OPTIONAL fields: mode ("<modeId>", on the event / on the routine TEMPLATE,
+     never per-occurrence) and goal (one line; per-occurrence via setRtnOvr for
+     routines, with the template carrying a default). Nothing here filters or
+     renders yet -- that's stage 2+; this stage is the store, the resolver, and
+     the single decider.
+
+     `shows` strings were read from her REAL data (book33-categories + every
+     category actually used on events/routines), per the spec's own "find the
+     real category strings, do not invent them" rule:
+       real tracks:     personal / work / marriage / family
+       real categories: Morning, Fitness, Beauty, Skin & Nails, Home,
+                        Daily essentials, Routine (+ generated ones: Birthdays,
+                        Medical, Supplements & Herbs, Family Dinh Admin)
+     Spec names that DON'T exist in the data (reported, not invented):
+       "Beauty AM"/"Beauty PM" -- both skincare routines live under
+         "Skin & Nails"; there is no AM/PM split at the category level.
+       "Code", "build tasks", "CPD", "learning" -- no such categories anywhere;
+         code/study get empty shows (their block + hidden count still work, and
+         stage-5 to-do tagging is where their content really comes from).
+       "Dinner"/"wind-down" -- both live under "Daily essentials", which also
+         holds every MORNING essential (breakfast, brush teeth am...), so
+         including it wholesale in night would be wrong; tag those two routines
+         mode:"night" directly instead when stage 10's UI lands.
+     ============================================================ */
+  const MODES_KEY = "book33-modes";
+  // built-in Home -- what you get when no mode block contains now. Not stored,
+  // not editable, filters nothing (shows: null is the "no filtering" signal).
+  const MODE_HOME = { id: "home", name: "Home", emoji: "🏠", accent: "", order: 99, shows: null, builtin: true };
+  function defaultModes() {
+    return [
+      { id: "morning", name: "Morning",  emoji: "🌅", accent: "#E8A33D", order: 1, shows: { tracks: [], categories: ["Morning", "Fitness", "Skin & Nails"] } },
+      { id: "work",    name: "Work",     emoji: "⚕",  accent: "#17809B", order: 2, shows: { tracks: ["work"], categories: [] } },
+      { id: "code",    name: "Code",     emoji: "💻", accent: "#7E6BD0", order: 3, shows: { tracks: [], categories: [] } },
+      { id: "study",   name: "Study",    emoji: "📚", accent: "#2E9D57", order: 4, shows: { tracks: [], categories: [] } },
+      { id: "clean",   name: "Cleaning", emoji: "🧹", accent: "#8A9AA2", order: 5, shows: { tracks: [], categories: ["Home"] } },
+      { id: "night",   name: "Night",    emoji: "🌙", accent: "#5B6FC4", order: 6, shows: { tracks: [], categories: ["Beauty", "Skin & Nails"] } },
+    ];
+  }
+  function loadModes() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(MODES_KEY));
+      if (Array.isArray(raw) && raw.length) return raw;
+    } catch (e) {}
+    return defaultModes();
+  }
+  let MODES = loadModes();
+  function saveModes() { try { localStorage.setItem(MODES_KEY, JSON.stringify(MODES)); } catch (e) {} }
+  function modeById(id) {
+    if (!id || id === "home") return MODE_HOME;
+    return MODES.find(m => m.id === id) || MODE_HOME;
+  }
+  // THE one resolver for "what mode does this item carry": a plain event carries
+  // its own, a routine occurrence reads its TEMPLATE (a routine's mode is a
+  // property of the routine -- storing it per-day would mean setting it every
+  // single day). Returns a mode ID or null, never the Home object -- "no mode"
+  // is a valid state the sheet renders as such, not silently Home.
+  function modeOf(e) {
+    if (!e) return null;
+    if (e.mode) return e.mode;
+    if (e.rtTaskId) {
+      const t = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
+      return (t && t.mode) || null;
+    }
+    return null;
+  }
+  // §1.3 activeMode() -- ONE function, the ONLY place "which mode is active" is
+  // decided (the spec: "if this logic appears twice anywhere, it's wrong").
+  // Finds the timed item containing `now` that carries a mode; when several
+  // overlap, the one that STARTED LATEST wins (the more specific block);
+  // otherwise Home. `now` is an optional Date, for tests and for callers
+  // already holding one -- defaults to the real clock. Reads dayEventsRawFor
+  // (the same shared day-assembly todayCbdBlock/clinicPatientsIn already use,
+  // occurrence overrides and chain-resolved times included), not a second scan.
+  function activeMode(now) {
+    const n = now instanceof Date ? now : new Date();
+    const nowMin = n.getHours() * 60 + n.getMinutes();
+    let best = null, bestStart = -1;
+    dayEventsRawFor(n).forEach(o => {
+      const mId = modeOf(o);
+      if (!mId || o.allDay || !o.start) return;
+      const cs = toMin(o.start), ce = itemEndMin(o);
+      if (cs == null || ce == null) return;
+      if (nowMin >= cs && nowMin < ce && cs > bestStart) { best = mId; bestStart = cs; }
+    });
+    return best ? modeById(best) : MODE_HOME;
+  }
+  // spec §1.2: the existing CBD Work routine gets mode:"work" so the clinic day
+  // works immediately. Conditional + idempotent: only fires where that routine
+  // actually exists (her live device -- this dev copy has none), and only while
+  // the field has never been set (once set -- even cleared to null by a future
+  // UI -- it is never re-imposed).
+  (function seedCbdWorkMode() {
+    const t = findCbdWorkRoutine();
+    if (t && t.mode === undefined) { t.mode = "work"; saveRoutines(); }
+  })();
+
+  /* ============================================================
      WORK MODE + WORK DAY BOARD (2026-08-20, Linh's Cliniko-safe brief)
      ------------------------------------------------------------
      SAFETY, read this before touching anything below: Book33 never calls the
@@ -36895,6 +36998,10 @@
      which writes its result into localStorage["book33-clinic-day"]. Everything
      below only ever READS that key -- grep this file for "clinicApi"/"fetch(" if
      you ever doubt it; there is nothing here that talks to the network.
+     NOTE (stage-1 modes, 2026-08-20): currentWorkMode()/isInCbdWorkNow() below
+     predate activeMode() above and overlap it conceptually -- the spec's §6.2
+     reconciliation (work mode = activeMode().id === "work" + the same override)
+     belongs to stage 11 (work-mode skin), deliberately not done in stage 1.
      ============================================================ */
   // --- import target: book33-clinic-day, written externally by /patients, read-only here ---
   const CLINIC_DAY_KEY = "book33-clinic-day";
