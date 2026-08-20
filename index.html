@@ -8947,6 +8947,16 @@
     padding: 8px 12px; color: var(--ink);
   }
   .plantmrw-goal:focus { outline: none; border-color: var(--margin-rule); }
+  /* modes stage 9, "triggers propose, never set" -- reuses .upk-btn/.upk-accept/
+     .upk-dismiss verbatim (Upkeep suggestions), just sized down and laid out in
+     a row instead of Upkeep's stacked-column .upk-actions, since this row has no
+     date block competing for height. */
+  .modesug-section { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--note-line); }
+  .modesug-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .modesug-mode { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; flex: none; }
+  .modesug-title { font-size: 13px; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modesug-actions { flex: none; display: flex; gap: 6px; }
+  .modesug-actions .upk-btn { width: 32px; height: 32px; font-size: 13px; }
 
   /* ---- Meals today (2026-08-11, "log my actual lunch") — itemized, grouped by slot ---- */
   .nut-meal-slot { margin-top: 12px; }
@@ -44103,6 +44113,52 @@
   // fasting panel), so a plain re-render after every toggle is enough to stay
   // current -- no separate sync step.
   let modeSortOpen = false;
+  // modes stage 9, "triggers propose, never set": an untagged routine whose
+  // track/category matches a mode's OWN shows list (the same signal
+  // modeVisible() reads to decide visibility, just queried in reverse) is a
+  // plausible tagging candidate -- surfaced here, never applied automatically.
+  // Same accept/dismiss shape as the Upkeep day-suggestions (buildUpkeepSuggestions/
+  // upkRowHtml, 2026-08-19) -- reuses .upk-btn/.upk-accept/.upk-dismiss verbatim
+  // rather than a second button style. Dismissal has no cycle/due-date to expire
+  // it against (unlike Upkeep's) -- it's keyed on routine+mode+track+category, so
+  // it only reappears if the routine's own track/category actually changes, not
+  // on some elapsed-time schedule.
+  const MODETAG_DISMISS_KEY = "book33-modetag-dismiss";
+  function loadModeTagDismiss() {
+    try {
+      const v = JSON.parse(localStorage.getItem(MODETAG_DISMISS_KEY));
+      return v && typeof v === "object" ? v : {};
+    } catch (e) { return {}; }
+  }
+  let MODETAG_DISMISS = loadModeTagDismiss();
+  function saveModeTagDismiss() { try { localStorage.setItem(MODETAG_DISMISS_KEY, JSON.stringify(MODETAG_DISMISS)); } catch (e) {} }
+  const modeTagSuggestionKey = (t, m) => `${t.id}:${m.id}:${t.track || ""}:${t.category || ""}`;
+  function modeTagSuggestions() {
+    const out = [];
+    ROUTINE_TASKS.forEach(t => {
+      if (t.mode) return;
+      const m = MODES.find(mm => mm.shows && (
+        (t.track && mm.shows.tracks && mm.shows.tracks.indexOf(t.track) !== -1) ||
+        (t.category && mm.shows.categories && mm.shows.categories.indexOf(t.category) !== -1)
+      ));
+      if (!m) return;
+      const key = modeTagSuggestionKey(t, m);
+      if (Object.prototype.hasOwnProperty.call(MODETAG_DISMISS, key)) return;
+      out.push({ routine: t, mode: m, key });
+    });
+    return out;
+  }
+  function modeTagSuggestionRowHtml(s) {
+    const m = s.mode;
+    return `<div class="modesug-row">
+      <span class="modesug-mode" style="color:${m.accent || "var(--margin-rule)"}">${m.emoji || ""} ${esc(m.name)}</span>
+      <span class="modesug-title">${esc(s.routine.title)}</span>
+      <div class="modesug-actions">
+        <button type="button" class="upk-btn upk-accept" data-modesug-accept="${esc(s.key)}" data-modesug-rt="${esc(s.routine.id)}" data-modesug-mode="${esc(m.id)}" aria-label="Tag ${esc(s.routine.title)} as ${esc(m.name)}">✓</button>
+        <button type="button" class="upk-btn upk-dismiss" data-modesug-dismiss="${esc(s.key)}" aria-label="Not now — ${esc(s.routine.title)}">✕</button>
+      </div>
+    </div>`;
+  }
   function modeSortListHtml() {
     const rows = ROUTINE_TASKS.slice().sort((a, b) => (a.title || "").localeCompare(b.title || ""));
     if (!rows.length) return `<div class="log-row">No routines yet.</div>`;
@@ -44116,7 +44172,13 @@
   function renderModeSortPanel() {
     const body = document.getElementById("editPanelBody");
     if (!body) return;
+    const suggestions = modeTagSuggestions();
+    const sugHtml = suggestions.length ? `<div class="modesug-section">
+      <div class="field-hint" style="margin:0 0 8px">Suggested — these look like they belong to a mode, based on track/category. ✓ tags it, ✕ dismisses.</div>
+      ${suggestions.map(modeTagSuggestionRowHtml).join("")}
+    </div>` : "";
     body.innerHTML = `<p class="field-hint" style="margin:0 0 12px">Routines that always show cut through every mode's filter — go through this list once and flip the ones that shouldn't get hidden.</p>
+      ${sugHtml}
       <div class="modesort-list">${modeSortListHtml()}</div>`;
   }
   function openModeSortPanel() {
@@ -44141,6 +44203,23 @@
     saveRoutines();
     renderModeSortPanel();
     renderDay();   // the day's own mode-hidden pill count can change immediately
+  });
+  document.addEventListener("click", e => {
+    const accept = e.target.closest("[data-modesug-accept]");
+    if (accept) {
+      const t = ROUTINE_TASKS.find(x => x.id === accept.dataset.modesugRt);
+      if (t) { t.mode = accept.dataset.modesugMode; saveRoutines(); }
+      renderModeSortPanel();
+      renderDay();
+      return;
+    }
+    const dismiss = e.target.closest("[data-modesug-dismiss]");
+    if (dismiss) {
+      MODETAG_DISMISS[dismiss.dataset.modesugDismiss] = true;
+      saveModeTagDismiss();
+      renderModeSortPanel();
+      return;
+    }
   });
   // modes stage 8, "tomorrow's planner": #editPanelOverlay's fifth occupant.
   // Lists tomorrow's real occurrences (dayEventsRawFor, override-resolved,
