@@ -14639,6 +14639,14 @@
     font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer;
   }
   .cad-variant-btn:hover { background: color-mix(in oklab, var(--gold-bright) 12%, transparent); }
+  .cad-variant-btn[aria-pressed="true"] { background: var(--gold-bright); color: #241B04; }
+  /* 2026-08-20 (travel-aware steps): "what time did they give you" -- a real
+     confirmed booking, never a guess. Same field styling as every other input in the
+     app (ONE FIELD LANGUAGE, untouched here), this only lays the row out. */
+  .cad-book-input { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+  .cad-book-q { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+  .cad-book-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cad-book-confirmed { margin-top: 12px; font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   /* Shopping: depletion bars + plain list */
   .shop-low-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--note-line); }
   .shop-low-item:last-child { border-bottom: none; }
@@ -21992,6 +22000,19 @@
       cadenceWeeks: 6, leadDays: 10, travelFrom: "Kogarah", stage: "due",
       variants: [{ name: "Mani", durMin: 90, cost: 200 }, { name: "Mani + pedi", durMin: 150, cost: 200 }],
       history: [],
+      // 2026-08-20 (travel-aware steps -- Linh): min:null on the middle step is
+      // deliberate, not a gap -- the appointment's real length depends on which
+      // variant she books (see cadenceBookSave), so it's resolved at booking time,
+      // never guessed here. The 20min travel legs are a plain round DEFAULT (no
+      // real distance/maps data exists anywhere in this app to derive a measured
+      // figure from) -- stored as data specifically so it's a number she can edit
+      // later, not a value baked into the scheduling code itself.
+      steps: [
+        { label: "Travel to salon", min: 20 },
+        { label: "Appointment", min: null },
+        { label: "Travel back", min: 20 },
+      ],
+      bookedAt: null,   // { date, startMin, variantIdx } once she's told the app a real confirmed time
     }];
   }
   function saveCadence() { try { localStorage.setItem(CADENCE_KEY, JSON.stringify(CADENCE)); } catch (e) {} }
@@ -22016,6 +22037,65 @@
     const weeksLateToBook = weeksSince - bookPointWeeks;
     const pct = Math.max(0, Math.min(1, weeksSince / item.cadenceWeeks));
     return { item, lastDate, weeksSince, bookPointWeeks, weeksLateToBook, pct };
+  }
+  // render-only state, same idiom as cadPickerOpenId/todoChecklistOpenId just below/above
+  let cadBookInputOpenId = null;
+  // the appointment step's real length: whichever variant she declared at booking, not
+  // a guess -- item.steps' own seed leaves this step's min null on purpose (see
+  // loadCadence's comment), so it always resolves through here.
+  function cadenceStepMin(item, idx) {
+    const s = item.steps[idx];
+    if (s.min != null) return s.min;
+    const vi = item.bookedAt && item.bookedAt.variantIdx != null ? item.bookedAt.variantIdx : 0;
+    const v = item.variants[vi];
+    return v ? v.durMin : 60;
+  }
+  // 2026-08-20 (travel-aware steps -- Linh, STEP 3/4/6): turns item.steps into real
+  // back-to-back EVENTS anchored to item.bookedAt -- reuses the SAME anchorTo/
+  // anchorMode chain machinery every other chained event already renders through
+  // (chainedPlainEvent/chainedStartMinOn, called automatically from renderDay()'s own
+  // assembly) rather than computing/storing literal times for anything but the root
+  // step. Idempotent: existing generated blocks (tagged fromCadence) are updated in
+  // place, not duplicated -- calling this again after she edits bookedAt (a
+  // reschedule) moves the whole sequence together for free, since steps after the
+  // first never carry their own literal time to begin with, only their id in the
+  // anchor chain. Generalises to any CADENCE item with a real steps array (STEP 6) --
+  // nothing here names Nails specifically.
+  function cadenceGenerateSteps(item) {
+    if (!item.steps || !item.steps.length || !item.bookedAt) return;
+    const dateKey = item.bookedAt.date;
+    const existing = EVENTS.filter(e => e.fromCadence === item.id).sort((a, b) => a.cadenceStepIdx - b.cadenceStepIdx);
+    // STEP 5: the whole sequence lives on the ROOT block so its detail sheet can
+    // offer "▶ Start walkthrough" over Travel → Appointment → Travel back -- reuses
+    // e.steps/tlWalkStepIdx/renderTlWalkBody exactly as any routine's steps already do
+    // (that machinery is already generic over any e.steps array, see stepMinOf/
+    // stepLabel), not a second implementation. The 3 real EVENTS rows below are
+    // still what actually blocks the calendar's time -- this is a second, independent
+    // completion-tracking layer over the same sequence, not a replacement for STEP 3's
+    // separate blocks.
+    const walkSteps = item.steps.map((s, i) => ({ text: s.label, min: cadenceStepMin(item, i) }));
+    item.steps.forEach((s, i) => {
+      const dur = cadenceStepMin(item, i);
+      let e = existing[i];
+      if (!e) {
+        e = {
+          id: uid(), track: "personal", category: "Beauty", kind: "event", allDay: false,
+          fromCadence: item.id, cadenceStepIdx: i,
+        };
+        if (i > 0) { e.anchorTo = existing[i - 1].id; e.anchorMode = "after"; }
+        EVENTS.push(e);
+        existing[i] = e;
+      }
+      e.title = i === 1 ? `${item.emoji} ${item.name}` : `${item.emoji} ${s.label}`;
+      e.date = dateKey;
+      e.durationMin = dur;
+      if (i === 0) {
+        e.start = minToTime(item.bookedAt.startMin);
+        e.end = minToTime(Math.min(item.bookedAt.startMin + dur, 1439));
+        e.steps = walkSteps;
+      }
+    });
+    saveEvents(EVENTS);
   }
 
   /* 2026-08-20 (upkeep dial): a SEPARATE, additive-only system list for the dial widget
@@ -22316,7 +22396,28 @@
       ? `<div class="cad-variant-picker">${item.variants.map((v, i) =>
           `<button type="button" class="cad-variant-btn" data-cad-log="${esc(item.id)}::${i}">${esc(v.name)} · $${v.cost}</button>`).join("")}</div>`
       : "";
-    return `<div class="cad-tracker">${steps}</div>${picker}`;
+    // 2026-08-20 (travel-aware steps -- Linh, STEP 2): "Go" now gates on a REAL
+    // confirmed time from her, never a guess -- see cadenceGenerateSteps' own comment
+    // for why nothing is added to the calendar until bookedAt exists.
+    let bookHtml = "";
+    if (item.stage === "go" && item.steps && item.steps.length) {
+      if (cadBookInputOpenId === item.id) {
+        bookHtml = `<div class="cad-book-input">
+          <div class="cad-book-q">What time did they give you?</div>
+          <div class="cad-book-row">
+            <input type="date" id="cadBookDate-${esc(item.id)}" value="${esc(item.bookedAt ? item.bookedAt.date : keyOf(TODAY))}">
+            <input type="time" id="cadBookTime-${esc(item.id)}" value="${item.bookedAt ? esc(minToTime(item.bookedAt.startMin)) : ""}">
+          </div>
+          <div class="cad-book-row">${item.variants.map((v, i) => `<button type="button" class="cad-variant-btn" data-cad-book-variant="${i}"
+              aria-pressed="${(item.bookedAt ? item.bookedAt.variantIdx : 0) === i}">${esc(v.name)}</button>`).join("")}</div>
+          <button type="button" class="btn-save" data-cad-book-save="${esc(item.id)}">Save</button>
+        </div>`;
+      } else if (item.bookedAt) {
+        bookHtml = `<div class="cad-book-confirmed">Booked for ${esc(qaDayLbl(parseKey(item.bookedAt.date)))} at ${esc(fmtTime(minToTime(item.bookedAt.startMin)))}
+          <button type="button" class="tab-link" data-cad-book-change="${esc(item.id)}">Change</button></div>`;
+      }
+    }
+    return `<div class="cad-tracker">${steps}</div>${bookHtml}${picker}`;
   }
   function renderNailsSurface() {
     const mount = document.getElementById("nailsSurface");
@@ -44716,6 +44817,14 @@
       const item = cadenceItemById(cadAdvance.dataset.cadAdvance);
       if (!item) return;
       if (item.stage === "go") {
+        // 2026-08-20 (travel-aware steps, STEP 2): a real steps array gates "Go" on a
+        // confirmed time first -- an item with no steps seeded (not yet given this
+        // treatment, STEP 6) falls through to the old straight-to-variant-picker tap.
+        if (item.steps && item.steps.length && !item.bookedAt) {
+          cadBookInputOpenId = cadBookInputOpenId === item.id ? null : item.id;
+          reRenderCurrent();
+          return;
+        }
         cadPickerOpenId = cadPickerOpenId === item.id ? null : item.id;
         reRenderCurrent();
         return;
@@ -44724,6 +44833,41 @@
       item.stage = STAGES[Math.min(STAGES.indexOf(item.stage) + 1, STAGES.length - 1)];
       saveCadence();
       reRenderCurrent();
+      return;
+    }
+    const cadBookChange = e.target.closest("[data-cad-book-change]");
+    if (cadBookChange) {
+      cadBookInputOpenId = cadBookChange.dataset.cadBookChange;
+      reRenderCurrent();
+      return;
+    }
+    const cadBookVariant = e.target.closest("[data-cad-book-variant]");
+    if (cadBookVariant) {
+      cadBookVariant.parentElement.querySelectorAll("[data-cad-book-variant]")
+        .forEach(b => b.setAttribute("aria-pressed", String(b === cadBookVariant)));
+      return;
+    }
+    // 2026-08-20 (travel-aware steps, STEP 2/3/4): the only place a real confirmed
+    // time is ever recorded -- generates/reschedules the calendar blocks in the same
+    // action (cadenceGenerateSteps is idempotent, so this is correct whether this is
+    // the first booking or she's changing an existing one).
+    const cadBookSave = e.target.closest("[data-cad-book-save]");
+    if (cadBookSave) {
+      const item = cadenceItemById(cadBookSave.dataset.cadBookSave);
+      if (!item) return;
+      const dateEl = document.getElementById(`cadBookDate-${item.id}`);
+      const timeEl = document.getElementById(`cadBookTime-${item.id}`);
+      if (!dateEl.value || !timeEl.value) return;
+      const pressedVariant = cadBookSave.parentElement.querySelector('[data-cad-book-variant][aria-pressed="true"]');
+      item.bookedAt = {
+        date: dateEl.value, startMin: timeToMin(timeEl.value),
+        variantIdx: pressedVariant ? parseInt(pressedVariant.dataset.cadBookVariant, 10) : 0,
+      };
+      saveCadence();
+      cadenceGenerateSteps(item);
+      cadBookInputOpenId = null;
+      reRenderCurrent();
+      renderDay();
       return;
     }
     // picking a variant IS "reaching Logged" -- appends the real date/variant/cost and
@@ -47206,19 +47350,12 @@
             chips: [{ text: upkeepUdChip(picked.date), tone: "gold" }, { text: item.where, tone: "plain" }, lateChip],
           });
         }
-      } else if (item.stage === "go") {
-        const id = `cadence:${item.id}:appt:${cycleKey}`;
-        if (!isUpkeepDismissed(id)) {
-          const mins = item.variants[0] ? item.variants[0].durMin : 60;
-          const picked = pickUpkeepDay(DP_TYPES.find(t => t.id === "travel"), mins);
-          if (picked) out.push({
-            id, itemId: item.id, kind: "appointment", title: item.name, durMin: mins,
-            bestDate: keyOf(picked.date), bestScore: picked.score, why: picked.why,
-            bestStart: minToTime(picked.startMin), bestEnd: minToTime(picked.endMin),
-            chips: [{ text: upkeepUdChip(picked.date), tone: "gold" }, { text: `from ${item.travelFrom}`, tone: "plain" }, { text: `${mins} min`, tone: "plain" }],
-          });
-        }
       }
+      // 2026-08-20 (travel-aware steps -- Linh: "the salon decides the time, not the
+      // app"): the "go" stage used to guess an appointment slot here via
+      // pickUpkeepDay() and let her Accept it straight onto the calendar -- removed
+      // outright. A real confirmed time now only ever comes from her own typed entry
+      // (cadenceBookSave, wired into cadenceTrackerHtml's Go step), never a guess.
     });
     return out;
   }
