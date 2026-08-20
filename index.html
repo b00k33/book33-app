@@ -8933,6 +8933,20 @@
   .log-row .val { font-family: var(--font-body); flex: 1; font-variant-numeric: tabular-nums; }
   .log-row .del { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; padding: 4px 4px; }
   .log-row .del:hover { color: var(--margin-rule); }
+  /* modes stage 8, "tomorrow's planner" -- same .note-inline field shape (border/
+     radius/background tokens) as every other plain text field in this file, own
+     class since this one needs the mode-chip head row above it. */
+  .plantmrw-row { padding: 12px 0; border-top: 1px solid var(--note-line); }
+  .plantmrw-row:first-child { border-top: none; }
+  .plantmrw-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .plantmrw-mode { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; flex: none; }
+  .plantmrw-title { font-size: 13px; color: var(--ink); }
+  .plantmrw-goal {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px;
+    border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--raised);
+    padding: 8px 12px; color: var(--ink);
+  }
+  .plantmrw-goal:focus { outline: none; border-color: var(--margin-rule); }
 
   /* ---- Meals today (2026-08-11, "log my actual lunch") — itemized, grouped by slot ---- */
   .nut-meal-slot { margin-top: 12px; }
@@ -18649,6 +18663,12 @@
                    thing,' not 'create a new one'"). Same change on the other six primary Add
                    buttons (Recipe/Goal/Person/Family task/Work-manual section/Shopping item). -->
               <button class="add-btn" id="addBtn">+ Add to this day</button>
+              <!-- modes stage 8, "tomorrow's planner": #addRow is one traveling node
+                   (placeDeskGrid relocates it, never duplicates it) so a sibling here
+                   is reachable at every width for free -- same reasoning that made it
+                   the right anchor over #deskTodayMenu's data-dnav row (desktop-only)
+                   or any of the three separate day-step-prev/next copies. -->
+              <button type="button" class="add-btn" id="planTomorrowBtn">🌙 Plan tomorrow</button>
             </div>
           </div>
         </div>
@@ -38932,6 +38952,7 @@
     if (todoPanelOpen) { closeTodoPanel(); armBackGuard(); return; }
     if (fastPanelOpen) { closeFastPanel(); armBackGuard(); return; }
     if (modeSortOpen) { closeModeSortPanel(); armBackGuard(); return; }
+    if (planTomorrowOpen) { closePlanTomorrowPanel(); armBackGuard(); return; }
     if (!document.getElementById("editPanelOverlay").hidden) { closeRtnForm(); armBackGuard(); return; }
     if (!document.getElementById("jumpOverlay").hidden) { closeJump(); armBackGuard(); return; }
     if (dayRightDrawerIsOpen()) { closeDayRightDrawer(); armBackGuard(); return; }
@@ -43801,15 +43822,15 @@
   // 2026-08-19: #editPanelOverlay now has a THIRD possible occupant (the fasting
   // panel, see fastPanelOpen below, added after the To-do overflow list) -- these
   // shared triggers branch on which one is actually open rather than always
-  // calling the routine-form close. modeSortOpen (modes stage 7, "one-pass sorting
-  // screen") is the FOURTH; any fifth joins this same chain.
-  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else closeRtnForm(); });
+  // calling the routine-form close. modeSortOpen (modes stage 7) is the FOURTH,
+  // planTomorrowOpen (modes stage 8) the FIFTH; any sixth joins this same chain.
+  document.getElementById("editPanelClose")?.addEventListener("click", () => { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else if (planTomorrowOpen) closePlanTomorrowPanel(); else closeRtnForm(); });
   document.getElementById("editPanelOverlay")?.addEventListener("click", e => {
     if (e.target.closest(".slide-panel-sheet")) return;
-    if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else closeRtnForm();
+    if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else if (planTomorrowOpen) closePlanTomorrowPanel(); else closeRtnForm();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && (fastPanelOpen || todoPanelOpen || modeSortOpen)) { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else closeModeSortPanel(); }
+    if (e.key === "Escape" && (fastPanelOpen || todoPanelOpen || modeSortOpen || planTomorrowOpen)) { if (fastPanelOpen) closeFastPanel(); else if (todoPanelOpen) closeTodoPanel(); else if (modeSortOpen) closeModeSortPanel(); else closePlanTomorrowPanel(); }
   });
   // 2026-08-19 (Linh, "+N more -> a slide-out panel... warm, appealing look, instead
   // of navigating to the full To-do page"): the rail To-do widget's overflow view.
@@ -44120,6 +44141,75 @@
     saveRoutines();
     renderModeSortPanel();
     renderDay();   // the day's own mode-hidden pill count can change immediately
+  });
+  // modes stage 8, "tomorrow's planner": #editPanelOverlay's fifth occupant.
+  // Lists tomorrow's real occurrences (dayEventsRawFor, override-resolved,
+  // same source activeModeItem/todayCbdBlock read) that carry a mode -- the
+  // point is setting each block's Goal before the day starts, so it's already
+  // there when tomorrow's session actually begins (stage 3 reads the covering
+  // item's .goal onto the session card). Goal writes go to exactly the same
+  // place the event/routine editors already write it (template-level for a
+  // routine, direct field for a plain event) -- a genuine per-OCCURRENCE
+  // override would need extending setRtnOvr/its merge allowlist, deliberately
+  // left for a later pass rather than guessed at here.
+  let planTomorrowOpen = false;
+  function planTomorrowItems() {
+    const tmrw = addDays(TODAY, 1);
+    return dayEventsRawFor(tmrw).filter(e => {
+      if (!modeOf(e)) return false;
+      if (e.rtTaskId) return true;
+      return EVENTS.some(x => x.id === e.id);
+    }).sort((a, b) => (toMin(a.start) ?? 9999) - (toMin(b.start) ?? 9999));
+  }
+  function planTomorrowGoalOf(e) {
+    if (e.rtTaskId) {
+      const t = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
+      return (t && t.goal) || "";
+    }
+    return e.goal || "";
+  }
+  function planTomorrowListHtml() {
+    const items = planTomorrowItems();
+    if (!items.length) return `<div class="log-row">No mode-tagged blocks on tomorrow's calendar yet.</div>`;
+    return items.map(e => {
+      const m = modeById(modeOf(e));
+      return `<div class="plantmrw-row">
+        <div class="plantmrw-head"><span class="plantmrw-mode" style="color:${m.accent || "var(--margin-rule)"}">${m.emoji || ""} ${esc(m.name)}</span><span class="plantmrw-title">${esc(e.title)}</span></div>
+        <input type="text" class="field-bare plantmrw-goal" data-plantmrw-goal="${e.id}" data-plantmrw-rt="${e.rtTaskId || ""}" value="${esc(planTomorrowGoalOf(e))}" placeholder="Set a goal for this block">
+      </div>`;
+    }).join("");
+  }
+  function renderPlanTomorrowPanel() {
+    const body = document.getElementById("editPanelBody");
+    if (!body) return;
+    body.innerHTML = `<p class="field-hint" style="margin:0 0 12px">Tomorrow's mode-tagged blocks — set what you want out of each one now, so it's already there when the session starts.</p>
+      <div class="plantmrw-list">${planTomorrowListHtml()}</div>`;
+  }
+  function openPlanTomorrowPanel() {
+    armBackGuard();
+    planTomorrowOpen = true;
+    const title = document.getElementById("editPanelTitle");
+    if (title) title.textContent = "Plan tomorrow";
+    renderPlanTomorrowPanel();
+    document.getElementById("editPanelOverlay").hidden = false;
+  }
+  function closePlanTomorrowPanel() {
+    planTomorrowOpen = false;
+    document.getElementById("editPanelOverlay").hidden = true;
+  }
+  document.getElementById("planTomorrowBtn")?.addEventListener("click", openPlanTomorrowPanel);
+  document.addEventListener("change", e => {
+    const inp = e.target.closest("[data-plantmrw-goal]");
+    if (!inp) return;
+    const val = inp.value.trim();
+    const rtId = inp.dataset.plantmrwRt;
+    if (rtId) {
+      const t = ROUTINE_TASKS.find(x => x.id === rtId);
+      if (t) { if (val) t.goal = val; else delete t.goal; saveRoutines(); }
+    } else {
+      const ev = EVENTS.find(x => x.id === inp.dataset.plantmrwGoal);
+      if (ev) { if (val) ev.goal = val; else delete ev.goal; saveEvents(EVENTS); }
+    }
   });
   document.addEventListener("click", e => {
     if (e.target.closest("[data-open-todo-panel]")) { openTodoPanel(); return; }
