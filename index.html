@@ -6782,6 +6782,16 @@
   .track-opt[data-track="marriage"] { color: var(--marriage-ink); }
   .track-opt[data-track="personal"] { color: var(--ink); }
   .track-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px currentColor; font-weight: 600; }
+  /* to-do editor's Mode row (stage 5) -- "None" + up to 6 live modes is more options
+     than the fixed 4-option track picker this component was built for, so it wraps
+     instead of squeezing every button into one row. No ::before dot: each button's
+     own emoji already marks it, a second currentColor dot next to an emoji would
+     read as a duplicate marker -- same reasoning #navModePicker's own ::before
+     suppression above already established for the same "emoji, not a colour dot"
+     shape of option. */
+  #todoModePicker.track-picker { flex-wrap: wrap; }
+  #todoModePicker .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
+  #todoModePicker .track-opt::before { display: none; }
   /* 2026-08-15 fix (B2): Settings → Navigation, §5's own Drawer/Tabs switch. §0 forbids
      outlined controls outright ("No outlined pills, fields or buttons anywhere in this
      build") and the selected state here was drawing a 1.5px inset ring INSIDE the shared
@@ -11047,6 +11057,16 @@
     background: var(--margin-rule); color: var(--accent-on);
     max-width: min(280px, calc(100vw - 28px));
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* To-do's own mode-hidden pill (stage 5) -- same message/reveal-tap idiom as
+     .tl-mode-hidden-pill above, but the To-do page is a plain top-to-bottom
+     scrolling list, not a fixed-viewport calendar, so this one sits IN FLOW right
+     above the list instead of floating fixed over the page. */
+  .todo-mode-hidden-pill {
+    display: block; width: 100%; text-align: left; box-sizing: border-box;
+    margin: 0 0 12px; padding: 8px 14px; border: none; border-radius: 999px;
+    background: var(--margin-rule); color: var(--accent-on);
+    font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
   }
   /* ============ ASTRO STRIP ============ */
   .astro {
@@ -17968,6 +17988,7 @@
       <h1>☑ To-do</h1>
     </div>
     <p class="nt-intro">Tick something off, or turn it into an event once it has a day and time.</p>
+    <button type="button" class="todo-mode-hidden-pill" id="todoModeHiddenPill" hidden></button>
     <div id="todoList"></div>
     <div class="add-row" id="todoAddRow">
       <button class="add-btn" id="todoAddBtn">+ Add a task</button>
@@ -17988,6 +18009,10 @@
           <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
           <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
         </div>
+      </div>
+      <div class="field full">
+        <label>Mode <span class="field-hint">optional</span></label>
+        <div class="track-picker" id="todoModePicker" role="group" aria-label="Mode"></div>
       </div>
       <div class="field full">
         <label for="todoCat">Category <span class="field-hint">optional</span></label>
@@ -37216,6 +37241,53 @@
     state.modeRevealAll = true;
     renderDay();
   });
+  // §4 to-do mode-tagging (stage 5): "the active mode's to-dos, PLUS untagged ones" --
+  // her own confirmed rule, deliberately looser than modeVisible's calendar rule. A
+  // to-do carries .mode/.track/.category same as an event, but reusing modeVisible
+  // verbatim would HIDE every untagged to-do the instant any mode besides Home was
+  // active (its own track/category fallback rarely matches a to-do's free-text
+  // category) -- fine for a calendar block, wrong for a to-do list she still wants
+  // to see most of by default. So: its own small function, not a shared one -- these
+  // are two genuiningly different rules, not one rule scanned twice. Same shared
+  // state.modeRevealAll/syncModeReveal though: "show everything hidden by Code mode"
+  // is still one decision, not a per-surface one that could disagree.
+  function todoModeVisible(t, am) {
+    if (state.modeRevealAll) return true;
+    if (am.id === "home" || !am.shows) return true;
+    const tm = modeOf(t);
+    if (!tm) return true;   // untagged -- always shows
+    return tm === am.id;
+  }
+  function renderTodoModeHiddenPill(hidden, am) {
+    const pill = document.getElementById("todoModeHiddenPill");
+    if (!pill) return;
+    if (!hidden.length || state.modeRevealAll) { pill.hidden = true; return; }
+    pill.hidden = false;
+    const names = hidden.map(t => t.title).filter(Boolean);
+    const shown = names.slice(0, 3).join(", ");
+    const more = names.length > 3 ? ` +${names.length - 3} more` : "";
+    pill.textContent = `${hidden.length} to-do${hidden.length === 1 ? "" : "s"} hidden for ${esc(am.name)} mode · ${shown}${more}`;
+  }
+  document.getElementById("todoModeHiddenPill").addEventListener("click", () => {
+    state.modeRevealAll = true;
+    renderTodoPage();
+  });
+  // populates #todoModePicker (the to-do editor's own Mode row) from the live MODES
+  // list once at boot -- modes are effectively static today (no settings UI edits them
+  // yet), so a one-time render is enough; re-run this if/when one exists. "None" is a
+  // real, common choice (not every to-do belongs to a mode), so it's an explicit
+  // pressed-by-default option here, same track-picker component .todoTrackPicker uses.
+  function renderTodoModePicker() {
+    const host = document.getElementById("todoModePicker");
+    if (!host) return;
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true">None</button>` +
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+  }
+  renderTodoModePicker();
+  document.getElementById("todoModePicker").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    document.querySelectorAll("#todoModePicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
   // spec §1.2: the existing CBD Work routine gets mode:"work" so the clinic day
   // works immediately. Conditional + idempotent: only fires where that routine
   // actually exists (her live device -- this dev copy has none), and only while
@@ -51148,7 +51220,18 @@
   function renderTodoPage() {
     const host = document.getElementById("todoList");
     if (!host) return;
-    const sorted = TODOS.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    // §4 to-do mode-tagging (stage 5) -- same filter, same reveal state as the Day
+    // timeline (stage 2); see modeVisible's own comment for why todos need no
+    // parallel filter function.
+    const am = activeMode();
+    syncModeReveal(am);
+    const hidden = [];
+    const visible = TODOS.filter(t => { const ok = todoModeVisible(t, am); if (!ok) hidden.push(t); return ok; });
+    renderTodoModeHiddenPill(hidden, am);
+    const sorted = visible.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    const emptyMsg = TODOS.length && !visible.length
+      ? `Nothing here for ${esc(am.name)} mode right now.`
+      : "Nothing on your to-do list. Add one below.";
     host.innerHTML = sorted.length ? sorted.map(t => {
       const bits = [t.category, TRACK_LABEL[t.track] || t.track].filter(Boolean);
       return `<div class="shop-lux-item${t.done ? " bought" : ""}">
@@ -51160,7 +51243,7 @@
         <button type="button" class="add-btn todo-make-event" data-todo-event="${t.id}">→ Make event</button>
         <button class="shop-del" data-todo-del="${t.id}" aria-label="Remove ${esc(t.title)}">×</button>
       </div>`;
-    }).join("") : `<div class="fam-empty">Nothing on your to-do list. Add one below.</div>`;
+    }).join("") : `<div class="fam-empty">${emptyMsg}</div>`;
   }
   // opens the shared Event form pre-filled from a to-do item -- convertingTodoId
   // (declared up by fRepeatChoice) tells the form's submit handler to remove this
@@ -51198,6 +51281,7 @@
     document.getElementById("todoAddRow").hidden = false;
     document.getElementById("todoAddForm").reset();
     document.querySelectorAll("#todoTrackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === "personal")));
+    document.querySelectorAll("#todoModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === "")));
   }
   document.getElementById("todoTrackPicker").addEventListener("click", e => {
     const b = e.target.closest(".track-opt"); if (!b) return;
@@ -51215,8 +51299,10 @@
     if (!title) { document.getElementById("todoTitle").focus(); return; }
     const pressed = document.querySelector("#todoTrackPicker .track-opt[aria-pressed=\"true\"]");
     const track = pressed ? pressed.dataset.track : "personal";
+    const modePressed = document.querySelector("#todoModePicker .track-opt[aria-pressed=\"true\"]");
+    const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
     const category = document.getElementById("todoCat").value.trim();
-    TODOS.push({ id: uid(), title, track, category, note: "", done: false, createdAt: keyOf(TODAY) });
+    TODOS.push({ id: uid(), title, track, category, mode, note: "", done: false, createdAt: keyOf(TODAY) });
     saveTodos(TODOS);
     closeTodoForm();
     renderTodoPage();
