@@ -16074,6 +16074,76 @@
   :root[data-workmode="on"] .nav-panel-chapter-grouplbl { color: rgba(255,255,255,.65); }
   :root[data-workmode="on"] .nir-row { color: rgba(255,255,255,.85); }
 
+  /* ============ WORK MODE HIDES NUMEROLOGY/ASTROLOGY EVERYWHERE (2026-08-20) ============
+     Linh: "Work Mode should hide numerology/astrology everywhere, not just recolour
+     chrome." display:none only, same reversible pattern #astroLine already used when it
+     was retired -- nothing here touches a calculation (universalDay()/personalYear()/
+     personalMonth()/sunSign()/chineseYear() all still run every time; other features
+     (Best-day scoring, dpScoreDay) quietly depend on them staying live). Investigated
+     against the LIVE DOM, not just comments -- #focusTile/#birthdayWidget/#imprintBox
+     (the three ids Linh's own spec named) no longer exist at all (retired 2026-07-31,
+     confirmed via getElementById on a clean load); nothing to hide there. The list below
+     is what's actually real today, including four desktop-only surfaces her spec didn't
+     name (deskDateBlock/deskGlance/deskToolStar/deskToolZodiac/ddcDate) -- she's mobile-
+     first so these were easy to miss. #dayAstroBits is a CHILD of #numGroupStrip, so
+     hiding the strip already covers it; no separate rule needed. */
+  :root[data-workmode="on"] #numGroupStrip,
+  :root[data-workmode="on"] .mini-cal-mascot,
+  :root[data-workmode="on"] #railNum,
+  /* the widget-rail's own "Numerology" card (data-wr-id, not a static id -- see
+     wrCardHtml()) -- not showing in this dev copy's default arrangement, but a real
+     surface if she's arranged it into her rail on her own device. */
+  :root[data-workmode="on"] [data-wr-id="focusTile"],
+  /* desktop header date line ("12 · Aug · Thursday · UD 3") -- .dd-sep:last-of-type is
+     the separator right before .dd-ud, so together they remove "· UD 3" cleanly instead
+     of leaving a dangling "·". */
+  :root[data-workmode="on"] #deskDateBlock .dd-ud,
+  :root[data-workmode="on"] #deskDateBlock .dd-sep:last-of-type,
+  /* the desktop toolbar's ★ Numerology / 🐐 Zodiac buttons (their sibling 🎖 Birthdays
+     button is untouched -- birthdays aren't astrology, same call as railBday below). */
+  :root[data-workmode="on"] #deskToolStar,
+  :root[data-workmode="on"] #deskToolZodiac,
+  /* second desktop date card's "· UD n" -- .ddc-ud is a new wrapper span (see
+     renderDeskHead()) added specifically so this could be hidden without also hiding
+     the month/year text it used to be fused into as plain text. */
+  :root[data-workmode="on"] #ddcDate .ddc-ud,
+  /* Week page's per-day "UD n" meta-line badge -- .wk-ud is a new wrapper span (see the
+     week-grid render loop) added for the same reason as .ddc-ud above. .wk-meta-sep is
+     the " · " between UD and CD, now its own span for the same dangling-separator
+     reason as #deskDateBlock .dd-sep above -- hide both together. */
+  :root[data-workmode="on"] .wk-ud,
+  :root[data-workmode="on"] .wk-meta-sep {
+    display: none;
+  }
+  /* #deskGlance's 4 chips are fixed DOM order (Moon·PM, Sign, Year, Birthdays -- see
+     renderDeskGlance()), no per-chip class to target directly. Hide the first 3
+     (astrology); the 4th (Birthdays) stays, same "birthdays aren't astrology" call as
+     railBday/deskToolBday above. */
+  :root[data-workmode="on"] #deskGlance .dg-chip:nth-child(1),
+  :root[data-workmode="on"] #deskGlance .dg-chip:nth-child(2),
+  :root[data-workmode="on"] #deskGlance .dg-chip:nth-child(3) {
+    display: none;
+  }
+  /* Month tab (STEP 3): #moBody's numerology-scored content swaps for a calm
+     placeholder + "Show anyway"; see the HTML comment beside #moWmPlaceholder for why
+     this one is a placeholder-swap instead of a plain hide. #monthPage.mo-wm-reveal is
+     added by the "Show anyway" click handler -- see moWmRevealed in the JS. */
+  #moWmPlaceholder { display: none; }
+  :root[data-workmode="on"] #monthPage:not(.mo-wm-reveal) #moBody { display: none; }
+  :root[data-workmode="on"] #monthPage:not(.mo-wm-reveal) #moWmPlaceholder { display: block; }
+  .mo-wm-placeholder {
+    max-width: var(--content-max, 720px);
+    margin: 24px auto;
+    padding: 16px;
+    text-align: center;
+  }
+  .mo-wm-placeholder p {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink-faint);
+    margin: 0 0 12px;
+  }
+
   /* ============ WORK DAY BOARD -- Cliniko-skinned, scoped to this page only ============
      Colours read off Linh's own Cliniko window (approximate, per her instruction to verify
      against their logo before locking in). These live ONLY as custom properties on
@@ -18096,36 +18166,53 @@
         <button class="today-pill" id="moEventsToggle" aria-pressed="true">Events shown</button>
       </div>
     </div>
-    <div class="qa-slot" id="qaSlotMonth"></div>
-    <div class="mo-summary" id="moSummary"></div>
-    <div class="mo-themes" id="moThemes"></div>
-    <div id="moGoals"></div>
-    <!-- 2026-08-20 (Week 34 -- Linh: numerology-mapped Month tab, STEP 3a/3d): shares
-         dpType with the existing "🔮 Best day" picker (#dpTypes) -- same renderDpTypes()
-         markup, second mount, not a duplicate. -->
-    <div class="mo-dp-panel">
-      <div class="mo-sum-row" id="moDpBest"></div>
-      <div class="dp-types" id="moDpTypes"></div>
+    <!-- 2026-08-20 (Linh, Work Mode numerology hide, STEP 3 -- Claude's own judgment
+         call, disclosed): this whole tab's BODY is numerology/astrology scoring now
+         (Week 34 redesign -- zodiac year/moon/shopping-day summary, PY/PM theme chips,
+         the dpType day-scorer, and .mo-cell's own tint/UD/moon/best-day badges are all
+         fused together, confirmed by reading renderMonth()/the .mo-cell markup directly
+         -- not separable surfaces the way the rest of this job's hides are). A calm
+         placeholder stands in for #moBody instead of trying to pick it apart; "Show
+         anyway" reveals it for this visit only (resets on next reload, not persisted --
+         moWmRevealed below is a plain in-memory flag, never written to storage). The
+         nav header above (month/year pickers, Day/Week/Month switcher) stays usable
+         either way -- it's navigation chrome, not a numerology display. -->
+    <div class="mo-wm-placeholder" id="moWmPlaceholder">
+      <p>Calendar's numerology view is hidden in Work Mode.</p>
+      <button type="button" class="today-pill" id="moShowAnywayBtn">Show anyway</button>
     </div>
-    <!-- 2026-08-08 (Linh: "there needs to be a date above the calendar"): the
-         "August 2026" up in .mo-head scrolls out of view long before the grid
-         itself comes into view (summary/themes/goals cards sit between them),
-         so once you've scrolled to the actual days there's nothing on screen
-         saying which month they belong to. Reuses .section-head/h3, the same
-         card-title idiom every other box on this page already uses. -->
-    <div class="section-head"><h3 id="moGridLabel"></h3></div>
-    <div class="mo-grid" id="moGrid"></div>
-    <div class="mo-legend">
-      <span><i style="background:var(--work-ink)"></i> Work</span>
-      <span><i style="background:var(--marriage-ink)"></i> Marriage</span>
-      <span><i style="background:var(--personal-ink)"></i> Personal</span>
-      <span><i class="ring"></i> Shopping day</span>
-      <span><i class="ud-key"></i> Universal Day, under the date · master numbers marked</span>
-      <span><i style="background:var(--flow-med)"></i> Period logged</span>
-      <span><i style="border:1.5px dashed var(--flow-med);background:transparent"></i> Period expected</span>
-      <span><i style="box-shadow:inset 0 0 0 1.5px var(--fertile);background:transparent"></i> Fertile window</span>
-      <span><i style="background:var(--fertile)"></i> Est. ovulation</span>
-      <span>CD<i style="width:auto;border-radius:0;background:none;color:var(--ink-faint);font-size:11px">n</i> Cycle day</span>
+    <div id="moBody">
+      <div class="qa-slot" id="qaSlotMonth"></div>
+      <div class="mo-summary" id="moSummary"></div>
+      <div class="mo-themes" id="moThemes"></div>
+      <div id="moGoals"></div>
+      <!-- 2026-08-20 (Week 34 -- Linh: numerology-mapped Month tab, STEP 3a/3d): shares
+           dpType with the existing "🔮 Best day" picker (#dpTypes) -- same renderDpTypes()
+           markup, second mount, not a duplicate. -->
+      <div class="mo-dp-panel">
+        <div class="mo-sum-row" id="moDpBest"></div>
+        <div class="dp-types" id="moDpTypes"></div>
+      </div>
+      <!-- 2026-08-08 (Linh: "there needs to be a date above the calendar"): the
+           "August 2026" up in .mo-head scrolls out of view long before the grid
+           itself comes into view (summary/themes/goals cards sit between them),
+           so once you've scrolled to the actual days there's nothing on screen
+           saying which month they belong to. Reuses .section-head/h3, the same
+           card-title idiom every other box on this page already uses. -->
+      <div class="section-head"><h3 id="moGridLabel"></h3></div>
+      <div class="mo-grid" id="moGrid"></div>
+      <div class="mo-legend">
+        <span><i style="background:var(--work-ink)"></i> Work</span>
+        <span><i style="background:var(--marriage-ink)"></i> Marriage</span>
+        <span><i style="background:var(--personal-ink)"></i> Personal</span>
+        <span><i class="ring"></i> Shopping day</span>
+        <span><i class="ud-key"></i> Universal Day, under the date · master numbers marked</span>
+        <span><i style="background:var(--flow-med)"></i> Period logged</span>
+        <span><i style="border:1.5px dashed var(--flow-med);background:transparent"></i> Period expected</span>
+        <span><i style="box-shadow:inset 0 0 0 1.5px var(--fertile);background:transparent"></i> Fertile window</span>
+        <span><i style="background:var(--fertile)"></i> Est. ovulation</span>
+        <span>CD<i style="width:auto;border-radius:0;background:none;color:var(--ink-faint);font-size:11px">n</i> Cycle day</span>
+      </div>
     </div>
   </div>
 
@@ -31149,10 +31236,13 @@
 
       // one faint meta line folds what used to be four pill rows: UD, cycle day+phase,
       // then tiny glyphs for period / ovulation / fertile / birthdays (titles carry detail)
-      const metaBits = [`UD${wkUd.value}`];
+      // 2026-08-20 (Linh, Work Mode numerology hide): each bit carries its own leading
+      // separator now (was metaBits.join(" · ")) so .wk-ud + its separator can hide as
+      // one unit without leaving a dangling "· CD5" when a cycle day is also present.
+      const metaBits = [`<span class="wk-ud">UD${wkUd.value}</span>`];
       // 2026-08-05 (Linh: "include this dropdown in the cd in the calendar too"): the
       // CD is a tap target — opens the same quick-log popover, logging THIS column's day
-      if (cd) metaBits.push(`<span class="wk-cd-tap" data-cd-log data-cd-date="${k}" role="button" tabindex="0" title="Log this day">CD${cd}${wkPhaseInfo ? " " + wkPhaseInfo.icon : ""}</span>`);
+      if (cd) metaBits.push(`<span class="wk-meta-sep"> · </span><span class="wk-cd-tap" data-cd-log data-cd-date="${k}" role="button" tabindex="0" title="Log this day">CD${cd}${wkPhaseInfo ? " " + wkPhaseInfo.icon : ""}</span>`);
       const metaIcons =
         (ps ? `<span title="${ps.logged ? "Period logged" : "Period expected"}">🩸</span>` : "")
         + (isOvu ? `<span title="Est. ovulation">✦</span>` : isFertile ? `<span title="Fertile window">✧</span>` : "")
@@ -31189,7 +31279,7 @@
       }).join("") + (shown.length > 2 ? `<span class="wkov-more">+${shown.length - 2} more</span>` : "");
       wkov += `<div class="wkov-card" data-today="${k === keyOf(TODAY)}" data-jump="${k}">
         <div class="wkov-top"><span class="wkov-wd">${WD_FULL[i].slice(0, 3)}</span><span class="wk-num">${d.getDate()}</span></div>
-        <div class="wkov-meta">${metaBits.join(" · ")}${metaIcons ? " " + metaIcons : ""}</div>
+        <div class="wkov-meta">${metaBits.join("")}${metaIcons ? " " + metaIcons : ""}</div>
         <div class="wkov-chips">${wkovChips}${routineChip}</div>
       </div>`;
 
@@ -31197,7 +31287,7 @@
         <div class="wk-head">
           <div class="wk-dow">${WD_FULL[i].slice(0,3)}</div>
           <div class="wk-num">${d.getDate()}${wkBdays.length ? ` <span class="wk-bd-badge" title="${esc(wkBdays.map(b => b.title).join(" · "))}">🎂</span>` : ""}</div>
-          <div class="wk-meta">${metaBits.join(" · ")}${metaIcons ? " " + metaIcons : ""}</div>
+          <div class="wk-meta">${metaBits.join("")}${metaIcons ? " " + metaIcons : ""}</div>
           ${shown.length ? `<div class="wk-count">${doneN ? `${shown.length} · ${doneN} done` : `${shown.length} event${shown.length === 1 ? "" : "s"}`}</div>` : ""}
         </div>
         <div class="wk-events">
@@ -31251,7 +31341,7 @@
         ? `<div class="wt-now" style="top:${wtY(nowMin).toFixed(1)}px"></div>` : "";
       wtHead += `<div class="wtg-day" data-jump="${k}" data-today="${wtToday}">
         <div class="wk-dow">${WD_FULL[i].slice(0, 3)}</div><div class="wk-num">${d.getDate()}</div>
-        <div class="wk-meta">${metaBits.join(" · ")}${metaIcons ? " " + metaIcons : ""}</div>
+        <div class="wk-meta">${metaBits.join("")}${metaIcons ? " " + metaIcons : ""}</div>
         <div class="wt-chips">${chips}</div>
       </div>`;
       wtCols += `<div class="wt-col" data-jump="${k}" data-today="${wtToday}">${blocks}${nowLine}</div>`;
@@ -31547,6 +31637,7 @@
   }
 
   function renderMonth() {
+    document.getElementById("monthPage").classList.toggle("mo-wm-reveal", moWmRevealed);
     const y = state.monthAnchor.getFullYear(), m = state.monthAnchor.getMonth();
     const first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
 
@@ -37887,6 +37978,10 @@
       }
     }
   }
+  // 2026-08-20 (Linh, Work Mode numerology hide, STEP 3): "Show anyway" on the Month
+  // tab's placeholder -- plain in-memory flag, never persisted, so it's back to hidden
+  // on the next reload ("for that visit" only). See #moWmPlaceholder in the HTML.
+  let moWmRevealed = false;
   let wmLastMode = null;
   function renderWorkModeBar() {
     const host = document.getElementById("workModeBar");
@@ -39721,6 +39816,10 @@
     document.getElementById("moEventsToggle").setAttribute("aria-pressed", String(state.moShowEvents));
     document.getElementById("moEventsToggle").textContent = state.moShowEvents ? "Events shown" : "Events hidden";
     renderMonth();
+  });
+  document.getElementById("moShowAnywayBtn").addEventListener("click", () => {
+    moWmRevealed = true;
+    document.getElementById("monthPage").classList.add("mo-wm-reveal");
   });
   document.getElementById("moMonthSel").addEventListener("change", e => {
     state.monthAnchor = new Date(state.monthAnchor.getFullYear(), +e.target.value, 1); render();
@@ -41631,7 +41730,7 @@
     const ddc = document.getElementById("ddcDate");
     if (ddc) ddc.innerHTML = `<div class="ddc-num">${d.getDate()}</div>` +
       `<div class="ddc-wd">${WD_FULL[dowIndex(d)]}</div>` +
-      `<div class="ddc-sub">${MONTHS[d.getMonth()]} ${d.getFullYear()} · UD ${universalDay(d).value}</div>`;
+      `<div class="ddc-sub">${MONTHS[d.getMonth()]} ${d.getFullYear()} <span class="ddc-ud"> · UD ${universalDay(d).value}</span></div>`;
   }
   // 2026-08-11 (Build brief, "Today at a glance"): 4 read-only chips replacing the
   // desktop reading of #numGroupStrip (moon+PM, sun sign) and the year-animal/birthday
