@@ -4904,6 +4904,10 @@
     color: var(--ink-faint); font-size: 10px; font-weight: 700; cursor: pointer;
   }
   .lm-day-tog[aria-pressed="true"] { background: var(--gold); color: #241B04; border-color: var(--gold); }
+  <!-- 2026-08-21: view-switch pills above #lmGrid -- .lm-chip does all the pill/
+       pressed-state styling already (same class the Categories palette above already
+       uses), this wrapper is layout only. -->
+  .lm-view-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
   .lm-grid-wrap { overflow-x: auto; }
   .lm-grid { display: grid; grid-template-columns: 42px repeat(7, 1fr); gap: 2px; min-width: 620px; user-select: none; }
   .lm-hd { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 4px 0 8px; letter-spacing: .04em; }
@@ -4914,6 +4918,23 @@
     content: ""; position: absolute; inset: 0; border-radius: 3px;
     outline: 1.5px dashed rgba(244,208,107,.65); outline-offset: -1.5px; pointer-events: none;
   }
+  /* Auto (real-schedule) cells are read-only -- no pointer cursor, no hover brighten,
+     unlike hand-paint's own .lm-cell base rule just above (untouched). The emoji
+     label only ever sits on the FIRST cell of an unbroken same-mode run (see
+     renderLifeMap()'s isRunStart check) -- three mode accents sit close enough to
+     existing track colours (ΔE 5.3-10, checked with the dataviz validator) that the
+     fill colour alone isn't reliably tellable apart, so the label isn't decoration. */
+  .lm-cell-auto { cursor: default; }
+  .lm-cell-auto:hover { filter: none; }
+  .lm-cell-emoji { position: absolute; top: 1px; left: 2px; font-size: 9px; line-height: 1; pointer-events: none; }
+  .lm-untimed { margin-top: 10px; }
+  .lm-untimed-toggle {
+    background: none; border: none; padding: 0; font: inherit; font-size: 11.5px;
+    color: var(--ink-faint); cursor: pointer;
+  }
+  .lm-untimed-toggle:hover { color: var(--ink-soft); }
+  .lm-untimed-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .lm-untimed-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
   .lm-bar { display: flex; height: 30px; border-radius: 8px; overflow: hidden; margin-bottom: 12px; background: var(--field-bg); }
   .lm-seg { display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-shadow: 0 1px 1px rgba(0,0,0,.35); }
   .lm-legend { display: flex; flex-wrap: wrap; gap: 14px; }
@@ -18037,7 +18058,7 @@
       <div class="eyebrow">Where the hours go</div>
       <h1>🗺 Life Map</h1>
     </div>
-    <div class="span-note" style="display:block;margin-bottom:16px">
+    <div class="span-note" style="display:block;margin-bottom:16px" id="lmNote">
       Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here.
     </div>
 
@@ -18059,9 +18080,14 @@
 
     <div class="lm-panel">
       <div class="lm-panel-title">Your week</div>
+      <!-- 2026-08-21 ("an auto layer that paints from my real schedule"): a second,
+           read-only way to fill this SAME #lmGrid, toggled by these two pills --
+           never blended with hand-paint. See renderLifeMap()/lmAutoGrid(). -->
+      <div class="lm-view-toggle" id="lmViewToggle"></div>
       <div class="lm-grid-wrap">
         <div class="lm-grid" id="lmGrid"></div>
       </div>
+      <div class="lm-untimed" id="lmUntimed" hidden></div>
     </div>
 
     <div class="lm-panel">
@@ -19745,6 +19771,14 @@
   let lmEraser = false;
   let lmPainting = false;
   let lmPaintValue = null;
+  // 2026-08-21 ("an auto layer that paints from my real schedule"): which of the two
+  // #lmGrid views is showing -- "hand" (default, LIFEMAP.cells, unchanged) or "auto"
+  // (computed fresh every render by lmAutoGrid(), never persisted). Not saved to
+  // LIFEMAP/PREFS on purpose -- a view choice, not stored data; reopening the page
+  // always starts on Hand-paint.
+  let lmViewMode = "hand";
+  let lmUntimedOpen = false;
+  let LM_AUTO_UNTIMED = [];
   const LM_HOURS = []; for (let lmH = 6; lmH <= 23; lmH++) LM_HOURS.push(lmH);
   function lmFmtHour(h) {
     const ap = h < 12 ? "a" : "p";
@@ -19769,23 +19803,96 @@
     document.getElementById("lmWmEnd").value = LIFEMAP.wmEnd || "17:00";
     document.getElementById("lmWmDays").innerHTML = WD_MIN.map((letter, i) =>
       `<button type="button" class="lm-day-tog" data-lm-wmday="${i}" aria-pressed="${(LIFEMAP.wmDays || []).indexOf(i) !== -1}">${letter}</button>`).join("");
+    // 2026-08-21: view-switch pills -- never blended, #lmGrid below is built by
+    // EITHER the untouched hand-paint branch OR the new auto branch, never both.
+    document.getElementById("lmViewToggle").innerHTML = `
+      <button type="button" class="lm-chip" data-lm-view="hand" aria-pressed="${lmViewMode !== "auto"}">✏️ Hand-paint</button>
+      <button type="button" class="lm-chip" data-lm-view="auto" aria-pressed="${lmViewMode === "auto"}">✨ From my real schedule</button>`;
+    const lmNoteEl = document.getElementById("lmNote");
     let gridHtml = `<div class="lm-hd"></div>` + WD_FULL.map(w => `<div class="lm-hd">${w.slice(0, 3)}</div>`).join("");
-    LM_HOURS.forEach(hour => {
-      gridHtml += `<div class="lm-hr-lbl">${lmFmtHour(hour)}</div>`;
-      for (let d = 0; d < 7; d++) {
-        const key = d + "-" + hour;
-        const catId = LIFEMAP.cells[key];
-        const cat = catId ? CAT_BY_ID[catId] : null;
-        const wmEndH = parseInt((LIFEMAP.wmEnd || "17:00").split(":")[0], 10) + (parseInt((LIFEMAP.wmEnd || "17:00").split(":")[1], 10) > 0 ? 1 : 0);
-        const wmMark = LIFEMAP.wmOn && (LIFEMAP.wmDays || []).indexOf(d) !== -1 &&
-          hour >= parseInt((LIFEMAP.wmStart || "09:00").split(":")[0], 10) && hour < wmEndH;
-        gridHtml += `<div class="lm-cell${wmMark ? " lm-wm-on" : ""}" data-lm-cell data-lm-day="${d}" data-lm-hour="${hour}"
-          style="${cat ? `background:var(--${cat.id}-seed)` : ""}"
-          title="${cat ? esc(cat.name) + " · " : ""}${WD_FULL[d]} ${lmFmtHour(hour)}"></div>`;
-      }
-    });
+    if (lmViewMode === "auto") {
+      const start = startOfWeek(TODAY), end = addDays(start, 6);
+      const rangeTxt = start.getMonth() === end.getMonth()
+        ? `${MONTHS[start.getMonth()]} ${start.getDate()}–${end.getDate()}`
+        : `${MONTHS[start.getMonth()]} ${start.getDate()} – ${MONTHS[end.getMonth()]} ${end.getDate()}`;
+      lmNoteEl.textContent = `Auto-painted from your real schedule this week (${rangeTxt}) using your Modes — read-only. Switch to Hand-paint to edit the grid yourself.`;
+      const { grid, untimed } = lmAutoGrid(start);
+      LM_AUTO_UNTIMED = untimed;
+      LM_HOURS.forEach((hour, hi) => {
+        gridHtml += `<div class="lm-hr-lbl">${lmFmtHour(hour)}</div>`;
+        for (let d = 0; d < 7; d++) {
+          const cell = grid[d][hi];
+          const runStart = cell && (hi === 0 || !grid[d][hi - 1] || grid[d][hi - 1].mode.id !== cell.mode.id);
+          gridHtml += `<div class="lm-cell lm-cell-auto"
+            style="${cell ? `background:${cell.mode.accent}` : ""}"
+            title="${cell ? esc(cell.title) : `${WD_FULL[d]} ${lmFmtHour(hour)}`}">${runStart ? `<span class="lm-cell-emoji">${cell.mode.emoji}</span>` : ""}</div>`;
+        }
+      });
+      renderLmUntimed(untimed);
+    } else {
+      lmNoteEl.textContent = `Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here.`;
+      LM_HOURS.forEach(hour => {
+        gridHtml += `<div class="lm-hr-lbl">${lmFmtHour(hour)}</div>`;
+        for (let d = 0; d < 7; d++) {
+          const key = d + "-" + hour;
+          const catId = LIFEMAP.cells[key];
+          const cat = catId ? CAT_BY_ID[catId] : null;
+          const wmEndH = parseInt((LIFEMAP.wmEnd || "17:00").split(":")[0], 10) + (parseInt((LIFEMAP.wmEnd || "17:00").split(":")[1], 10) > 0 ? 1 : 0);
+          const wmMark = LIFEMAP.wmOn && (LIFEMAP.wmDays || []).indexOf(d) !== -1 &&
+            hour >= parseInt((LIFEMAP.wmStart || "09:00").split(":")[0], 10) && hour < wmEndH;
+          gridHtml += `<div class="lm-cell${wmMark ? " lm-wm-on" : ""}" data-lm-cell data-lm-day="${d}" data-lm-hour="${hour}"
+            style="${cat ? `background:var(--${cat.id}-seed)` : ""}"
+            title="${cat ? esc(cat.name) + " · " : ""}${WD_FULL[d]} ${lmFmtHour(hour)}"></div>`;
+        }
+      });
+      renderLmUntimed([]);   // clears any stale panel left from Auto view
+    }
     document.getElementById("lmGrid").innerHTML = gridHtml;
     renderLifeMapSummary();
+  }
+  // 2026-08-21 ("an auto layer that paints from my real schedule"): a second way to
+  // fill the SAME #lmGrid, gated by lmViewMode -- computed fresh every render, NEVER
+  // written into LIFEMAP.cells (confirmed live: toggling Auto -> Hand-paint leaves
+  // localStorage["book33-lifemap"] byte-identical). Same day-items source renderWeek
+  // already reads (generatedFor(d) + EVENTS.filter(e => e.date === k), see that
+  // function's own line ~31320) -- not a new data source. Only items with a real
+  // modeOf(e) paint a cell; one with no start time can't paint an hour so it's
+  // collected into `untimed` rather than silently dropped (MODES.md §2's own rule).
+  // One mode per cell, last-item-in-source-order wins on overlap -- same single-
+  // value-per-cell model LIFEMAP.cells itself already uses, not a new scheme.
+  function lmAutoGrid(start) {
+    const untimed = [];
+    const grid = Array.from({ length: 7 }, () => LM_HOURS.map(() => null));
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+      const d = addDays(start, dayIdx);
+      const k = keyOf(d);
+      const items = [...generatedFor(d).filter(e => !e.preview), ...EVENTS.filter(e => e.date === k)];
+      items.forEach(e => {
+        const mId = modeOf(e);
+        if (!mId) return;
+        const mode = modeById(mId);
+        const s = toMin(e.start);
+        if (s === null) { untimed.push({ title: e.title || mode.name, mode, dayIdx }); return; }
+        const end = itemEndMin(e);
+        const rangeTxt = `${fmtTime(e.start)}–${fmtTime(minToTime(end))}`;
+        LM_HOURS.forEach((hour, hi) => {
+          if (hour * 60 < end && (hour + 1) * 60 > s) {
+            grid[dayIdx][hi] = { mode, title: `${mode.name} · ${rangeTxt} · ${e.title || ""}` };
+          }
+        });
+      });
+    }
+    return { grid, untimed };
+  }
+  function renderLmUntimed(list) {
+    const host = document.getElementById("lmUntimed");
+    if (!host) return;
+    if (!list.length) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    host.innerHTML = `
+      <button type="button" class="lm-untimed-toggle" data-lm-untimed-toggle aria-expanded="${lmUntimedOpen}">+ ${list.length} more this week without a set time ${lmUntimedOpen ? "▾" : "›"}</button>
+      ${lmUntimedOpen ? `<div class="lm-untimed-list">${list.map(u => `
+        <div class="lm-untimed-item"><span class="lm-dot" style="background:${u.mode.accent}"></span>${u.mode.emoji} ${esc(u.title)} — ${WD_FULL[u.dayIdx].slice(0, 3)}</div>`).join("")}</div>` : ""}`;
   }
   function renderLifeMapSummary() {
     const cats = lifeCats();
@@ -19832,6 +19939,10 @@
   });
   document.addEventListener("pointerup", () => { if (lmPainting) { lmPainting = false; saveLifeMap(); } });
   document.addEventListener("click", e => {
+    const lmView = e.target.closest("[data-lm-view]");
+    if (lmView) { lmViewMode = lmView.dataset.lmView; renderLifeMap(); return; }
+    const lmUntimedTog = e.target.closest("[data-lm-untimed-toggle]");
+    if (lmUntimedTog) { lmUntimedOpen = !lmUntimedOpen; renderLmUntimed(LM_AUTO_UNTIMED); return; }
     const arm = e.target.closest("[data-lm-arm]");
     if (arm) { lmArmed = arm.dataset.lmArm; lmEraser = false; renderLifeMap(); return; }
     const eraser = e.target.closest("[data-lm-eraser]");
