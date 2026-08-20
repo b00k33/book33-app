@@ -2385,6 +2385,21 @@
     border-radius: 999px; padding: 0 14px; cursor: pointer;
   }
   .sc-end-btn:hover, .sc-end-btn:focus-visible { border-color: var(--margin-rule); color: var(--margin-rule); }
+  /* Modes stage 4 (2026-08-21, "a mode session takes over the page for real
+     hyperfocus"): toggled by renderSessionCard() only while .mode-focus AND a
+     real session is active (see that function's own comment) -- an active mode
+     with no session, or a session with mode-focus off, gets none of this. Kept
+     as an in-place treatment rather than reparenting the card into the widget
+     rail's old spot -- confirmed with Linh that the two aren't actually
+     neighbors at any width (session card already lives in the desktop
+     sidebar's #dsbSessionSlot, nowhere near #wrCards), so "centred" here means
+     centred within whatever container the card already sits in, not moved
+     into the rail's own DOM slot. */
+  .session-card.session-hero {
+    padding: 20px 16px; border-radius: var(--radius-md); background: var(--raised);
+    border-top: none; margin-top: 16px;
+  }
+  .session-card.session-hero .sc-rings { justify-content: center; gap: 28px; margin: 4px 0 8px; }
 
   /* Cycle page — hormone rhythm chart (LH/FSH/Estrogen/Progesterone + uterine lining) */
   .cyc-hormone-wrap {
@@ -16162,6 +16177,24 @@
      reason as #deskDateBlock .dd-sep above -- hide both together. */
   .mode-focus .wk-ud,
   .mode-focus .wk-meta-sep {
+    display: none;
+  }
+  /* Modes stage 4 (2026-08-21, "a mode session takes over the page for real
+     hyperfocus"): SAME .mode-focus hook, extended to the rest of the Day page's
+     chrome -- the widget rail (all three width variants), the fire shortcut,
+     Mandarin flashcard, outside/power notes, and the 1/3/5/7 days-shown picker.
+     Not scoped to sessionIsActive() -- an active mode with no session running
+     still wants this chrome out of the way, same as numerology above; the
+     session-specific hero treatment (#daySessionCard.session-hero, below) is
+     the separate, narrower thing that DOES require a real session. */
+  .mode-focus #wrCards,
+  .mode-focus #wrFallback,
+  .mode-focus #wrMobile,
+  .mode-focus .day-fire-shortcut-row,
+  .mode-focus #mandarinCard,
+  .mode-focus #outsideNote,
+  .mode-focus #powerNote,
+  .mode-focus #calDaysRow {
     display: none;
   }
   /* #deskGlance's 4 chips are fixed DOM order (Moon·PM, Sign, Year, Birthdays -- see
@@ -37722,15 +37755,28 @@
   // disagreeing scan. Named by TITLE (her example: "clinic, dinner, hair wash"),
   // capped at 3 names + a "+N more" tail so a heavy filter day doesn't overflow
   // the pill's own max-width.
+  // Modes stage 4 (2026-08-21): now also covers the page-wide widgets .mode-focus
+  // hides (widget rail, fire shortcut, Mandarin card, notes, days-shown picker) --
+  // ONE combined pill, not a second one, same reveal-all tap fixes both. Reads
+  // .mode-focus straight off <body> rather than a new param: renderTimeline's own
+  // call site already runs applyModeFocusClass(am) immediately before calling this,
+  // so the class is guaranteed current by the time this reads it. The widget-hidden
+  // fact is folded in BEFORE the item-name list (not appended after it) on purpose --
+  // this pill is a single-line, 280px, ellipsis-truncated button (see .tl-mode-
+  // hidden-pill CSS), so on a heavy filter day it's the item-name preview that
+  // should get clipped first, never the widgets fact.
   function renderModeHiddenPill(hidden, am) {
     const pill = document.getElementById("tlModeHiddenPill");
     if (!pill) return;
-    if (!hidden.length || state.modeRevealAll) { pill.hidden = true; return; }
+    const widgetsHidden = document.body.classList.contains("mode-focus");
+    if (state.modeRevealAll || (!hidden.length && !widgetsHidden)) { pill.hidden = true; return; }
     pill.hidden = false;
+    if (!hidden.length) { pill.textContent = "Your widgets are hidden for focus · tap to show"; return; }
     const names = hidden.map(e => e.title).filter(Boolean);
     const shown = names.slice(0, 3).join(", ");
     const more = names.length > 3 ? ` +${names.length - 3} more` : "";
-    pill.textContent = `${hidden.length} other thing${hidden.length === 1 ? "" : "s"} today ${hidden.length === 1 ? "is" : "are"} hidden · ${shown}${more}`;
+    const widgetsPart = widgetsHidden ? " + widgets" : "";
+    pill.textContent = `${hidden.length} thing${hidden.length === 1 ? "" : "s"}${widgetsPart} hidden · ${shown}${more}`;
   }
   document.getElementById("tlModeHiddenPill").addEventListener("click", () => {
     state.modeRevealAll = true;
@@ -38037,7 +38083,7 @@
     const host = document.getElementById("daySessionCard");
     if (!host) return;
     const s = currentSession();
-    if (!s) { host.hidden = true; host.innerHTML = ""; return; }
+    if (!s) { host.hidden = true; host.innerHTML = ""; host.classList.remove("session-hero"); return; }
     // §3.2 "finishing the plan completes the session, even with extras
     // outstanding" -- checked on every render (covers a tick that just
     // happened via the shared delegate, and a fresh page load resuming an
@@ -38045,8 +38091,16 @@
     // priority over the time's-up ending-actions state below: even mid "what
     // now" decision, finishing the plan still just finishes the session.
     const planDone = s.planIds.filter(isDone).length;
-    if (s.planIds.length && planDone === s.planIds.length) { endSession(); host.hidden = true; host.innerHTML = ""; return; }
+    if (s.planIds.length && planDone === s.planIds.length) { endSession(); host.hidden = true; host.innerHTML = ""; host.classList.remove("session-hero"); return; }
     host.hidden = false;
+    // Modes stage 4 (2026-08-21): `s` above is already a real session, so this
+    // only needs to check .mode-focus -- sessionIsActive() is structurally
+    // guaranteed true inside this branch. Bigger plan/extra rings (reusing
+    // sessionRingSvg's own size param, not a forked ring function) are the
+    // "larger ring" half of her ask; the CSS class is the "centred" half.
+    const hero = document.body.classList.contains("mode-focus");
+    host.classList.toggle("session-hero", hero);
+    const planRingSize = hero ? 96 : 64, extraRingSize = hero ? 56 : 38;
     const mode = modeById(s.modeId);
     const item = sessionCoveringItem(s);
     const goal = item && item.goal ? item.goal : "";
@@ -38076,8 +38130,8 @@
         <button type="button" class="sc-end-btn" data-sc-move-next>Move to next</button>
       </div>` : ""}
       <div class="sc-rings">
-        <div class="exp-ring-wrap" style="width:64px;height:64px">${sessionRingSvg(planPct, mode.accent || "var(--margin-rule)", 64)}<div class="exp-ring-center"><b style="color:${mode.accent || "var(--margin-rule)"}">${planDone}/${s.planIds.length}</b></div></div>
-        <div class="exp-ring-wrap" style="width:38px;height:38px">${sessionRingSvg(extraPct, lightAccent, 38)}<div class="exp-ring-center"><b style="color:${lightAccent};font-size:10px">${extraDone}/${s.extras.length}</b></div></div>
+        <div class="exp-ring-wrap" style="width:${planRingSize}px;height:${planRingSize}px">${sessionRingSvg(planPct, mode.accent || "var(--margin-rule)", planRingSize)}<div class="exp-ring-center"><b style="color:${mode.accent || "var(--margin-rule)"}">${planDone}/${s.planIds.length}</b></div></div>
+        <div class="exp-ring-wrap" style="width:${extraRingSize}px;height:${extraRingSize}px">${sessionRingSvg(extraPct, lightAccent, extraRingSize)}<div class="exp-ring-center"><b style="color:${lightAccent};font-size:10px">${extraDone}/${s.extras.length}</b></div></div>
       </div>
       <div class="sc-list-label">The plan</div>
       <div class="sc-list">${planRows || `<div class="sc-empty">No checklist on this block</div>`}</div>
