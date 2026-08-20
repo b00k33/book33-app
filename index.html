@@ -7751,7 +7751,16 @@
   .mo-sum-row .v i { font-family: var(--font-display); color: var(--ink-faint); font-size: 13px; }
   .mo-sum-row .gl { font-family: var(--font-emoji); }
 
-  .mo-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 4px; }
+  .mo-grid { display: grid; grid-template-columns: 16px repeat(7, minmax(0,1fr)); gap: 4px; }
+  /* 2026-08-20 (Week 34 — Linh, STEP 1): a real gutter column, not a corner badge on
+     day 1 — avoids overlapping .mo-num/.mo-ud/moon/fast-ring, which already share that
+     cell's top row. isoWeekNumber() (existing, already used by the Week page) is reused
+     as-is, called once per row on that row's Monday. */
+  .mo-wk-hd { }
+  .mo-wk {
+    font-size: 9px; color: var(--ink-faint); text-align: center; padding-top: 10px;
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
   .mo-dow {
     text-align: center; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--ink-faint); padding-bottom: 8px;
@@ -7831,6 +7840,21 @@
   }
 
   .mo-cell[data-lny="true"] { border-color: var(--margin-rule); border-width: 1.5px; }
+  /* 2026-08-20 (Week 34 — Linh, STEP 3b): reuses the SAME --cell-tint slot data-el
+     already paints (see .mo-cell::before above) rather than a second overlay layer --
+     when a real score crosses a threshold it deliberately wins over the element tint
+     (source order below data-el), since it's the new headline signal on this page.
+     36-64 sets no --cell-tint override, so the cell just falls back to its data-el tint. */
+  .mo-cell[data-dp-band="good"] { --cell-tint: var(--power-good-tint); }
+  .mo-cell[data-dp-band="bad"]  { --cell-tint: var(--power-bad-tint); }
+  .mo-dp-score {
+    font-size: 13px; font-family: var(--font-body); font-variant-numeric: tabular-nums;
+    color: var(--ink-faint); font-weight: 600; line-height: 1;
+  }
+  /* the picker + best-day line living just above the grid (STEP 3a/3d) -- .dp-types
+     itself is the existing shared chip-row class, untouched; this only wraps it */
+  .mo-dp-panel { margin-bottom: 12px; }
+  .mo-dp-panel .mo-sum-row { margin-bottom: 8px; }
   .mo-lny {
     font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: var(--accent-on);
     background: var(--margin-rule); border-radius: 3px; padding: 4px 4px;
@@ -17694,6 +17718,13 @@
     <div class="mo-summary" id="moSummary"></div>
     <div class="mo-themes" id="moThemes"></div>
     <div id="moGoals"></div>
+    <!-- 2026-08-20 (Week 34 -- Linh: numerology-mapped Month tab, STEP 3a/3d): shares
+         dpType with the existing "🔮 Best day" picker (#dpTypes) -- same renderDpTypes()
+         markup, second mount, not a duplicate. -->
+    <div class="mo-dp-panel">
+      <div class="mo-sum-row" id="moDpBest"></div>
+      <div class="dp-types" id="moDpTypes"></div>
+    </div>
     <!-- 2026-08-08 (Linh: "there needs to be a date above the calendar"): the
          "August 2026" up in .mo-head scrolls out of view long before the grid
          itself comes into view (summary/themes/goals cards sit between them),
@@ -19974,15 +20005,52 @@
     const r = toSingleDigit(primary || 0);
     return { n: r, ...(NUM_FOCUS[r] || NUM_FOCUS[1]) };
   }
+  // 2026-08-20 (Week 34 -- Linh, STEP 2): colour <-> number reference table. Grey is
+  // kept as the string "1/28" on purpose -- it's tied to the semi-master DAY (28 that
+  // reduces to 1, see universalDay()'s SEMI_MASTERS branch just above), not the plain
+  // number 1 or 28 alone, so it's matched separately in coloursForDayValue() below
+  // rather than folded into the plain reverse-lookup buckets. Placement assumption:
+  // surfaced only on the existing day-numerology popover (focusPopoverHtml(), below) --
+  // flagging this per her own instruction, since it wasn't pinned down further.
+  const COLOUR_NUM = {
+    Blue: 4, Orange: 33, Red: 9, Pink: 5, Teal: 11, Lilac: 1, Purple: 7, Lavender: 9,
+    Yellow: 11, Green: 4, Brown: 9, Black: 11, White: 11, Navy: 8, Silver: 4, Gold: 11,
+    Grey: "1/28", Plum: 8,
+  };
+  const COLOUR_NUM_REV = {};
+  Object.keys(COLOUR_NUM).forEach(name => {
+    const v = COLOUR_NUM[name];
+    if (typeof v === "number") (COLOUR_NUM_REV[v] = COLOUR_NUM_REV[v] || []).push(name);
+  });
+  // resolvedN is the SAME single/master number focusFor() already resolved for this
+  // value (f.n) -- reused rather than re-deriving it. value is additionally checked for
+  // a semi-master slash pairing (universalDay() writes "28/1"; the table above writes
+  // "1/28" -- compared as a Set of the two numbers so either order matches).
+  function coloursForDayValue(value, resolvedN) {
+    const names = (COLOUR_NUM_REV[resolvedN] || []).slice();
+    const parts = String(value).split("/").map(s => parseInt(s, 10));
+    if (parts.length === 2 && parts.every(n => !isNaN(n))) {
+      const pairKey = parts.slice().sort((a, b) => a - b).join("/");
+      Object.keys(COLOUR_NUM).forEach(name => {
+        const v = COLOUR_NUM[name];
+        if (typeof v !== "string") return;
+        const vParts = v.split("/").map(s => parseInt(s, 10)).sort((a, b) => a - b).join("/");
+        if (vParts === pairKey && !names.includes(name)) names.push(name);
+      });
+    }
+    return names;
+  }
   // 2026-08-02 (Linh: "shown when mouse hovers over PM9 or UD1 or PY11"): one .df-tile,
   // same markup/classes renderDailyFocus() already builds (task chips included), just
   // wrapped in a positioned popover — see .num-hover-pop/.num-hover-trigger CSS.
   function focusPopoverHtml(label, value, f, extraClass) {
     const chip = x => `<span data-add-action="${esc(x)}" title="Add “${esc(x)}” to this day" role="button" tabindex="0">${esc(x)}</span>`;
+    const cols = coloursForDayValue(value, f.n);
     return `<div class="num-hover-pop${extraClass ? " " + extraClass : ""}"><div class="df-tile">
       <div class="t-label">${esc(label)}</div>
       <div class="t-head"><span class="t-value">${esc(String(value))}</span><span class="t-title">${f.em ? f.em + " " : ""}${esc(f.title)}</span></div>
       <div class="df-lean theme-acts">${f.lean.slice(0, 3).map(chip).join("")}</div>
+      ${cols.length ? `<div class="t-sub">Colours: ${esc(cols.join(", "))}</div>` : ""}
     </div></div>`;
   }
 
@@ -30942,10 +31010,26 @@
       </div>`;
     } else document.getElementById("moThemes").innerHTML = "";
 
+    /* ---- Week 34 (2026-08-20, Linh, STEP 3a/3d): numerology/astrology day-scoring,
+       layered on top of the grid below, not a rebuild of it. dpType/DP_TYPES/dpScoreDay
+       are the SAME picker+scorer the "🔮 Best day" popup already uses -- one shared
+       piece of state, two mounts (renderDpTypes() itself writes both). ---- */
+    renderDpTypes();
+    const dpSpec = DP_TYPES.find(t => t.id === dpType);
+    let dpBest = null;
+    for (let day = 1; day <= last.getDate(); day++) {
+      const dd = new Date(y, m, day);
+      const s = dpScoreDay(dd, dpSpec);
+      if (!dpBest || s.score > dpBest.score) dpBest = { d: dd, score: s.score };   // earliest day wins ties, same rule as pickUpkeepDay
+    }
+    document.getElementById("moDpBest").innerHTML = dpBest ? `<span class="k">Best day</span>
+      <span class="v">for ${esc(dpSpec.label)} — <b>${fullDate(dpBest.d.getDate())}</b>,
+      score <span style="color:var(--gold);font-weight:700">${dpBest.score}/100</span> (UD ${esc(universalDay(dpBest.d).value)})</span>` : "";
+
     /* ---- the grid ---- */
     const gridStart = startOfWeek(first);
     const cells = Math.ceil((dayDiff(last, gridStart) + 1) / 7) * 7;
-    let html = PLANETS.map((p, i) => `<div class="mo-dow">
+    let html = `<div class="mo-wk-hd"></div>` + PLANETS.map((p, i) => `<div class="mo-dow">
         <span class="planet">${p.icon}</span><span class="wd">${WD_MIN[i]}</span>
       </div>`).join("");
 
@@ -30973,6 +31057,9 @@
       const isFertile = !isOvu && moWin && dayDiff(d, moWin.fertileFrom) >= 0 && dayDiff(moWin.fertileTo, d) >= 0;
 
       const ud = universalDay(d);
+      // Week 34, STEP 3b: same scorer the "🔮 Best day" popup uses, called per-cell.
+      const dpS = dpScoreDay(d, dpSpec);
+      const dpBand = dpS.score >= 65 ? "good" : dpS.score <= 35 ? "bad" : "";
       const lny = isLunarNewYear(d);
       const incoming = lny ? chineseYear(d) : null;
       // 2026-08-02 ("more of that hover-for-detail... Month page — hover a cell for the
@@ -30987,15 +31074,17 @@
         title="Add “${esc(x)}” to ${d.getDate()} ${MON_SHORT[m]}">${esc(x)}</span>`;
       const moPopSide = i % 7 >= 4 ? " mo-hover-pop--right" : "";
 
+      if (i % 7 === 0) html += `<div class="mo-wk" title="ISO week ${isoWeekNumber(d)}">${isoWeekNumber(d)}</div>`;
       html += `<div class="mo-cell-wrap"><button class="mo-cell${bdays.length ? " has-bday" : ""}" data-el="${sign.el}" data-out="${!inMonth}"
           data-today="${keyOf(d) === keyOf(TODAY)}" data-shop="${shop}" data-lny="${lny}"
-          data-fertile="${!!isFertile}" data-ovu="${!!isOvu}"
+          data-fertile="${!!isFertile}" data-ovu="${!!isOvu}" data-dp-band="${dpBand}"
           data-jump="${keyOf(d)}">
         ${ps ? `<span class="mo-period" data-predicted="${!!ps.predicted}" style="${ps.logged ? `background:var(${FLOW_VAR[ps.flow]})` : ""}" aria-label="${ps.logged ? "Period logged" : "Period expected"}"></span>` : ""}
         <div class="mo-top">
           <span class="mo-datewrap">
             <span class="mo-num">${d.getDate()}${bdays.length ? ` <span class="mo-bd-badge" title="${esc(bdays.map(b => b.title).join(" · "))}">🎂</span>` : ""}</span>
             <span class="mo-ud" data-master="${ud.master}">${ud.value}</span>
+            <span class="mo-dp-score" title="${esc(dpSpec.label)} score">${dpS.score}</span>
           </span>
           ${moon ? moonHtml(moon.idx, "mo-moon", moon.name) : ""}
           ${keyOf(d) === keyOf(TODAY) ? miniFastRing("mo-fast-mini") : ""}
@@ -46911,8 +47000,14 @@
     return { score: Math.max(0, Math.min(100, Math.round(score))), why: why.join(" · ") };
   }
   function renderDpTypes() {
-    document.getElementById("dpTypes").innerHTML = DP_TYPES.map(t =>
+    const html = DP_TYPES.map(t =>
       `<button type="button" data-dp-type="${t.id}" aria-pressed="${t.id === dpType}">${t.label}</button>`).join("");
+    document.getElementById("dpTypes").innerHTML = html;
+    // 2026-08-20 (Week 34, STEP 3a): Month's own mount of the same picker -- only
+    // present while the Month page is in the DOM's current markup, guard so this stays
+    // callable from anywhere dpType changes, same as before.
+    const moMount = document.getElementById("moDpTypes");
+    if (moMount) moMount.innerHTML = html;
   }
 
   /* ============================================================
@@ -47213,9 +47308,14 @@
     document.getElementById("dayPickerBtn").setAttribute("aria-expanded", String(!p.hidden));
     if (!p.hidden) { renderDpTypes(); document.getElementById("dpTitle").focus(); }
   });
-  document.getElementById("dpTypes").addEventListener("click", e => {
+  // 2026-08-20 (Week 34, STEP 3a): widened from a listener on the single #dpTypes
+  // element to a document-level delegate so the new #moDpTypes mount (Month page)
+  // fires it too -- same data-dp-type attribute, same handler, matches the rest of
+  // this file's own convention for "one control, several mounts" (data-jump-view etc).
+  document.addEventListener("click", e => {
     const b = e.target.closest("[data-dp-type]"); if (!b) return;
     dpType = b.dataset.dpType; renderDpTypes();
+    if (state.view === "month") renderMonth();
   });
   document.getElementById("dpFind").addEventListener("click", () => {
     const spec = DP_TYPES.find(t => t.id === dpType);
