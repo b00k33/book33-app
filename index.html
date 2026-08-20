@@ -8413,6 +8413,39 @@
   .recipe-row .actions { display: flex; gap: 4px; flex: none; }
   .recipe-row .actions .del { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; padding: 4px 4px; }
   .recipe-row .actions .del:hover { color: var(--margin-rule); }
+  /* 2026-08-20 (Linh, carnivore-plan price-per-kg reference): flat row, hairline
+     separator -- same recipe as .recipe-row/.log-row just above, own class since the
+     content shape (name+notes+meta on the left, a prominent $/kg + carb indicator on
+     the right) is its own thing. Edit reuses the exact .fhe-row/.fhe-actions/.fhe-cancel
+     field-row recipe the Fasting history inline editor already established (colours/
+     spacing token-for-token identical) under its own .mp-* names, not literally shared
+     classes -- same convention .recipe-row/.log-row/.plantmrw-row already each use their
+     own name for one shared "flat hairline row" recipe. */
+  .mp-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--note-line); }
+  .mp-row:first-child { border-top: none; }
+  .mp-row .mp-info { flex: 1; min-width: 0; }
+  .mp-row .mp-name { font-family: var(--font-body); font-size: 13px; }
+  .mp-row .mp-name a { color: inherit; text-decoration: underline; text-decoration-color: var(--note-line); text-underline-offset: 2px; }
+  .mp-row .mp-notes { font-size: 11px; color: var(--ink-faint); margin-top: 2px; font-style: italic; }
+  .mp-row .mp-meta { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
+  .mp-row .mp-side { flex: none; text-align: right; }
+  .mp-row .mp-perkg { font-size: 16px; font-weight: 700; color: var(--gold-bright); font-variant-numeric: tabular-nums; }
+  .mp-row .mp-perkg-unit { font-size: 11px; font-weight: 400; color: var(--ink-faint); }
+  .mp-row .mp-carb { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+  .mp-row .mp-carb.ok { color: var(--fast-green); }
+  .mp-row .edit { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 13px; padding: 12px 8px; min-height: 44px; min-width: 44px; flex: none; }
+  .mp-row .edit:hover { color: var(--margin-rule); }
+  .mp-row.editing .edit { color: var(--margin-rule); }
+  .mp-row .del { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 15px; padding: 12px 4px; min-height: 44px; min-width: 44px; flex: none; }
+  .mp-row .del:hover { color: var(--warn); }
+  .mp-edit { padding: 12px 0; border-top: 1px dashed var(--note-line); margin: -4px 0 8px; }
+  .mp-edit .fhe-row + .fhe-row { margin-top: 12px; }
+  .mp-carb-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--ink-soft); cursor: pointer; }
+  .mp-carb-check input { width: 20px; height: 20px; flex: none; accent-color: var(--gold-bright); }
+  .mp-perkg-preview { margin-top: 12px; font-size: 13px; color: var(--ink-faint); }
+  .mp-perkg-preview b { color: var(--gold-bright); font-size: 16px; }
+  #mpAddToggle { margin-bottom: 4px; min-height: 44px; }
+  .mp-add { border-top: none; margin-top: 0; padding-top: 4px; }
   #recipeIngredients, #phFormulaIngredients {
     width: 100%; font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--field-bg);
     border: 1px solid var(--note-line); border-radius: 3px; padding: 8px 12px; resize: vertical;
@@ -16701,6 +16734,12 @@
 
     <div class="section-head" style="margin-top:24px"><h2>Recent days</h2><span class="rule"></span></div>
     <div id="nutHistory"></div>
+
+    <!-- 2026-08-20 (Linh, carnivore-plan price-per-kg reference): a genuinely separate,
+         standalone list -- MEAT_PRICES, its own store, not a field on NUTRITION/
+         NUT_MEALS above. See renderNutPrices() for the row/edit/add markup. -->
+    <div class="section-head" style="margin-top:24px"><h2>Price reference</h2><span class="rule"></span></div>
+    <div id="nutPrices"></div>
   </div>
 
   <!-- ================= GROWTH — Chapter 9: progress, proof, what's next ================= -->
@@ -32264,6 +32303,186 @@
                                      //   calories, iron, protein, choline, vitaminC, carbs, fat,
                                      //   linkedEventId, linkedEventTitle, linkedEventTimeLabel}] }
 
+  /* ============================================================
+     MEAT PRICES — "Price reference" (2026-08-20, Linh: quality-meats $/kg list for the
+     carnivore plan). A genuinely separate store from NUTRITION/NUT_MEALS above -- a
+     price list is neither a daily metric nor a logged meal, it's a running reference
+     she compares options against. Same load/save pair idiom as every other store in
+     this file. */
+  const MEAT_PRICES_KEY = "book33-meat-prices";
+  function loadMeatPrices() {
+    try { const v = JSON.parse(localStorage.getItem(MEAT_PRICES_KEY)); if (Array.isArray(v)) return v; }
+    catch (e) {}
+    return [];
+  }
+  function saveMeatPrices() { try { localStorage.setItem(MEAT_PRICES_KEY, JSON.stringify(MEAT_PRICES)); } catch (e) {} }
+  let MEAT_PRICES = loadMeatPrices();   // [{id, name, retailer, url, packKg, price, carbFree, notes}]
+  // seed her real starting list once -- if anything's already there (including a prior
+  // seed, or her own added/edited/deleted rows), never re-seed and duplicate.
+  if (!MEAT_PRICES.length) {
+    MEAT_PRICES = [
+      { id: uid(), name: "Pork Crackle — Unseasoned Pork Rinds/Crackling, 1kg Bulk Pack", retailer: "The Carnivore Pantry", url: "https://thecarnivorepantry.com/products/pork-crackle-unseasoned-pork-rinds-crackling-1kg-bulk-pack-keto-diet-paleo", packKg: 1, price: 65, carbFree: true, notes: "100% free-range, cooked in lard, no carbs" },
+      { id: uid(), name: "Wild Caught Alaskan Sockeye Salmon — 5kg Value Bundle", retailer: "Fish & Co", url: "https://fishandco.com.au/product/wild-caught-alaskan-sockeye-salmon-5kg-value-bundle/", packKg: 5, price: 425, carbFree: true, notes: "Wild-caught, sockeye" },
+      { id: uid(), name: "Alaskan Salmon — Whole Side", retailer: "Fish & Co", url: "https://fishandco.com.au/product/alaskan-salmon-whole-side/", packKg: 0.7, price: 63, carbFree: true, notes: "Wild-caught, whole-side cut" },
+    ];
+    saveMeatPrices();
+  }
+  // sparse edit draft, same idiom as fastHistDraft (Health page's fasting history
+  // inline editor) -- only the fields actually typed into land here; a save merges it
+  // over the real row (`{...p, ...mpEditDraft}`) so an untouched field is never wiped.
+  let mpEditId = null;
+  let mpEditDraft = null;
+  function closeMpEdit() { mpEditId = null; mpEditDraft = null; }
+  // add-form draft is a full object (there's no "real row" to merge over yet)
+  const MP_BLANK_DRAFT = { name: "", retailer: "", url: "", packKg: "", price: "", carbFree: false, notes: "" };
+  let mpAddOpen = false;
+  let mpAddDraft = { ...MP_BLANK_DRAFT };
+  function closeMpAdd() { mpAddOpen = false; mpAddDraft = { ...MP_BLANK_DRAFT }; }
+  // shared by both the "+ Add a product" form and each row's inline editor -- same
+  // fhe-row/label/input recipe the Fasting history inline editor already uses (own
+  // .mp-* wrapper classes, see the CSS comment above .mp-row). `prefix` becomes the
+  // data-mpa-field/data-mpe-field attribute so the shared input/click delegates below
+  // can tell an add-draft field from an edit-draft field apart.
+  function mpFieldsHtml(d, prefix) {
+    const packKg = parseFloat(d.packKg) || 0;
+    const price = parseFloat(d.price) || 0;
+    const perKg = packKg > 0 ? price / packKg : 0;
+    return `
+      <div class="fhe-row">
+        <label>Name <input type="text" data-${prefix}-field="name" value="${esc(d.name || "")}" placeholder="Product name"></label>
+      </div>
+      <div class="fhe-row">
+        <label>Retailer <input type="text" data-${prefix}-field="retailer" value="${esc(d.retailer || "")}" placeholder="Retailer"></label>
+        <label>Link (optional) <input type="url" data-${prefix}-field="url" value="${esc(d.url || "")}" placeholder="https://…"></label>
+      </div>
+      <div class="fhe-row">
+        <label>Pack size (kg) <input type="number" min="0" step="0.01" data-${prefix}-field="packKg" value="${d.packKg === "" || d.packKg == null ? "" : d.packKg}" placeholder="1"></label>
+        <label>Price ($) <input type="number" min="0" step="0.01" data-${prefix}-field="price" value="${d.price === "" || d.price == null ? "" : d.price}" placeholder="0.00"></label>
+      </div>
+      <div class="fhe-row">
+        <label>Notes <input type="text" data-${prefix}-field="notes" value="${esc(d.notes || "")}" placeholder="Optional"></label>
+      </div>
+      <label class="mp-carb-check"><input type="checkbox" data-${prefix}-field="carbFree" ${d.carbFree ? "checked" : ""}> 0g carb / 0g sugar</label>
+      <div class="mp-perkg-preview">${packKg > 0 ? `<b>$${perKg.toFixed(2)}</b>/kg` : "Enter pack size + price to see $/kg"}</div>`;
+  }
+  function mpEditorHtml(p) {
+    const d = { ...p, ...(mpEditDraft || {}) };
+    return `<div class="mp-edit">
+      ${mpFieldsHtml(d, "mpe")}
+      <div class="fhe-actions">
+        <button type="button" class="btn-save" data-mpe-save="${p.id}">Save</button>
+        <button type="button" class="fhe-cancel" data-mpe-cancel="${p.id}">Cancel</button>
+      </div>
+    </div>`;
+  }
+  function mpAddFormHtml() {
+    return `<div class="mp-edit mp-add">
+      ${mpFieldsHtml(mpAddDraft, "mpa")}
+      <div class="fhe-actions">
+        <button type="button" class="btn-save" data-mpa-save="1">Add</button>
+        <button type="button" class="fhe-cancel" data-mpa-cancel="1">Cancel</button>
+      </div>
+    </div>`;
+  }
+  function mpRowHtml(p) {
+    const perKg = p.packKg > 0 ? p.price / p.packKg : 0;
+    const editing = mpEditId === p.id;
+    return `<div class="mp-row${editing ? " editing" : ""}">
+        <div class="mp-info">
+          <div class="mp-name">${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)}</div>
+          ${p.notes ? `<div class="mp-notes">${esc(p.notes)}</div>` : ""}
+          <div class="mp-meta">${esc(p.retailer || "—")} · ${p.packKg}kg · $${Number(p.price).toFixed(2)}</div>
+        </div>
+        <div class="mp-side">
+          <div class="mp-perkg">$${perKg.toFixed(2)}<span class="mp-perkg-unit">/kg</span></div>
+          <div class="mp-carb${p.carbFree ? " ok" : ""}">${p.carbFree ? "✓ 0g carb · 0g sugar" : "unconfirmed"}</div>
+        </div>
+        <button type="button" class="edit" data-mp-edit="${p.id}" aria-label="${editing ? "Close editor" : "Edit"}" aria-expanded="${editing}">${editing ? "︿" : "✎"}</button>
+        <button type="button" class="del" data-mp-del="${p.id}" aria-label="Delete">×</button>
+      </div>` + (editing ? mpEditorHtml(p) : "");
+  }
+  function renderNutPrices() {
+    const host = document.getElementById("nutPrices");
+    if (!host) return;
+    const sorted = [...MEAT_PRICES].sort((a, b) => (a.price / a.packKg) - (b.price / b.packKg));
+    host.innerHTML =
+      `<button type="button" class="add-btn" id="mpAddToggle" aria-expanded="${mpAddOpen}">${mpAddOpen ? "− Cancel" : "+ Add a product"}</button>` +
+      (mpAddOpen ? mpAddFormHtml() : "") +
+      (sorted.length ? sorted.map(mpRowHtml).join("")
+        : `<div class="h-empty">No products yet — add one to start comparing $/kg.</div>`);
+  }
+  document.getElementById("nutPrices").addEventListener("click", e => {
+    if (e.target.closest("#mpAddToggle")) {
+      mpAddOpen ? closeMpAdd() : (mpAddOpen = true);
+      renderNutPrices(); return;
+    }
+    if (e.target.closest("[data-mpa-cancel]")) { closeMpAdd(); renderNutPrices(); return; }
+    const addSave = e.target.closest("[data-mpa-save]");
+    if (addSave) {
+      const name = (mpAddDraft.name || "").trim();
+      const packKg = parseFloat(mpAddDraft.packKg);
+      const price = parseFloat(mpAddDraft.price);
+      if (!name || !(packKg > 0) || !(price >= 0)) return;
+      MEAT_PRICES.push({
+        id: uid(), name, retailer: (mpAddDraft.retailer || "").trim(), url: (mpAddDraft.url || "").trim(),
+        packKg, price, carbFree: !!mpAddDraft.carbFree, notes: (mpAddDraft.notes || "").trim(),
+      });
+      saveMeatPrices(); closeMpAdd(); renderNutPrices(); return;
+    }
+    const mEdit = e.target.closest("[data-mp-edit]");
+    if (mEdit) {
+      const id = mEdit.dataset.mpEdit;
+      mpEditId = mpEditId === id ? null : id;
+      mpEditDraft = null;
+      renderNutPrices(); return;
+    }
+    const mDel = e.target.closest("[data-mp-del]");
+    if (mDel) {
+      // no confirm() -- her own instruction: a personal price list has no downstream
+      // consequence like stock or a dated record, unlike LCM Pharmacy's delete rules.
+      const id = mDel.dataset.mpDel;
+      MEAT_PRICES = MEAT_PRICES.filter(p => p.id !== id);
+      if (mpEditId === id) closeMpEdit();
+      saveMeatPrices(); renderNutPrices(); return;
+    }
+    if (e.target.closest("[data-mpe-cancel]")) { closeMpEdit(); renderNutPrices(); return; }
+    const eSave = e.target.closest("[data-mpe-save]");
+    if (eSave) {
+      const p = MEAT_PRICES.find(x => x.id === eSave.dataset.mpeSave);
+      if (!p) return;
+      const d = { ...p, ...(mpEditDraft || {}) };
+      const name = (d.name || "").trim();
+      const packKg = parseFloat(d.packKg);
+      const price = parseFloat(d.price);
+      if (!name || !(packKg > 0) || !(price >= 0)) return;
+      Object.assign(p, {
+        name, retailer: (d.retailer || "").trim(), url: (d.url || "").trim(),
+        packKg, price, carbFree: !!d.carbFree, notes: (d.notes || "").trim(),
+      });
+      saveMeatPrices(); closeMpEdit(); renderNutPrices(); return;
+    }
+  });
+  // live $/kg preview as she types -- patches just .mp-perkg-preview rather than a full
+  // renderNutPrices(), same reason the Fasting history editor patches just .fhe-dur:
+  // a full re-render would drop focus out of the field mid-type.
+  document.getElementById("nutPrices").addEventListener("input", e => {
+    const f = e.target.closest("[data-mpa-field],[data-mpe-field]");
+    if (!f) return;
+    const isAdd = f.matches("[data-mpa-field]");
+    const key = isAdd ? f.dataset.mpaField : f.dataset.mpeField;
+    const val = f.type === "checkbox" ? f.checked : f.value;
+    if (isAdd) mpAddDraft[key] = val;
+    else { mpEditDraft = mpEditDraft || {}; mpEditDraft[key] = val; }
+    const wrap = f.closest(".mp-edit");
+    if (!wrap) return;
+    const draft = isAdd ? mpAddDraft
+      : { ...(MEAT_PRICES.find(p => p.id === wrap.querySelector("[data-mpe-save]")?.dataset.mpeSave) || {}), ...mpEditDraft };
+    const packKg = parseFloat(draft.packKg) || 0;
+    const price = parseFloat(draft.price) || 0;
+    const preview = wrap.querySelector(".mp-perkg-preview");
+    if (preview) preview.innerHTML = packKg > 0 ? `<b>$${(price / packKg).toFixed(2)}</b>/kg` : "Enter pack size + price to see $/kg";
+  });
+
   // small ring, same stroke-dasharray trick as the fasting ring — quick "did I have enough" glance
   // size/sw default to the Nutrition page's own 58px/6px ring unchanged — optional so a
   // smaller caller (2026-08-16, the widget-rail Boost card) can shrink both without a
@@ -32324,6 +32543,11 @@
         <span class="val">${NUT_METRICS.map(m => entry[m.id] ? `${entry[m.id]}${m.unit === "kcal" ? "kcal" : m.unit === "glasses" ? " glasses" : m.unit}` : null).filter(Boolean).join(" · ") || "—"}</span>
       </div>`;
     }).join("") : `<div class="h-empty">Nothing logged yet.</div>`;
+
+    // 2026-08-20 (carnivore-plan price-per-kg reference): its own render call, own
+    // function, own store (MEAT_PRICES) -- everything above this line is NUTRITION/
+    // NUT_MEALS rendering, untouched.
+    renderNutPrices();
   }
   // 2026-08-11 (Linh, "log my actual lunch"): itemized meals for today, grouped by
   // slot in a fixed Breakfast/Lunch/Dinner/Snack order -- separate list from the
