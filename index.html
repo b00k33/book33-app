@@ -4956,6 +4956,13 @@
   .lm-save-event { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--margin-rule); }
   .lm-se-row { display: flex; gap: 8px; }
   .lm-se-row .field { flex: 1; }
+  /* 2026-08-21 (Quick-plan week, STEP 3): reviewed-not-imported suggestions, sitting
+     between the armable Saved-events chips and the manual "+ Save an event" form. */
+  .lm-suggest { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--margin-rule); }
+  .lm-suggest-title { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .02em; }
+  .lm-suggest-row { display: flex; align-items: center; gap: 8px; }
+  .lm-suggest-info { flex: 1; font-size: 13px; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lm-suggest-meta { color: var(--ink-faint); font-size: 12px; }
   .lm-untimed { margin-top: 10px; }
   .lm-untimed-toggle {
     background: none; border: none; padding: 0; font: inherit; font-size: 11.5px;
@@ -19818,6 +19825,11 @@
   let SAVED_EVENTS = loadSavedEvents();
   let lmArmed = null;    // currently-selected category id to paint with
   let lmEraser = false;
+  // 2026-08-21 (Hand-paint -> real, STEP 2): a third armable tool alongside Eraser --
+  // when armed, tapping an already-painted cell promotes its whole contiguous
+  // same-category run into a real routine instead of painting/erasing. Same
+  // mutual-exclusivity idiom as lmEraser (arming a category or Eraser clears it).
+  let lmConfirming = false;
   let lmPainting = false;
   let lmPaintValue = null;
   // 2026-08-21 ("an auto layer that paints from my real schedule"): which of the two
@@ -19828,12 +19840,10 @@
   let lmViewMode = "hand";
   let lmUntimedOpen = false;
   let LM_AUTO_UNTIMED = [];
-  // 2026-08-21 (two-way sync, STEP 5): which "day-hour" keys a hand-paint gesture
-  // has touched, and the lmSyncedCells() snapshot taken at its start -- both null
-  // outside a gesture. Cached rather than recomputed on every pointerover so a fast
-  // drag doesn't re-walk ROUTINE_TASKS per cell, and so the gesture can't see a
-  // routine it creates partway through its own drag.
-  let lmGestureCells = null;
+  // 2026-08-21 (two-way sync, STEP 5): the lmSyncedCells() snapshot taken at a hand-
+  // paint gesture's start, null outside one. Cached rather than recomputed on every
+  // pointerover so a fast drag doesn't re-walk ROUTINE_TASKS per cell, and blocks
+  // dragging onto a cell that became synced partway through the same drag.
   let lmGestureSynced = null;
   // 2026-08-21 (Quick-plan week, STEP 4): the third #lmGrid mode -- a specific,
   // DATED upcoming week (unlike Hand-paint's abstract pattern), booking real
@@ -19912,19 +19922,34 @@
     if (lmViewMode === "plan") {
       paletteTitleEl.textContent = "Saved events";
       if (!lmPlanArmed || !SAVED_EVENTS.find(s => s.id === lmPlanArmed)) lmPlanArmed = SAVED_EVENTS[0] ? SAVED_EVENTS[0].id : null;
+      const suggested = lmSuggestedSavedEvents();
       document.getElementById("lmPalette").innerHTML =
         (SAVED_EVENTS.length ? SAVED_EVENTS.map(s => `
           <button type="button" class="lm-chip" data-lm-plan-arm="${s.id}" aria-pressed="${lmPlanArmed === s.id}">
             <span class="lm-dot" style="background:var(--${s.track}-seed)"></span>${s.icon ? esc(s.icon) + " " : ""}${esc(s.title)}
           </button>`).join("") : `<div class="lm-empty">No saved events yet — add one below.</div>`) +
+        // 2026-08-21 (Quick-plan week, STEP 3): reviewed, never bulk-imported -- each
+        // suggestion is its own button, adding exactly the one she taps and nothing
+        // else. Omitted entirely when empty rather than shown with nothing in it.
+        (suggested.length ? `
+          <div class="lm-suggest">
+            <div class="lm-suggest-title">Suggested from your calendar</div>
+            ${suggested.map(s => `
+              <div class="lm-suggest-row">
+                <span class="lm-dot" style="background:var(--${s.track}-seed)"></span>
+                <span class="lm-suggest-info">${s.icon ? esc(s.icon) + " " : ""}${esc(s.title)}<span class="lm-suggest-meta"> · ${s.count}×${s.durationMin ? " · " + s.durationMin + "m" : ""}</span></span>
+                <button type="button" class="lm-tool lm-tool-link" data-lm-suggest-add="${esc(s.key)}">+ Add</button>
+              </div>`).join("")}
+          </div>` : "") +
         `<button type="button" class="lm-tool lm-tool-link" data-lm-save-event-toggle>${lmSaveFormOpen ? "– Cancel" : "+ Save an event"}</button>`;
     } else {
       paletteTitleEl.textContent = "Categories";
       document.getElementById("lmPalette").innerHTML = cats.map(c => `
-        <button type="button" class="lm-chip" data-lm-arm="${c.id}" aria-pressed="${!lmEraser && lmArmed === c.id}">
+        <button type="button" class="lm-chip" data-lm-arm="${c.id}" aria-pressed="${!lmEraser && !lmConfirming && lmArmed === c.id}">
           <span class="lm-dot" style="background:var(--${c.id}-seed)"></span>${esc(c.name)}
         </button>`).join("") +
         `<button type="button" class="lm-tool" data-lm-eraser aria-pressed="${lmEraser}">⌫ Eraser</button>
+         <button type="button" class="lm-tool" data-lm-confirm aria-pressed="${lmConfirming}" title="Tap a painted block to make it a real recurring routine">✓ Confirm to schedule</button>
          <button type="button" class="lm-tool lm-tool-link" data-lm-categories>+ Add/edit a category</button>`;
     }
     renderLmSaveEventForm();
@@ -19993,7 +20018,7 @@
       });
       renderLmUntimed(untimed);
     } else {
-      lmNoteEl.textContent = `Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here. Hours already covered by a real routine (ringed) sync in from your calendar automatically and can't be repainted directly.`;
+      lmNoteEl.textContent = `Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here. Hours already covered by a real routine (ringed) sync in from your calendar automatically and can't be repainted directly. Happy with a block? Arm "✓ Confirm to schedule" and tap it to make it a real recurring routine.`;
       // 2026-08-21 (two-way sync, part 1+3): synced (a real routine's own hours)
       // always wins over a manual LIFEMAP.cells value for THIS cell -- see
       // lmSyncedCells' own comment. A stale manual value underneath is left alone,
@@ -20098,38 +20123,26 @@
     el.style.background = cat ? `var(--${cat.id}-seed)` : "";
     el.title = (cat ? cat.name + " · " : "") + WD_FULL[day] + " " + lmFmtHour(hour);
   }
-  // 2026-08-21 (two-way sync, STEP 5): on release, converts each contiguous same-
-  // category run the gesture touched (grown outward through any already-matching
-  // adjacent hours, hand-painted earlier or just now -- "extending a block grows
-  // it") into ONE real ROUTINE_TASKS entry, or extends/bridges an existing
-  // Life-Map-made routine that already sits right up against it. Never runs for an
-  // eraser gesture -- erasing only ever touches LIFEMAP.cells directly (STEP 6: a
-  // synced cell can't be erased, since pointerdown already blocks painting it).
+  // 2026-08-21 (Hand-paint -> real, STEP 2 -- Linh: "Hand-paint stays free to sketch
+  // ideas that never become real until she explicitly confirms them"): painting is
+  // a pure private sketch again -- it only ever touches LIFEMAP.cells, same as
+  // before the two-way-sync job's auto-commit-on-release behaviour, which this
+  // removes. The ONLY way a painted block becomes a real ROUTINE_TASKS entry now is
+  // an explicit "✓ Confirm to schedule" tap (see lmGrowRun + the pointerdown
+  // handler further down, and lmCommitRoutineRun itself).
   function lmFinishGesture() {
-    if (lmPaintValue !== null && lmGestureCells && lmGestureCells.size) {
-      const byDay = {};
-      lmGestureCells.forEach(key => {
-        const [d, h] = key.split("-").map(Number);
-        (byDay[d] = byDay[d] || new Set()).add(h);
-      });
-      let lastMsg = null;
-      Object.keys(byDay).forEach(dayStr => {
-        const day = Number(dayStr);
-        const done = new Set();
-        [...byDay[day]].sort((a, b) => a - b).forEach(h => {
-          if (done.has(h) || LIFEMAP.cells[day + "-" + h] !== lmPaintValue) return;
-          let lo = h, hi = h;
-          while (LIFEMAP.cells[day + "-" + (lo - 1)] === lmPaintValue) lo--;
-          while (LIFEMAP.cells[day + "-" + (hi + 1)] === lmPaintValue) hi++;
-          for (let x = lo; x <= hi; x++) done.add(x);
-          const msg = lmCommitRoutineRun(day, lo, hi);
-          if (msg) lastMsg = msg;
-        });
-      });
-      if (lastMsg) rewardToast(lastMsg);
-    }
     saveLifeMap();
     renderLifeMap();
+  }
+  // day/hour/category -> [lo,hi] inclusive hours: grows outward through any already-
+  // matching adjacent hours on that day. Used by "✓ Confirm to schedule" (the
+  // pointerdown handler further down) to find how much of a painted block one tap
+  // should promote to a real routine.
+  function lmGrowRun(day, hour, catId) {
+    let lo = hour, hi = hour;
+    while (LIFEMAP.cells[day + "-" + (lo - 1)] === catId) lo--;
+    while (LIFEMAP.cells[day + "-" + (hi + 1)] === catId) hi++;
+    return [lo, hi];
   }
   // day/[lo,hi] (inclusive hours) of one painted run -> a real weekly routine
   // covering it. Extends (or bridges two) existing Life-Map-made routines that
@@ -20138,8 +20151,7 @@
   // the clean way to recognise it the spec asked for (never an id-format check).
   // Only ever matches a routine with a SINGLE weekday -- the entry this creates
   // always has weekdays:[day], one per day painted, never grouped across days.
-  function lmCommitRoutineRun(day, lo, hi) {
-    const catId = lmPaintValue;
+  function lmCommitRoutineRun(day, lo, hi, catId) {
     const cat = CAT_BY_ID[catId];
     if (!cat) return null;
     let startMin = lo * 60, endMin = (hi + 1) * 60;
@@ -20241,6 +20253,41 @@
     }
     renderLifeMap();
   }
+  // 2026-08-21 (Quick-plan week, STEP 3): calendar history she's already logged,
+  // offered as candidates for the Saved events library -- never auto-added, only
+  // ever surfaced for her to pick individually. A title "repeats" case-insensitively
+  // (so "Coffee with Mum" and "coffee with mum" count as the same thing); anything
+  // that already matches an existing SAVED_EVENTS title (also case-insensitively) is
+  // excluded so nothing suggests a duplicate of what's already saved. Typical
+  // duration comes from whichever occurrence has BOTH start and end, preferring the
+  // most recent one that does -- an occurrence missing either can't say how long it
+  // usually runs, so it's left out of that particular calculation rather than
+  // guessed; if NONE of a title's occurrences have both, durationMin comes back
+  // null and the caller shows no duration rather than making one up.
+  function lmSuggestedSavedEvents() {
+    const savedTitles = new Set(SAVED_EVENTS.map(s => (s.title || "").trim().toLowerCase()));
+    const byTitle = {};
+    EVENTS.forEach(e => {
+      const t = (e.title || "").trim();
+      if (!t || savedTitles.has(t.toLowerCase())) return;
+      (byTitle[t.toLowerCase()] = byTitle[t.toLowerCase()] || []).push(e);
+    });
+    return Object.keys(byTitle).filter(k => byTitle[k].length > 1).map(k => {
+      const occ = byTitle[k].slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      const latest = occ[occ.length - 1];
+      let durationMin = null;
+      for (let i = occ.length - 1; i >= 0 && durationMin === null; i--) {
+        if (occ[i].start && occ[i].end) {
+          const d = timeToMin(occ[i].end) - timeToMin(occ[i].start);
+          if (d > 0) durationMin = d;
+        }
+      }
+      return {
+        key: k, title: latest.title, track: latest.track, category: latest.category || "",
+        icon: latest.icon || "", count: occ.length, durationMin,
+      };
+    });
+  }
   function renderLmSaveEventForm() {
     const host = document.getElementById("lmSaveEventForm");
     if (!host) return;
@@ -20278,10 +20325,26 @@
       e.preventDefault();
       return;
     }
+    // 2026-08-21 (Hand-paint -> real, STEP 2): "✓ Confirm to schedule" armed -- a
+    // single tap (not a drag) promotes the tapped cell's whole contiguous
+    // same-category run into one real routine, same as a paint gesture would, then
+    // stops here (no paint gesture starts). A tap on an empty cell has nothing to
+    // confirm, so it's a no-op.
+    if (lmConfirming) {
+      const catId = LIFEMAP.cells[key];
+      if (catId) {
+        const [lo, hi] = lmGrowRun(day, hour, catId);
+        const msg = lmCommitRoutineRun(day, lo, hi, catId);
+        if (msg) rewardToast(msg);
+        saveLifeMap();
+        renderLifeMap();
+      }
+      e.preventDefault();
+      return;
+    }
     lmGestureSynced = synced;
     lmPainting = true;
     lmPaintValue = lmEraser ? null : lmArmed;
-    lmGestureCells = new Set([key]);
     lmPaintCell(cell, day, hour);
     renderLifeMapSummary();
     saveLifeMap();
@@ -20294,7 +20357,6 @@
     const day = Number(cell.dataset.lmDay), hour = Number(cell.dataset.lmHour);
     const key = day + "-" + hour;
     if (lmGestureSynced && lmGestureSynced[key]) return;   // can't drag over a synced cell either
-    if (lmGestureCells) lmGestureCells.add(key);
     lmPaintCell(cell, day, hour);
     renderLifeMapSummary();
   });
@@ -20302,7 +20364,6 @@
     if (!lmPainting) return;
     lmPainting = false;
     lmFinishGesture();
-    lmGestureCells = null;
     lmGestureSynced = null;
   });
   // 2026-08-21 (Quick-plan week, STEP 4): a THIRD, separate gesture on `[data-lm-
@@ -20342,9 +20403,11 @@
     const lmUntimedTog = e.target.closest("[data-lm-untimed-toggle]");
     if (lmUntimedTog) { lmUntimedOpen = !lmUntimedOpen; renderLmUntimed(LM_AUTO_UNTIMED); return; }
     const arm = e.target.closest("[data-lm-arm]");
-    if (arm) { lmArmed = arm.dataset.lmArm; lmEraser = false; renderLifeMap(); return; }
+    if (arm) { lmArmed = arm.dataset.lmArm; lmEraser = false; lmConfirming = false; renderLifeMap(); return; }
     const eraser = e.target.closest("[data-lm-eraser]");
-    if (eraser) { lmEraser = true; renderLifeMap(); return; }
+    if (eraser) { lmEraser = true; lmConfirming = false; renderLifeMap(); return; }
+    const confirmTool = e.target.closest("[data-lm-confirm]");
+    if (confirmTool) { lmConfirming = true; lmEraser = false; renderLifeMap(); return; }
     const catLink = e.target.closest("[data-lm-categories]");
     if (catLink) { state.view = "categories"; render(); return; }
     const wmDayTog = e.target.closest("[data-lm-wmday]");
@@ -20370,6 +20433,19 @@
     }
     const planArm = e.target.closest("[data-lm-plan-arm]");
     if (planArm) { lmPlanArmed = planArm.dataset.lmPlanArm; renderLifeMap(); return; }
+    const suggestAdd = e.target.closest("[data-lm-suggest-add]");
+    if (suggestAdd) {
+      const s = lmSuggestedSavedEvents().find(x => x.key === suggestAdd.dataset.lmSuggestAdd);
+      if (s) {
+        SAVED_EVENTS.push({
+          id: uid(), title: s.title, track: s.track, category: s.category,
+          icon: s.icon, durationMin: s.durationMin || null,
+        });
+        saveSavedEvents();
+      }
+      renderLifeMap();
+      return;
+    }
     const seToggle = e.target.closest("[data-lm-save-event-toggle]");
     if (seToggle) { lmSaveFormOpen = !lmSaveFormOpen; renderLifeMap(); return; }
     const seTrack = e.target.closest("[data-lm-se-track]");
