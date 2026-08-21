@@ -24293,6 +24293,57 @@
   function loadTodos() { try { return JSON.parse(localStorage.getItem(TODO_KEY) || "[]"); } catch (e) { return []; } }
   function saveTodos(list) { try { localStorage.setItem(TODO_KEY, JSON.stringify(list)); } catch (e) {} }
   let EVENTS = loadEvents();
+  // 2026-08-21 (universal Events/Routines system, Stage 1 of 3 -- additive-only
+  // migration, Linh: "I want Events and Routines to eventually be one real, unified
+  // system"): a new, THIRD store that unions EVENTS/ROUTINE_TASKS/RECURRING_EVENTS
+  // losslessly -- every field its source object already had, unchanged, plus `kind`/
+  // `repeats` so a future stage can tell items apart and read repeat info without
+  // re-deriving it. Nothing reads ITEMS yet (that's Stage 2) -- it exists purely in
+  // parallel, so this stage can ship and be verified with zero risk to anything that
+  // currently works. Same load/save idiom as every other store here.
+  const ITEMS_KEY = "book33-items";
+  function loadItems() {
+    try { const v = JSON.parse(localStorage.getItem(ITEMS_KEY)); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function saveItems() { try { localStorage.setItem(ITEMS_KEY, JSON.stringify(ITEMS)); } catch (e) {} }
+  let ITEMS = loadItems();
+  // One-time, additive-only migration -- gated on a flag (not "ITEMS is empty"), so
+  // deleting every item later never re-triggers it and never duplicates. CRITICAL:
+  // never touches book33-events/book33-routines/book33-recurring-events themselves --
+  // this only ever ADDS book33-items; the three source stores come out of every run
+  // byte-for-byte unchanged, same as they went in.
+  // RECURRING_EVENTS folded in alongside the two stores originally scoped for this
+  // stage -- found live while confirming STEP 1 (the brief described "two parallel
+  // stores"; this is a genuine third, book33-recurring-events, recurring calendar
+  // EVENTS rather than personal routines). Confirmed with Linh before including it.
+  // Kept as its own `kind: "recur_event"` rather than folded into plain "event" --
+  // even though a generated OCCURRENCE from either array renders as kind:"event" on
+  // the calendar (recurring events display exactly like routines display as
+  // kind:"routine" -- a display concern, not a provenance one), collapsing the two
+  // TEMPLATE arrays' `kind` here would silently lose which real array
+  // (saveEvents() vs saveRecurringEvents()) a given item needs to write back to --
+  // exactly the kind of information a lossless Stage 1 exists to preserve, not erase.
+  // Its repeats mapping is identical to a routine's: recurringEventOccursOn() reads
+  // RECURRING_EVENTS items through the SAME schedulesOf(t) helper ROUTINE_TASKS uses
+  // (freq/schedules/weekdays, confirmed live), so `{freq: t.freq, weekdays:
+  // t.weekdays}` taken straight off the field, unnormalized, fits it exactly as
+  // written for routines -- no separate mapping needed.
+  (function migrateToItemsOnce() {
+    const FLAG = "book33-items-migrated";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    if (!ITEMS.length) {
+      ITEMS = [
+        ...EVENTS.map(e => ({ ...e, kind: "event", repeats: null })),
+        ...ROUTINE_TASKS.map(t => ({ ...t, kind: "routine", repeats: { freq: t.freq, weekdays: t.weekdays } })),
+        ...RECURRING_EVENTS.map(t => ({ ...t, kind: "recur_event", repeats: { freq: t.freq, weekdays: t.weekdays } })),
+      ];
+      saveItems();
+    }
+    try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+    console.log("book33-items migrated: " + ITEMS.length + " entries (" + EVENTS.length + " events + "
+      + ROUTINE_TASKS.length + " routines + " + RECURRING_EVENTS.length + " recurring events)");
+  })();
   // 2026-08-06: same family→personal reassignment as migrateFamilyTrackToPersonal()
   // above, for saved calendar events specifically.
   (function migrateFamilyEventsToPersonal() {
