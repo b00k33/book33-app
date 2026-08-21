@@ -21775,6 +21775,20 @@
     return null;
   }
 
+  // 2026-08-21 (universal Events/Routines system, Stage 2 of 3): guards resyncItems()
+  // (defined much further down, near ITEMS/EVENTS -- see its own comment) against a
+  // real crash found while wiring it into saveRoutines()/saveRecurringEvents() here.
+  // Several boot-time migrations below (e.g. the wedding-anniversary/marriage-checkin
+  // legacy-seed cleanup just past ROUTINE_TASKS's own declaration) call saveRoutines()
+  // synchronously at the TOP LEVEL, long before EVENTS/ITEMS are declared later in
+  // this same closure -- resyncItems() referencing EVENTS that early would throw
+  // (TDZ), crashing boot outright for anyone whose data still triggers one of those
+  // cleanups. Flipped true once EVENTS/ROUTINE_TASKS/RECURRING_EVENTS/ITEMS are ALL
+  // genuinely loaded (right after Stage 1's migration IIFE); resyncItems() is a no-op
+  // before that -- harmless, since every store this early is still being fixed up by
+  // boot-time migrations anyway, and the run once itemsSyncReady flips true always
+  // rebuilds ITEMS from each store's FINAL post-migration state regardless.
+  let itemsSyncReady = false;
   /* --- Routines: general recurring tasks, any life track ---
      freq: "once" | "daily" | "weekly" | "monthly" | "yearly" */
   const ROUTINE_KEY = "book33-routines";
@@ -21787,7 +21801,7 @@
     } catch (e) {}
     return [{ id: "laundry", title: "Laundry", track: "personal", category: "Home", freq: "weekly", weekday: 6, note: "" }];
   }
-  function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} saveWidgetDigest(); }
+  function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} saveWidgetDigest(); resyncItems(); }
   let ROUTINE_TASKS = loadRoutines();
   // one-time (2026-08-21, Quick-plan week STEP 2): seed the Saved-events library
   // from her existing recurring routines so it isn't empty on day one -- one entry
@@ -22142,7 +22156,7 @@
     try { const v = JSON.parse(localStorage.getItem(RECUR_EV_KEY)); return Array.isArray(v) ? v : []; }
     catch (e) { return []; }
   }
-  function saveRecurringEvents() { try { localStorage.setItem(RECUR_EV_KEY, JSON.stringify(RECURRING_EVENTS)); } catch (e) {} }
+  function saveRecurringEvents() { try { localStorage.setItem(RECUR_EV_KEY, JSON.stringify(RECURRING_EVENTS)); } catch (e) {} resyncItems(); }
   let RECURRING_EVENTS = loadRecurringEvents();
   const EV_TIME_OVR_KEY = "book33-event-time-overrides";
   function loadEvTimeOvr() {
@@ -24271,7 +24285,7 @@
       }));
     } catch (e) { return []; }
   }
-  function saveEvents(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {} saveWidgetDigest(); }
+  function saveEvents(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {} saveWidgetDigest(); resyncItems(); }
   function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveDone(map) { try { localStorage.setItem(DONE_KEY, JSON.stringify(map)); } catch (e) {} }
   // 2026-08-06 (Linh, outcomes spec): per-OCCURRENCE completion outcomes — keyed by the
@@ -24344,6 +24358,34 @@
     console.log("book33-items migrated: " + ITEMS.length + " entries (" + EVENTS.length + " events + "
       + ROUTINE_TASKS.length + " routines + " + RECURRING_EVENTS.length + " recurring events)");
   })();
+  // 2026-08-21 (universal Events/Routines system, Stage 2 of 3 -- keep ITEMS live,
+  // Linh: "make ITEMS a LIVE, always-accurate mirror"): rebuilds ITEMS wholesale from
+  // whatever EVENTS/ROUTINE_TASKS/RECURRING_EVENTS hold RIGHT NOW -- same mapping
+  // Stage 1's one-time migration used, RECURRING_EVENTS included per her call on that
+  // same question last stage. Wired into the end of saveEvents()/saveRoutines()/
+  // saveRecurringEvents() below (the three, and confirmed-ONLY-three, real write paths
+  // for their stores -- a repo-wide grep for direct localStorage.setItem on any of
+  // their keys found exactly one site per store, each already inside these functions),
+  // so every existing create/edit/delete path for any of them -- the event form, the
+  // routine editor, Quick-plan's booking, Hand-paint's confirm-to-schedule, the recurring-
+  // event template editor, all of it -- keeps ITEMS accurate with zero changes to any
+  // of those call sites. A full wholesale rebuild every save, not an id-matched merge:
+  // correct and simpler, per her own STEP 4 -- nothing reads ITEMS yet, and no ITEMS
+  // entry carries a field its source object doesn't already have, so there's nothing an
+  // in-place merge would preserve that a fresh rebuild would lose. Guarded by
+  // itemsSyncReady (see its own comment, next to ROUTINE_KEY) -- a no-op if called
+  // before all three source stores genuinely exist, which real boot-time migrations
+  // still running above this point can do.
+  itemsSyncReady = true;
+  function resyncItems() {
+    if (!itemsSyncReady) return;
+    ITEMS = [
+      ...EVENTS.map(e => ({ ...e, kind: "event", repeats: null })),
+      ...ROUTINE_TASKS.map(t => ({ ...t, kind: "routine", repeats: { freq: t.freq, weekdays: t.weekdays } })),
+      ...RECURRING_EVENTS.map(t => ({ ...t, kind: "recur_event", repeats: { freq: t.freq, weekdays: t.weekdays } })),
+    ];
+    saveItems();
+  }
   // 2026-08-06: same family→personal reassignment as migrateFamilyTrackToPersonal()
   // above, for saved calendar events specifically.
   (function migrateFamilyEventsToPersonal() {
