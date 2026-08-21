@@ -20060,8 +20060,25 @@
     const start = lmWeekStart || startOfWeek(TODAY);
     const d = addDays(start, day);
     const mode = modeById(modeId);
-    const s = minToTime(LM_SLOTS[lo]), e = minToTime(LM_SLOTS[hi] + LM_SLOT_MIN);
+    // 2026-08-21 (Linh: "i tried to add sleep and its not adding" -- painting into the
+    // grid's final 23:00-23:30 slot): LM_SLOTS[hi] + LM_SLOT_MIN is 1440 for the last
+    // slot, and minToTime(1440) wraps to "00:00" via its own `% 24` -- a real, deliberate
+    // rule for every OTHER minToTime() caller (a value that's genuinely the start of a
+    // new day), but wrong here since this end time is still describing THIS day. Same
+    // Math.min(_, 1439) clamp already used everywhere else in this file a real end-of-day
+    // value is computed (routine/recurring/chain effEnd, search "1439") -- not a new
+    // convention, not a minToTime() patch (every other caller's wraparound is correct).
+    const s = minToTime(LM_SLOTS[lo]), e = minToTime(Math.min(LM_SLOTS[hi] + LM_SLOT_MIN, 1439));
     const t = (title || "").trim() || mode.name;
+    // STEP 4: a paint gesture that would produce a non-positive-duration event must
+    // refuse, not silently write a broken record she can't see. With the clamp above,
+    // every real lo<=hi pair from the grid already produces e>s -- this can't actually
+    // fire from normal painting (LM_SLOTS never reaches 1439) -- but it's cheap
+    // insurance against any future change to LM_SLOTS' range or a malformed run, so
+    // it's kept rather than left as a silent assumption. No toast here: the caller
+    // (the pointerup handler below) is what decides the ONE toast a whole gesture
+    // shows, so this just signals "didn't create anything" via a null return.
+    if (toMin(e) <= toMin(s)) return null;
     EVENTS.push({
       id: uid(), date: keyOf(d), track: lmInferTrack(mode), title: t,
       icon: mode.emoji || "", kind: "event", allDay: false, start: s, end: e, mode: mode.id,
@@ -20648,10 +20665,18 @@
     const day = lmSelDay, modeId = lmArmedMode;
     lmSelDay = null; lmSelSlots = null;
     const runs = lmContiguousRuns(slots);
-    let lastMsg = null;
-    runs.forEach(([lo, hi]) => { lastMsg = lmCommitCreate(day, lo, hi, modeId, ""); });
+    let lastMsg = null, created = 0;
+    runs.forEach(([lo, hi]) => {
+      const msg = lmCommitCreate(day, lo, hi, modeId, "");
+      if (msg) { lastMsg = msg; created++; }
+    });
     renderLifeMap();
-    rewardToast(runs.length === 1 ? lastMsg : `Added ${runs.length} blocks`);
+    // STEP 4: exactly one toast for the whole gesture, whatever the mix of runs was --
+    // this branch (created===0) is the only user-visible trace of the guard above ever
+    // firing, so the refusal message lives here, not duplicated inside lmCommitCreate.
+    if (created === 0) rewardToast("That block has nowhere to go — try a shorter range.");
+    else if (created === 1 && runs.length === 1) rewardToast(lastMsg);
+    else rewardToast(`Added ${created} block${created === 1 ? "" : "s"}${created < runs.length ? " (some skipped)" : ""}`);
   });
   document.addEventListener("pointercancel", () => {
     if (!lmSelecting) return;
@@ -24627,6 +24652,29 @@
   function loadTodos() { try { return JSON.parse(localStorage.getItem(TODO_KEY) || "[]"); } catch (e) { return []; } }
   function saveTodos(list) { try { localStorage.setItem(TODO_KEY, JSON.stringify(list)); } catch (e) {} }
   let EVENTS = loadEvents();
+  // 2026-08-22 (Linh: "i tried to add sleep and its not adding" -- STEP 3, repairing
+  // data broken before the STEP 2 fix above): any EVENTS entry saved with end:"00:00"
+  // and a real start was a paint that reached the grid's last slot, back when
+  // lmCommitCreate() wrapped LM_SLOTS' final 1440 into "00:00" via minToTime()'s own
+  // midnight rule instead of clamping to 23:59 -- end before start, so it rendered
+  // nowhere (confirmed live: invisible on both Life Map and Day view). One-time,
+  // idempotent, same done-flag idiom as book33-items-migrated -- guarded so it can
+  // never run twice. Conservative on purpose: only the exact broken shape (end
+  // "00:00", a real start that isn't also "00:00") is rewritten, nothing else about
+  // the entry -- and nothing outside EVENTS -- is touched.
+  (function repairMidnightEndEventsOnce() {
+    const FLAG = "book33-midnight-end-repaired";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    let fixed = 0;
+    EVENTS.forEach(e => {
+      if (e.end === "00:00" && e.start && e.start !== "00:00" && toMin(e.start) !== null) {
+        e.end = "23:59";
+        fixed++;
+      }
+    });
+    if (fixed > 0) saveEvents(EVENTS);
+    try { localStorage.setItem(FLAG, "1"); } catch (err) {}
+  })();
   // 2026-08-21 (universal Events/Routines system, Stage 1 of 3 -- additive-only
   // migration, Linh: "I want Events and Routines to eventually be one real, unified
   // system"): a new, THIRD store that unions EVENTS/ROUTINE_TASKS/RECURRING_EVENTS
