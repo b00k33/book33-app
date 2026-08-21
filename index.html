@@ -17503,6 +17503,7 @@
             <button type="button" class="rtn-repeat-opt" data-repeat-quick="weekdays">Weekdays (Mon–Fri)</button>
             <button type="button" class="rtn-repeat-opt" data-repeat-quick="today">Every <span id="rtnRepeatTodayLbl"></span></button>
             <button type="button" class="rtn-repeat-opt" data-repeat-detail="interval">Every 2 days…</button>
+            <button type="button" class="rtn-repeat-opt" data-repeat-detail="sinceLastDone">Since it was last done…</button>
             <button type="button" class="rtn-repeat-opt" data-repeat-detail="weekly">Weekly on…</button>
             <button type="button" class="rtn-repeat-opt" data-repeat-detail="monthly">Monthly…</button>
             <button type="button" class="rtn-repeat-opt" data-repeat-detail="yearly">Yearly…</button>
@@ -21463,13 +21464,6 @@
     return true;
   }
   function routineOccursOn(t, date) {
-    // 2026-08-11 (hair wash rotation rebuild): hair-wash's cadence is a real freq
-    // (interval, edited via the normal Repeats picker), but whether it's due right
-    // now is an independent, self-adjusting lastDone+cadence threshold (hairIsDue),
-    // not a calendar-pattern match -- and it must never surface through this generic
-    // routine pipeline (Day timeline/streak/fitLink-crossref) or its Log/Skip'd
-    // occurrence would double-render alongside generatedFor's own dedicated push.
-    if (t.id === HAIR_ROUTINE_ID) return false;
     // she's toggled this routine off the calendar entirely (Linh 2026-07-27) — the
     // Routines table's calendar switch; blocks BEFORE extraDates too, since turning
     // a routine off means off, extra placements included
@@ -21536,7 +21530,42 @@
     // exists purely as a Habits-page tick target (see hbEligibleOn, which treats
     // every day as eligible for this freq specifically).
     if (t.freq === "count") return false;
+    // 2026-08-21 (hair-wash rebuild, "the always exactly one wash due next" rule
+    // made generic): due once intervalDays have passed since the routine's own
+    // MOST RECENT logged completion -- stays due, never resets on its own, until
+    // it's actually ticked done. Only ever asserted for TODAY: this freq has no
+    // fixed calendar slot to project forward or backward (unlike every other freq
+    // above, its next occurrence genuinely depends on when it gets logged, not on
+    // the calendar alone) -- see routineSinceLastDoneDue's own comment for the
+    // full reasoning, including why this still gives a correct, meaningful streak.
+    if (t.freq === "sinceLastDone") {
+      if (!t.intervalDays) return false;
+      if (keyOf(date) !== keyOf(TODAY)) return false;
+      return keyOf(TODAY) >= keyOf(routineSinceLastDoneDue(t, TODAY));
+    }
     return false;
+  }
+  // 2026-08-21: generic completion lookup for the sinceLastDone freq above -- most
+  // recent date STRICTLY BEFORE `asOf` where t's real occurrence id was ticked
+  // done. "Strictly before" (not on-or-before) matters: it's what lets the SAME due
+  // date stay true right through the day it's actually completed (so streakWithGrace
+  // credits that day), only flipping false starting the day after.
+  function routineLastDoneOnOrBefore(t, asOf) {
+    for (let i = 1; i <= 400; i++) {
+      const d = addDays(asOf, -i);
+      if (isDone(`rt-${t.id}-${keyOf(d)}`)) return d;
+    }
+    return null;
+  }
+  // the date a sinceLastDone routine becomes (or stays) due, evaluated purely from
+  // its own real completion history (isDone on its standard rt-<id>-<date> ids) --
+  // never a separate cached "lastDone" pointer, so it can't drift from what's
+  // actually ticked. No completion ever logged falls back to t.startDate (or
+  // `asOf` itself, so a brand-new routine with no start date reads due from day one).
+  function routineSinceLastDoneDue(t, asOf) {
+    const last = routineLastDoneOnOrBefore(t, asOf);
+    if (last) return addDays(last, t.intervalDays);
+    return t.startDate ? parseKey(t.startDate) : asOf;
   }
   // does t's chain put it on this date? True when its anchor runs that day (following
   // the anchor's own chain in turn — that's what lets A→B→C work), filtered by t's own
@@ -21823,6 +21852,7 @@
     // this is a no-op for the overwhelming majority of routines that don't use it.
     const endSuffix = t.freq === "once" ? "" : rtnDateRangeSuffix(t.startDate, t.endDate);
     if (t.freq === "interval") return `Every ${t.intervalDays} ${intervalUnitLabel(t.intervalUnit, t.intervalDays)}` + endSuffix;
+    if (t.freq === "sinceLastDone") return `Every ${t.intervalDays} ${intervalUnitLabel(t.intervalUnit, t.intervalDays)} since last done` + endSuffix;
     if (t.freq === "numMoney") return "Money days · 8 / 28 (wkdays)";
     if (t.freq === "count") return `${t.weeklyTarget || 5}×/week`;
     if (t.freq === "weekly") {
@@ -21879,6 +21909,11 @@
       const horizon = (unit === "years" ? 366 : 31) * t.intervalDays + 31;
       for (let i = 0; i <= horizon; i++) { const d = addDays(from, i); if (routineOwnPatternOn(t, d)) return d; }
       return null;
+    }
+    if (t.freq === "sinceLastDone") {
+      if (!t.intervalDays) return null;
+      const due = routineSinceLastDoneDue(t, from);
+      return keyOf(due) > keyOf(from) ? due : from;
     }
     return null;
   }
@@ -22417,17 +22452,12 @@
   }
   const hairRoutine = () => ROUTINE_TASKS.find(t => t.id === HAIR_ROUTINE_ID);
   const hairCadenceDays = () => { const rt = hairRoutine(); return (rt && rt.intervalDays > 0) ? rt.intervalDays : 2; };
-  // due once cadenceDays have passed since the last logged wash -- STAYS due (never
-  // resets on its own) until she actually Logs or Skips, so a late day never quietly
-  // loses its turn the way a fixed calendar pattern would
-  // 2026-08-19 (Linh, "snooze for the next day"): a snoozeDate, when it's still in
-  // the future, wins over the normal lastDone+cadence maths -- lets "not today,
-  // tomorrow instead" push the due date out by exactly one day without touching
-  // HAIRD.lastDone (which would shift the whole rotation's future cadence too).
-  function hairDueDate() {
-    if (HAIRD.snoozeDate && keyOf(TODAY) < HAIRD.snoozeDate) return parseKey(HAIRD.snoozeDate);
-    return HAIRD.lastDone ? addDays(parseKey(HAIRD.lastDone), hairCadenceDays()) : TODAY;
-  }
+  // 2026-08-21 (hair-wash rebuild): now a thin wrapper on the generic sinceLastDone
+  // engine (routineSinceLastDoneDue reads real completion history off hair-wash's own
+  // standard rt-hair-wash-<date> ids, same as any other routine) -- HAIRD.lastDone is
+  // no longer the scheduling source of truth, just a mirror Upkeep's Hair ring reads
+  // (see hairLogWash/hairUndoLog, still stamping it on every completion, unchanged).
+  function hairDueDate() { return routineSinceLastDoneDue(hairRoutine(), TODAY); }
   function hairIsDue(date) { return keyOf(date) >= keyOf(hairDueDate()); }
   // ✓ Log: stamp today done, append history, advance the pointer to the next wash.
   function hairLogWash(date) {
@@ -22439,23 +22469,15 @@
     if (HAIRD.history.length > 200) HAIRD.history = HAIRD.history.slice(-200);
     HAIRD.lastDone = k;
     HAIRD.pos = (HAIRD.pos + 1) % HAIRD.rotation.length;
-    HAIRD.snoozeDate = null;
     saveHairData();
   }
-  // Skip: advance the pointer WITHOUT stamping lastDone -- the clock doesn't reset,
-  // so it's still (still) due right after, just with the next wash up.
+  // "Not this one" (was Skip): advance the rotation pointer only -- what today's wash
+  // is CALLED changes, but due-ness (now the generic sinceLastDone engine, driven by
+  // real completion history) is untouched, exactly like every other display-only
+  // rotation change.
   function hairSkipWash() {
     if (!HAIRD.rotation.length) return;
     HAIRD.pos = (HAIRD.pos + 1) % HAIRD.rotation.length;
-    HAIRD.snoozeDate = null;
-    saveHairData();
-  }
-  // 2026-08-19 (Linh, "snooze for the next day"): the one-tap alternative to typing a
-  // date hair wash was never going to accept (see hairDueDate() above + the
-  // HAIR_ROUTINE_ID note in commitTlMove, further down). Always exactly tomorrow, not
-  // an arbitrary day -- matches what she actually asked for.
-  function hairSnoozeTomorrow() {
-    HAIRD.snoozeDate = keyOf(addDays(TODAY, 1));
     saveHairData();
   }
   // un-ticking the checkbox reverses a same-day Log exactly (rewinds pos, restores
@@ -22482,11 +22504,11 @@
     return names.join(" → ");
   }
   // the hair-wash routine's OWN Routines-list row (List view) -- due status + "N of
-  // M in rotation" + the same Log/Skip actions the calendar occurrence offers, in
-  // place of the generic dow-dots/freq-label every other routine row shows (spec:
-  // "the Routines-list row ... must all offer Log/Skip"). Table view (Board) keeps
-  // its plain routineFreqLabel() cell -- "every N days" already reads correctly
-  // there without a special case, and its columns have no room for these actions.
+  // M in rotation" + the same Log/"Not this one" actions the calendar occurrence
+  // offers, in place of the generic dow-dots/freq-label every other routine row
+  // shows. Table view (Board) keeps its plain routineFreqLabel() cell -- "every N
+  // days since last done" already reads correctly there without a special case, and
+  // its columns have no room for these actions.
   function hairRoutineRowHtml(t) {
     const w = hairCurrentWash();
     const due = hairIsDue(TODAY);
@@ -22506,7 +22528,7 @@
         ${next ? `<div class="rtn-meta"><span class="rtn-meta-time">then: ${esc(next)}</span></div>` : ""}
         <div class="rtn-hair-row-acts">
           <button type="button" class="add-btn" data-hairrow-log="${t.id}">✓ Log this wash</button>
-          <button type="button" class="add-btn" data-hairrow-skip="${t.id}">Skip</button>
+          <button type="button" class="add-btn" data-hairrow-not-this="${t.id}">Not this one</button>
         </div>
       </div>
       <button type="button" class="rtn-cal-toggle" data-rtn-cal="${t.id}" aria-pressed="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button>
@@ -22608,9 +22630,8 @@
         title: (src && src.title) || "💧 Hair wash",
         track: (src && src.track) || HAIR.track,
         category: "Beauty",
-        freq: "interval", intervalUnit: "days",
+        freq: "sinceLastDone", intervalUnit: "days",
         intervalDays: (src && src.intervalDays) || 2,
-        anchor: keyOf(TODAY),
         calOn: src ? src.calOn !== false : true,
         note: (src && src.note) || "",
       });
@@ -22623,6 +22644,26 @@
     const bd = ROUTINE_TASKS.find(t => t.id === "beauty-blowdry");
     if (bd && bd.category !== "Skin & Nails") { bd.category = "Skin & Nails"; changed = true; }
     if (changed) saveRoutines();
+    try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+  })();
+
+  // one-time (2026-08-21, "carve-outs made obsolete" rebuild): the block above
+  // already ran on this install (its own FLAG is set), so it created the ONE
+  // rotation routine on the OLD "interval" freq (fixed anchor date + step) -- that
+  // never fit "always due, never resets until logged" (it needed hairIsDue's own
+  // bespoke lastDone+cadence check bolted on beside it). Flip already-migrated data
+  // onto the new sinceLastDone freq, which now IS that exact rule, generically.
+  // Pure data-shape fixup (same one-time-flag pattern as migrateHairToRotation
+  // above) -- not a scheduling carve-out; nothing here reads t.id.
+  (function migrateHairToSinceLastDone() {
+    const FLAG = "book33-rtn-hair-sincelastdone-migrated";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    const rt = ROUTINE_TASKS.find(t => t.id === HAIR_ROUTINE_ID);
+    if (rt && rt.freq !== "sinceLastDone") {
+      rt.freq = "sinceLastDone";
+      delete rt.anchor;
+      saveRoutines();
+    }
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
   })();
 
@@ -23210,10 +23251,10 @@
     const ws = startOfWeek(TODAY);
     const rows = HAIRD.history
       .filter(h => { const d = parseKey(h.date); return d >= ws && d <= TODAY; })
-      .map(h => ({ key: `hair-${h.date}`, date: parseKey(h.date), name: (hairWashById(h.wash) || {}).name || "Wash", done: true }));
+      .map(h => ({ key: `rt-${HAIR_ROUTINE_ID}-${h.date}`, date: parseKey(h.date), name: (hairWashById(h.wash) || {}).name || "Wash", done: true }));
     if (!rows.some(r => keyOf(r.date) === keyOf(TODAY)) && hairIsDue(TODAY)) {
       const w = hairCurrentWash();
-      rows.push({ key: `hair-${keyOf(TODAY)}`, date: TODAY, name: w ? w.name : "Wash", done: false });
+      rows.push({ key: `rt-${HAIR_ROUTINE_ID}-${keyOf(TODAY)}`, date: TODAY, name: w ? w.name : "Wash", done: false });
     }
     rows.sort((a, b) => a.date - b.date);
     return rows;
@@ -23284,43 +23325,6 @@
   const isGhostItem = e => !!(e && (e.ghostSkip || e.ghostMoved));
   function generatedFor(date) {
     const out = [], k = keyOf(date);
-    // 2026-08-11 (rotation rebuild): ONE hair-wash routine now, not 3 independently-
-    // scheduled tiers -- "is it due" isn't a calendar pattern (routineOccursOn
-    // deliberately excludes it, see its own comment), it's a self-adjusting
-    // lastDone+cadence threshold that STAYS due until she Logs or Skips. That only
-    // ever means something for TODAY, so (unlike the old per-tier system) this
-    // never projects a wash onto past/future dates -- Week/Month calendars simply
-    // don't carry a hair cell; Log/Skip on today's occurrence is the one place this
-    // is decided, same as the acceptance spec's "today's wash + steps + due status".
-    const hrt = hairRoutine();
-    if (hrt && hrt.calOn !== false && (k === keyOf(TODAY) || (HAIRD.snoozeDate && k === HAIRD.snoozeDate))) {
-      const w = hairWashById(hairWashIdFor(date));
-      if (w) {
-        const due = hairIsDue(date);
-        const dueIn = due ? 0 : dayDiff(hairDueDate(), date);
-        // 2026-08-17 (Linh: "i can't see my hair wash event" -- the editor's own
-        // Start/How-long fields save real data that nothing ever read; the Routines
-        // row and this calendar item both hardcoded allDay regardless): a real
-        // Start now renders as a real timed block, same as every other routine,
-        // instead of an all-day chip that doesn't match what the editor promises.
-        // No Start (or "Remove time" in the editor) still falls back to all-day --
-        // that's still a valid state, not an error.
-        const hasTime = !!hrt.start;
-        out.push({
-          id: `hair-${k}`, generated: true, habit: w.id, date: k,
-          track: hrt.track, category: HAIR.category, title: `${w.icon} ${w.name} wash`,
-          note: due ? "" : `Due in ${dueIn} day${dueIn === 1 ? "" : "s"}`,
-          locPath: HAIR.locPath,
-          steps: w.steps.map(s => ({ text: s.name, min: s.min, productId: s.productId, noteId: s.noteId })),
-          // fromRoutine + a real rtTaskId (unlike the old per-tier items, which had
-          // none): qualifies for the "Also today" allDay exception below AND the
-          // .ics export's routine lookup, which silently dropped every hair
-          // occurrence before (no rtTaskId to resolve).
-          fromRoutine: true, rtTaskId: HAIR_ROUTINE_ID, hairDue: due, hairNext: hairRotationPreview(),
-          allDay: !hasTime, start: hasTime ? hrt.start : "", end: hasTime ? (hrt.end || "") : "",
-        });
-      }
-    }
     familyTasksOn(date).forEach(t => {
       out.push({
         id: `fam-${t.id}-${keyOf(date)}`, generated: true, date: keyOf(date),
@@ -23692,6 +23696,32 @@
     });
     // (the nightly 28 Money Hour renders as a green power-block on the timeline
     //  — see POWER_HOURS — rather than as a generated event card)
+    // 2026-08-21 (hair-wash rebuild): hair-wash's occurrence is now built by the
+    // generic per-routine loop above, same as any other routine (real rt-hair-wash-
+    // <date> id, real Repeats/streak support) -- everything about WHETHER/WHEN it
+    // exists (due-ness, id, moves) is fully decided there. All that's left is
+    // display: which wash today's occurrence actually IS (rotation-dependent, so it
+    // can't live on the routine template itself). This overlay only ever touches
+    // title/steps/note/locPath/hairDue/hairNext on the object the generic loop
+    // already produced -- it never creates the occurrence, never changes its id, and
+    // never runs on a moved/skipped ghost (isGhostItem) or on any day but today,
+    // since a wash-type rotation only ever means something for the ONE day it's due.
+    if (k === keyOf(TODAY)) {
+      const hairOcc = out.find(o => o.rtTaskId === HAIR_ROUTINE_ID && o.date === k && !isGhostItem(o));
+      if (hairOcc) {
+        const w = hairWashById(hairWashIdFor(TODAY));
+        if (w) {
+          const due = hairIsDue(TODAY);
+          const dueIn = due ? 0 : dayDiff(hairDueDate(), TODAY);
+          hairOcc.title = `${w.icon} ${w.name} wash`;
+          hairOcc.note = due ? "" : `Due in ${dueIn} day${dueIn === 1 ? "" : "s"}`;
+          hairOcc.locPath = HAIR.locPath;
+          hairOcc.steps = w.steps.map(s => ({ text: s.name, min: s.min, productId: s.productId, noteId: s.noteId }));
+          hairOcc.hairDue = due;
+          hairOcc.hairNext = hairRotationPreview();
+        }
+      }
+    }
     return out;
   }
 
@@ -24495,7 +24525,7 @@
   function bestRoutineStreak() {
     let best = null;
     ROUTINE_TASKS.forEach(t => {
-      if (t.calOn === false || t.id === HAIR_ROUTINE_ID) return;
+      if (t.calOn === false) return;
       const streak = streakWithGrace(d => routineOccursOn(t, d), d => isDone(`rt-${t.id}-${keyOf(d)}`), 200);
       if (streak >= 3 && (!best || streak > best.streak)) best = { title: t.title, streak };
     });
@@ -24758,16 +24788,17 @@
   // routine instance — routines never live in EVENTS, so this is the only reliable way
   // tickTask can see a routine's fitness link without re-deriving it from the id string.
   function tickTask(id, on, fitLink, fitDate) {
-    // ✓ Log this wash: the Also-today checkbox for the hair-wash occurrence
-    // (id = `hair-${dateKey}`, see generatedFor) -- stamps lastDone + advances the
-    // rotation pointer on tick, exactly reverses (hairUndoLog) on un-tick, same as
-    // every other occurrence's tick/untick symmetry. No EVENTS entry exists for this
-    // id (it's generated, not stored), so it never reaches the branches below.
-    if (id.startsWith("hair-")) {
-      const date = parseKey(id.slice(5));
+    // ✓ Log this wash: hair-wash's tick is a real routine occurrence (id
+    // `rt-hair-wash-<date>`, see generatedFor) like any other -- toggleDone below
+    // already handles the done-state itself. This ADDITIONALLY stamps
+    // HAIRD.lastDone + advances the rotation pointer on tick, exactly reverses
+    // (hairUndoLog) on un-tick -- checking WHICH routine by its real task id, not
+    // its id format, so it falls through to the normal path below same as anything
+    // else, rather than replacing it.
+    const occForHair = parseOccId(id);
+    if (occForHair && occForHair.taskId === HAIR_ROUTINE_ID) {
+      const date = occForHair.date ? parseKey(occForHair.date) : TODAY;
       if (on) hairLogWash(date); else hairUndoLog(date);
-      toggleDone(id, on);
-      return;
     }
     const ev = EVENTS.find(x => x.id === id);
     // 2026-08-19 (upkeep suggestions): an event created by accepting an upkeep
@@ -25853,18 +25884,6 @@
     const end = minToTime(Math.min(toMin(timeStr) + dur, 1439));
     if (e.id.indexOf("fitcal-") === 0) {
       if (!moveFitLogSession(e.id.slice(7), e.date, dateKey, timeStr, dur)) return;
-    } else if (e.rtTaskId === HAIR_ROUTINE_ID) {
-      // drag-to-reschedule for Regular wash (2026-08-20): mirrors commitTlMove()'s own
-      // hair-wash branch — hair-wash is ONE routine, not per-date occurrences, so
-      // there's no override key to write (unlike the branch just below); the dropped
-      // time goes straight onto the routine itself. Drag is same-day only already
-      // (existing constraint), so unlike the Move panel there's no cross-day case to
-      // reject here.
-      const rt = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
-      if (!rt) return;
-      rt.start = timeStr;
-      if (end) rt.end = end;
-      saveRoutines();
     } else if (e.fromRoutine && e.rtTaskId) {
       // e.id never changes across repeated moves (see generatedFor()'s injected pass —
       // it's what lets done-state/notes keep following the occurrence) and it CARRIES
@@ -26596,15 +26615,6 @@
   function refreshTlMoveConfirm() {
     const btn = document.getElementById("tlMoveConfirm");
     if (!btn) return;
-    // 2026-08-19 (hair-wash snooze, found live): this live-refresh path is shared by
-    // every item's move panel, so it needs the SAME hair-wash check renderTlDetailBody
-    // used for the button's initial label (isHairWashMove there) -- without it, typing
-    // a time silently overwrote "Save new time" back to routine-scope wording ("Move
-    // the routine to 7:30am") on the very first keystroke, even though there's no
-    // #tlMoveDate field left in this panel to make that wording correct. Reads the
-    // open item off the button's own data-tl-move-go rather than adding new state.
-    const openEv = TL_ITEMS_BY_ID[btn.dataset.tlMoveGo];
-    if (openEv && openEv.rtTaskId === HAIR_ROUTINE_ID) { btn.textContent = "Save new time"; return; }
     const dEl = document.getElementById("tlMoveDate");
     const tEl = document.getElementById("tlMoveTime");
     btn.textContent = tlMoveConfirmText(dEl ? dEl.value : "", tEl ? tEl.value : "", tlDetailPanel === "copy", !!dEl);
@@ -26667,6 +26677,16 @@
       // chooser (this event / this and following / all events) instead of confirm().
       actions.push(row(`data-edit="${e.recurId}"`, "Edit series", "✎"));
       actions.push(row(`data-ev-occ-del="${e.id}" title="Delete — choose how much of the series"`, "Delete", "🗑", true));
+    } else if (e.rtTaskId === HAIR_ROUTINE_ID) {
+      // hair-wash gets one extra action the generic routine branch below doesn't
+      // offer: swapping today's wash TYPE without touching due-ness/id/move at all
+      // (that's the rotation's whole "only ever a display concern" contract — see
+      // hairSkipWash). Deliberately not worded "Skip" (reads like delete/dismiss).
+      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
+      const nextId = HAIRD.rotation.length > 1 ? HAIRD.rotation[(HAIRD.pos + 1) % HAIRD.rotation.length] : null;
+      const nextW = nextId ? hairWashById(nextId) : null;
+      if (nextW) actions.push(row(`data-hair-not-this="${e.id}"`, `Not this one — next up: ${nextW.name}`, "↻"));
+      actions.push(row(`data-rt-occ-del="${e.id}" title="Delete just this occurrence"`, "Delete", "🗑", true));
     } else if (e.rtTaskId) {
       // 2026-08-04 (Linh, popup declutter mockup: pencil stays in the header): this
       // pencil used to jump straight to the routine TEMPLATE editor -- SUPERSEDED, it
@@ -26752,8 +26772,10 @@
     // 2026-08-15 fix (C4): parseOccId(e.id) is part of the test now — see the long note
     // at the action pair below. Everything gated on isRtnOcc (the Repeats label, the
     // per-day override lookup, Next-after-this, Streak, the Skip button) needs a real
-    // "rt-<taskId>-<date>" occurrence to be meaningful, and the hair-wash occurrence
-    // ("hair-<date>") satisfied fromRoutine + rtTaskId without being one.
+    // "rt-<taskId>-<date>" occurrence to be meaningful. 2026-08-21 (hair-wash rebuild):
+    // hair-wash's occurrence now IS one of those, so it correctly gets isRtnOcc=true
+    // and all of the above for free -- no longer the gap this fix was originally
+    // written to plug for it specifically.
     const isRtnOcc = !!(e.fromRoutine && e.rtTaskId && parseOccId(e.id));
     const rtnT = isRtnOcc ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
     // 2026-08-04: same real-or-derived end as the calendar block (itemEndMin), so
@@ -26988,13 +27010,6 @@
     const moveScopeable = moveOpen && isRtnOcc && !!rtnT;
     const moveDayScope = !moveScopeable || tlMoveScope !== "routine";
     const moveVerb = copyOpen ? "Add to" : "Move to";
-    // 2026-08-19 (Linh, "reschedule to a later time same day or snooze for the next
-    // day"): hair wash never accepted an arbitrary date anyway -- it always lands on
-    // its own next-due day (hairDueDate(), above) -- so the date field here was a dead
-    // end dressed up as a real control. Swapped for the one thing that IS real: a
-    // one-tap "not today, tomorrow instead" snooze. The time fields below are
-    // untouched -- changing today's time still works exactly as before.
-    const isHairWashMove = moveOpen && !copyOpen && e.rtTaskId === HAIR_ROUTINE_ID;
     const moveField = (id, cls, type, label, value, extra) => `<label class="tl-move-fld">
           <span class="tl-move-fld-lbl">${esc(label)}</span>
           <!-- .field-bare is the ONE FIELD LANGUAGE law's own documented escape hatch (see
@@ -27015,9 +27030,7 @@
           <button type="button" class="ovr-scope-opt" data-move-scope="routine" aria-pressed="${!moveDayScope}">The routine<span class="sub">${esc(schedLbl)}</span></button>
         </div>
         <div class="tl-move-hint">${esc(moveScopeHint(e, rtnT, occDateD, moveDayScope))}</div>` : ""}
-        ${isHairWashMove ? `<button type="button" class="tl-move-snooze" data-tl-hair-snooze="1">😴 Not today — remind me tomorrow instead</button>
-        <div class="tl-move-hint">It always lands on its own next-due day, so this is the one thing that can move — everything below just changes today's time.</div>`
-          : moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
+        ${moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
         <div class="tl-detail-move-row">
           ${moveField("tlMoveTime", "tl-move-time", "time", "Starts", moveDayScope ? e.start : (rtnT && rtnT.start) || e.start)}
           ${moveField("tlMoveEnd", "tl-move-time", "time", "Ends", moveDayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : ((rtnT && rtnT.end) || e.end || ""))}
@@ -27028,7 +27041,7 @@
              (Cancel/reopen) always starts clean; .tl-detail-extra's own flex gap spaces
              it without an extra margin. -->
         <div class="tl-move-error" id="tlMoveError" hidden></div>
-        <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${isHairWashMove ? "Save new time" : esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
+        <button type="button" class="tl-move-confirm" id="tlMoveConfirm" data-tl-move-go="${e.id}">${esc(tlMoveConfirmText(moveDayScope ? e.date : "", moveDayScope ? "" : ((rtnT && rtnT.start) || e.start), copyOpen, moveDayScope))}</button>
       </div>` : "";
     // 2026-08-03 (Linh: "let me RATE Pilates out of 5 ... save it to my fitness log"):
     // only renders once a real FIT_LOG session exists for this item (resolveFitSessionFor)
@@ -27976,13 +27989,13 @@
       refreshOpenTlDetail();
       return;
     }
-    // 2026-08-19 (Linh, "snooze for the next day"): today's occurrence stops showing
-    // as due, tomorrow's shows up due instead (see hairDueDate() + the generatedFor
-    // gate above) -- no date to type, no confirm step beyond this one tap.
-    const hairSnooze = e.target.closest("[data-tl-hair-snooze]");
-    if (hairSnooze) {
+    // "Not this one — next up: X" (renderTlDetailHeadActions): swaps today's wash
+    // type only -- due-ness/id/move are untouched, exactly like every other
+    // rotation-only change (see hairSkipWash).
+    const hairNotThis = e.target.closest("[data-hair-not-this]");
+    if (hairNotThis) {
       e.stopPropagation();
-      hairSnoozeTomorrow();
+      hairSkipWash();
       tlDetailPanel = null;
       closeTlDetail();
       renderDay();
@@ -28091,24 +28104,6 @@
       rt.start = startVal;
       const subs = Array.isArray(rt.subtasks) ? rt.subtasks.filter(s => s && s.text) : [];
       if (!subs.length && endVal) rt.end = endVal;
-      saveRoutines();
-      tlDetailPanel = null;
-      closeTlDetail();
-      renderDay();
-      return;
-    }
-    // 2026-08-19 (Linh, "reschedule to a later time same day or snooze for the next
-    // day"): hair wash's date field is gone from the panel now (see moveHtml, and the
-    // new snooze button/hairSnoozeTomorrow() for the "different day" case) -- this
-    // branch only ever needs to save the new time, so it has to run BEFORE the
-    // date-format check below, which would otherwise always fail since #tlMoveDate no
-    // longer exists in the DOM for this item. SUPERSEDES the 18 Aug fix just below,
-    // which taught this branch to show an error instead of silently failing when the
-    // date changed -- now there's no date field for it to disagree with in the first
-    // place.
-    if (!copy && rt && rt.id === HAIR_ROUTINE_ID) {
-      rt.start = startVal;
-      if (endVal) rt.end = endVal;
       saveRoutines();
       tlDetailPanel = null;
       closeTlDetail();
@@ -30788,7 +30783,7 @@
             ${kind === "event" ? `<span class="kind-sq" title="Event"></span>`
               : `<input type="checkbox" class="tick" data-track="${e.track}" data-tick="${e.id}" ${done ? "checked" : ""} aria-label="Mark ${esc(e.title)} done">`}
             <span class="note-text">${e.icon ? `<span class="p-icon">${e.icon}</span>` : ""}${esc(stagedLabel(e))}${stageChip(e)}${kind === "event" ? "" : estChip(e)}${e.note ? `<span class="loc">— ${esc(e.note)}</span>` : ""}${locOf(e).length ? `<span class="loc">— ${locOf(e).map(esc).join(" › ")}</span>` : ""}${e.hairNext ? `<span class="loc">then: ${esc(e.hairNext)}</span>` : ""}${e.generated ? '<span class="recur">↻</span>' : ""}</span>
-            ${e.id.startsWith("hair-") ? `<button type="button" class="tl-edit" style="position:static;opacity:1;margin-left:auto" data-hair-skip="${e.id}" aria-label="Skip this wash">Skip</button>`
+            ${e.rtTaskId === HAIR_ROUTINE_ID ? `<button type="button" class="tl-edit" style="position:static;opacity:1;margin-left:auto" data-hair-not-this="${e.id}" aria-label="Not this wash">Not this one</button>`
               : e.generated ? "" : `<button class="tl-edit" style="position:static;opacity:1" data-edit="${e.id}" aria-label="Edit ${esc(e.title)}">✎</button>
               <button class="tl-del" style="position:static;opacity:1;margin-left:auto" data-del="${e.id}" aria-label="Remove ${esc(e.title)}">×</button>`}
           </div>`;
@@ -31092,12 +31087,13 @@
     });
     g += `<div class="hb-cnth">WK</div>`;
     HB_TRACKS().forEach(tk => {
-      // hair-wash's real progress lives in HAIRD.history/the rotation position, not a
-      // per-date calendar pattern (routineOccursOn deliberately excludes it, same
-      // reason bestRoutineStreak does -- see its own comment) -- it isn't a fit for
-      // this grid's "N of M days matched a pattern" shape, so it doesn't get a row
-      // here; Log/Skip on its own Routines-list row is where it's tracked instead.
-      const list = ROUTINE_TASKS.filter(t => t.track === tk && t.id !== HAIR_ROUTINE_ID);
+      // 2026-08-21: a sinceLastDone routine (hair-wash today, potentially others
+      // later) has no fixed calendar pattern to check days against -- it's only
+      // ever due/not-due as of TODAY, which doesn't fit this grid's "N of M days
+      // matched a pattern" shape, so it's excluded on freq, not on identity. Its
+      // real progress (rotation position/history) is tracked on its own
+      // Routines-list row instead (hairRoutineRowHtml).
+      const list = ROUTINE_TASKS.filter(t => t.track === tk && t.freq !== "sinceLastDone");
       if (!list.length) return;
       g += `<div class="hb-grp">${esc(trackLabel(tk))}</div>`;
       list.forEach(t => {
@@ -31133,8 +31129,8 @@
     let g = `<div class="hb-mgrid" style="grid-template-columns:96px repeat(${dim},1fr)"><div></div>`;
     for (let d = 1; d <= dim; d++) g += `<div class="hb-mdh">${d === 1 || d % 5 === 0 ? d : ""}</div>`;
     HB_TRACKS().forEach(tk => {
-      // hair-wash excluded -- see the matching comment in renderHbWeek above
-      ROUTINE_TASKS.filter(t => t.track === tk && t.id !== HAIR_ROUTINE_ID).forEach(t => {
+      // sinceLastDone routines excluded -- see the matching comment in renderHbWeek above
+      ROUTINE_TASKS.filter(t => t.track === tk && t.freq !== "sinceLastDone").forEach(t => {
         g += `<div class="hb-mhl" data-hb-edit="${t.id}">${esc(t.title)}</div>`;
         for (let d = 1; d <= dim; d++) {
           const dt = new Date(y, m, d), k = keyOf(dt), today = k === tKey;
@@ -34301,7 +34297,7 @@
     const host = document.getElementById("todayChecklist");
     if (!host) return;
     const wanted = generatedFor(TODAY).filter(e => !e.preview && (
-      e.id.startsWith("hair-") || e.id.startsWith("rt-beauty-blowdry-") ||
+      e.id.startsWith("rt-hair-wash-") || e.id.startsWith("rt-beauty-blowdry-") ||
       e.id.startsWith("rt-beauty-skincareAM-") || e.id.startsWith("rt-beauty-skincarePM-") ||
       e.id.startsWith("rt-beauty-manicure-") || e.id.startsWith("supp-")));
     host.innerHTML = wanted.length ? wanted.map(e => {
@@ -44074,6 +44070,11 @@
       const unit = document.getElementById("rtnIntervalUnit").value;
       return `Every ${n} ${intervalUnitLabel(unit, n)}` + endSuffix;
     }
+    if (rtnFreq === "sinceLastDone") {
+      const n = document.getElementById("rtnIntervalDays").value || 2;
+      const unit = document.getElementById("rtnIntervalUnit").value;
+      return `Every ${n} ${intervalUnitLabel(unit, n)} since last done` + endSuffix;
+    }
     if (rtnFreq === "asNeeded") return "As needed — no schedule";
     return "";
   }
@@ -44098,7 +44099,7 @@
     document.getElementById("rtnWeeklyField").hidden = rtnFreq !== "weekly";
     document.getElementById("rtnWeekIntervalField").hidden = rtnFreq !== "weekly";
     document.getElementById("rtnSchedExtraField").hidden = rtnFreq !== "weekly";
-    document.getElementById("rtnIntervalField").hidden = rtnFreq !== "interval";
+    document.getElementById("rtnIntervalField").hidden = rtnFreq !== "interval" && rtnFreq !== "sinceLastDone";
     document.getElementById("rtnAnchorField").hidden = rtnFreq !== "interval";
     document.querySelectorAll("#rtnFreqPicker .track-opt").forEach(b =>
       b.setAttribute("aria-pressed", String(b.dataset.freq === rtnFreq)));
@@ -44293,6 +44294,7 @@
     document.getElementById("rtnRepeatStep2").hidden = false;
     document.getElementById("rtnFreqGroup").hidden = which !== "custom";
     if (which === "interval") rtnFreq = "interval";
+    else if (which === "sinceLastDone") rtnFreq = "sinceLastDone";
     else if (which === "weekly") rtnFreq = "weekly";
     else if (which === "monthly") rtnFreq = "monthly";
     else if (which === "yearly") rtnFreq = "yearly";
@@ -45530,6 +45532,9 @@
         document.getElementById("rtnIntervalDays").value = task.intervalDays || 2;
         document.getElementById("rtnIntervalUnit").value = task.intervalUnit || "days";
         document.getElementById("rtnAnchorDate").value = task.anchor || "";
+      } else if (task.freq === "sinceLastDone") {
+        document.getElementById("rtnIntervalDays").value = task.intervalDays || 2;
+        document.getElementById("rtnIntervalUnit").value = task.intervalUnit || "days";
       }
       syncRtnFreqFields();
       rtnExtraDates = Array.isArray(task.extraDates) ? task.extraDates.slice() : [];
@@ -46079,6 +46084,12 @@
       if (!anchor) { document.getElementById("rtnAnchorDate").focus(); return; }
       task.intervalDays = n; task.anchor = anchor;
       task.intervalUnit = document.getElementById("rtnIntervalUnit").value;
+    } else if (rtnFreq === "sinceLastDone") {
+      const n = parseInt(document.getElementById("rtnIntervalDays").value, 10);
+      if (!n || n < 1) { document.getElementById("rtnIntervalDays").focus(); return; }
+      task.intervalDays = n;
+      task.intervalUnit = document.getElementById("rtnIntervalUnit").value;
+      delete task.anchor;
     }
 
     // Matches the Table view's own Phase-cell editor semantics exactly (rtgEditCell's
@@ -47235,20 +47246,20 @@
       reRenderCurrent();
       return;
     }
-    // Skip this wash (Also-today row) — advances the rotation pointer WITHOUT
+    // "Not this one" (Also-today row) — advances the rotation pointer WITHOUT
     // logging/stamping lastDone, so it's still due right after, just with the next
     // wash in the queue up next. See hairSkipWash's own comment for why this doesn't
     // touch the due-clock the way Log (the checkbox tick, via tickTask) does.
-    const hairSkip = e.target.closest("[data-hair-skip]");
-    if (hairSkip) { hairSkipWash(); renderDay(); return; }
-    // same Log/Skip actions, inline on the hair-wash routine's OWN Routines-list row
-    // (spec: "the Routines-list row ... must all offer ✓ Log this wash, Skip") --
-    // Log routes through tickTask so the Also-today checkbox for today's occurrence
-    // stays in sync (same DONE[] flag either surface ticks).
+    const hairNotThisRow = e.target.closest("[data-hair-not-this]");
+    if (hairNotThisRow) { hairSkipWash(); renderDay(); return; }
+    // same Log/"Not this one" actions, inline on the hair-wash routine's OWN
+    // Routines-list row -- Log routes through tickTask (real rt-hair-wash-<date> id)
+    // so the Also-today checkbox for today's occurrence stays in sync (same DONE[]
+    // flag either surface ticks).
     const hairRowLog = e.target.closest("[data-hairrow-log]");
-    if (hairRowLog) { e.stopPropagation(); tickTask(`hair-${keyOf(TODAY)}`, true); reRenderCurrent(); return; }
-    const hairRowSkip = e.target.closest("[data-hairrow-skip]");
-    if (hairRowSkip) { e.stopPropagation(); hairSkipWash(); reRenderCurrent(); return; }
+    if (hairRowLog) { e.stopPropagation(); tickTask(`rt-${HAIR_ROUTINE_ID}-${keyOf(TODAY)}`, true); reRenderCurrent(); return; }
+    const hairRowNotThis = e.target.closest("[data-hairrow-not-this]");
+    if (hairRowNotThis) { e.stopPropagation(); hairSkipWash(); reRenderCurrent(); return; }
     // imprint month — open the month view on it, ready to plan the big moves in
     const imprintPlan = e.target.closest("[data-imprint-plan]");
     if (imprintPlan) {
@@ -50459,34 +50470,24 @@
       const id = item.dataset.tlDetail, pointerId = e.pointerId;
       // 2026-08-18 (Linh: "there are two events at the same time but they are not
       // displayed side by side"): never ARM a drag on an item that can't actually be
-      // moved. A hair wash / birthday / supplement falls through every savable branch in
+      // moved. A birthday / supplement falls through every savable branch in
       // rescheduleItem() and hits its bare `return` — which saved nothing AND re-rendered
       // nothing, leaving the block parked at the drop position with the inline top the
       // drag preview put there. A parked block never went through the overlap/column
       // pass, so it sat full-width on top of whatever was really at that time and read as
-      // "two events not splitting". Reproduced live before fixing: dragging Regular wash
-      // onto Morning made both render full-width and overlapping while the stored time
-      // stayed 08:15. tlItemCanMove() alone isn't strict enough for THIS gate, though:
-      // it returns true for hair-wash too, since hair-wash also satisfies
-      // fromRoutine && rtTaskId, same as a real routine occurrence — confirmed by
-      // testing this fix live, where the drag still armed. rescheduleItem() additionally
-      // needs parseOccId(id) to resolve (to compute its per-date override key), and
-      // hair-wash's id ("hair-<date>") never matches parseOccId's required
-      // "rt-<taskId>-<date>" shape, so a normal routine occurrence's path through
-      // rescheduleItem() can't be reused for it as-is — hence the explicit
-      // rtTaskId===HAIR_ROUTINE_ID carve-out both here and in rescheduleItem() itself
-      // (2026-08-20): drag now arms for hair-wash and saves through the SAME logic the
-      // Move panel's own hair-wash special case already used (commitTlMove,
-      // ~2026-08-15/16) — write the dropped time straight onto the routine, no
-      // per-date override to compute. A normal routine occurrence still needs the
-      // stricter parseOccId(id) test (isRtnOcc, ~line 23579) since IT genuinely does
-      // need that per-date override key; hair-wash just takes its own separate path.
+      // "two events not splitting". tlItemCanMove() alone isn't strict enough for THIS
+      // gate — rescheduleItem() additionally needs parseOccId(id) to resolve (to compute
+      // its per-date override key), which the clause below checks directly.
+      // 2026-08-21 (hair-wash rebuild): hair-wash used to need its own explicit
+      // rtTaskId===HAIR_ROUTINE_ID clause here, since its old id ("hair-<date>") never
+      // matched parseOccId's "rt-<taskId>-<date>" shape. Now that its id IS that shape,
+      // it naturally satisfies the fromRoutine/rtTaskId/parseOccId clause below like any
+      // other routine occurrence — no separate clause needed.
       // A tap still opens the detail sheet exactly as before: only the DRAG behaviour
       // for non-movable generated items (birthdays, supplements, …) is skipped.
       const dragEv = TL_ITEMS_BY_ID[id];
       const dragOk = dragEv && (!dragEv.generated
         || (dragEv.fromRoutine && !!dragEv.rtTaskId && !!parseOccId(dragEv.id))
-        || dragEv.rtTaskId === HAIR_ROUTINE_ID
         || (dragEv.fromRecurringEvent && !!dragEv.recurId)
         || dragEv.id.indexOf("fitcal-") === 0);
       if (dragEv && !dragOk) return;
