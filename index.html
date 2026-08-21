@@ -20063,11 +20063,35 @@
     renderLmCellPanel();
   }
   // Drag-select on an empty cell -- a drag only ever spans one day/column (the
-  // pointerover guard below ignores a different day), so "contiguous cells in one
-  // drag" always resolves to a single lo/hi range on lmSelDay, same as the old
-  // Quick-plan gesture this replaces. Direct classList toggling during the drag
-  // (not a full re-render per pointerover) is the same performance choice that old
-  // gesture already made.
+  // elementFromPoint hit-test below ignores a different day), so "contiguous cells in
+  // one drag" always resolves to a single lo/hi range on lmSelDay, same as the old
+  // Quick-plan gesture this replaces.
+  // 2026-08-21 (Linh: "i cant schedule or change things" -- cells went gold on drag but
+  // no create panel ever appeared, and stayed stuck gold forever): reproduced live --
+  // static reading alone couldn't show this, it only shows up under real pointer-event
+  // sequences. Two confirmed real causes, both real-hardware classes the Day-view
+  // timeline's own item-drag already had to work around once before (see its "(1)/(2)/
+  // (3)" comment a few thousand lines down, whose technique this reuses rather than
+  // reinventing):
+  //  (1) nothing here ever handled pointercancel. On real touch hardware, a drag that
+  //      moves without anything telling the browser to keep it lets the browser reclaim
+  //      the gesture for native scroll partway through -- confirmed live: dispatching
+  //      pointerdown -> pointerover -> pointercancel reproduces exactly what Linh saw
+  //      (gold cells, no panel, permanently stuck -- lmSelecting never got reset so
+  //      nothing about the page could clear them short of a reload). The preventDefault()
+  //      that was already here on pointerdown does NOT stop this -- confirmed via the
+  //      Day-view comment's own finding -- only a live NON-PASSIVE touchmove listener
+  //      does, added below. pointercancel now runs the exact same cleanup a completed
+  //      drag does, so an interrupted/abandoned drag can never leave a cell stuck.
+  //  (2) pointerover's own e.target doesn't reliably track the finger across elements
+  //      during a real touch drag the way it does for a mouse (a documented Pointer
+  //      Events/touch platform gap) -- swapped for elementFromPoint(clientX, clientY) on
+  //      pointermove, which the Day-view drag also relies on for the same reason, so
+  //      cell tracking no longer depends on trusting touch's own boundary events.
+  // Success and cancel both now re-render the whole grid (not just the panel) so the
+  // lm-cell-selecting classes added via direct DOM writes during the drag are always
+  // wiped by the same state-driven check renderLifeMap() already does per cell, rather
+  // than relying on nothing else to remove them.
   document.addEventListener("pointerdown", e => {
     const cell = e.target.closest("[data-lm-empty-cell]");
     if (!cell) return;
@@ -20078,22 +20102,33 @@
     cell.classList.add("lm-cell-selecting");
     e.preventDefault();
   });
-  document.addEventListener("pointerover", e => {
+  document.addEventListener("pointermove", e => {
     if (!lmSelecting) return;
-    const cell = e.target.closest("[data-lm-empty-cell]");
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const cell = under && under.closest && under.closest("[data-lm-empty-cell]");
     if (!cell) return;
     const day = Number(cell.dataset.lmDay);
     if (day !== lmSelDay) return;
     lmSelHours.add(Number(cell.dataset.lmHour));
     cell.classList.add("lm-cell-selecting");
   });
+  // non-passive on purpose -- see (1) above; a passive listener can't call
+  // preventDefault() in time to stop the browser's own scroll takeover once it starts.
+  document.addEventListener("touchmove", e => { if (lmSelecting) e.preventDefault(); }, { passive: false });
   document.addEventListener("pointerup", () => {
     if (!lmSelecting) return;
     lmSelecting = false;
     const hours = [...lmSelHours].sort((a, b) => a - b);
-    lmPanel = { type: "create", day: lmSelDay, lo: hours[0], hi: hours[hours.length - 1], modeId: null };
+    const day = lmSelDay;
     lmSelDay = null; lmSelHours = null;
-    renderLmCellPanel();
+    lmPanel = { type: "create", day, lo: hours[0], hi: hours[hours.length - 1], modeId: null };
+    renderLifeMap();
+  });
+  document.addEventListener("pointercancel", () => {
+    if (!lmSelecting) return;
+    lmSelecting = false;
+    lmSelDay = null; lmSelHours = null;
+    renderLifeMap();
   });
   document.addEventListener("click", e => {
     const filled = e.target.closest("[data-lm-filled-cell]");
