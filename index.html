@@ -4918,6 +4918,23 @@
     content: ""; position: absolute; inset: 0; border-radius: 3px;
     outline: 1.5px dashed rgba(244,208,107,.65); outline-offset: -1.5px; pointer-events: none;
   }
+  /* 2026-08-21 (two-way sync, STEP 3): a cell derived from a real routine (see
+     lmSyncedCells) -- same fill as a manually-painted cell, plus an inset ring so
+     it still reads as different at a glance, same visual language as .lm-wm-on's
+     own ::after overlay just above. Not directly paintable (blocked at pointerdown),
+     hence the read-only cursor/hover treatment matching .lm-cell-auto. */
+  .lm-cell-synced { cursor: pointer; }
+  .lm-cell-synced:hover { filter: brightness(1.15); }
+  .lm-cell-synced::after {
+    content: ""; position: absolute; inset: 0; border-radius: 3px;
+    outline: 1.5px solid var(--ink-soft); outline-offset: -1.5px; pointer-events: none;
+  }
+  /* both a synced cell AND inside work-mode hours: keep both cues rather than
+     letting one ::after silently win over the other. */
+  .lm-cell.lm-wm-on.lm-cell-synced::after {
+    outline: 1.5px dashed rgba(244,208,107,.65); outline-offset: -1.5px;
+    box-shadow: inset 0 0 0 3px var(--ink-soft);
+  }
   /* Auto (real-schedule) cells are read-only -- no pointer cursor, no hover brighten,
      unlike hand-paint's own .lm-cell base rule just above (untouched). The emoji
      label only ever sits on the FIRST cell of an unbroken same-mode run (see
@@ -19780,11 +19797,60 @@
   let lmViewMode = "hand";
   let lmUntimedOpen = false;
   let LM_AUTO_UNTIMED = [];
+  // 2026-08-21 (two-way sync, STEP 5): which "day-hour" keys a hand-paint gesture
+  // has touched, and the lmSyncedCells() snapshot taken at its start -- both null
+  // outside a gesture. Cached rather than recomputed on every pointerover so a fast
+  // drag doesn't re-walk ROUTINE_TASKS per cell, and so the gesture can't see a
+  // routine it creates partway through its own drag.
+  let lmGestureCells = null;
+  let lmGestureSynced = null;
   const LM_HOURS = []; for (let lmH = 6; lmH <= 23; lmH++) LM_HOURS.push(lmH);
   function lmFmtHour(h) {
     const ap = h < 12 ? "a" : "p";
     let h12 = h % 12; if (h12 === 0) h12 = 12;
     return h12 + ap;
+  }
+  // "1–4pm" not "1pm–4pm" -- drops the first period marker when both ends share one,
+  // matching how she writes a range by hand. Only used for the Life Map sync
+  // confirmation toast (lmCommitRoutineRun) -- fmtTime elsewhere is always used bare.
+  function lmTimeRangeShort(s, e) {
+    const a = fmtTime(s), b = fmtTime(e);
+    if (a.slice(-2) === b.slice(-2)) return `${a.slice(0, -2)}–${b}`;
+    return `${a}–${b}`;
+  }
+  // 2026-08-21 (Life Map ↔ Calendar two-way sync, part 1): a real recurring routine
+  // with a track, weekdays and BOTH a start AND an end time already describes real
+  // painted hours -- this reads that back as a day-hour -> {trackId, routineId,
+  // title} map, same key shape as LIFEMAP.cells, so renderLifeMap can treat it as a
+  // second source for the same grid. Recomputed fresh every call (never cached,
+  // never written anywhere) -- same "regenerated wholesale" approach
+  // regenerateCategoryStyles()/lmAutoGrid already use, so it can never drift from
+  // ROUTINE_TASKS. calOn:false is excluded on purpose: a routine she's hidden from
+  // her real calendar shouldn't read as "on your calendar" here either.
+  // Deliberately narrower than schedulesOf()'s own single-pattern fallback (which
+  // omits `end` -- callers that need it read t.end directly, same as generatedFor
+  // does), so both the multi-layer and single-pattern shapes are handled explicitly
+  // here rather than trusting a helper that doesn't carry the field this needs.
+  function lmSyncedCells() {
+    const synced = {};
+    ROUTINE_TASKS.forEach(t => {
+      if (t.freq !== "weekly" || t.calOn === false) return;
+      if (!t.track || !CAT_BY_ID[t.track] || CAT_BY_ID[t.track].type !== "life") return;
+      const layers = Array.isArray(t.schedules) && t.schedules.length
+        ? t.schedules
+        : [{ weekdays: Array.isArray(t.weekdays) ? t.weekdays : [], start: t.start || "", end: t.end || "" }];
+      layers.forEach(l => {
+        if (!Array.isArray(l.weekdays) || !l.weekdays.length || !l.start || !l.end) return;
+        const sMin = timeToMin(l.start), eMin = timeToMin(l.end);
+        if (sMin == null || eMin == null || eMin <= sMin) return;
+        l.weekdays.forEach(day => {
+          LM_HOURS.forEach(hour => {
+            if (hour * 60 < eMin && (hour + 1) * 60 > sMin) synced[day + "-" + hour] = { trackId: t.track, routineId: t.id, title: t.title };
+          });
+        });
+      });
+    });
+    return synced;
   }
   // day index here is 0=Monday..6=Sunday throughout — same convention as WD_FULL/
   // WD_MIN/dowIndex() everywhere else in this file, not JS's native Sunday-first.
@@ -19831,19 +19897,29 @@
       });
       renderLmUntimed(untimed);
     } else {
-      lmNoteEl.textContent = `Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here.`;
+      lmNoteEl.textContent = `Paint your week by hand with your real life categories — pick one below, then click or drag across the grid. Saved as you go, same as everything else here. Hours already covered by a real routine (ringed) sync in from your calendar automatically and can't be repainted directly.`;
+      // 2026-08-21 (two-way sync, part 1+3): synced (a real routine's own hours)
+      // always wins over a manual LIFEMAP.cells value for THIS cell -- see
+      // lmSyncedCells' own comment. A stale manual value underneath is left alone,
+      // not deleted, so it reappears on its own if the routine ever stops covering
+      // that hour (e.g. she shortens it in Routines) -- never a silent data loss.
+      const synced = lmSyncedCells();
       LM_HOURS.forEach(hour => {
         gridHtml += `<div class="lm-hr-lbl">${lmFmtHour(hour)}</div>`;
         for (let d = 0; d < 7; d++) {
           const key = d + "-" + hour;
-          const catId = LIFEMAP.cells[key];
+          const sync = synced[key];
+          const catId = sync ? sync.trackId : LIFEMAP.cells[key];
           const cat = catId ? CAT_BY_ID[catId] : null;
           const wmEndH = parseInt((LIFEMAP.wmEnd || "17:00").split(":")[0], 10) + (parseInt((LIFEMAP.wmEnd || "17:00").split(":")[1], 10) > 0 ? 1 : 0);
           const wmMark = LIFEMAP.wmOn && (LIFEMAP.wmDays || []).indexOf(d) !== -1 &&
             hour >= parseInt((LIFEMAP.wmStart || "09:00").split(":")[0], 10) && hour < wmEndH;
-          gridHtml += `<div class="lm-cell${wmMark ? " lm-wm-on" : ""}" data-lm-cell data-lm-day="${d}" data-lm-hour="${hour}"
+          const title = sync
+            ? `${esc(sync.title)} · synced from your calendar`
+            : `${cat ? esc(cat.name) + " · " : ""}${WD_FULL[d]} ${lmFmtHour(hour)}`;
+          gridHtml += `<div class="lm-cell${wmMark ? " lm-wm-on" : ""}${sync ? " lm-cell-synced" : ""}" data-lm-cell data-lm-day="${d}" data-lm-hour="${hour}"
             style="${cat ? `background:var(--${cat.id}-seed)` : ""}"
-            title="${cat ? esc(cat.name) + " · " : ""}${WD_FULL[d]} ${lmFmtHour(hour)}"></div>`;
+            title="${title}"></div>`;
         }
       });
       renderLmUntimed([]);   // clears any stale panel left from Auto view
@@ -19899,7 +19975,12 @@
     const cats = lifeCats();
     const counts = {};
     cats.forEach(c => { counts[c.id] = 0; });
+    // 2026-08-21 (two-way sync, STEP 7): merged view -- a synced cell and a manual
+    // LIFEMAP.cells entry never both count for the same key (painting is blocked on
+    // a synced cell, so it's never both), so the two loops below can't double-count.
     Object.keys(LIFEMAP.cells).forEach(k => { if (counts[LIFEMAP.cells[k]] !== undefined) counts[LIFEMAP.cells[k]]++; });
+    const synced = lmSyncedCells();
+    Object.keys(synced).forEach(k => { const tk = synced[k].trackId; if (counts[tk] !== undefined) counts[tk]++; });
     const total = Object.keys(counts).reduce((s, k) => s + counts[k], 0);
     const bar = document.getElementById("lmBar");
     const legend = document.getElementById("lmLegend");
@@ -19921,12 +20002,103 @@
     el.style.background = cat ? `var(--${cat.id}-seed)` : "";
     el.title = (cat ? cat.name + " · " : "") + WD_FULL[day] + " " + lmFmtHour(hour);
   }
+  // 2026-08-21 (two-way sync, STEP 5): on release, converts each contiguous same-
+  // category run the gesture touched (grown outward through any already-matching
+  // adjacent hours, hand-painted earlier or just now -- "extending a block grows
+  // it") into ONE real ROUTINE_TASKS entry, or extends/bridges an existing
+  // Life-Map-made routine that already sits right up against it. Never runs for an
+  // eraser gesture -- erasing only ever touches LIFEMAP.cells directly (STEP 6: a
+  // synced cell can't be erased, since pointerdown already blocks painting it).
+  function lmFinishGesture() {
+    if (lmPaintValue !== null && lmGestureCells && lmGestureCells.size) {
+      const byDay = {};
+      lmGestureCells.forEach(key => {
+        const [d, h] = key.split("-").map(Number);
+        (byDay[d] = byDay[d] || new Set()).add(h);
+      });
+      let lastMsg = null;
+      Object.keys(byDay).forEach(dayStr => {
+        const day = Number(dayStr);
+        const done = new Set();
+        [...byDay[day]].sort((a, b) => a - b).forEach(h => {
+          if (done.has(h) || LIFEMAP.cells[day + "-" + h] !== lmPaintValue) return;
+          let lo = h, hi = h;
+          while (LIFEMAP.cells[day + "-" + (lo - 1)] === lmPaintValue) lo--;
+          while (LIFEMAP.cells[day + "-" + (hi + 1)] === lmPaintValue) hi++;
+          for (let x = lo; x <= hi; x++) done.add(x);
+          const msg = lmCommitRoutineRun(day, lo, hi);
+          if (msg) lastMsg = msg;
+        });
+      });
+      if (lastMsg) rewardToast(lastMsg);
+    }
+    saveLifeMap();
+    renderLifeMap();
+  }
+  // day/[lo,hi] (inclusive hours) of one painted run -> a real weekly routine
+  // covering it. Extends (or bridges two) existing Life-Map-made routines that
+  // already sit adjacent to this run on the same day/category rather than creating
+  // an overlap -- "created via Life Map" is tracked with a plain t.fromLifeMap flag,
+  // the clean way to recognise it the spec asked for (never an id-format check).
+  // Only ever matches a routine with a SINGLE weekday -- the entry this creates
+  // always has weekdays:[day], one per day painted, never grouped across days.
+  function lmCommitRoutineRun(day, lo, hi) {
+    const catId = lmPaintValue;
+    const cat = CAT_BY_ID[catId];
+    if (!cat) return null;
+    let startMin = lo * 60, endMin = (hi + 1) * 60;
+    const isMatch = t => t.fromLifeMap && t.freq === "weekly" && t.track === catId
+      && Array.isArray(t.weekdays) && t.weekdays.length === 1 && t.weekdays[0] === day && t.start && t.end;
+    const left = ROUTINE_TASKS.find(t => isMatch(t) && timeToMin(t.end) === startMin);
+    const right = ROUTINE_TASKS.find(t => isMatch(t) && t !== left && timeToMin(t.start) === endMin);
+    let survivor;
+    if (left && right) {
+      startMin = Math.min(timeToMin(left.start), startMin);
+      endMin = Math.max(timeToMin(right.end), endMin);
+      left.start = minToTime(startMin); left.end = minToTime(endMin);
+      ROUTINE_TASKS = ROUTINE_TASKS.filter(t => t !== right);
+      survivor = left;
+    } else if (left || right) {
+      survivor = left || right;
+      startMin = Math.min(timeToMin(survivor.start), startMin);
+      endMin = Math.max(timeToMin(survivor.end), endMin);
+      survivor.start = minToTime(startMin); survivor.end = minToTime(endMin);
+    } else {
+      survivor = {
+        id: uid(), title: cat.name, track: catId, freq: "weekly",
+        weekdays: [day], start: minToTime(startMin), end: minToTime(endMin),
+        calOn: true, fromLifeMap: true,
+      };
+      ROUTINE_TASKS.push(survivor);
+    }
+    saveRoutines();
+    // now synced (derived from the routine above), not hand-painted -- avoids
+    // double-counting the same hours in both LIFEMAP.cells and lmSyncedCells()
+    for (let x = lo; x <= hi; x++) delete LIFEMAP.cells[day + "-" + x];
+    return `Added to your calendar: ${cat.name}, every ${WD_FULL[day].slice(0, 3)} ${lmTimeRangeShort(survivor.start, survivor.end)}`;
+  }
   document.addEventListener("pointerdown", e => {
     const cell = e.target.closest("[data-lm-cell]");
     if (!cell) return;
+    const day = Number(cell.dataset.lmDay), hour = Number(cell.dataset.lmHour);
+    const key = day + "-" + hour;
+    const synced = lmSyncedCells();
+    // 2026-08-21 (two-way sync, STEP 4): a synced cell can't be painted or erased
+    // directly -- it's derived from a real routine, not stored paint. The cleanest
+    // entry point IS the routine's own editor (openRtnFormFromCalendar already opens
+    // it as an overlay without leaving this page), so tapping one goes straight
+    // there rather than just naming it in a toast.
+    if (synced[key]) {
+      const rt = ROUTINE_TASKS.find(t => t.id === synced[key].routineId);
+      if (rt) openRtnFormFromCalendar(rt);
+      e.preventDefault();
+      return;
+    }
+    lmGestureSynced = synced;
     lmPainting = true;
     lmPaintValue = lmEraser ? null : lmArmed;
-    lmPaintCell(cell, Number(cell.dataset.lmDay), Number(cell.dataset.lmHour));
+    lmGestureCells = new Set([key]);
+    lmPaintCell(cell, day, hour);
     renderLifeMapSummary();
     saveLifeMap();
     e.preventDefault();
@@ -19935,10 +20107,20 @@
     if (!lmPainting) return;
     const cell = e.target.closest("[data-lm-cell]");
     if (!cell) return;
-    lmPaintCell(cell, Number(cell.dataset.lmDay), Number(cell.dataset.lmHour));
+    const day = Number(cell.dataset.lmDay), hour = Number(cell.dataset.lmHour);
+    const key = day + "-" + hour;
+    if (lmGestureSynced && lmGestureSynced[key]) return;   // can't drag over a synced cell either
+    if (lmGestureCells) lmGestureCells.add(key);
+    lmPaintCell(cell, day, hour);
     renderLifeMapSummary();
   });
-  document.addEventListener("pointerup", () => { if (lmPainting) { lmPainting = false; saveLifeMap(); } });
+  document.addEventListener("pointerup", () => {
+    if (!lmPainting) return;
+    lmPainting = false;
+    lmFinishGesture();
+    lmGestureCells = null;
+    lmGestureSynced = null;
+  });
   document.addEventListener("click", e => {
     const lmView = e.target.closest("[data-lm-view]");
     if (lmView) { lmViewMode = lmView.dataset.lmView; renderLifeMap(); return; }
