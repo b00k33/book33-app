@@ -4907,7 +4907,7 @@
   <!-- 2026-08-21: view-switch pills above #lmGrid -- .lm-chip does all the pill/
        pressed-state styling already (same class the Categories palette above already
        uses), this wrapper is layout only. -->
-  .lm-view-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+  .lm-view-toggle { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .lm-grid-wrap { overflow-x: auto; }
   .lm-grid { display: grid; grid-template-columns: 42px repeat(7, 1fr); gap: 2px; min-width: 620px; user-select: none; }
   .lm-hd { font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 4px 0 8px; letter-spacing: .04em; }
@@ -4944,6 +4944,18 @@
   .lm-cell-auto { cursor: default; }
   .lm-cell-auto:hover { filter: none; }
   .lm-cell-emoji { position: absolute; top: 1px; left: 2px; font-size: 9px; line-height: 1; pointer-events: none; }
+  /* 2026-08-21 (Quick-plan week, STEP 4): the third #lmGrid mode. A bookable empty
+     cell uses .lm-cell's own base pointer/hover as-is (it IS tappable, same as
+     hand-paint) -- only the gesture-in-progress highlight and the occupied/dimmed
+     state below need their own rules. */
+  .lm-cell-plan-armed { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .lm-cell-occupied { cursor: default; opacity: .35; }
+  .lm-cell-occupied:hover { filter: none; }
+  .lm-week-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+  .lm-week-range { font-size: 12.5px; font-weight: 700; color: var(--ink); min-width: 170px; text-align: center; }
+  .lm-save-event { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--margin-rule); }
+  .lm-se-row { display: flex; gap: 8px; }
+  .lm-se-row .field { flex: 1; }
   .lm-untimed { margin-top: 10px; }
   .lm-untimed-toggle {
     background: none; border: none; padding: 0; font: inherit; font-size: 11.5px;
@@ -18081,8 +18093,9 @@
     </div>
 
     <div class="lm-panel">
-      <div class="lm-panel-title">Categories</div>
+      <div class="lm-panel-title" id="lmPaletteTitle">Categories</div>
       <div class="lm-palette" id="lmPalette"></div>
+      <div class="lm-save-event" id="lmSaveEventForm" hidden></div>
     </div>
 
     <div class="lm-panel">
@@ -18102,6 +18115,7 @@
            read-only way to fill this SAME #lmGrid, toggled by these two pills --
            never blended with hand-paint. See renderLifeMap()/lmAutoGrid(). -->
       <div class="lm-view-toggle" id="lmViewToggle"></div>
+      <div class="lm-week-nav" id="lmWeekNav" hidden></div>
       <div class="lm-grid-wrap">
         <div class="lm-grid" id="lmGrid"></div>
       </div>
@@ -19785,6 +19799,23 @@
   function saveLifeMap() {
     try { localStorage.setItem(LIFEMAP_KEY, JSON.stringify(LIFEMAP)); } catch (e) {}
   }
+  // 2026-08-21 (Quick-plan week, STEP 2): a short library of "things I book often,"
+  // separate from LIFEMAP.cells (an abstract recurring pattern) and ROUTINE_TASKS (a
+  // real recurring commitment) -- these are shortcut TEMPLATES for one-off bookings.
+  // Same load/save idiom as everything else here. The one-time seed from her existing
+  // routines lives further down, right after ROUTINE_TASKS itself loads (this file's
+  // established spot for a ROUTINE_TASKS-dependent one-time migration -- see
+  // migrateHairToRotation's own comment for the same reasoning).
+  const SAVED_EVENTS_KEY = "book33-saved-events";
+  function loadSavedEvents() {
+    try {
+      const v = JSON.parse(localStorage.getItem(SAVED_EVENTS_KEY));
+      if (Array.isArray(v)) return v;
+    } catch (e) {}
+    return [];
+  }
+  function saveSavedEvents() { try { localStorage.setItem(SAVED_EVENTS_KEY, JSON.stringify(SAVED_EVENTS)); } catch (e) {} }
+  let SAVED_EVENTS = loadSavedEvents();
   let lmArmed = null;    // currently-selected category id to paint with
   let lmEraser = false;
   let lmPainting = false;
@@ -19804,6 +19835,21 @@
   // routine it creates partway through its own drag.
   let lmGestureCells = null;
   let lmGestureSynced = null;
+  // 2026-08-21 (Quick-plan week, STEP 4): the third #lmGrid mode -- a specific,
+  // DATED upcoming week (unlike Hand-paint's abstract pattern), booking real
+  // one-off EVENTS from the SAVED_EVENTS library. lmPlanWeekStart is a real Date
+  // (that week's Monday), left null until first entered so it defaults to the
+  // CURRENT real week -- same "not persisted, resets on reload" choice lmViewMode
+  // itself already made (a navigation position, not stored data). lmPlanArmed is
+  // a SAVED_EVENTS id (armed template), separate from lmArmed (a category id) so
+  // switching modes can't leave the wrong kind of thing armed. lmPlanGestureCells/
+  // lmPlanGestureDates mirror the hand-paint gesture tracking above -- a plan
+  // gesture also needs each cell's real dated EVENTS date key, not just day/hour.
+  let lmPlanWeekStart = null;
+  let lmPlanArmed = null;
+  let lmPlanPainting = false;
+  let lmPlanGestureCells = null;
+  let lmSaveFormOpen = false;
   const LM_HOURS = []; for (let lmH = 6; lmH <= 23; lmH++) LM_HOURS.push(lmH);
   function lmFmtHour(h) {
     const ap = h < 12 ? "a" : "p";
@@ -19859,25 +19905,75 @@
     if (!host) return;
     const cats = lifeCats();
     if (!lmArmed || !cats.find(c => c.id === lmArmed)) lmArmed = cats[0] ? cats[0].id : null;
-    document.getElementById("lmPalette").innerHTML = cats.map(c => `
-      <button type="button" class="lm-chip" data-lm-arm="${c.id}" aria-pressed="${!lmEraser && lmArmed === c.id}">
-        <span class="lm-dot" style="background:var(--${c.id}-seed)"></span>${esc(c.name)}
-      </button>`).join("") +
-      `<button type="button" class="lm-tool" data-lm-eraser aria-pressed="${lmEraser}">⌫ Eraser</button>
-       <button type="button" class="lm-tool lm-tool-link" data-lm-categories>+ Add/edit a category</button>`;
+    const paletteTitleEl = document.getElementById("lmPaletteTitle");
+    // 2026-08-21 (Quick-plan week, STEP 4): the palette shows Saved events (armable
+    // like a category chip) instead of Categories while in plan mode -- Hand-paint
+    // and Auto's own palette rendering is otherwise byte-identical to before.
+    if (lmViewMode === "plan") {
+      paletteTitleEl.textContent = "Saved events";
+      if (!lmPlanArmed || !SAVED_EVENTS.find(s => s.id === lmPlanArmed)) lmPlanArmed = SAVED_EVENTS[0] ? SAVED_EVENTS[0].id : null;
+      document.getElementById("lmPalette").innerHTML =
+        (SAVED_EVENTS.length ? SAVED_EVENTS.map(s => `
+          <button type="button" class="lm-chip" data-lm-plan-arm="${s.id}" aria-pressed="${lmPlanArmed === s.id}">
+            <span class="lm-dot" style="background:var(--${s.track}-seed)"></span>${s.icon ? esc(s.icon) + " " : ""}${esc(s.title)}
+          </button>`).join("") : `<div class="lm-empty">No saved events yet — add one below.</div>`) +
+        `<button type="button" class="lm-tool lm-tool-link" data-lm-save-event-toggle>${lmSaveFormOpen ? "– Cancel" : "+ Save an event"}</button>`;
+    } else {
+      paletteTitleEl.textContent = "Categories";
+      document.getElementById("lmPalette").innerHTML = cats.map(c => `
+        <button type="button" class="lm-chip" data-lm-arm="${c.id}" aria-pressed="${!lmEraser && lmArmed === c.id}">
+          <span class="lm-dot" style="background:var(--${c.id}-seed)"></span>${esc(c.name)}
+        </button>`).join("") +
+        `<button type="button" class="lm-tool" data-lm-eraser aria-pressed="${lmEraser}">⌫ Eraser</button>
+         <button type="button" class="lm-tool lm-tool-link" data-lm-categories>+ Add/edit a category</button>`;
+    }
+    renderLmSaveEventForm();
     document.getElementById("lmWmOn").checked = !!LIFEMAP.wmOn;
     document.getElementById("lmWmStart").value = LIFEMAP.wmStart || "09:00";
     document.getElementById("lmWmEnd").value = LIFEMAP.wmEnd || "17:00";
     document.getElementById("lmWmDays").innerHTML = WD_MIN.map((letter, i) =>
       `<button type="button" class="lm-day-tog" data-lm-wmday="${i}" aria-pressed="${(LIFEMAP.wmDays || []).indexOf(i) !== -1}">${letter}</button>`).join("");
     // 2026-08-21: view-switch pills -- never blended, #lmGrid below is built by
-    // EITHER the untouched hand-paint branch OR the new auto branch, never both.
+    // EXACTLY ONE of the three branches, never combined.
     document.getElementById("lmViewToggle").innerHTML = `
-      <button type="button" class="lm-chip" data-lm-view="hand" aria-pressed="${lmViewMode !== "auto"}">✏️ Hand-paint</button>
-      <button type="button" class="lm-chip" data-lm-view="auto" aria-pressed="${lmViewMode === "auto"}">✨ From my real schedule</button>`;
+      <button type="button" class="lm-chip" data-lm-view="hand" aria-pressed="${lmViewMode !== "auto" && lmViewMode !== "plan"}">✏️ Hand-paint</button>
+      <button type="button" class="lm-chip" data-lm-view="auto" aria-pressed="${lmViewMode === "auto"}">✨ From my real schedule</button>
+      <button type="button" class="lm-chip" data-lm-view="plan" aria-pressed="${lmViewMode === "plan"}">📌 Quick-plan week</button>`;
+    const lmWeekNavEl = document.getElementById("lmWeekNav");
+    lmWeekNavEl.hidden = lmViewMode !== "plan";
     const lmNoteEl = document.getElementById("lmNote");
     let gridHtml = `<div class="lm-hd"></div>` + WD_FULL.map(w => `<div class="lm-hd">${w.slice(0, 3)}</div>`).join("");
-    if (lmViewMode === "auto") {
+    if (lmViewMode === "plan") {
+      if (!lmPlanWeekStart) lmPlanWeekStart = startOfWeek(TODAY);
+      const start = lmPlanWeekStart, end = addDays(start, 6);
+      const weekRangeTxt = start.getMonth() === end.getMonth()
+        ? `${WD_FULL[0].slice(0, 3)} ${start.getDate()} – ${WD_FULL[6].slice(0, 3)} ${end.getDate()} ${MONTHS[end.getMonth()]}`
+        : `${WD_FULL[0].slice(0, 3)} ${start.getDate()} ${MONTHS[start.getMonth()]} – ${WD_FULL[6].slice(0, 3)} ${end.getDate()} ${MONTHS[end.getMonth()]}`;
+      lmNoteEl.textContent = `Book a specific week from your saved events — arm one below, then tap or drag across empty hours. Hours already booked (dimmed) can't be double-booked; anything more detailed still goes through the normal calendar.`;
+      lmWeekNavEl.innerHTML = `
+        <button type="button" class="lm-tool" data-lm-plan-week="-1" aria-label="Previous week">◂</button>
+        <span class="lm-week-range">${weekRangeTxt}</span>
+        <button type="button" class="lm-tool" data-lm-plan-week="1" aria-label="Next week">▸</button>`;
+      // real dates in the column header, not just weekday names -- this grid is a
+      // specific dated week now, not an abstract recurring pattern.
+      gridHtml = `<div class="lm-hd"></div>` + Array.from({ length: 7 }, (_, d) => {
+        const dd = addDays(start, d);
+        return `<div class="lm-hd">${WD_FULL[d].slice(0, 3)} ${dd.getDate()}</div>`;
+      }).join("");
+      const occupied = lmPlanOccupiedGrid(start);
+      LM_HOURS.forEach((hour, hi) => {
+        gridHtml += `<div class="lm-hr-lbl">${lmFmtHour(hour)}</div>`;
+        for (let d = 0; d < 7; d++) {
+          const dd = addDays(start, d);
+          const isOccupied = occupied[d][hi];
+          const title = `${isOccupied ? "Already booked · " : ""}${WD_FULL[d]} ${dd.getDate()} ${lmFmtHour(hour)}`;
+          gridHtml += isOccupied
+            ? `<div class="lm-cell lm-cell-occupied" title="${esc(title)}"></div>`
+            : `<div class="lm-cell lm-cell-plan" data-lm-plan-cell data-lm-plan-day="${d}" data-lm-plan-hour="${hour}" title="${esc(title)}"></div>`;
+        }
+      });
+      renderLmUntimed([]);
+    } else if (lmViewMode === "auto") {
       const start = startOfWeek(TODAY), end = addDays(start, 6);
       const rangeTxt = start.getMonth() === end.getMonth()
         ? `${MONTHS[start.getMonth()]} ${start.getDate()}–${end.getDate()}`
@@ -20077,6 +20173,94 @@
     for (let x = lo; x <= hi; x++) delete LIFEMAP.cells[day + "-" + x];
     return `Added to your calendar: ${cat.name}, every ${WD_FULL[day].slice(0, 3)} ${lmTimeRangeShort(survivor.start, survivor.end)}`;
   }
+  // 2026-08-21 (Quick-plan week, STEP 4): which day/hour cells of `start`'s week
+  // are already spoken for -- a real routine occurrence (generatedFor) or an
+  // existing EVENTS entry for that date. Same source + overlap math lmAutoGrid
+  // already uses (generatedFor(d).filter(!preview) + EVENTS.filter(date===k)),
+  // not a new way of asking "what's on this day" -- only the OUTPUT shape (a
+  // plain occupied/not grid, not a mode-coloured one) differs.
+  function lmPlanOccupiedGrid(start) {
+    const grid = Array.from({ length: 7 }, () => LM_HOURS.map(() => false));
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+      const d = addDays(start, dayIdx);
+      const k = keyOf(d);
+      const items = [...generatedFor(d).filter(e => !e.preview), ...EVENTS.filter(e => e.date === k)];
+      items.forEach(e => {
+        const s = toMin(e.start);
+        if (s === null) return;
+        const end = itemEndMin(e);
+        LM_HOURS.forEach((hour, hi) => { if (hour * 60 < end && (hour + 1) * 60 > s) grid[dayIdx][hi] = true; });
+      });
+    }
+    return grid;
+  }
+  // day/[lo,hi] (inclusive hours, already known-empty -- occupied cells never carry
+  // data-lm-plan-cell to begin with) -> ONE real one-off EVENTS entry for that
+  // exact date. Never touches ROUTINE_TASKS -- a Quick-plan booking is a specific
+  // dated booking, not a change to any recurring pattern.
+  function lmCommitPlanRun(saved, weekStart, day, lo, hi) {
+    const d = addDays(weekStart, day);
+    const start = `${pad(lo)}:00`, end = `${pad(hi + 1)}:00`;
+    EVENTS.push({
+      id: uid(), date: keyOf(d), track: saved.track, category: saved.category || "",
+      title: saved.title, icon: saved.icon || "", kind: "event", allDay: false, start, end,
+    });
+    saveEvents(EVENTS);
+    return `Added: ${saved.title} — ${WD_FULL[day].slice(0, 3)} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${lmTimeRangeShort(start, end)}`;
+  }
+  // on release, splits whatever the gesture actually touched (per day) into
+  // contiguous runs and commits ONE booking per run -- e.g. a drag that jumps a
+  // gap becomes two bookings, not one spanning the gap. Every touched cell was
+  // already confirmed empty at pointerdown/pointerover time (occupied cells never
+  // get the data-lm-plan-cell attribute), so there's nothing left to re-check here.
+  function lmFinishPlanGesture() {
+    if (lmPlanArmed && lmPlanGestureCells && lmPlanGestureCells.size) {
+      const saved = SAVED_EVENTS.find(s => s.id === lmPlanArmed);
+      if (saved) {
+        const start = lmPlanWeekStart || startOfWeek(TODAY);
+        const byDay = {};
+        lmPlanGestureCells.forEach(key => {
+          const [d, h] = key.split("-").map(Number);
+          (byDay[d] = byDay[d] || new Set()).add(h);
+        });
+        let lastMsg = null;
+        Object.keys(byDay).forEach(dayStr => {
+          const day = Number(dayStr);
+          const hours = [...byDay[day]].sort((a, b) => a - b);
+          let lo = null, hi = null;
+          hours.forEach(h => {
+            if (lo === null) { lo = h; hi = h; return; }
+            if (h === hi + 1) { hi = h; return; }
+            lastMsg = lmCommitPlanRun(saved, start, day, lo, hi) || lastMsg;
+            lo = h; hi = h;
+          });
+          if (lo !== null) lastMsg = lmCommitPlanRun(saved, start, day, lo, hi) || lastMsg;
+        });
+        if (lastMsg) rewardToast(lastMsg);
+      }
+    }
+    renderLifeMap();
+  }
+  function renderLmSaveEventForm() {
+    const host = document.getElementById("lmSaveEventForm");
+    if (!host) return;
+    if (lmViewMode !== "plan" || !lmSaveFormOpen) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    const cats = lifeCats();
+    host.innerHTML = `
+      <div class="field full"><label for="lmSeTitle">Title</label><input type="text" id="lmSeTitle" class="field-bare" placeholder="e.g. Coffee with Mum"></div>
+      <div class="field full"><label>Part of life</label>
+        <div class="track-picker" role="group" aria-label="Part of life">
+          ${cats.map((c, i) => `<button type="button" class="track-opt" data-lm-se-track="${c.id}" aria-pressed="${i === 0}">${esc(c.name)}</button>`).join("")}
+        </div>
+      </div>
+      <div class="lm-se-row">
+        <div class="field"><label for="lmSeIcon">Icon <span class="field-hint">optional</span></label><input type="text" id="lmSeIcon" class="field-bare" maxlength="4" placeholder="☕"></div>
+        <div class="field"><label for="lmSeDur">Duration (min)</label><input type="number" id="lmSeDur" class="field-bare" value="60" min="5" step="5"></div>
+      </div>
+      <div class="field full"><label for="lmSeCat">Category <span class="field-hint">optional</span></label><input type="text" id="lmSeCat" class="field-bare" placeholder="e.g. Friends"></div>
+      <button type="button" class="btn-save" data-lm-se-save>Save event</button>`;
+  }
   document.addEventListener("pointerdown", e => {
     const cell = e.target.closest("[data-lm-cell]");
     if (!cell) return;
@@ -20121,6 +20305,37 @@
     lmGestureCells = null;
     lmGestureSynced = null;
   });
+  // 2026-08-21 (Quick-plan week, STEP 4): a THIRD, separate gesture on `[data-lm-
+  // plan-cell]` -- distinct dataset attr from hand-paint's `[data-lm-cell]`, so
+  // these coexist safely (each grid only ever renders one attribute's worth of
+  // cells, per lmViewMode). An already-occupied cell simply doesn't carry
+  // data-lm-plan-cell at all (see renderLifeMap's plan branch), so it's inert to
+  // both handlers below with no separate guard needed -- same "can't tap to
+  // overwrite" outcome as mode 2's synced cells, just enforced by never wiring the
+  // attribute rather than an explicit check.
+  document.addEventListener("pointerdown", e => {
+    const cell = e.target.closest("[data-lm-plan-cell]");
+    if (!cell || !lmPlanArmed) return;
+    lmPlanPainting = true;
+    const day = Number(cell.dataset.lmPlanDay), hour = Number(cell.dataset.lmPlanHour);
+    lmPlanGestureCells = new Set([day + "-" + hour]);
+    cell.classList.add("lm-cell-plan-armed");
+    e.preventDefault();
+  });
+  document.addEventListener("pointerover", e => {
+    if (!lmPlanPainting) return;
+    const cell = e.target.closest("[data-lm-plan-cell]");
+    if (!cell) return;
+    const day = Number(cell.dataset.lmPlanDay), hour = Number(cell.dataset.lmPlanHour);
+    if (lmPlanGestureCells) lmPlanGestureCells.add(day + "-" + hour);
+    cell.classList.add("lm-cell-plan-armed");
+  });
+  document.addEventListener("pointerup", () => {
+    if (!lmPlanPainting) return;
+    lmPlanPainting = false;
+    lmFinishPlanGesture();
+    lmPlanGestureCells = null;
+  });
   document.addEventListener("click", e => {
     const lmView = e.target.closest("[data-lm-view]");
     if (lmView) { lmViewMode = lmView.dataset.lmView; renderLifeMap(); return; }
@@ -20142,6 +20357,42 @@
     }
     const lmClear = e.target.closest("[data-lm-clear]");
     if (lmClear) { LIFEMAP.cells = {}; saveLifeMap(); renderLifeMap(); return; }
+    // Quick-plan week (STEP 4/3) -- week switcher, saved-event arming, and the
+    // "+ Save an event" mini-form. Not persisted state beyond SAVED_EVENTS itself
+    // (lmPlanWeekStart/lmPlanArmed/lmSaveFormOpen are all in-memory, same
+    // "navigation position, not stored data" choice lmViewMode already made).
+    const planWeek = e.target.closest("[data-lm-plan-week]");
+    if (planWeek) {
+      if (!lmPlanWeekStart) lmPlanWeekStart = startOfWeek(TODAY);
+      lmPlanWeekStart = addDays(lmPlanWeekStart, Number(planWeek.dataset.lmPlanWeek) * 7);
+      renderLifeMap();
+      return;
+    }
+    const planArm = e.target.closest("[data-lm-plan-arm]");
+    if (planArm) { lmPlanArmed = planArm.dataset.lmPlanArm; renderLifeMap(); return; }
+    const seToggle = e.target.closest("[data-lm-save-event-toggle]");
+    if (seToggle) { lmSaveFormOpen = !lmSaveFormOpen; renderLifeMap(); return; }
+    const seTrack = e.target.closest("[data-lm-se-track]");
+    if (seTrack) {
+      document.querySelectorAll("#lmSaveEventForm [data-lm-se-track]").forEach(b => b.setAttribute("aria-pressed", String(b === seTrack)));
+      return;
+    }
+    const seSave = e.target.closest("[data-lm-se-save]");
+    if (seSave) {
+      const titleEl = document.getElementById("lmSeTitle");
+      const title = titleEl.value.trim();
+      if (!title) { titleEl.focus(); return; }
+      const trackBtn = document.querySelector('#lmSaveEventForm [data-lm-se-track][aria-pressed="true"]');
+      const track = trackBtn ? trackBtn.dataset.lmSeTrack : (lifeCats()[0] && lifeCats()[0].id);
+      const icon = document.getElementById("lmSeIcon").value.trim();
+      const category = document.getElementById("lmSeCat").value.trim();
+      const durationMin = Math.max(5, parseInt(document.getElementById("lmSeDur").value, 10) || 60);
+      SAVED_EVENTS.push({ id: uid(), title, track, category, icon, durationMin });
+      saveSavedEvents();
+      lmSaveFormOpen = false;
+      renderLifeMap();
+      return;
+    }
   });
   document.addEventListener("change", e => {
     if (e.target.id === "lmWmOn") { LIFEMAP.wmOn = e.target.checked; saveLifeMap(); renderLifeMap(); return; }
@@ -21462,6 +21713,32 @@
   }
   function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} saveWidgetDigest(); }
   let ROUTINE_TASKS = loadRoutines();
+  // one-time (2026-08-21, Quick-plan week STEP 2): seed the Saved-events library
+  // from her existing recurring routines so it isn't empty on day one -- one entry
+  // per routine with a track and a real weekdays list (the SIMPLE single-pattern
+  // shape; a multi-layer routine stores its days under t.schedules instead and has
+  // no top-level t.weekdays, so it's skipped here, same literal reading as the
+  // brief's own "track and weekdays.length" condition). Duration comes from a real
+  // start+end when both exist, else a plain 60min default. Gated on a flag, not on
+  // "array is currently empty" -- so deleting every saved event later never
+  // silently re-seeds them back.
+  (function seedSavedEventsOnce() {
+    const FLAG = "book33-saved-events-seeded";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    if (!SAVED_EVENTS.length) {
+      const seeded = ROUTINE_TASKS.filter(t => t.track && Array.isArray(t.weekdays) && t.weekdays.length).map(t => {
+        const split = splitRtnIconTitle(t.title || "");
+        let durationMin = 60;
+        if (t.start && t.end) {
+          const d = timeToMin(t.end) - timeToMin(t.start);
+          if (d > 0) durationMin = d;
+        }
+        return { id: uid(), title: split.rest || t.title || "", track: t.track, category: t.category || "", icon: split.icon || "", durationMin };
+      });
+      if (seeded.length) { SAVED_EVENTS = seeded; saveSavedEvents(); }
+    }
+    try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+  })();
   // 2026-08-11 (CBD Work clinic-ops brief): strips a leading hand-typed icon/emoji
   // (same convention splitRtnIconTitle parses for the editor's Name row) and
   // lower-cases the rest, so "🩺 CBD Work" and "CBD Work" both resolve to the same
