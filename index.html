@@ -4903,6 +4903,10 @@
      mode-coloured (background set inline) or plain when untagged -- and stays tappable
      to see/edit what's there, unlike the old read-only Auto view this replaces. */
   .lm-cell-filled:hover { filter: brightness(1.15); }
+  /* 2026-08-21 (mode-less items were rendering invisible -- see renderLifeMap()'s own
+     comment): the ▪ glyph is plain text, not an emoji, so unlike .lm-cell-emoji's other
+     uses it needs an explicit colour rather than relying on inherited body text colour. */
+  .lm-cell-nomode .lm-cell-emoji { color: var(--ink-faint); }
   .lm-cell-empty { border: 1px dashed transparent; }
   .lm-cell-empty:hover { border-color: var(--gold); }
   .lm-cell-selecting { outline: 2px solid var(--gold); outline-offset: -2px; }
@@ -18094,7 +18098,7 @@
       <h1>🗺 Life Map</h1>
     </div>
     <div class="span-note" style="display:block;margin-bottom:16px" id="lmNote">
-      Your real week, coloured by Mode. Tap an empty hour to add something; tap a filled one to see what's there.
+      Your real week, coloured by Mode — plain grey means no Mode yet, tap it to tag one. Tap an empty hour to add something.
     </div>
 
     <div class="lm-panel">
@@ -19955,6 +19959,18 @@
     }
     return null;
   }
+  // 2026-08-21 (mode-less items audit, STEP 3): assigning a Mode from the view panel
+  // writes straight through the item's real store, exactly like any other edit --
+  // `edit.ref` is the actual EVENTS/ROUTINE_TASKS/RECURRING_EVENTS array element
+  // lmResolveEdit() found (never the transient generatedFor() occurrence, never ITEMS
+  // directly), so this is a normal in-place field write + the store's own real save
+  // function -- resyncItems() (called inside each of those) rebuilds ITEMS from here.
+  function lmSetItemMode(edit, modeId) {
+    edit.ref.mode = modeId;
+    if (edit.kind === "routine") saveRoutines();
+    else if (edit.kind === "recur") saveRecurringEvents();
+    else saveEvents(EVENTS);
+  }
   function renderLmCellPanel() {
     const host = document.getElementById("lmCellPanel");
     if (!host) return;
@@ -19964,11 +19980,23 @@
       const { item, mode, edit, day } = lmPanel;
       const endMin = item.start ? itemEndMin(item) : null;
       const timeTxt = item.allDay || !item.start ? "All day" : (endMin != null ? lmTimeRangeShort(item.start, minToTime(endMin)) : fmtTime(item.start));
+      // 2026-08-21 (mode-less items audit, STEP 3): only offer the picker when there's
+      // a real store to write the pick into (matches the Edit button's own `edit` gate
+      // just below) -- generatedFor() items with no backing store (birthdays,
+      // supplements, family tasks, Medical Tracking appointments) have nowhere safe to
+      // persist a mode, so they keep the plain "(no Mode set)" text only, same as today.
+      const showModePicker = mode.id === "home" && !!edit;
       host.innerHTML = `
         <div class="lm-panel-title">${WD_FULL[day]} · ${timeTxt}</div>
         <div class="lm-cell-panel-row">
           <div class="lm-cell-panel-title">${item.title ? esc(item.title) : "(untitled)"}</div>
           <div class="lm-cell-panel-meta"><span class="lm-dot" style="background:${mode.accent || "var(--ink-faint)"}"></span>${mode.emoji ? mode.emoji + " " : ""}${esc(mode.name)}${mode.id === "home" ? " (no Mode set)" : ""}</div>
+          ${showModePicker && MODES.length ? `<div class="lm-chip-row">
+            ${MODES.slice().sort((a, b) => a.order - b.order).map(m => `
+              <button type="button" class="lm-chip" data-lm-pick-mode="${m.id}">
+                <span class="lm-dot" style="background:${m.accent}"></span>${m.emoji ? m.emoji + " " : ""}${esc(m.name)}
+              </button>`).join("")}
+          </div>` : ""}
           <div class="lm-cell-panel-actions">
             ${edit ? `<button type="button" class="btn-save" data-lm-panel-edit>Edit</button>` : `<span class="lm-empty">Not editable from Life Map.</span>`}
             <button type="button" class="btn-cancel" data-lm-panel-close>Close</button>
@@ -20048,9 +20076,19 @@
         if (cell) {
           const runStart = hi === 0 || !grid[d][hi - 1] || grid[d][hi - 1].item !== cell.item;
           const hasMode = cell.mode.id !== "home";
-          gridHtml += `<div class="lm-cell lm-cell-filled" data-lm-filled-cell data-lm-day="${d}" data-lm-hour="${hour}"
-            style="${hasMode ? `background:${cell.mode.accent}` : ""}"
-            title="${esc(cell.title)}">${runStart && hasMode ? `<span class="lm-cell-emoji">${cell.mode.emoji}</span>` : ""}</div>`;
+          // 2026-08-21 (Linh audit, "mode-less items render invisible"): a mode-less
+          // cell used to get NO inline background at all, falling through to
+          // .lm-cell's own plain --field-bg -- confirmed live, bit-for-bit identical
+          // to an empty cell's computed colour. Real scheduled items (she currently
+          // has zero Modes assigned anywhere) were rendering completely invisible.
+          // Neutral fill here reuses --ink-faint (never gold -- gold already means
+          // "selected" in this grid), and the glyph is a plain ▪ rather than the
+          // "home" mode's own 🏠, which would wrongly imply a Mode is actually set.
+          const fillStyle = hasMode ? `background:${cell.mode.accent}` : `background:color-mix(in oklab, var(--ink-faint) 24%, var(--field-bg))`;
+          const glyph = hasMode ? cell.mode.emoji : "▪";
+          gridHtml += `<div class="lm-cell lm-cell-filled${hasMode ? "" : " lm-cell-nomode"}" data-lm-filled-cell data-lm-day="${d}" data-lm-hour="${hour}"
+            style="${fillStyle}"
+            title="${esc(cell.title)}">${runStart ? `<span class="lm-cell-emoji">${glyph}</span>` : ""}</div>`;
         } else {
           const selecting = lmSelecting && lmSelDay === d && lmSelHours && lmSelHours.has(hour);
           gridHtml += `<div class="lm-cell lm-cell-empty${selecting ? " lm-cell-selecting" : ""}" data-lm-empty-cell data-lm-day="${d}" data-lm-hour="${hour}"
@@ -20158,6 +20196,12 @@
     if (pickMode && lmPanel && lmPanel.type === "create") {
       lmPanel.modeId = pickMode.dataset.lmPickMode;
       renderLmCellPanel();
+      return;
+    }
+    if (pickMode && lmPanel && lmPanel.type === "view" && lmPanel.edit) {
+      lmSetItemMode(lmPanel.edit, pickMode.dataset.lmPickMode);
+      lmPanel = null;
+      renderLifeMap();
       return;
     }
     const panelSave = e.target.closest("[data-lm-panel-save]");
