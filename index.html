@@ -55052,49 +55052,98 @@
     var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return MON[d.getMonth()] + " " + d.getDate() + ", " + time;
   }
-  // Card lives just above "Sign out of Book33" (built once here; forceResyncBtn()
-  // below relocates the existing pull link to sit inside it, as its last child).
-  // Central Ink & Brass vars throughout, per CLAUDE.md -- this is new UI, unlike
-  // the legacy hardcoded-hex buttons elsewhere in this module.
+  // 2026-08-22 (Linh, "this is taking up too much space... make it smaller in one
+  // strip in a more inconspicuous way" -- the sync card + Sign out were the ~309px
+  // the Life Map no-scroll job couldn't account for, both unconditional .wrap
+  // children rendered below EVERY page despite the old comment calling this "the
+  // settings-screen sync card"). Builds TWO pieces now instead of one card:
+  // #b33SyncStrip -- always visible, one ~24px line (dot/status/time on the left,
+  // a compact "Sync now" + "..." on the right) -- and #b33SyncCard, repurposed
+  // from "the card" into the collapsed details row "..." reveals: the real 44px
+  // Sync button (CLAUDE.md's tap-target floor, not spare space -- keeps its own
+  // id/onclick, signoutBtn()/forceResyncBtn() below still find and fill it exactly
+  // as before, just laid out as a row via `order` rather than stacked). Kept the
+  // id b33SyncCard specifically so those two functions need zero lookup changes.
   function syncCardEl() {
-    if (document.getElementById("b33SyncCard")) return;
+    if (document.getElementById("b33SyncStrip")) return;
     if (!document.getElementById("b33ScSpinKeyframes")) {
       var css = document.createElement("style");
       css.id = "b33ScSpinKeyframes";
       css.textContent = "@keyframes b33scspin{to{transform:rotate(360deg)}}";
       document.head.appendChild(css);
     }
-    var card = document.createElement("div");
-    card.id = "b33SyncCard";
-    card.style.cssText = "max-width:430px;margin:32px auto 0;padding:16px 16px;border:1px solid var(--note-line);border-radius:12px;background:var(--raised);box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
+    var FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif";
 
-    var row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:8px";
+    var strip = document.createElement("div");
+    strip.id = "b33SyncStrip";
+    strip.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:430px;margin:16px auto 8px;padding:8px 4px 0;border-top:1px solid var(--note-line);box-sizing:border-box;font-family:" + FONT;
+
+    var left = document.createElement("div");
+    left.style.cssText = "display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden";
     var dot = document.createElement("span");
     dot.id = "b33ScDot";
-    dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none";
+    dot.style.cssText = "width:6px;height:6px;border-radius:50%;flex:none";
     var label = document.createElement("span");
     label.id = "b33ScLabel";
-    label.style.cssText = "font-size:13px;font-weight:700";
-    row.appendChild(dot); row.appendChild(label);
-
-    var sub = document.createElement("div");
+    label.style.cssText = "font-size:10.5px;font-weight:600;white-space:nowrap;flex:none";
+    var sep = document.createElement("span");
+    sep.textContent = "·";
+    sep.style.cssText = "font-size:10.5px;color:var(--ink-faint);flex:none";
+    var sub = document.createElement("span");
     sub.id = "b33ScSub";
-    sub.style.cssText = "font-size:11px;color:var(--ink-faint);margin:4px 0 12px 16px";
+    sub.style.cssText = "font-size:10.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    left.appendChild(dot); left.appendChild(label); left.appendChild(sep); left.appendChild(sub);
+
+    var right = document.createElement("div");
+    right.style.cssText = "display:flex;align-items:center;gap:10px;flex:none";
+    var syncNow = document.createElement("a");
+    syncNow.id = "b33ScSyncNowCompact";
+    syncNow.href = "#";
+    syncNow.textContent = "Sync now";
+    syncNow.style.cssText = "font-size:10.5px;color:var(--ink-faint);text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    // same pushNow(true) the real button below fires -- a second, smaller entry
+    // point to the identical action, not a second code path.
+    syncNow.onclick = function (e) { e.preventDefault(); pushNow(true); };
+    var more = document.createElement("button");
+    more.type = "button";
+    more.id = "b33ScMore";
+    more.setAttribute("aria-expanded", "false");
+    more.setAttribute("aria-label", "More sync options");
+    more.textContent = "⋯";
+    more.style.cssText = "border:none;background:none;color:var(--ink-faint);font-size:14px;line-height:1;padding:4px 6px;min-width:24px;min-height:24px;cursor:pointer;font-family:" + FONT;
+    right.appendChild(syncNow); right.appendChild(more);
+
+    strip.appendChild(left); strip.appendChild(right);
+
+    var card = document.createElement("div");
+    card.id = "b33SyncCard";
+    card.hidden = true;
+    card.style.cssText = "display:flex;align-items:center;flex-wrap:wrap;gap:12px;max-width:430px;margin:0 auto 16px;box-sizing:border-box;font-family:" + FONT;
 
     var btn = document.createElement("button");
     btn.type = "button";
     btn.id = "b33ScBtn";
-    btn.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;border:1px solid var(--margin-rule);background:var(--margin-rule);color:var(--accent-on);font:700 13px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:12px;border-radius:9px;cursor:pointer;box-sizing:border-box";
+    btn.style.cssText = "display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid var(--margin-rule);background:var(--margin-rule);color:var(--accent-on);font:700 13px " + FONT + ";padding:12px 16px;border-radius:9px;cursor:pointer;box-sizing:border-box;flex:none";
     // manual trigger of the SAME code path auto-sync uses -- force=true only skips
     // the "nothing marked DIRTY" guard, see pushNow() above.
     btn.onclick = function () { pushNow(true); };
-
-    card.appendChild(row);
-    card.appendChild(sub);
     card.appendChild(btn);
-    var out = document.getElementById("b33Signout");
-    (out ? out.parentElement : (document.querySelector(".wrap") || document.body)).insertBefore(card, out);
+
+    more.onclick = function () {
+      var opening = card.hidden;
+      card.hidden = !opening;
+      more.setAttribute("aria-expanded", String(opening));
+    };
+    // collapses on navigation so it's never left open eating space on a page
+    // she's moved on to -- watches body[data-view] rather than reaching into the
+    // main app's render/routing (this module stays a self-contained IIFE, same
+    // boundary fmtLastSynced()'s own duplicate above already keeps).
+    new MutationObserver(function () {
+      if (!card.hidden) { card.hidden = true; more.setAttribute("aria-expanded", "false"); }
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-view"] });
+
+    (document.querySelector(".wrap") || document.body).appendChild(strip);
+    (document.querySelector(".wrap") || document.body).appendChild(card);
     updateSyncCard();
   }
   // Refreshes the card's text/colors/disabled-state from current syncState() --
@@ -55124,6 +55173,16 @@
     btn.style.opacity = btn.disabled ? "0.55" : "1";
     btn.style.cursor = btn.disabled ? "default" : "pointer";
     btn.innerHTML = "";
+    // 2026-08-22 (collapsed-strip rebuild): the strip's own compact "Sync now"
+    // link fires the identical pushNow(true) the real button does -- mirror the
+    // same disabled state onto it so a mid-sync tap can't double-fire from
+    // whichever entry point happens to be visible. Guarded null-check since a
+    // stale card without the strip rebuild would otherwise silently no-op here.
+    var syncNowCompact = document.getElementById("b33ScSyncNowCompact");
+    if (syncNowCompact) {
+      syncNowCompact.style.opacity = btn.disabled ? "0.55" : "1";
+      syncNowCompact.style.pointerEvents = btn.disabled ? "none" : "auto";
+    }
     if (st === "syncing") {
       label.textContent = "Syncing…";
       sub.textContent = "Pushing your changes to the cloud";
@@ -55240,20 +55299,29 @@
   }
   // Sign out → switch login. signOut() clears the session; onAuthStateChange then
   // drops straight to sign-in (baked config stays, so no Connect step).
+  // 2026-08-22 (collapsed-strip rebuild): used to always append straight to .wrap,
+  // standing alone below the card. Now appends INSIDE #b33SyncCard (the details
+  // row syncCardEl() builds, called before this in go() so it already exists) --
+  // order:3 + margin-left:auto is what actually pushes it to the right of the row
+  // regardless of DOM append order, since forceResyncBtn() below also appends into
+  // the same row and both need a stable visual position independent of which one
+  // runs last. Falls back to .wrap directly if the row doesn't exist for any
+  // reason, same as before.
   function signoutBtn() {
     if (document.getElementById("b33Signout")) return;
     var b = document.createElement("a");
     b.id = "b33Signout";
     b.href = "#";
     b.textContent = "Sign out of Book33";
-    b.style.cssText = "display:block;text-align:center;margin:32px auto 44px;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#6a5a7c;text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    b.style.cssText = "font-size:11px;color:#8a7a9c;text-decoration:underline;text-underline-offset:2px;cursor:pointer;white-space:nowrap;order:3;margin-left:auto";
     b.onclick = function (e) {
       e.preventDefault();
       b.textContent = "Signing out…";
       var done = function () { try { b.remove(); } catch (e) {} };
       if (sb) sb.auth.signOut().then(done, done); else done();
     };
-    (document.querySelector(".wrap") || document.body).appendChild(b);
+    var card = document.getElementById("b33SyncCard");
+    (card || document.querySelector(".wrap") || document.body).appendChild(b);
   }
   // 2026-08-07 (Linh: "this cannot happen again" -- comprehensive sync audit): every
   // fix above closes a specific mechanism, but there was no way to just GET OUT of a
@@ -55267,13 +55335,17 @@
   // 2026-08-09: relocated inside the new sync card (secondary link below the push
   // button, per the brief) instead of standing alone above Sign out -- same pull
   // behavior, unchanged, just re-parented.
+  // 2026-08-22 (collapsed-strip rebuild): was a block line stacked below the push
+  // button; now a row item inside the same details row (order:2, between the
+  // button at its default order:0 and Sign out's order:3) -- text/onclick/confirm
+  // flow all unchanged.
   function forceResyncBtn() {
     if (document.getElementById("b33Resync")) return;
     var b = document.createElement("a");
     b.id = "b33Resync";
     b.href = "#";
     b.textContent = "↻ Force resync from cloud";
-    b.style.cssText = "display:block;text-align:center;margin:12px auto 0;font:400 12px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--ink-faint);text-decoration:underline;text-underline-offset:2px;cursor:pointer";
+    b.style.cssText = "font-size:11px;color:var(--ink-faint);text-decoration:underline;text-underline-offset:2px;cursor:pointer;white-space:nowrap;order:2";
     b.onclick = function (e) {
       e.preventDefault();
       if (!confirm("Replace everything on this device with what's currently saved in the cloud? Any edit made only here that hasn't synced yet will be lost.")) return;
@@ -55427,7 +55499,11 @@
     // digest this boot, even once ready. One direct push here (bypassing the
     // interception, reading whatever's already in localStorage) covers that.
     pushWidgetPublic(localStorage.getItem(WIDGET_PUBLIC_KEY));
-    hideOverlay(); badge(); signoutBtn(); syncCardEl(); forceResyncBtn(); subscribe(); setLive(true);
+    // 2026-08-22 (collapsed-strip rebuild): syncCardEl() now has to run FIRST --
+    // it builds the details row (#b33SyncCard) that signoutBtn()/forceResyncBtn()
+    // both append themselves into; either running before it would fall through to
+    // their .wrap-direct fallback instead and end up outside the collapsed row.
+    hideOverlay(); badge(); syncCardEl(); signoutBtn(); forceResyncBtn(); subscribe(); setLive(true);
     placeCosmicMascot();
     placeDateLine();
     placeThemeToggle();
