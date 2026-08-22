@@ -11683,13 +11683,39 @@
      its spot -- the two filters are independent and can both have something to
      report at once (origin-hidden and mode-hidden are different sets of items).
      Same shape, its own accent (--margin-rule instead of --gold) so the two read
-     as related-but-distinct chrome, not one pill mysteriously changing its text. */
+     as related-but-distinct chrome, not one pill mysteriously changing its text.
+     2026-08-22 (Linh: "make the hidden-by-Mode control obvious and reversible" --
+     she didn't know this was a control, or that tapping it revealed everything):
+     was plain textContent, single-state (only ever rendered while something was
+     hidden, so it read as a passing alert). Now a real two-state toggle -- see
+     renderModeHiddenPill()'s own comment -- so it needs two children (a
+     truncating state label + a fixed-width hint, same "label + small uppercase
+     hint" shape #trackSummaryBtn/.who-edit already use) instead of one text
+     node, and a visibly distinct "on" (revealed) look instead of relying on
+     text alone to carry the state. */
   .tl-mode-hidden-pill {
     top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px + 34px + 6px);
     background: var(--margin-rule); color: var(--accent-on);
     max-width: min(280px, calc(100vw - 28px));
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 8px;
   }
+  .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl-mode-hidden-pill .tlmp-hint {
+    flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: color-mix(in oklab, var(--accent-on) 72%, transparent);
+  }
+  /* the "on" (revealed) state -- a genuinely different fill, not just different
+     text, so it reads as a flipped switch even at a glance. NOT --accent-on:
+     measured live in dark theme, --accent-on resolves to plain white and
+     --gold-bright to a light/bright gold there (#EAC24E) -- white-on-that is
+     roughly a 1.7:1 contrast ratio, nowhere near the 4.5:1 floor. #241B04 is
+     the SAME dark-on-gold-bright pairing .cad-variant-btn[aria-pressed="true"]
+     already uses (a closer match than .tl-desk-done's --accent-on, which
+     turns out not to be the safe precedent its own comment nearby assumed) --
+     ~10:1 against the dark-theme gold and comfortably high against light
+     theme's --cosmic-gold too (#D8B45C, also a light/bright tone). */
+  .tl-mode-hidden-pill[aria-pressed="true"] { background: var(--gold-bright); color: #241B04; }
+  .tl-mode-hidden-pill[aria-pressed="true"] .tlmp-hint { color: color-mix(in oklab, #241B04 72%, transparent); }
   /* To-do's own mode-hidden pill (stage 5) -- same message/reveal-tap idiom as
      .tl-mode-hidden-pill above, but the To-do page is a plain top-to-bottom
      scrolling list, not a fixed-viewport calendar, so this one sits IN FLOW right
@@ -17263,8 +17289,17 @@
          mode-filtering hides is ever silent. Same global-chrome placement as the origin
          pill just above (a page-agnostic sibling, day-view-only via CSS) and the SAME
          "tap to reveal everything" shape, but content-driven (names the top few hidden
-         items) rather than a static count, since her spec asks for both. -->
-    <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" hidden></button>
+         items) rather than a static count, since her spec asks for both.
+         2026-08-22 ("make the hidden-by-Mode control obvious and reversible"): was a
+         single textContent node, hidden whenever nothing was filtered -- read as a
+         passing alert, not a setting she owned (she didn't know tapping it revealed
+         everything). Now always rendered whenever a real (non-Home) Mode is active,
+         in either state, and a real two-way toggle -- see renderModeHiddenPill()/
+         its click handler. aria-pressed reflects "revealed" (true) vs "filtered"
+         (false); two child spans (state text + a small fixed hint) instead of one,
+         same shape #trackSummaryBtn/.who-edit already use for "label + small
+         uppercase hint". -->
+    <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
   </div>
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
@@ -39686,23 +39721,55 @@
   // this pill is a single-line, 280px, ellipsis-truncated button (see .tl-mode-
   // hidden-pill CSS), so on a heavy filter day it's the item-name preview that
   // should get clipped first, never the widgets fact.
+  // 2026-08-22 ("make the hidden-by-Mode control obvious and reversible" -- she found
+  // Sleep missing from Day view, didn't know this pill was tappable): rebuilt as an
+  // always-rendered, both-ways-labelled toggle instead of an appear-only-when-hidden
+  // alert -- her own diagnosis of why it read wrong ("she did not know the pill was a
+  // control"). Hidden only for Home (am.shows === null; modeVisible() filters nothing
+  // there, so there is genuinely no toggle to offer -- matches the Home exception
+  // already documented on modeVisible() itself). Every other mode: always visible,
+  // states its OWN current side honestly ("Showing X only · N hidden" filtered,
+  // "Showing everything" revealed) rather than only ever announcing one direction --
+  // this is also what makes STEP 4's per-mode reset harmless instead of silent: the
+  // reset still happens (mtActiveTakeoverModeId()'s Study/Cleaning takeover genuinely
+  // needs it, see that function's own comment -- a real reason, not a default left
+  // alone), but there is no longer a moment where the control just isn't there to
+  // check; whatever the real state is, this says so the instant she looks.
   function renderModeHiddenPill(hidden, am) {
     const pill = document.getElementById("tlModeHiddenPill");
-    if (!pill) return;
-    const widgetsHidden = document.body.classList.contains("mode-focus");
-    if (state.modeRevealAll || (!hidden.length && !widgetsHidden)) { pill.hidden = true; return; }
+    const stateEl = document.getElementById("tlModeHiddenPillState");
+    const hintEl = document.getElementById("tlModeHiddenPillHint");
+    if (!pill || !stateEl || !hintEl) return;
+    if (am.id === "home") { pill.hidden = true; return; }
     pill.hidden = false;
-    if (!hidden.length) { pill.textContent = "Your widgets are hidden for focus · tap to show"; return; }
-    const names = hidden.map(e => e.title).filter(Boolean);
-    const shown = names.slice(0, 3).join(", ");
-    const more = names.length > 3 ? ` +${names.length - 3} more` : "";
-    const widgetsPart = widgetsHidden ? " + widgets" : "";
-    pill.textContent = `${hidden.length} thing${hidden.length === 1 ? "" : "s"}${widgetsPart} hidden · ${shown}${more}`;
+    pill.setAttribute("aria-pressed", String(!!state.modeRevealAll));
+    if (state.modeRevealAll) {
+      stateEl.textContent = "Showing everything";
+      hintEl.textContent = "Filter ›";
+      return;
+    }
+    const widgetsHidden = document.body.classList.contains("mode-focus");
+    let detail = "";
+    if (hidden.length) {
+      const names = hidden.map(e => e.title).filter(Boolean);
+      const shown = names.slice(0, 3).join(", ");
+      const more = names.length > 3 ? ` +${names.length - 3} more` : "";
+      const widgetsPart = widgetsHidden ? " + widgets" : "";
+      detail = ` · ${hidden.length} thing${hidden.length === 1 ? "" : "s"}${widgetsPart} hidden: ${shown}${more}`;
+    } else if (widgetsHidden) {
+      detail = " · widgets hidden";
+    }
+    stateEl.textContent = `Showing ${am.name} only${detail}`;
+    hintEl.textContent = "Show all ›";
   }
+  // 2026-08-22: real two-way toggle now (was always-true, one-way -- the only way
+  // back to filtered used to be waiting for the active Mode itself to change). Flips
+  // whichever way it isn't right now; renderModeHiddenPill()'s own aria-pressed read
+  // is what decides current side, so this never needs to know it independently.
   document.getElementById("tlModeHiddenPill").addEventListener("click", () => {
-    state.modeRevealAll = true;
+    state.modeRevealAll = !state.modeRevealAll;
     // renderDay() -> renderTimeline() refreshes .mode-focus itself (applyModeFocusClass
-    // above), so numerology/astrology comes back the instant this pill does.
+    // above), so numerology/astrology comes back (or re-hides) the instant this pill does.
     renderDay();
   });
   // §4 to-do mode-tagging (stage 5): "the active mode's to-dos, PLUS untagged ones" --
