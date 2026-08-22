@@ -969,6 +969,16 @@ app's actual landing surface is `#dayPage` (`state.view` defaults to `"day"`), w
 isn't part of this sweep and already suppresses `.astro` via its own established rule;
 no other `.bd-head` page reads as a genuine home/landing surface.
 
+## Life Map never scrolls (standing rule, adopted 2026-08-22)
+Life Map only — every other page keeps scrolling normally. Linh: "make it so there is
+no scrolling on this page whatsoever." The whole week, top to bottom, always fits the
+window: no page scroll, and no scrollbar inside the grid either. If space is short,
+reduce row height (down to the legible floor, currently 9px) or content — never add a
+scrollbar. Reserve only what genuinely sits below the page in the current layout,
+measured live (a hidden/fixed/absolute element reserves nothing) — don't assume a
+fixed gap between the page and its container just because they happened to grow
+together in one test. `lmComputeRowHeight()` is the reference implementation.
+
 ## Modes law (standing rule, adopted 2026-08-22)
 Applies to every surface in index.html. Supersedes both the old "Work Mode / Personal
 Mode" system and the old event-tag Modes system — where anything elsewhere conflicts
