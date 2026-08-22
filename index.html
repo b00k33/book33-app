@@ -5019,9 +5019,10 @@
   .lm-tool:hover { background: color-mix(in oklab, var(--ink-faint) 16%, var(--field-bg)); color: var(--ink-soft); }
   /* 2026-08-21 (paint palette rebuild, Linh's approved mockup -- book33-lifemap-
      final-mockup.html, pasted into chat and matched exactly): the page becomes one
-     non-scrolling row -- a slim palette strip beside the week grid -- and the old
-     below-grid #lmCellPanel (which grew the page taller every time it opened) is now
-     a floating popover instead (.lm-popover, positioned by lmPositionPopover()). */
+     non-scrolling row -- a slim palette strip beside the week grid. The old below-
+     grid #lmCellPanel (which grew the page taller every time it opened) went through
+     a floating-popover phase next; 2026-08-22 moved it again, to a docked side panel/
+     drawer -- see .lm-side-panel further down for the current shape. */
   /* 2026-08-22 ("stop guessing the space, let the layout give it" -- blocker 1):
      flex-start meant the week panel only ever grew as tall as ITS OWN content --
      it never stretched to fill #lifeMapPage's real available height, which is
@@ -5200,7 +5201,18 @@
      24-hour grid) and could again. 1fr rows split .lm-grid-wrap's real height across
      every row with no rounding remainder -- the old fixed-px-per-row approach could
      waste close to a full row to integer flooring. */
-  .lm-grid { display: grid; grid-template-columns: 32px repeat(7, 1fr); gap: 1px; user-select: none; cursor: crosshair; height: 100%; }
+  .lm-grid { display: grid; grid-template-columns: 32px repeat(7, 1fr); gap: 1px; user-select: none; cursor: crosshair; height: 100%; position: relative; }
+  /* 2026-08-22 (Linh: "connect Sleep across midnight"): absolutely positioned inside
+     .lm-grid (position:relative above, added for exactly this) rather than as a real
+     grid item -- an overnight Sleep's two halves sit in adjacent day COLUMNS at
+     opposite ends of the grid's height (previous day's last row, next day's first
+     row; see lmDrawSleepConnectors()), never two cells a normal grid span could
+     bridge. pointer-events:none so it never steals a paint/erase/tap click from the
+     cells it passes over. */
+  .lm-sleep-bridge { position: absolute; width: 2px; background: var(--gold-bright); opacity: .8; pointer-events: none; transform: translateX(-50%); }
+  .lm-sleep-bridge::before, .lm-sleep-bridge::after { content: ""; position: absolute; left: 50%; width: 6px; height: 6px; border-radius: 50%; background: var(--gold-bright); transform: translate(-50%, -50%); }
+  .lm-sleep-bridge::before { top: 0; }
+  .lm-sleep-bridge::after { top: 100%; }
   .lm-hd { font-size: 9.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 2px 0 5px; letter-spacing: .04em; }
   .lm-hr-lbl {
     font-size: clamp(8.5px, calc(var(--lm-row-h, 12px) * 0.5), 12px);
@@ -5271,18 +5283,51 @@
   .lm-cell-panel-title { font-size: 14px; font-weight: 700; color: var(--ink); }
   .lm-cell-panel-meta { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 7px; }
   .lm-cell-panel-actions { display: flex; gap: 8px; margin-top: 4px; }
-  /* 2026-08-21 (paint palette rebuild, STEP 5/7): #lmCellPanel floats near whatever
-     filled cell it's for (lmPositionPopover()) instead of sitting below the grid in
-     normal flow -- that stacking was the page growth Linh asked to remove. Still
-     .lm-panel underneath (background/border/radius/padding unchanged), this only adds
-     the floating behaviour on top. */
+  /* 2026-08-21 (paint palette rebuild, STEP 5/7): #lmModesPanel (only -- see
+     2026-08-22 below for #lmCellPanel, which moved off this shape) floats near
+     whatever triggered it instead of sitting in normal flow -- that stacking was the
+     page growth Linh asked to remove. Still .lm-panel underneath (background/border/
+     radius/padding unchanged), this only adds the floating behaviour on top. */
   .lm-popover { position: fixed; z-index: 400; max-width: min(320px, calc(100vw - 20px)); margin-bottom: 0; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
   /* 2026-08-21 (Linh: "add function so i can edit the modes... bring a side tab for
-     it"): the Modes editor, same floating/never-grows-the-page popover shape as
-     #lmCellPanel above -- own width/height cap since a list of Modes (plus one
+     it"): the Modes editor -- own width/height cap since a list of Modes (plus one
      expanded editor) runs taller than a single cell's info. No border, same as
      every other Life Map surface after the gold-outline removal above. */
   .lm-modes-panel { z-index: 410; width: min(320px, calc(100vw - 20px)); max-height: min(560px, calc(100vh - 20px)); overflow-y: auto; }
+  /* 2026-08-22 (Linh: "pin the tap panel to a fixed side panel" -- SUPERSEDES the
+     floating-popover placement above for #lmCellPanel specifically; #lmModesPanel is
+     untouched, still a .lm-popover). Desktop: a real flex sibling of .lm-weekbox
+     inside .lm-stage (see the HTML), collapsed to width:0 until .open -- .lm-weekbox
+     already carries flex:1/min-width:0 (2026-08-22, "stop guessing the space") so it
+     reflows to give this the room, no JS-computed widths anywhere. Mobile: repurposed
+     into a slide-in overlay drawer below, modelled on -- not sharing state or markup
+     with -- #dayRightDrawer's own transform+.open convention (same reason that one
+     doesn't use [hidden]: a transition needs a real "off-screen but present" starting
+     box to animate from). Content itself is still exactly what renderLmCellPanel()
+     already builds -- only the container changed. */
+  .lm-side-panel {
+    flex: none; width: 0; min-width: 0; min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column; margin-bottom: 0;
+    /* .lm-panel's own padding (below) is real px on both sides -- border-box can't
+       shrink a box past its own padding, so width:0 alone rendered a 36px sliver
+       (18px+18px) instead of truly collapsing (confirmed live). Zeroing padding here
+       too, restored by .open, is what actually gets to 0. */
+    padding: 0;
+    transition: width .15s ease, padding-left .15s ease, padding-right .15s ease;
+  }
+  .lm-side-panel.open { width: 220px; padding: 16px 18px; overflow-y: auto; }
+  @media (max-width: 640px) {
+    .lm-side-panel {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
+      width: min(78%, 320px); overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform .22s ease;
+      box-shadow: -8px 0 24px rgba(0,0,0,.4);
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .lm-side-panel.open { width: min(78%, 320px); transform: translateX(0); }
+  }
   .lm-modes-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
   .lm-modes-close { border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px; }
   .lm-modes-close:hover { color: var(--ink); }
@@ -11683,6 +11728,21 @@
     background: var(--gold); color: #1a1408; font-size: 11px; font-weight: 700; cursor: pointer;
     box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
+  /* 2026-08-22 (Linh: her screenshot showed this pill floating over a Life Map cell)
+     bug fix, belt-and-braces: both hidden-pills' own `hidden` attribute is driven
+     purely by count/flag logic with no page check at all -- #tlOriginHiddenPill's
+     origin-hidden state is session-only and can be left "on" from Day view with
+     nothing to ever clear it walking away; #tlModeHiddenPill is only ever touched
+     inside renderTimeline() (Day-view-only), so once shown it stays hidden=false on
+     every other page forever. .tl-hidden-pill-row (their wrapper) is deliberately
+     display:contents (no box, see its own comment) so it can't scope them either.
+     Real page-scoping here, keyed off #wrap's own data-view (kept current on every
+     navigation by render(), see its "document.getElementById('wrap').dataset.view =
+     state.view" line) -- this holds even if some future code path forgets to
+     re-hide one of these correctly, the same way this bug happened in the first
+     place. Day-view behaviour (click handler, text, two-way toggle) untouched --
+     this is pure visibility, layered on top of the existing hidden-attribute logic. */
+  #wrap[data-view]:not([data-view="day"]) .tl-origin-hidden-pill { display: none !important; }
   @media (max-width: 640px) {
     .tl-origin-filter .track-opt { padding: 5px 8px; font-size: 9.5px; }
   }
@@ -18713,8 +18773,15 @@
 
     <!-- 2026-08-21 (paint palette rebuild, STEP 5): one non-scrolling row -- the
          palette strip beside the week grid, replacing the old below-grid panel that
-         used to grow the page. #lmCellPanel is now a floating popover (see .lm-popover
-         and lmPositionPopover()), sitting outside .lm-stage so it never affects flow. -->
+         used to grow the page.
+         2026-08-22 (Linh: "pin the tap panel to a fixed side panel"): #lmCellPanel
+         moved IN as .lm-stage's third flex child (was a page-level floating popover
+         sitting outside .lm-stage) -- on desktop it's a real docked column that
+         reflows .lm-weekbox to make room; on mobile (.lm-side-panel's own media
+         query) it's re-styled into a slide-in overlay drawer instead, so it stays
+         out of flow there exactly like before. No [hidden] any more -- see
+         renderLmCellPanel()'s own comment for why a transition needs it always
+         present. -->
     <div class="lm-stage">
       <div class="lm-strip" id="lmStrip"></div>
       <div class="lm-panel lm-weekbox">
@@ -18731,9 +18798,9 @@
         </div>
         <div class="lm-untimed" id="lmUntimed" hidden></div>
       </div>
+      <div class="lm-panel lm-side-panel" id="lmCellPanel"></div>
     </div>
 
-    <div class="lm-panel lm-popover" id="lmCellPanel" hidden></div>
     <div class="lm-panel lm-popover lm-modes-panel" id="lmModesPanel" hidden></div>
   </div>
 
@@ -20567,11 +20634,11 @@
   let lmSelecting = false;
   // 2026-08-21 (paint palette rebuild, Linh's approved mockup): the "create" panel type
   // is gone -- painting commits immediately, no picker/Save/title step (assumption (a)
-  // in the publish report). lmPanel is now only ever null or a "view" popover:
-  // {type:"view", day, item, mode, edit, anchorEl}. anchorEl is the exact filled-cell
-  // element that was clicked, used once by lmPositionPopover() to place the floating
-  // popover next to it -- never read after that render, so a stale/detached reference
-  // across a later re-render is never a concern.
+  // in the publish report). lmPanel is now only ever null or a "view" panel:
+  // {type:"view", day, item, mode, edit}. 2026-08-22: dropped anchorEl -- it existed
+  // solely for lmPositionPopover() (deleted, see renderLmCellPanel()) to place the old
+  // floating popover next to the tapped cell; the fixed side panel/drawer that
+  // replaced it doesn't anchor to anything.
   let lmPanel = null;
   // Which Mode (a real mode id) or "eraser" is armed on the palette strip, or null --
   // the ONE piece of state the whole paint gesture hangs off. Deliberately NOT
@@ -20770,34 +20837,24 @@
     else if (edit.kind === "recur") saveRecurringEvents();
     else saveEvents(EVENTS);
   }
-  // 2026-08-21 (paint palette rebuild): floats #lmCellPanel next to whatever filled
-  // cell it's for instead of it sitting in normal document flow -- it's a fixed-
-  // position popover now (see .lm-popover), so nothing here can grow the page taller.
-  // anchorEl is the exact cell element the click landed on; a plain viewport-clamped
-  // placement, not a retrofit of clampPopoverToViewport() (that helper assumes the
-  // popover is already a CSS-positioned descendant of its trigger, which this single
-  // shared, page-level element isn't).
-  function lmPositionPopover(anchorEl) {
-    const host = document.getElementById("lmCellPanel");
-    if (!host || !anchorEl) return;
-    const margin = 10;
-    const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
-    const r = anchorEl.getBoundingClientRect();
-    host.style.left = "0px"; host.style.top = "0px";
-    const hr = host.getBoundingClientRect();
-    let left = Math.min(Math.max(r.left, margin), vw - margin - hr.width);
-    let top = r.bottom + 6;
-    if (top + hr.height > vh - margin) top = r.top - hr.height - 6;
-    top = Math.min(Math.max(top, margin), vh - margin - hr.height);
-    host.style.left = `${Math.round(left)}px`;
-    host.style.top = `${Math.round(top)}px`;
-  }
+  // 2026-08-22 (Linh: "pin the tap panel to a fixed side panel" -- SUPERSEDES the
+  // floating popover this used to be, lmPositionPopover() and all): #lmCellPanel is
+  // now .lm-side-panel, a real flex sibling on desktop and a slide-in drawer on
+  // mobile (see its CSS) -- both driven by one .open class, toggled here, rather than
+  // [hidden]. [hidden] forces display:none, which gives a CSS transition no "before"
+  // frame to animate from (confirmed live: instant pop-in, no slide) -- exactly why
+  // #dayRightDrawer's own drawer doesn't use it either. Closing only toggles the
+  // class off and returns -- it deliberately leaves the last-open item's markup in
+  // place (invisible either way: width:0/overflow:hidden on desktop, translateX off-
+  // screen on mobile) so a close plays as a real collapse/slide-out instead of the
+  // content vanishing first; the next open's innerHTML rebuild below overwrites it
+  // before it's ever visible again.
   function renderLmCellPanel() {
     const host = document.getElementById("lmCellPanel");
     if (!host) return;
-    if (!lmPanel) { host.hidden = true; host.innerHTML = ""; return; }
-    host.hidden = false;
-    const { item, mode, edit, day, anchorEl } = lmPanel;
+    host.classList.toggle("open", !!lmPanel);
+    if (!lmPanel) return;
+    const { item, mode, edit, day } = lmPanel;
     const endMin = item.start ? itemEndMin(item) : null;
     const timeTxt = item.allDay || !item.start ? "All day" : (endMin != null ? lmTimeRangeShort(item.start, minToTime(endMin)) : fmtTime(item.start));
     // 2026-08-21 (mode-less items audit, STEP 3): only offer the picker when there's
@@ -20822,7 +20879,6 @@
           <button type="button" class="btn-cancel" data-lm-panel-close>Close</button>
         </div>
       </div>`;
-    lmPositionPopover(anchorEl);
   }
   // Line-drawn SVG icons for the palette strip, same viewBox/stroke convention as the
   // event-form progression rail (stroke="currentColor" so a wrapping element's own
@@ -20901,11 +20957,11 @@
         ${lmSvgIcon("gear")}
       </button>`;
   }
-  // 2026-08-21 (Modes editor): a small dedicated flyout placer, NOT a reuse of
-  // lmPositionPopover() -- that one anchors below/above a small clicked point (a
-  // grid cell); this one anchors beside the strip's own SIDE, a different shape
-  // (same reasoning lmPositionPopover's own comment gives for not reusing
-  // clampPopoverToViewport). Prefers flying out to the strip's right; falls back to
+  // 2026-08-21 (Modes editor): a small dedicated flyout placer, not a retrofit of
+  // clampPopoverToViewport (that helper assumes the popover is already a CSS-
+  // positioned descendant of its trigger, which this single shared, page-level
+  // element isn't) -- this one anchors beside the strip's own SIDE. Prefers flying
+  // out to the strip's right; falls back to
   // dropping below it when there isn't room -- the same side the strip itself moves
   // to under the 640px wrap breakpoint, so the fallback still reads as "next to the
   // strip" in that layout. Always clamped inside the viewport, never off-screen.
@@ -21143,6 +21199,12 @@
     }).join("");
     const { grid, untimed } = lmWeekGrid(start);
     LM_AUTO_UNTIMED = untimed;
+    // 2026-08-22 (Linh: "connect Sleep across midnight"): which days (this loop's `d`)
+    // open with a slot-0 cell that's really the tail of the PREVIOUS day's overnight
+    // run, not a new one -- collected here (where grid[d-1] is already in scope) and
+    // drawn once the grid is real DOM, by lmDrawSleepConnectors() below.
+    const lastSlotIdx = LM_SLOTS.length - 1;
+    const lmMidnightBridges = [];
     LM_SLOTS.forEach((slotMin, si) => {
       // half-hour rows get no label -- only :00 rows do, per the approved mockup, so
       // the gutter column doesn't get noisy at 2x the old row count.
@@ -21163,7 +21225,22 @@
           // and every click handler's own grid[day][si].item lookup) is untouched,
           // so clicking any cell in a merged run still opens THAT cell's real
           // underlying entry, never just the run's first one.
-          const runStart = si === 0 || !grid[d][si - 1] || grid[d][si - 1].mode.id !== cell.mode.id;
+          // 2026-08-22 pt.2 ("connect Sleep across midnight"): that same-mode run can
+          // now continue INTO si===0 from the previous day's own last slot -- each
+          // day's items come from its own calendar date (lmWeekGrid()'s `k = keyOf(d)`
+          // filter), so an overnight Sleep is never one cell wrapping past midnight,
+          // it's two real, separately-dated entries that happen to be mode-adjacent
+          // across the day boundary (confirmed live against her actual data: a night's
+          // sleep is logged as several date-stamped fragments, not one cross-midnight
+          // span). grid[d-1] is only ever the CURRENT week's own earlier column here
+          // (this loop's d runs 0..6 for the SAME lmWeekGrid() call) -- Sunday's own
+          // tail into the FOLLOWING week's Monday is a different render entirely
+          // (next week's grid doesn't exist yet when this one draws), so that one
+          // edge intentionally keeps today's plain behaviour; every other boundary in
+          // the visible week (Mon->Tue up to Sat->Sun) is covered.
+          const isMidnightContinuation = si === 0 && d > 0 && grid[d - 1][lastSlotIdx] && grid[d - 1][lastSlotIdx].mode.id === cell.mode.id;
+          if (isMidnightContinuation) lmMidnightBridges.push(d);
+          const runStart = !isMidnightContinuation && (si === 0 || !grid[d][si - 1] || grid[d][si - 1].mode.id !== cell.mode.id);
           const hasMode = cell.mode.id !== "home";
           // 2026-08-21 (Linh audit, "mode-less items render invisible"): a mode-less
           // cell used to get NO inline background at all, falling through to
@@ -21197,6 +21274,46 @@
     renderLmCellPanel();
     lmComputeRowHeight();
     lmEnsureRowHeightObserver();
+    lmDrawSleepConnectors(lmMidnightBridges, lastSlotIdx);
+  }
+  // 2026-08-22 (Linh: "connect Sleep across midnight"): the bridgeDays list is which
+  // days (this week's d, 1..6) open on a continuation of the PREVIOUS day's run (see
+  // isMidnightContinuation above) -- for each, measures the two REAL cells' rendered
+  // rects (getBoundingClientRect(), taken after lmComputeRowHeight() has already set
+  // final row heights above -- never hardcoded offsets, since row height itself is
+  // dynamic per lmComputeRowHeight()'s own floor/ceiling/1fr logic) and drops a small
+  // gold marker between them. Geometrically these two cells are the LAST slot of one
+  // column and the FIRST slot of the next -- opposite ends of the whole grid's height,
+  // not neighbours -- so "between them" is a thin line at their shared column
+  // boundary running the full measured gap, with a dot at each real edge; there's no
+  // shorter path that still touches both actual cells. .lm-grid keeps its own
+  // innerHTML rebuild every render (top of this function), so previous bridges are
+  // already gone by the time this runs -- nothing to clean up going in.
+  function lmDrawSleepConnectors(bridgeDays, lastSlotIdx) {
+    const page = document.getElementById("lifeMapPage");
+    const gridEl = document.getElementById("lmGrid");
+    if (!page || page.hidden || !gridEl || !bridgeDays.length) return;
+    const gridRect = gridEl.getBoundingClientRect();
+    bridgeDays.forEach(d => {
+      const fromCell = gridEl.querySelector(`[data-lm-day="${d - 1}"][data-lm-slot="${lastSlotIdx}"]`);
+      const toCell = gridEl.querySelector(`[data-lm-day="${d}"][data-lm-slot="0"]`);
+      if (!fromCell || !toCell) return;
+      const fromRect = fromCell.getBoundingClientRect();
+      const toRect = toCell.getBoundingClientRect();
+      // fromCell is day d-1's LAST row (bottom of the whole grid), toCell is day d's
+      // FIRST row (top of the whole grid) -- min/max rather than assuming which rect
+      // sits higher, so this stays correct even if a future change reorders the
+      // grid's rows; getting this backwards silently drops the height (a negative
+      // CSS length is invalid, so the browser just ignores the assignment) rather
+      // than throwing -- confirmed live, worth the extra safety.
+      const edgeA = fromRect.bottom - gridRect.top, edgeB = toRect.top - gridRect.top;
+      const bridge = document.createElement("div");
+      bridge.className = "lm-sleep-bridge";
+      bridge.style.left = `${Math.round((fromRect.right + toRect.left) / 2 - gridRect.left)}px`;
+      bridge.style.top = `${Math.round(Math.min(edgeA, edgeB))}px`;
+      bridge.style.height = `${Math.round(Math.abs(edgeB - edgeA))}px`;
+      gridEl.appendChild(bridge);
+    });
   }
   // 2026-08-22 ("stop guessing the space, let the layout give it"): SUPERSEDES the
   // whole "compute the space via window.innerHeight minus a stack of estimated
@@ -21554,7 +21671,7 @@
       // 2026-08-22: a Mode armed on the strip now repaints the tapped occupied cell
       // instead of no-op'ing -- see lmRepaintOccupied just above lmTryErase.
       if (lmArmedMode) { lmRepaintOccupied(cell, day, si, lmArmedMode); return; }
-      lmPanel = { type: "view", day, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item), anchorEl: filled };
+      lmPanel = { type: "view", day, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item) };
       renderLmCellPanel();
       return;
     }
