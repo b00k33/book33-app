@@ -5013,7 +5013,7 @@
      a floating popover instead (.lm-popover, positioned by lmPositionPopover()). */
   .lm-stage { display: flex; gap: 10px; align-items: flex-start; }
   .lm-strip {
-    flex: none; width: 44px; border-radius: var(--radius-md);
+    flex: none; width: 104px; border-radius: var(--radius-md);
     background: var(--note-bg); padding: 6px 5px; display: flex; flex-direction: column;
     align-items: center; gap: 4px;
   }
@@ -5024,9 +5024,25 @@
     transition: box-shadow .12s ease, background .12s ease;
   }
   .lm-sw svg { width: 14px; height: 14px; }
-  .lm-sw b { font-size: 8.5px; font-weight: 800; letter-spacing: .04em; }
+  /* 2026-08-22 ("Mode name in the colour block, not icon+letter"): the per-Mode
+     chips only -- eraser/gear stay the plain 34px .lm-sw icon shape above,
+     untouched, just centred inside the now-wider strip. Width is the "roughly
+     90-95px, no wrap down to Cleaning/Morning at 11px" spec, measured live
+     (both fit with room to spare); longer custom names ellipsis via
+     overflow/text-overflow on .lm-sw-name rather than wrapping or shrinking
+     the font, and the existing title="" attribute (native tooltip on desktop
+     hover, and long-press on most mobile browsers) carries the full name --
+     no second custom tooltip component built for this one affordance. */
+  .lm-sw-mode { width: 92px; height: 34px; padding: 0 8px; }
+  .lm-sw-name {
+    font-size: 11px; font-weight: 700; max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
   /* armed/lit state -- a gold ring only, no colour edge stripe (she explicitly asked
-     for that removed); the Mode's own colour lives in the icon/letter alone. */
+     for that removed); the Mode's own colour lives in the icon/letter alone.
+     .lm-sw-mode's own inline background (the Mode's accent) always wins over this
+     rule's background-mix -- the ring alone is what shows "armed" there now; the
+     background-mix still applies to eraser/gear, which have no inline background. */
   .lm-sw-on { box-shadow: 0 0 0 2px var(--gold); background: color-mix(in oklab, var(--gold) 14%, var(--field-bg)); }
   .lm-sw-sep { width: 18px; height: 1px; background: var(--margin-rule); margin: 2px 0; }
   /* 2026-08-21 (Linh: "too much empty space outside the border"): same specificity
@@ -20582,13 +20598,24 @@
   // colour edge stripe -- STEP 5) plus a divider and the eraser chip. Re-rendered on
   // its own (not part of renderLifeMap()'s bigger grid rebuild) whenever the armed
   // tool changes, since arming never changes anything about the week's own data.
+  // 2026-08-22 (Linh, "Mode name in the colour block, not icon+letter"): a solid
+  // fill of the Mode's own accent, its name as the label -- no icon, no letter, on
+  // THIS strip only (lmModeIcon()/lmModeLetter()/lmSvgIcon() stay real, editable
+  // data, still used elsewhere; this is a display change on one surface). Text
+  // colour is accentOnFor()'s existing black/white YIQ split, the SAME function
+  // session-card mode pills/the reveal-all pill/etc already call for text-on-
+  // accent-fill -- not a second contrast function. .lm-sw-on's own background-
+  // tint (gold-mixed) is inert here since the inline background below always
+  // wins over a class rule -- the gold RING (its box-shadow) is what still shows
+  // "armed", unchanged; eraser/gear keep the plain .lm-sw path (no inline
+  // background), so .lm-sw-on's tint still applies there exactly as before.
   function renderLmStrip() {
     const host = document.getElementById("lmStrip");
     if (!host) return;
     const modes = MODES.slice().sort((a, b) => a.order - b.order);
     host.innerHTML = modes.map(m => `
-      <button type="button" class="lm-sw${lmArmedMode === m.id ? " lm-sw-on" : ""}" data-lm-mode="${m.id}" title="${esc(m.name)}" style="color:${m.accent}">
-        ${lmSvgIcon(lmModeIcon(m))}<b>${esc(lmModeLetter(m))}</b>
+      <button type="button" class="lm-sw lm-sw-mode${lmArmedMode === m.id ? " lm-sw-on" : ""}" data-lm-mode="${m.id}" title="${esc(m.name)}" style="background:${m.accent};color:${accentOnFor(m.accent)}">
+        <span class="lm-sw-name">${esc(m.name)}</span>
       </button>`).join("")
       + `<div class="lm-sw-sep"></div>
       <button type="button" class="lm-sw${lmArmedMode === "eraser" ? " lm-sw-on" : ""}" data-lm-mode="eraser" title="Eraser" style="color:var(--ink-faint)">
