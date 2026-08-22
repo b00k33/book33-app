@@ -27347,11 +27347,23 @@
   // disagree about how long something runs. Render-only — e.end itself is never
   // written back, so nothing about how the item is stored changes, just how it's
   // drawn. Returns null only when the item has no start at all.
+  // 2026-08-22 ("Sleep 10:30pm+8h silently breaks"): `real` used to be returned
+  // exactly as parsed, so a genuinely-overnight end (e.g. "06:30" stored for a
+  // 22:30 start) read as 390 -- LESS than the 1350 start -- and every consumer of
+  // this function (duration math, timeline/Life-Map block placement, "is this
+  // still running" checks) silently treated the block as a few-hundred-minute
+  // negative-or-tiny span instead of the real ~8h. The save path (syncEndFromDur(),
+  // buildRoutineFromCurrentForm(), the main submit handler) no longer clamps or
+  // discards that value -- this is the one place that turns "numerically earlier
+  // than start" into what it actually means: the block ends the following day.
+  // Strictly LESS than (not <=) so a genuine same-time start/end -- effectively a
+  // 0-length item, not something anyone schedules on purpose -- stays same-day,
+  // matching "don't touch same-day events at all."
   function itemEndMin(e) {
     const s = toMin(e.start);
     if (s === null) return null;
     const real = toMin(e.end);
-    if (real !== null) return real;
+    if (real !== null) return real < s ? real + 1440 : real;
     const fitDur = e.fitLink && FIT_PRESETS[e.fitLink] ? FIT_PRESETS[e.fitLink].durationMin : null;
     return s + (e.durationMin || fitDur || 30);
   }
@@ -52722,10 +52734,20 @@
   });
   // duration and end stay in lockstep: typing a duration rewrites Ends immediately
   // (also when Start moves), and editing Ends by hand clears the duration so it wins
+  // 2026-08-22 (Linh, "Sleep 10:30pm+8h silently breaks"): was Math.min(...,1439),
+  // clamping any duration that crosses midnight to 23:59 instead of wrapping --
+  // 22:30 + 8h (480min) = 1830, clamped to 1439 = a 1h29m block, not 8h. Dropped
+  // the clamp entirely: minToTime() already wraps the HOUR portion via its own
+  // %24 (see its definition), so 1830 correctly formats to "06:30" here -- exactly
+  // rtnSyncEndFromDur()'s own (already-correct) reference shape, `% 1440` before
+  // formatting being equivalent to letting minToTime's %24 do it after. The
+  // resulting fEnd numerically <= fStart is not an error to guard against here --
+  // that's what an overnight block looks like; see the two submit-time checks
+  // this used to conflict with, fixed alongside this.
   function syncEndFromDur() {
     if (fAllDay.checked) return;
     const dur = parseInt(fDur.value, 10);
-    if (fStart.value && dur > 0) fEnd.value = minToTime(Math.min(toMin(fStart.value) + dur, 1439));
+    if (fStart.value && dur > 0) fEnd.value = minToTime(toMin(fStart.value) + dur);
   }
   fDur.addEventListener("input", syncEndFromDur);
   fStart.addEventListener("input", () => { if (fDur.value) syncEndFromDur(); });
@@ -52847,7 +52869,12 @@
       const dur = parseInt(fDur.value, 10);
       if (dur > 0) end = minToTime(toMin(start) + dur);
     }
-    if (start && end && toMin(end) <= toMin(start)) end = "";
+    // 2026-08-22 ("Sleep 10:30pm+8h silently breaks"): was `if (... toMin(end) <=
+    // toMin(start)) end = "";`, treating a numerically-earlier end as invalid and
+    // discarding it. That's exactly what an overnight block's end looks like once
+    // minToTime() wraps past midnight (22:30 start, "06:30" end) -- itemEndMin()
+    // now treats end <= start as "the next day" wherever this end minute is later
+    // read, so nothing here needs to reject it at save time.
     const dateVal = fDate.value || keyOf(state.anchor);
     const modePressed = document.querySelector("#fModePicker .track-opt[aria-pressed=\"true\"]");
     const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
@@ -52886,7 +52913,8 @@
       const dur = parseInt(fDur.value, 10);
       if (dur > 0) end = minToTime(toMin(start) + dur);
     }
-    if (start && end && toMin(end) <= toMin(start)) end = "";
+    // 2026-08-22 ("Sleep 10:30pm+8h silently breaks") -- see buildRoutineFromCurrentForm()'s
+    // identical fix just above for the full explanation; same discard removed here.
     const dateVal = fDate.value || keyOf(state.anchor);
     // modes stage 10: same #fModePicker/"None" pressed-default pattern as
     // #todoModePicker (stage 5) -- read once here, used by every branch below.
