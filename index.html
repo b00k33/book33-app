@@ -20889,6 +20889,92 @@
     lmSelDay = null; lmSelSlots = null;
     renderLifeMap();
   });
+  // 2026-08-22 (Linh, "select a cell that's already moded and change to a different
+  // mode"): repainting a filled cell with a Mode armed used to be a flat no-op --
+  // now it re-modes it. A plain one-off EVENTS item splits precisely around the
+  // painted slot (STEP 2/3 below); a routine occurrence re-modes as a WHOLE for
+  // that date only, through the existing per-day override store, template and
+  // every other date untouched (Linh's explicit choice -- occurrences have no
+  // sub-range storage, so a partial paint still re-modes the whole occurrence
+  // rather than attempting a split); a recurring-event occurrence has no per-date
+  // override store for Mode at all (unlike routines -- see modeOf() below), so it
+  // still refuses and opens its own editor instead, same as the eraser already
+  // does for it just above.
+  function lmRepaintOccupied(cell, day, si, modeId) {
+    const edit = lmResolveEdit(cell.item);
+    if (!edit) { rewardToast("That's not something you can repaint from here."); return; }
+    const newMode = modeById(modeId);
+    if (edit.kind === "recur") {
+      rewardToast("That's part of a recurring event — repainting isn't available for it yet. Opening its editor instead.");
+      openFormForRecurEdit(edit.ref);
+      return;
+    }
+    if (edit.kind === "routine") {
+      const wkStart = lmWeekStart || startOfWeek(TODAY);
+      const dateKey = keyOf(addDays(wkStart, day));
+      const rt = edit.ref;
+      const prevOvr = rt.overrides && rt.overrides[dateKey];
+      const prevMode = prevOvr && prevOvr.mode !== undefined ? prevOvr.mode : undefined;
+      setRtnOvr(rt.id, dateKey, { mode: newMode.id });
+      const endMin = itemEndMin(cell.item);
+      const msg = `${newMode.name} · ${WD_FULL[day].slice(0, 3)} ${lmTimeRangeShort(cell.item.start, minToTime(endMin))}`;
+      showUndoSnackbar(msg, () => { setRtnOvr(rt.id, dateKey, { mode: prevMode }); renderLifeMap(); });
+      renderLifeMap();
+      return;
+    }
+    lmRepaintEvent(edit.ref, day, si, newMode);
+  }
+  // Splits a plain one-off EVENTS item around the tapped slot. The tapped slot fully
+  // covering the item just re-modes it in place; otherwise it splits into up to
+  // three real EVENTS records (head/middle/tail), each a full copy of every other
+  // field (track, location, notes, links, whatever exists) -- only mode/icon/title
+  // (title only if it was auto-named by a paint, STEP 3) and start/end differ. The
+  // original id stays on the earliest surviving ORIGINAL-mode piece (head if one
+  // survives, else tail) so anything referencing it (ticks, outcomes, fitness
+  // links) still resolves -- the freshly painted middle piece always gets a new id.
+  function lmRepaintEvent(ev, day, si, newMode) {
+    const origStartMin = toMin(ev.start);
+    const origEndMin = itemEndMin(ev);
+    const slotStart = LM_SLOTS[si];
+    const slotEndMin = Math.min(LM_SLOTS[si] + LM_SLOT_MIN, 1439);
+    const wasAutoNamed = ev.title === modeById(ev.mode).name;
+
+    if (slotStart <= origStartMin && slotEndMin >= origEndMin) {
+      const snap = { mode: ev.mode, title: ev.title, icon: ev.icon };
+      ev.mode = newMode.id;
+      ev.icon = newMode.emoji || "";
+      if (wasAutoNamed) ev.title = newMode.name;
+      saveEvents(EVENTS);
+      const msg = `${newMode.name} · ${WD_FULL[day].slice(0, 3)} ${lmTimeRangeShort(ev.start, minToTime(origEndMin))}`;
+      showUndoSnackbar(msg, () => { Object.assign(ev, snap); saveEvents(EVENTS); renderLifeMap(); });
+      renderLifeMap();
+      return;
+    }
+
+    const midStart = Math.max(origStartMin, slotStart);
+    const midEnd = Math.min(origEndMin, slotEndMin);
+    const headExists = origStartMin < midStart;
+    const tailExists = origEndMin > midEnd;
+    const midTitle = wasAutoNamed ? newMode.name : ev.title;
+    const mid = { ...ev, id: uid(), start: minToTime(midStart), end: minToTime(midEnd), mode: newMode.id, icon: newMode.emoji || "", title: midTitle };
+    const head = headExists ? { ...ev, id: uid(), start: minToTime(origStartMin), end: minToTime(midStart) } : null;
+    const tail = tailExists ? { ...ev, id: uid(), start: minToTime(midEnd), end: minToTime(origEndMin) } : null;
+    if (headExists) head.id = ev.id; else if (tailExists) tail.id = ev.id;
+
+    const idx = EVENTS.findIndex(e => e.id === ev.id);
+    const pieces = [head, mid, tail].filter(Boolean);
+    EVENTS.splice(idx, 1, ...pieces);
+    saveEvents(EVENTS);
+
+    const msg = `${newMode.name} · ${WD_FULL[day].slice(0, 3)} ${lmTimeRangeShort(minToTime(midStart), minToTime(midEnd))}`;
+    showUndoSnackbar(msg, () => {
+      EVENTS = EVENTS.filter(e => !pieces.some(p => p.id === e.id));
+      EVENTS.push(ev);
+      saveEvents(EVENTS);
+      renderLifeMap();
+    });
+    renderLifeMap();
+  }
   // 2026-08-21 (paint palette rebuild): a plain one-off EVENTS entry only -- STEP 7's
   // explicit rule. A routine/recurring-event occurrence refuses and opens the real
   // editor instead, since removing one occurrence of a recurring thing is a bigger,
@@ -20977,15 +21063,16 @@
     const filled = e.target.closest("[data-lm-filled-cell]");
     if (filled) {
       if (lmArmedMode === "eraser") { lmTryErase(filled); return; }
-      if (lmArmedMode) return;   // painting over an occupied cell: no-op, never overwrite/split a real item
       const start = lmWeekStart || startOfWeek(TODAY);
       const { grid } = lmWeekGrid(start);
       const day = Number(filled.dataset.lmDay), si = Number(filled.dataset.lmSlot);
       const cell = grid[day][si];
-      if (cell) {
-        lmPanel = { type: "view", day, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item), anchorEl: filled };
-        renderLmCellPanel();
-      }
+      if (!cell) return;
+      // 2026-08-22: a Mode armed on the strip now repaints the tapped occupied cell
+      // instead of no-op'ing -- see lmRepaintOccupied just above lmTryErase.
+      if (lmArmedMode) { lmRepaintOccupied(cell, day, si, lmArmedMode); return; }
+      lmPanel = { type: "view", day, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item), anchorEl: filled };
+      renderLmCellPanel();
       return;
     }
     // STEP 6: with no Mode armed, a click on an empty cell does nothing -- but says so,
@@ -38984,16 +39071,24 @@
     return MODES.find(m => m.id === id) || MODE_HOME;
   }
   // THE one resolver for "what mode does this item carry": a plain event carries
-  // its own, a routine occurrence reads its TEMPLATE (a routine's mode is a
-  // property of the routine -- storing it per-day would mean setting it every
-  // single day). Returns a mode ID or null, never the Home object -- "no mode"
-  // is a valid state the sheet renders as such, not silently Home.
+  // its own, a routine occurrence normally reads its TEMPLATE (a routine's mode is
+  // a property of the routine, one value for every day it repeats) UNLESS this
+  // particular date has its own per-day override (2026-08-22, Linh: "select a cell
+  // that's already moded and change to a different mode" -- repainting one
+  // occurrence of a routine on Life Map writes mode into that date's t.overrides
+  // entry via setRtnOvr, the SAME per-day store routines already use for
+  // start/end/title/note, rather than a second mechanism). Returns a mode ID or
+  // null, never the Home object -- "no mode" is a valid state the sheet renders as
+  // such, not silently Home.
   function modeOf(e) {
     if (!e) return null;
     if (e.mode) return e.mode;
     if (e.rtTaskId) {
       const t = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
-      return (t && t.mode) || null;
+      if (!t) return null;
+      const ovr = e.date ? rtnOvr(t, e.date) : null;
+      if (ovr && ovr.mode) return ovr.mode;
+      return t.mode || null;
     }
     return null;
   }
