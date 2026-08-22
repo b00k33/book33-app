@@ -4887,6 +4887,14 @@
     border: 1.5px solid var(--margin-rule); border-radius: 2px;
   }
   .outside-note { font-size: 11px; color: var(--ink-faint); font-style: italic; margin-top: 8px; padding-left: var(--gutter); }
+  /* 2026-08-22 (Linh: "when i click to edit sleep nothing happens"): items entirely
+     before START_HOUR (3am) were named here but were plain text -- no way to open
+     them at all, from anywhere. Underlined + padded rather than a full button: this
+     sits inline in a sentence ("Outside today's window: A, B, C"), not a standalone
+     control, so the 44px tap-target rule doesn't fit it literally -- kept the hit
+     area generous (own padding) without turning quiet italic text into a button row. */
+  .outside-note-item { background: none; border: none; padding: 3px 1px; margin: 0; font: inherit; font-style: italic; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .outside-note-item:hover, .outside-note-item:focus-visible { color: var(--ink-soft); }
 
   /* --- personal box — matches the luxe/moody theme like every other day-side card --- */
   .personal-box {
@@ -27922,7 +27930,15 @@
       const s = toMin(e.start);
       if (s === null) return;
       const eEnd = itemEndMin(e);
-      if (s >= END_MIN || eEnd <= START_MIN) { outside.push(e); return; }
+      // 2026-08-22 fix: items entirely outside [START_MIN,END_MIN) (e.g. Sleep pieces
+      // between midnight and START_HOUR=3am) never reach the TL_ITEMS_BY_ID assignment
+      // further down this same loop body (early return, same as every other branch here)
+      // -- openTlDetail()/every other [data-tl-detail] consumer looks an id up there and
+      // silently no-ops if it's missing, which is exactly why tapping one of these in
+      // #outsideNote (below) used to do nothing even once made clickable. Same
+      // isGhostItem guard as every other seeding site (line ~28147 etc.) so a ghost here
+      // still can't clobber a real occurrence already registered under the same id.
+      if (s >= END_MIN || eEnd <= START_MIN) { outside.push(e); if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; return; }
       const cs = Math.max(s, START_MIN);
       const ce = Math.min(eEnd, END_MIN);
       // routines with steps are always blocks (they expand to hold their tickable
@@ -28246,8 +28262,14 @@
       soloBlocks.forEach(el => { el.style.width = `${Math.ceil(maxW)}px`; });
     }
 
+    // 2026-08-22 fix ("when i click to edit sleep nothing happens"): each name is now
+    // a real [data-tl-detail] control -- the SAME document-level delegate every other
+    // timeline item already opens through (see its own comment, "SAME ... delegate
+    // every other timeline item already uses"), so this needed no new click handler,
+    // only the id being registered in TL_ITEMS_BY_ID (this loop's own change above)
+    // and this markup carrying the attribute a real block would.
     document.getElementById("outsideNote").innerHTML = outside.length
-      ? `<div class="outside-note">Outside today's window: ${outside.map(e => `${esc(e.title)} (${fmtTime(e.start)})`).join(", ")}</div>`
+      ? `<div class="outside-note">Outside today's window: ${outside.map(e => `<button type="button" class="outside-note-item" data-tl-detail="${e.id}">${esc(e.title)} (${fmtTime(e.start)})</button>`).join(", ")}</div>`
       : "";
   }
 
