@@ -20823,7 +20823,7 @@
     // forbidden now. Prefer 12px; only give up legibility headroom down to the 9px
     // absolute floor when the window genuinely won't fit 12px rows, so a roomy
     // window still gets the nicer 12px+ rows it already had.
-    const rowH = Math.max(LM_ROW_ABS_MIN, Math.min(LM_ROW_MAX, raw < LM_ROW_PREFERRED_MIN ? Math.max(raw, LM_ROW_ABS_MIN) : raw));
+    let rowH = Math.max(LM_ROW_ABS_MIN, Math.min(LM_ROW_MAX, raw < LM_ROW_PREFERRED_MIN ? Math.max(raw, LM_ROW_ABS_MIN) : raw));
     grid.style.setProperty("--lm-row-h", rowH + "px");
     // max-height only ever CAPS -- it can't force the box to grow -- so setting it
     // to fullAvailable in every case is correct: at/above the max the real content
@@ -20834,6 +20834,18 @@
     // safety net, not a real path, except in a window too short even for 9px rows
     // (STEP 3c: reported, not silently scrolled).
     gridWrap.style.maxHeight = Math.max(fullAvailable, 0) + "px";
+    // 2026-08-22 ("no scrolling whatsoever" -- STEP 4's own worked example showed a
+    // computed budget that "should" fit can still be wrong on a real machine, by
+    // hundreds of pixels): a calculated fullAvailable is a prediction, not a fact --
+    // trust the real page instead. scrollHeight forces one layout read (already
+    // paying for several above), so this is cheap; the loop only ever runs when the
+    // prediction was actually wrong, and is bounded (guard) so it can never spin.
+    let guard = 0;
+    while (document.documentElement.scrollHeight > window.innerHeight && rowH > LM_ROW_ABS_MIN && guard < 20) {
+      rowH -= 1;
+      grid.style.setProperty("--lm-row-h", rowH + "px");
+      guard++;
+    }
   }
   // recompute on resize (rAF-throttled so a drag-resize doesn't force layout on
   // every pixel of movement) -- Life Map's own view check keeps this a no-op on
