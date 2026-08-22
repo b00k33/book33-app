@@ -7958,6 +7958,15 @@
   }
   #addForm input.field-bare[type="number"], #addForm input.field-bare[type="date"],
   #addForm input.field-bare[type="time"] { border-radius: var(--field-radius-sm); padding: 8px 12px; }
+  /* 2026-08-22 (STEP 5, "fit without scrolling"): .efp-body/.efp-card are the SAME
+     shared component #rtnAddForm's own editor reuses (search "same shared .efp-*
+     component as #addForm") -- scoped to #addForm only, same containment precedent
+     as every other tightening pass in this form (.field-bare below, the 2026-08-18
+     pt.2 pass), so the routine editor's own copy is untouched. Gap/padding trimmed
+     one step down the 4/8/12/16/24/32 scale (16->12, 12->8) -- still on-scale, just
+     the small end, same move the pt.2 pass already made to .field/.when .row here. */
+  #addForm .efp-body { gap: 12px; }
+  #addForm .efp-card { padding: 12px; gap: 8px; }
   /* 2026-08-18 ("tighter than the first version"): own padding, not the shared
      --field-pad-y/-x tokens -- those back every OTHER .field-bare in the app
      (Goals/People/Family/etc.), so tightening them directly would ripple everywhere. */
@@ -8079,6 +8088,46 @@
      grid-column:1/-1 override on the old raw grid item (see the superseded
      :has() rule this replaces, a few hundred lines down near #fEndField). */
   #addForm .when:has(#fStartField[hidden]) #fDateField { flex: 1 1 100%; }
+  /* 2026-08-22 (STEP 5, "Day and Starts share one row instead of two stacked
+     fields"): the 208/188px bases above were tuned for #addForm's ~429px DESKTOP
+     content width -- measured live, phone width only gives .when ~209px, so they
+     wrapped every time there, exactly the stacked pair she's asking to fix. Below
+     640px: equal 1fr-style split (basis 0, min-width 0) so the two inputs always
+     share one row regardless of available width, letting the browser compress each
+     native date/time control as needed rather than each claiming a fixed minimum;
+     the hint text on Day's label is dropped here too -- it was wrapping the label
+     to 2 lines in the narrower column, taller than the input below it needed. */
+  @media (max-width: 640px) {
+    #addForm #fDateField, #addForm #fStartField { flex: 1 1 0; min-width: 0; }
+    #addForm #fDateField .field-hint { display: none; }
+    /* Mode row was wrapping "None" + top-5 + "More ›" into 3-4 rows (measured
+       234px at 375x700) -- by far the single biggest item in the form, more than
+       every other field combined. Same fix as .presets-row: one horizontally-
+       scrollable line instead of wrapping, chips keep their full 44px tap target
+       (min-height below) and natural width, nothing hidden or shrunk to get there. */
+    /* min-width:0 is load-bearing: #fModePicker is itself a flex child (of
+       #fModeField, min-width already 0 there) and a flex item's default
+       min-width:auto refuses to shrink below its content's intrinsic width --
+       without this, the 7-chip row (610px unwrapped) drags #fModeField/
+       .efp-field-row/.efp-card all the way out to ~575px instead of clipping
+       to the viewport, defeating overflow-x and reintroducing page-level
+       cramming. Confirmed live: without it pickerWidth measured 505px on a
+       375px viewport; with it the picker (and everything around it) sits
+       correctly inside 375px and only the picker's own content scrolls. */
+    #addForm #fModePicker.track-picker { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 2px 4px 2px 0; min-width: 0; }
+    #addForm #fModePicker .track-opt { min-height: 44px; }
+    /* the nowrap+scroll fix above still wasn't enough on its own -- traced the whole
+       chain live (#fModePicker up through #addForm) and the actual culprit is
+       .efp-layout: #addForm is display:grid (properly 375px, constrained), and
+       .efp-layout is ITS grid item ("full" = spans the row), but grid items get the
+       same min-width:auto default-to-min-content treatment as flex items -- with no
+       override, the picker's 610px min-content was inflating the grid TRACK itself
+       to 631px instead of the track clipping to 375 and #fModePicker's own
+       overflow-x doing the scrolling. .efp-card/.efp-field-row in between are
+       plain stretched flex items (not independently sized), so they weren't the
+       cause despite also being untested -- confirmed by fixing only this one line. */
+    #addForm .efp-layout { min-width: 0; }
+  }
   #addForm .dur { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   #addForm .dur .num {
     background: var(--field-bg); border-radius: 9px;
@@ -8115,10 +8164,64 @@
   .dur-step:active { color: var(--gold-bright); }
   #addForm #durChips.track-picker .track-opt { min-height: 34px; }
   #addForm #durChips .track-opt:disabled { opacity: .4; cursor: not-allowed; }
+  /* 2026-08-22 (STEP 5): "Custom" reads as a real quick-pick chip like its siblings
+     until pressed -- the aria-pressed[true] rule below is the same brass fill every
+     other pressed chip in this form already uses, no new visual language. */
+  #addForm #durCustomChip[aria-pressed="true"] {
+    background: var(--margin-rule); border-color: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
+  }
+  /* the revealed h/m boxes sit on their own line below the chip row once open --
+     .dur's own flex-wrap + gap:8px (see its base rule) already spaces them from the
+     chips above; margin-top just stops them looking glued to the chip row's bottom
+     edge when the browser's own wrap happens to land them close together. */
+  #addForm .dur-boxes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
   /* Whose job (More options): the summary button already reads as a single
      compact row -- just brought onto the same "well" ring language as .num
      above so every field in the form (not just How-long) shares one language. */
   #addForm .who-summary-btn { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--margin-rule) 22%, transparent); }
+  /* 2026-08-22 ("i want pre set events to choose from" -- STEP 3): one non-wrapping
+     row, horizontal scroll for anything past what fits -- same "cap visible items"
+     shape design44 §3 already establishes elsewhere (Cap visible items then "+N
+     more"), just via native scroll instead of a count-and-truncate since these are
+     tap targets, not a list. #presetsRow stays `hidden` (see markup) whenever
+     SAVED_EVENTS is empty -- renderPresetsRow()'s own short-circuit -- so this CSS
+     never shows an empty strip. */
+  .presets-row {
+    display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
+    margin: -4px 0 4px; -webkit-overflow-scrolling: touch;
+  }
+  .preset-card {
+    position: relative; flex: 0 0 auto; max-width: 168px; min-width: 96px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+    background: var(--field-bg); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
+    padding: 8px 10px; font-family: var(--font-body); cursor: pointer; text-align: left; min-height: 44px;
+  }
+  .preset-card:hover, .preset-card:focus-visible { border-color: var(--nav-active); }
+  .preset-card[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--margin-rule); border-color: var(--margin-rule); }
+  .preset-card-title { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .preset-card-sub { font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  /* small, unobtrusive per STEP 4 -- an invisible ::before pad keeps a real 44px tap
+     target (same trick .addform-head-close already uses) without visually enlarging
+     the corner mark itself. */
+  .preset-card-del {
+    position: absolute; top: -2px; right: -2px; width: 18px; height: 18px; border-radius: 999px;
+    border: none; background: var(--paper); color: var(--ink-faint); font-size: 11px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .preset-card-del::before { content: ""; position: absolute; inset: -13px; }
+  .preset-card-del:hover, .preset-card-del:focus-visible { color: var(--ink); }
+  /* ☆ Save as preset -- sits beside the Title field, quiet until tapped (unfilled
+     star), gold-filled once the current title has actually been saved as a preset
+     this session (savePresetFromForm() toggles the class) so tapping it twice in a
+     row doesn't silently create two identical presets. */
+  .preset-save-btn {
+    position: relative; flex: none; width: 32px; height: 32px; align-self: flex-end;
+    border: none; background: none; color: var(--ink-faint); font-size: 17px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 999px;
+  }
+  .preset-save-btn::before { content: ""; position: absolute; inset: -6px; }
+  .preset-save-btn:hover, .preset-save-btn:focus-visible { color: var(--gold-bright); background: var(--field-bg); }
+  .preset-save-btn.on { color: var(--gold-bright); }
   /* Fewer options: was a full-width centred row with its own top hairline --
      reads heavier than the compact fields around it now. A small left-aligned
      gold text link instead, scoped to #addForm only -- #rtnAddForm's own
@@ -19687,6 +19790,15 @@
             <span class="addform-head-title" id="addFormTitleText">New task</span>
             <button type="submit" class="addform-head-save" id="eventSubmitBtn">Save</button>
           </div>
+          <!-- 2026-08-22 (Linh: "make this fit without scrolling. i want pre set events to
+               choose from."): reuses SAVED_EVENTS/book33-saved-events (~line 20353) --
+               orphaned since the Life Map rebuild, not a new store. renderPresetsRow()
+               renders nothing at all when SAVED_EVENTS is empty (no empty state), so this
+               costs zero space until she's saved at least one -- see that function's own
+               comment for the empty-array short-circuit. full-bleed (not the icon-rail
+               .efp-field-row shape) since this isn't a field, it's a shortcut bar above
+               every field. -->
+          <div class="presets-row full" id="presetsRow" hidden></div>
           <!-- 2026-08-21 (visual progression on the add/edit event form, Linh's
                approved mockup): the rail + 3 stacked cards replace what used to be a
                flat run of full-width fields. Every field below keeps its exact id,
@@ -19714,12 +19826,34 @@
                     <label for="fTitle">What</label>
                     <input type="text" id="fTitle" class="field-bare" placeholder="e.g. Clinic hours, Date night, Gym" autocomplete="off" required>
                   </div>
+                  <!-- 2026-08-22 ("i want pre set events to choose from" -- STEP 4): saves
+                       whatever's currently filled in (title/mode/duration/where) as a new
+                       SAVED_EVENTS entry -- see savePresetFromForm(). Sits beside Title
+                       rather than its own field-row so it costs no extra row height. -->
+                  <button type="button" class="preset-save-btn" id="presetSaveBtn" aria-label="Save as preset" title="Save as preset">☆</button>
                 </div>
                 <div class="efp-field-row">
                   <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/></svg></div>
                   <div class="field" id="fTrackField">
                     <label>Part of life</label>
-                    <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life">
+                    <!-- 2026-08-22 (STEP 6, "Modes act as the category" -- checked before
+                         removing): track is read in ~136 places (calendar colouring,
+                         trackVisible()/PREFS.tracksOff filtering, etc.), so it can't just go
+                         unset. But no Mode maps to Family or Marriage (lmInferTrack() -- the
+                         SAME function Life Map's paint tool already uses, reused verbatim,
+                         not reinvented -- only "Work" mode has a single associated track;
+                         every other Mode falls back to "personal") -- fully hiding this
+                         picker would make Family/Marriage events unreachable through this
+                         form. Middle ground, same shape #whoPicker/whoSummaryBtn already use
+                         a few fields down: collapsed to a one-line inferred summary by
+                         default (syncTrackSummary(), auto-updates when Mode changes, unless
+                         she's already picked one herself this session), "Change" reveals the
+                         full 4-chip picker for the Family/Marriage case -- costs ~1 line
+                         instead of ~112px measured live, loses nothing. -->
+                    <button type="button" class="who-summary-btn" id="trackSummaryBtn" aria-expanded="false">
+                      <span id="trackSummaryText">Work</span><span class="who-edit">Change ›</span>
+                    </button>
+                    <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life" hidden>
                       <button type="button" class="track-opt" data-track="work" aria-pressed="true">Work</button>
                       <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
                       <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
@@ -19750,14 +19884,26 @@
                 <div class="field full" id="fDurPickerField">
                   <label>How long</label>
                   <div class="dur" id="durPicker">
-                    <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span></span>
-                    <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span></span>
+                    <!-- 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes
+                         used to always show (~44px of their own row) even though most
+                         picks are one of the 5 quick chips below. "Custom" joins them as a
+                         6th chip -- tapping it reveals #durBoxes in place (setDurBoxesOpen());
+                         picking a real chip (or a matching value already in the boxes, via
+                         syncDurChipState()) presses that chip and hides the boxes again.
+                         openFormForEdit() opens them automatically when the saved duration
+                         doesn't match any of the 5 (see its own comment) -- same
+                         "never hide what she's already filled in" rule as everywhere else. -->
                     <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
                       <button type="button" class="track-opt" data-dur="15">15m</button>
                       <button type="button" class="track-opt" data-dur="30">30m</button>
                       <button type="button" class="track-opt" data-dur="45">45m</button>
                       <button type="button" class="track-opt" data-dur="60">1h</button>
                       <button type="button" class="track-opt" data-dur="90">1h 30</button>
+                      <button type="button" class="track-opt" id="durCustomChip" data-dur-custom aria-pressed="false">Custom</button>
+                    </div>
+                    <div class="dur-boxes" id="durBoxes" hidden>
+                    <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span></span>
+                    <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span></span>
                     </div>
                   </div>
                 </div>
@@ -49541,16 +49687,56 @@
   // modes stage 10: #fModePicker mirrors #todoModePicker exactly (stage 5) --
   // own copy since this is a separate form. "None" is a real, common choice and
   // is the explicit pressed default.
+  // 2026-08-22 (STEP 5, "fit without scrolling"): all 8-11 Modes over 4 rows measured
+  // 286px live -- the single biggest field in the form. FMODE_TOP_N most-used (by
+  // real usage, never a hardcoded list) plus a "more ›" chip; every Mode stays
+  // reachable, just behind one extra tap. fModePickerExpanded is per-form-open state
+  // (reset in closeForm()/openForm()/openFormForEdit()) -- always starts collapsed,
+  // EXCEPT openFormForEdit() forces it open when the event's own mode isn't in the
+  // top N, so editing never hides what's already set (same rule as everywhere else).
+  const FMODE_TOP_N = 5;
+  // formSelectedMode is the single source of truth (same idiom as formWho/state.track
+  // just below) -- NOT read back off the DOM, because the collapsed picker may not
+  // even render a button for the current selection (an edited event's mode could be
+  // outside the top-N shown by default). renderFModePicker() below expands
+  // automatically whenever that's the case, so this stays correct either way.
+  let formSelectedMode = "";
+  let fModePickerExpanded = false;
+  function mostUsedModeIds(n) {
+    const counts = new Map();
+    EVENTS.forEach(e => { if (e.mode) counts.set(e.mode, (counts.get(e.mode) || 0) + 1); });
+    ROUTINE_TASKS.forEach(t => { if (t.mode) counts.set(t.mode, (counts.get(t.mode) || 0) + 1); });
+    return MODES.map(m => m.id)
+      .filter(id => counts.has(id))
+      .sort((a, b) => counts.get(b) - counts.get(a))
+      .slice(0, n);
+  }
   function renderFModePicker() {
     const host = document.getElementById("fModePicker");
     if (!host) return;
-    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true">None</button>` +
-      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+    const pressedId = formSelectedMode;
+    const topSet = new Set(mostUsedModeIds(FMODE_TOP_N));
+    // fill any remaining top-N slots with the next Modes in display order, so a
+    // fresh install with little/no usage data still shows a full, useful row
+    // instead of just "None" -- never fabricated content, just an ordering fallback.
+    MODES.forEach(m => { if (topSet.size < FMODE_TOP_N) topSet.add(m.id); });
+    const showAll = fModePickerExpanded || (pressedId && !topSet.has(pressedId));
+    const shown = showAll ? MODES : MODES.filter(m => topSet.has(m.id));
+    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}">${m.emoji || ""} ${esc(m.name)}</button>`;
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}">None</button>` +
+      shown.map(modeBtn).join("") +
+      (showAll || shown.length >= MODES.length ? "" : `<button type="button" class="track-opt" id="fModeMoreBtn">More ›</button>`);
   }
   renderFModePicker();
   document.getElementById("fModePicker").addEventListener("click", e => {
+    if (e.target.closest("#fModeMoreBtn")) { fModePickerExpanded = true; renderFModePicker(); return; }
     const b = e.target.closest(".track-opt"); if (!b) return;
-    document.querySelectorAll("#fModePicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    formSelectedMode = b.dataset.mode || "";
+    renderFModePicker();
+    // STEP 6: choosing a Mode re-infers Part of life from it (lmInferTrack(), the
+    // exact function Life Map's paint tool already uses) -- unless she's already
+    // picked Part of life herself this form-open, which always wins.
+    if (!trackManuallySet) syncTrackFromMode();
   });
 
   // one shared "Where" dropdown (event form, fitness sessions, birthday plans):
@@ -49891,11 +50077,132 @@
     formDirty = false;
     setMoreOptionsOpen(false);
     setFollowUpsOpen(false);
-    document.querySelectorAll("#fModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === "")));
+    formSelectedMode = ""; fModePickerExpanded = false; renderFModePicker();
+    trackManuallySet = false;
+    document.getElementById("trackPicker").hidden = true;
+    document.getElementById("trackSummaryBtn").hidden = false;
+    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "false");
+    setPresetSelected(null);
   }
   function syncTrack() {
     document.querySelectorAll("#trackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === state.track)));
+    syncTrackSummary();
   }
+  // 2026-08-22 (STEP 6): collapsed one-line summary for Part of life -- same shape as
+  // #whoPicker/whoSummaryBtn a few fields down. Reuses the app's existing
+  // trackLabel()/TRACK_LABEL (~line 20343, live-populated so a custom "+ Add part of
+  // life" track resolves too) rather than a second one-off lookup.
+  function syncTrackSummary() {
+    const t = document.getElementById("trackSummaryText");
+    if (t) t.textContent = trackLabel(state.track);
+  }
+  // true once she's picked Part of life herself this form-open -- from then on a
+  // Mode change never silently overrides her explicit choice (same "a human decision
+  // wins" rule openFormForEdit()'s own field population already follows).
+  let trackManuallySet = false;
+  function syncTrackFromMode() {
+    const mode = formSelectedMode ? modeById(formSelectedMode) : null;
+    state.track = mode ? lmInferTrack(mode) : "work";
+    syncTrack();
+  }
+  // 2026-08-22 (Linh: "make this fit without scrolling. i want pre set events to
+  // choose from." -- STEPS 3+4): SAVED_EVENTS/saveSavedEvents() (~line 20353) is the
+  // existing "things I book often" store, orphaned since the Life Map rebuild --
+  // reused verbatim, not a new store. Shape extended losslessly: mode/loc are new,
+  // optional fields read with `|| ""`/`|| undefined` everywhere below so the 5
+  // routine-seeded entries that predate this (no mode/loc) still render and apply
+  // fine, just filling less.
+  let presetSelectedId = null;
+  function fmtPresetDur(min) {
+    if (!min) return "";
+    const h = Math.floor(min / 60), m = min % 60;
+    return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
+  }
+  function presetSubline(p) {
+    const parts = [];
+    const mode = p.mode ? modeById(p.mode) : null;
+    parts.push(mode ? mode.name : trackLabel(p.track));
+    if (p.durationMin) parts.push(fmtPresetDur(p.durationMin));
+    if (p.loc) parts.push(p.loc);
+    return parts.join(" · ");
+  }
+  // renders NOTHING (stays hidden) when SAVED_EVENTS is empty -- no empty state,
+  // per her own explicit spec -- so this costs zero space until she's saved one.
+  function renderPresetsRow() {
+    const host = document.getElementById("presetsRow");
+    if (!host) return;
+    if (!SAVED_EVENTS.length) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    host.innerHTML = SAVED_EVENTS.map(p => `
+      <button type="button" class="preset-card" data-preset-id="${esc(p.id)}" aria-pressed="${String(p.id === presetSelectedId)}">
+        <span class="preset-card-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
+        <span class="preset-card-sub">${esc(presetSubline(p))}</span>
+        <span class="preset-card-del" data-preset-del="${esc(p.id)}" aria-label="Delete preset" title="Delete preset">✕</span>
+      </button>`).join("");
+  }
+  function setPresetSelected(id) { presetSelectedId = id; renderPresetsRow(); }
+  // fills Title/Mode/How long/Where in one tap -- day/time and Save stay hers.
+  function applyPreset(p) {
+    fTitle.value = p.title || "";
+    formSelectedMode = p.mode || ""; fModePickerExpanded = false; renderFModePicker();
+    if (p.track) { state.track = p.track; trackManuallySet = true; syncTrack(); }
+    else if (!trackManuallySet) { syncTrackFromMode(); }
+    fLoc.value = p.loc || "";
+    if (p.durationMin > 0) {
+      durHours.value = String(Math.floor(p.durationMin / 60));
+      durMinutes.value = String(p.durationMin % 60);
+      syncDurFromBoxes();
+    }
+    formDirty = true;
+  }
+  document.getElementById("presetsRow").addEventListener("click", e => {
+    const del = e.target.closest("[data-preset-del]");
+    if (del) {
+      e.stopPropagation();
+      const id = del.dataset.presetDel;
+      SAVED_EVENTS = SAVED_EVENTS.filter(p => p.id !== id);
+      saveSavedEvents();
+      if (presetSelectedId === id) presetSelectedId = null;
+      renderPresetsRow();
+      return;
+    }
+    const card = e.target.closest(".preset-card");
+    if (!card) return;
+    const id = card.dataset.presetId;
+    // tapping the already-selected card again clears the fill, per her spec
+    if (presetSelectedId === id) {
+      presetSelectedId = null;
+      fTitle.value = ""; fLoc.value = "";
+      formSelectedMode = ""; fModePickerExpanded = false; renderFModePicker();
+      durHours.value = ""; durMinutes.value = ""; syncDurFromBoxes();
+      renderPresetsRow();
+      return;
+    }
+    const p = SAVED_EVENTS.find(x => x.id === id);
+    if (!p) return;
+    presetSelectedId = id;
+    applyPreset(p);
+    renderPresetsRow();
+  });
+  // ☆ Save as preset -- takes whatever's currently filled in and adds it as a new
+  // SAVED_EVENTS entry. No separate management page, per her spec; delete is the
+  // small ✕ on each card above.
+  document.getElementById("presetSaveBtn").addEventListener("click", () => {
+    const title = fTitle.value.trim();
+    if (!title) { fTitle.focus(); return; }
+    const durTotal = (parseInt(durHours.value, 10) || 0) * 60 + (parseInt(durMinutes.value, 10) || 0);
+    SAVED_EVENTS.push({
+      id: uid(), title, track: state.track, category: fCat.value.trim(), icon: "",
+      ...(formSelectedMode ? { mode: formSelectedMode } : {}),
+      ...(durTotal > 0 ? { durationMin: durTotal } : {}),
+      ...(fLoc.value.trim() ? { loc: fLoc.value.trim() } : {}),
+    });
+    saveSavedEvents();
+    renderPresetsRow();
+    const btn = document.getElementById("presetSaveBtn");
+    btn.classList.add("on");
+    setTimeout(() => btn.classList.remove("on"), 900);
+  });
   function openForm(prefStart, prefLoc, prefWho) {
     armBackGuard();
     addRow.hidden = true; form.hidden = false;
@@ -49910,6 +50217,10 @@
     if (prefLoc && prefLoc.length) fLoc.value = prefLoc.join(" > ");
     setMoreOptionsOpen(false);
     setFollowUpsOpen(false);
+    trackManuallySet = false;
+    formSelectedMode = ""; fModePickerExpanded = false; renderFModePicker();
+    setPresetSelected(null);
+    renderPresetsRow();
     efpSyncAddForm();
     fTitle.focus();
   }
@@ -49921,13 +50232,19 @@
     eventEditId = ev.id;
     fTitle.value = ev.title;
     state.track = ev.track; syncTrack();
+    // a real saved event's track is a genuine prior decision -- a Mode change made
+    // while editing should never silently overwrite it (same reasoning as every
+    // other "don't clobber what's already there" field on this form).
+    trackManuallySet = true;
     formKind = "event"; syncKind();
     formWho = whoOf(ev); syncWho();
     fDate.value = ev.date || keyOf(state.anchor);
     updateEachWeekdayLabel();
     document.getElementById("fStages").value = (ev.stages || []).join("\n");
     fCat.value = ev.category || "";
-    document.querySelectorAll("#fModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === (ev.mode || ""))));
+    formSelectedMode = ev.mode || ""; fModePickerExpanded = false; renderFModePicker();
+    setPresetSelected(null);
+    renderPresetsRow();
     fGoal.value = ev.goal || "";
     fLoc.value = (ev.locPath || []).join(" > ");
     document.getElementById("fNote").value = ev.note || "";
@@ -52794,7 +53111,17 @@
   });
   document.getElementById("trackPicker").addEventListener("click", e => {
     const b = e.target.closest(".track-opt"); if (!b) return;
-    state.track = b.dataset.track; syncTrack();
+    state.track = b.dataset.track; trackManuallySet = true; syncTrack();
+    // picking always re-collapses back to the summary line -- same "pick then
+    // closes" pattern #whoPicker/whoSummaryBtn already use just below.
+    document.getElementById("trackPicker").hidden = true;
+    document.getElementById("trackSummaryBtn").hidden = false;
+    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "false");
+  });
+  document.getElementById("trackSummaryBtn").addEventListener("click", () => {
+    document.getElementById("trackPicker").hidden = false;
+    document.getElementById("trackSummaryBtn").hidden = true;
+    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "true");
   });
   fAllDay.addEventListener("change", () => {
     fStart.disabled = fEnd.disabled = fDur.disabled = fAllDay.checked;
@@ -52834,8 +53161,22 @@
     durHours.disabled = durMinutes.disabled = dis;
     durChips.querySelectorAll(".track-opt").forEach(b => b.disabled = dis);
   }
+  // 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes used to
+  // always render (~44px of their own row). #durBoxes now stays hidden unless the
+  // real duration doesn't match one of the 5 quick chips -- a genuinely custom
+  // value -- or she taps the "Custom" chip herself to type one. Toggling visibility
+  // lives here, in the ONE function every duration-changing path already funnels
+  // through, rather than repeated at each call site.
+  function setDurBoxesOpen(open) {
+    const box = document.getElementById("durBoxes");
+    const chip = document.getElementById("durCustomChip");
+    if (box) box.hidden = !open;
+    if (chip) chip.setAttribute("aria-pressed", String(open));
+  }
+  const DUR_PRESETS = [15, 30, 45, 60, 90];
   function syncDurChipState(totalMin) {
-    durChips.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.dur === totalMin)));
+    durChips.querySelectorAll(".track-opt[data-dur]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.dur === totalMin)));
+    setDurBoxesOpen(totalMin > 0 && !DUR_PRESETS.includes(totalMin));
   }
   // repaints the boxes/chips from whatever #fDur already holds -- edit
   // population, All-day clearing it, or a manual Ends edit clearing it too
@@ -52857,6 +53198,14 @@
   durChips.addEventListener("click", e => {
     const b = e.target.closest(".track-opt");
     if (!b) return;
+    // "Custom" isn't a value to apply -- it just reveals/hides the boxes so she can
+    // type an exact one; never clears whatever duration is already set.
+    if (b.hasAttribute("data-dur-custom")) {
+      const box = document.getElementById("durBoxes");
+      setDurBoxesOpen(box.hidden);
+      if (!box.hidden) durHours.focus();
+      return;
+    }
     const total = +b.dataset.dur;
     durHours.value = total > 0 ? String(Math.floor(total / 60)) : "";
     durMinutes.value = total > 0 ? String(total % 60) : "";
@@ -52945,8 +53294,10 @@
     // now treats end <= start as "the next day" wherever this end minute is later
     // read, so nothing here needs to reject it at save time.
     const dateVal = fDate.value || keyOf(state.anchor);
-    const modePressed = document.querySelector("#fModePicker .track-opt[aria-pressed=\"true\"]");
-    const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
+    // 2026-08-22 (STEP 5, Mode "most-used 5 + more"): reads formSelectedMode, the
+    // single source of truth, not the DOM -- the collapsed picker may not even
+    // render a button for the current selection.
+    const mode = formSelectedMode || undefined;
     const goalVal = fGoal.value.trim();
     const task = {
       id: uid(), title, track: state.track, category: fCat.value.trim(),
@@ -52987,8 +53338,9 @@
     const dateVal = fDate.value || keyOf(state.anchor);
     // modes stage 10: same #fModePicker/"None" pressed-default pattern as
     // #todoModePicker (stage 5) -- read once here, used by every branch below.
-    const modePressed = document.querySelector("#fModePicker .track-opt[aria-pressed=\"true\"]");
-    const mode = modePressed && modePressed.dataset.mode ? modePressed.dataset.mode : undefined;
+    // 2026-08-22: reads formSelectedMode (see buildRoutineFromCurrentForm()'s
+    // identical comment above) rather than scanning the DOM.
+    const mode = formSelectedMode || undefined;
     const goalVal = fGoal.value.trim();
     // follow-up stages: one per line, tasks only; edits keep her place in the chain
     const stages = formKind === "task"
