@@ -2414,6 +2414,70 @@
   }
   .session-card.session-hero .sc-rings { justify-content: center; gap: 28px; margin: 4px 0 8px; }
 
+  /* Modes law rule 4 (2026-08-22) -- Study/Cleaning/Morning/Night hyperfocus takeover.
+     Colour throughout rides on --margin-rule/--accent-on, the SAME root tokens
+     applyModeAccent() already re-sets per active mode (see its own comment, "every
+     ALREADY-existing button/pill/border... picks up the active mode's colour with
+     zero per-component change") -- no second re-colour path, satisfies rule 3 for
+     free. Checked live against every one of Study #2E9D57 / Cleaning #8A9AA2 /
+     Morning #E8A33D / Night #5B6FC4, both themes, per rule 6 -- Cleaning's grey is
+     the one close call (a light-ish neutral), confirmed still >4.5:1 on both
+     var(--paper) and var(--raised) at its dark-theme value; --accent-on is what
+     text ON a filled accent surface reads (Focus button, pulse states), already
+     YIQ-split per mode by accentOnFor(), reused as-is. */
+  .mode-ambient-rail {
+    margin: 12px 0; padding: 14px 16px; border-radius: var(--radius-md);
+    background: var(--raised); border: 1px solid var(--note-line);
+    border-left: 3px solid var(--margin-rule);
+  }
+  .mar-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .mar-title { font-size: 13px; font-weight: 800; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+  .mar-progress { font-size: 12px; color: var(--ink-faint); font-weight: 600; }
+  .mar-focus-btn {
+    border: none; background: var(--margin-rule); color: var(--accent-on); font: inherit; font-size: 12px;
+    font-weight: 700; padding: 8px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  }
+  .mar-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .mar-chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 5px 10px;
+    border-radius: 999px; border: 1px solid var(--note-line); color: var(--ink-faint); background: var(--paper);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mar-chip.mar-done { color: var(--ink-faint); text-decoration: line-through; opacity: .7; }
+  .mar-chip.mar-current { border-color: var(--margin-rule); color: var(--ink); font-weight: 700; background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); }
+  .mar-empty { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
+
+  .mode-takeover-overlay {
+    position: fixed; inset: 0; z-index: 300; background: var(--paper);
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .mode-takeover-inner { max-width: 480px; margin: 0 auto; padding: 20px 16px 48px; }
+  .mode-takeover-back {
+    display: inline-flex; align-items: center; gap: 6px; border: none; background: none;
+    color: var(--ink-faint); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    padding: 10px 4px; margin-bottom: 4px; min-height: 44px;
+  }
+  .mode-takeover-back:hover { color: var(--margin-rule); }
+  .mode-takeover-queue { margin-top: 28px; }
+  .mt-queue-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--ink-faint); margin-bottom: 10px;
+  }
+  <!-- Modes law rule 6 -- caught live (real getComputedStyle contrast probe, both
+       themes, all 4 modes): Morning's raw amber directly as text/border on
+       --raised measured ~1.26:1 in dark theme, badly failing. Deliberately NOT
+       mode-tinting the queue's own progress bar/Done button as a result --
+       they keep the SAME gold/green .tdrv-* already uses everywhere else
+       (already contrast-checked, nothing new to re-verify), and the mode is
+       still unmistakable from the ambient rail's border/Focus button (both of
+       which route through --accent-on, YIQ-computed per mode, not raw text). -->
+  .mode-takeover-reentry-pill {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 120;
+    border: none; background: var(--margin-rule); color: var(--accent-on); font: inherit; font-size: 12px;
+    font-weight: 700; padding: 10px 18px; border-radius: 999px; cursor: pointer;
+    box-shadow: var(--shadow); max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
   /* Cycle page — hormone rhythm chart (LH/FSH/Estrogen/Progesterone + uterine lining) */
   .cyc-hormone-wrap {
     background: var(--note-bg); border: 1px solid var(--note-line); border-radius: var(--radius-md);
@@ -19286,6 +19350,44 @@
              dead chrome since the 4-zone desktop build). -->
         <div id="daySessionCardHome" hidden></div>
         <div id="daySessionCard" class="session-card" hidden></div>
+        <!-- Modes law rule 4 (2026-08-22, "hyperfocus takeover", Study/Cleaning/Morning/
+             Night): the ambient rail is Morning/Night's own default state -- name +
+             progress + an all-at-once strip of today's mode-tagged items + a Focus
+             button. renderModeAmbientRail() fills it, self-hiding whenever it doesn't
+             apply (every other mode, or Morning/Night already mid-takeover). -->
+        <div id="modeAmbientRail" class="mode-ambient-rail" hidden></div>
+        <!-- The shared full-takeover screen (rule 4's "exactly three things remain"):
+             ONE component for all four of Study/Cleaning (opens automatically the
+             moment their tagged block starts) and Morning/Night (opens on tapping
+             Focus in the ambient rail above). #modeTakeoverSessionSlot is where
+             #daySessionCard itself gets reparented while open -- renderSessionCard()
+             is reused completely unchanged, same traveling-node + home-marker shape
+             #daySessionCard already uses for its mobile/desktop moves (see its own
+             comment above); renderModeTakeover() in the JS is just a third possible
+             parent, applied last so it always wins over placeDeskGrid()'s own mobile/
+             desktop placement for that render pass. #modeTakeoverQueueBody is filled
+             by mtQueueBodyHtml() -- the same one-at-a-time stocktake pattern
+             startTodoReview()/todoReviewBodyHtml() already use (reused CSS, .tdrv-*,
+             not a second version), but its own small queue (mtQueue/mtQueuePos) since
+             the to-do review's own queue is global/unfiltered and has 5 actions where
+             this needs exactly two (Done/Skip). -->
+        <div id="modeTakeoverOverlay" class="mode-takeover-overlay" hidden>
+          <div class="mode-takeover-inner">
+            <button type="button" class="mode-takeover-back" data-mt-back>← Back to Today</button>
+            <div id="modeTakeoverSessionSlot"></div>
+            <div class="mode-takeover-queue">
+              <div id="modeTakeoverQueueBody"></div>
+            </div>
+          </div>
+        </div>
+        <!-- the missing "back in" control (rule 4/7's own "equally visible way back
+             in" test): Study/Cleaning's takeover only auto-reopens when the active
+             mode CHANGES (modeRevealAll resets on that, not on demand) -- this small
+             pinned pill is what gets back into takeover on the SAME still-running
+             block after "Back to Today" was tapped, without waiting for anything.
+             Morning/Night don't need this: tapping Focus again in the ambient rail
+             already covers "back in" for them. -->
+        <button type="button" id="modeTakeoverReentryPill" class="mode-takeover-reentry-pill" hidden data-mt-reenter></button>
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -26442,6 +26544,18 @@
                   // modeVisible()'s own comment) so a reveal from an old mode never
                   // silently carries into a new one.
                   modeRevealAll: false, modeRevealAllFor: null,
+                  // Modes law rule 4 (2026-08-22, Study/Cleaning/Morning/Night takeover):
+                  // Morning/Night deliberately DON'T auto-takeover (her named exception,
+                  // see CLAUDE.md rule 4) -- they default to a visible ambient rail instead,
+                  // and this flag is what "Focus" tapped there turns on. Independent of
+                  // modeRevealAll on purpose: that flag means "show everything, ignore the
+                  // mode filter"; this one means "enter the SAME shared takeover screen
+                  // Study/Cleaning get automatically" -- a Morning/Night session can be
+                  // mid-takeover (this true) while modeRevealAll is still false the whole
+                  // time. Same session-only + per-mode-id-guard shape as modeRevealAll/
+                  // modeRevealAllFor just above, so it never silently carries from one
+                  // Night block into the next Morning one.
+                  modeFocusEngaged: false, modeFocusEngagedFor: null,
                   track: "work", year: TODAY.getFullYear(),
                   habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
@@ -32282,6 +32396,13 @@
     placeMiniCalDesk();
     // after placeMiniCalDesk so the right column already has the calendar at its top
     placeDeskGrid();
+    // Modes law rule 4 (2026-08-22): after placeDeskGrid() specifically so this
+    // always wins #daySessionCard's parent for this render pass -- placeDeskGrid()
+    // above unconditionally returns it to the mobile/desktop home it already knows
+    // about; renderModeTakeover() below is the one place that can override that
+    // with a third destination, the takeover overlay, when it applies.
+    renderModeTakeover();
+    renderModeAmbientRail();
     // 2026-08-18 (mobile Day-view drawers): after placeDeskGrid() so its "off" branch
     // has already tried (and, via inDayDrawers(), safely skipped) its own return-home
     // lines for this render before this function decides where things actually go.
@@ -39707,6 +39828,12 @@
     applyModeAccent();
     syncSessionAutoStart();
     if (state.view !== "day") return;
+    // Modes law rule 4 (2026-08-22): every second, not just on a full renderDay()
+    // pass -- so a session that ends mid-takeover (the plan finishing, see
+    // renderSessionCard()'s own endSession() branch) closes the overlay/rail
+    // promptly instead of leaving it open until the next navigation.
+    renderModeTakeover();
+    renderModeAmbientRail();
     const s = currentSession();
     const host = document.getElementById("daySessionCard");
     if (!s) { if (host && !host.hidden) renderSessionCard(); return; }
@@ -45981,6 +46108,222 @@
         </div>
       </div>`;
   }
+  /* ============================================================
+     Modes law rule 4 (2026-08-22) -- hyperfocus takeover for Study/Cleaning
+     (automatic) and Morning/Night (ambient rail + manual Focus). Built additively,
+     entirely separate from the EXISTING .mode-focus/syncModeFocus() mechanism
+     (2026-08-21, "hide page chrome, hero the session card") -- that one stays
+     exactly as it was; this is the further, dedicated full-screen screen rule 4
+     actually describes ("exactly three things remain... everything else is gone"),
+     which .mode-focus alone never attempted (it declutters the Day page's chrome,
+     the timeline itself stays visible underneath -- confirmed by reading its own
+     hide-list before building this: no timeline/nav rule in it anywhere).
+     Deliberately does not touch syncModeFocus()/applyModeFocusClass() or any of
+     their CSS -- this reuses renderSessionCard()/currentSession() (STEP direction:
+     "unchanged") and rides the SAME state.modeRevealAll reveal-all flag Study/
+     Cleaning already had (her own ask: the missing "back in" control just flips it
+     back to false, no new flag for those two) -- state.modeFocusEngaged is the
+     ONE new flag, and it's Morning/Night-only, per her explicit spec.
+     ============================================================ */
+  const MT_AUTO_MODES = ["study", "clean"];
+  const MT_MANUAL_MODES = ["morning", "night"];
+  let mtQueue = [], mtQueuePos = 0, mtQueueForId = null;
+  // guards state.modeFocusEngaged the same shape syncModeReveal() guards
+  // modeRevealAll (line ~39349) -- resets the instant the active mode id itself
+  // changes, so a Focus session left open into Morning never silently carries
+  // into whatever comes after it.
+  function mtSyncFocusEngageGuard(am) {
+    if (state.modeFocusEngagedFor !== am.id) { state.modeFocusEngaged = false; state.modeFocusEngagedFor = am.id; }
+  }
+  // whichever Mode the takeover should be showing FOR right now, or null -- the
+  // ONE place this is decided (same "if this logic appears twice, it's wrong"
+  // shape activeMode() itself follows), resolved fresh every call rather than
+  // cached, so a block ending mid-takeover closes it on the very next render.
+  function mtActiveTakeoverModeId() {
+    const am = activeMode();
+    if (MT_AUTO_MODES.includes(am.id) && sessionIsActive() && !state.modeRevealAll) return am.id;
+    if (MT_MANUAL_MODES.includes(am.id) && state.modeFocusEngaged) return am.id;
+    return null;
+  }
+  // her spec, precisely: TODOS not done + today's ROUTINE_TASKS occurrences, both
+  // filtered by modeOf(x) === modeId -- "the exact check modeVisible() already
+  // uses," same shape lmModeItemCount() already queries EVENTS/ROUTINE_TASKS/
+  // RECURRING_EVENTS with. generatedFor(TODAY) is where a routine template
+  // actually becomes today's real occurrence (start time, per-day override, chain
+  // resolution all applied) -- .rtTaskId present is what marks one of ITS entries
+  // as a routine occurrence rather than a family task/chain item, same test
+  // modeOf() itself branches on. Ghosts (skipped/moved elsewhere today) excluded --
+  // nothing to focus on for those.
+  function mtBuildQueue(modeId) {
+    const todos = TODOS.filter(t => !t.done && modeOf(t) === modeId).map(t => ({ kind: "todo", id: t.id }));
+    const routines = generatedFor(TODAY)
+      .filter(o => o.rtTaskId && !o.ghostSkip && !o.ghostMoved && modeOf(o) === modeId && !isDone(o.id))
+      .map(o => ({ kind: "routine", id: o.id }));
+    return [...todos, ...routines];
+  }
+  // one-at-a-time queue body -- same visual/interaction pattern as
+  // todoReviewBodyHtml() (progress count, thin track, one card, pulse-advance),
+  // reusing its .tdrv-* CSS as-is rather than a second stylesheet, but its own
+  // small queue/position pair: todoReviewQueue is global+unfiltered with 5
+  // actions (Edit/Schedule/Ignore/Remove/Complete); this is Mode-filtered with
+  // exactly the two rule 4 actually asks for, Done/Skip.
+  function mtQueueBodyHtml() {
+    const total = mtQueue.length;
+    if (mtQueuePos >= total) {
+      return `<div class="tdrv-empty">
+        <div class="tdrv-empty-big">${total ? "✨" : "🗂"}</div>
+        <div class="tdrv-empty-head">${total ? "Queue clear" : "Nothing queued"}</div>
+        <div class="tdrv-empty-stats">${total ? "Every tagged item is done." : "No to-dos or routines are tagged to this Mode yet."}</div>
+      </div>`;
+    }
+    const item = mtQueue[mtQueuePos];
+    let title = "", sub = "";
+    if (item.kind === "todo") {
+      const t = TODOS.find(x => x.id === item.id);
+      if (!t || t.done) { mtQueuePos++; return mtQueueBodyHtml(); }   // safety: vanished/finished some other way
+      title = t.title;
+    } else {
+      const o = generatedFor(TODAY).find(x => x.id === item.id);
+      if (!o || isDone(item.id)) { mtQueuePos++; return mtQueueBodyHtml(); }
+      title = o.title;
+      sub = o.start ? fmtTime(o.start) : "";
+    }
+    return `
+      <div class="tdrv-top"><div class="tdrv-progress">${mtQueuePos + 1} of ${total}</div></div>
+      <div class="tdrv-track"><div class="tdrv-track-fill" style="width:${(mtQueuePos / total) * 100}%"></div></div>
+      <div class="tdrv-card" data-mt-card>
+        <div class="tdrv-title">${esc(title)}</div>
+        ${sub ? `<div style="font-size:12px;color:var(--ink-faint)">${esc(sub)}</div>` : ""}
+        <div class="tdrv-actions">
+          <button type="button" data-mt-act="skip">⏭ Skip for now</button>
+          <button type="button" class="act-complete" data-mt-act="done">✓ Done</button>
+        </div>
+      </div>`;
+  }
+  // same brief colour-pulse-then-advance shape as todoReviewPulseAdvance -- its
+  // own copy since it targets [data-mt-card]/renders the takeover, not the to-do
+  // review panel.
+  function mtPulseAdvance(pulseClass) {
+    const card = document.querySelector("[data-mt-card]");
+    if (card) {
+      card.classList.add(pulseClass);
+      card.querySelectorAll("button").forEach(b => b.disabled = true);
+    }
+    setTimeout(() => { mtQueuePos++; renderModeTakeover(); }, 260);
+  }
+  // the shared full-takeover screen itself -- toggles #modeTakeoverOverlay, and
+  // when open, reparents the REAL #daySessionCard into it (renderSessionCard()'s
+  // own output, completely unchanged) -- called from renderDay() right AFTER
+  // placeDeskGrid() (see renderDay()'s own call site) specifically so this always
+  // wins the session-card's parent for that render pass, and again every second
+  // from sessionTick() while on the Day page, so a session ending mid-takeover
+  // closes it promptly rather than waiting for the next full navigation.
+  function renderModeTakeover() {
+    const overlay = document.getElementById("modeTakeoverOverlay");
+    const slot = document.getElementById("modeTakeoverSessionSlot");
+    const reentry = document.getElementById("modeTakeoverReentryPill");
+    const sessionCard = document.getElementById("daySessionCard");
+    const home = document.getElementById("daySessionCardHome");
+    if (!overlay || !slot) return;
+    const am = activeMode();
+    mtSyncFocusEngageGuard(am);
+    const modeId = mtActiveTakeoverModeId();
+    if (modeId) {
+      overlay.hidden = false;
+      if (sessionCard && sessionCard.parentElement !== slot) slot.appendChild(sessionCard);
+      // rebuild the queue only when the MODE it's showing for actually changed --
+      // never mid-queue, so a re-render from an unrelated tick never resets her
+      // progress through it.
+      if (mtQueueForId !== modeId) { mtQueue = mtBuildQueue(modeId); mtQueuePos = 0; mtQueueForId = modeId; }
+      const body = document.getElementById("modeTakeoverQueueBody");
+      if (body) body.innerHTML = `<div class="mt-queue-label">${am.emoji || ""} ${esc(am.name)}'s queue</div>` + mtQueueBodyHtml();
+      if (reentry) reentry.hidden = true;
+    } else {
+      overlay.hidden = true;
+      // never strand the real session card mid-viewport-DOM -- if placeDeskGrid()
+      // (which runs first every renderDay() pass) hasn't already reclaimed it this
+      // render, send it home now.
+      if (sessionCard && sessionCard.parentElement === slot) {
+        (home || document.querySelector(".wrap") || document.body).appendChild(sessionCard);
+      }
+      // the missing "back in" control, Study/Cleaning only (rule 4/7's "equally
+      // visible way back in" test) -- Morning/Night's own Focus button already
+      // covers both directions, per her spec.
+      const showReentry = MT_AUTO_MODES.includes(am.id) && sessionIsActive() && state.modeRevealAll;
+      if (reentry) {
+        reentry.hidden = !showReentry;
+        if (showReentry) reentry.textContent = `${am.emoji || ""} Back into ${am.name} focus`;
+      }
+    }
+  }
+  // Morning/Night's own default state (her named exception to rule 4's
+  // "automatic, not a button" -- see CLAUDE.md rule 4): visible, recoloured (free,
+  // via applyModeAccent()'s existing --margin-rule/--accent-on), a small pinned
+  // progress card instead of the full takeover. Same mtBuildQueue() data source
+  // as the takeover queue -- no separate mechanism to invent.
+  function renderModeAmbientRail() {
+    const host = document.getElementById("modeAmbientRail");
+    if (!host) return;
+    const am = activeMode();
+    mtSyncFocusEngageGuard(am);
+    if (!MT_MANUAL_MODES.includes(am.id) || state.modeFocusEngaged) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    // "3 of 6" needs the DONE ones too, not just what's left -- same filter shape
+    // as mtBuildQueue(), done items included, so this is its own small query
+    // rather than that function plus a second done-only scan.
+    const allTagged = [
+      ...TODOS.filter(t => modeOf(t) === am.id).map(t => ({ done: !!t.done, title: t.title })),
+      ...generatedFor(TODAY).filter(o => o.rtTaskId && !o.ghostSkip && !o.ghostMoved && modeOf(o) === am.id)
+        .map(o => ({ done: isDone(o.id), title: o.title })),
+    ];
+    const total = allTagged.length;
+    const doneN = allTagged.filter(x => x.done).length;
+    let markedCurrent = false;
+    const stripHtml = total ? allTagged.map(x => {
+      let cls = "";
+      if (x.done) cls = "mar-done";
+      else if (!markedCurrent) { cls = "mar-current"; markedCurrent = true; }
+      return `<span class="mar-chip ${cls}">${x.done ? "✓ " : ""}${esc(x.title)}</span>`;
+    }).join("") : `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>`;
+    host.innerHTML = `
+      <div class="mar-head">
+        <span class="mar-title">${am.emoji || ""} ${esc(am.name)} · ${doneN} of ${total}</span>
+        <button type="button" class="mar-focus-btn" data-mar-focus>Focus</button>
+      </div>
+      <div class="mar-strip">${stripHtml}</div>`;
+  }
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-mt-back]")) {
+      const am = activeMode();
+      if (MT_AUTO_MODES.includes(am.id)) state.modeRevealAll = true;
+      else state.modeFocusEngaged = false;
+      renderDay();
+      return;
+    }
+    if (e.target.closest("[data-mt-reenter]")) { state.modeRevealAll = false; renderDay(); return; }
+    if (e.target.closest("[data-mar-focus]")) {
+      const am = activeMode();
+      state.modeFocusEngaged = true; state.modeFocusEngagedFor = am.id;
+      renderDay();
+      return;
+    }
+    const mtAct = e.target.closest("[data-mt-act]");
+    if (mtAct) {
+      const act = mtAct.dataset.mtAct;
+      const item = mtQueue[mtQueuePos];
+      if (!item) return;
+      if (act === "skip") { mtQueuePos++; renderModeTakeover(); return; }
+      if (act === "done") {
+        if (item.kind === "todo") {
+          const t = TODOS.find(x => x.id === item.id);
+          if (t) { t.done = true; saveTodos(TODOS); renderDeskWidgetRail(); renderTodoPage(); }
+        } else {
+          toggleDone(item.id, true);
+        }
+        mtPulseAdvance("pulse-complete");
+      }
+    }
+  });
   // mirrors resolveEventColorHex()'s own resolution order (sub-category colour if it
   // has one, else the part-of-life colour) -- same rule the calendar block fill and
   // the widget-rail digest already use, just returning the live var() reference
