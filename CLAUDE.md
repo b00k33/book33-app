@@ -909,6 +909,129 @@ somewhere in the file. The point is picking ONE and applying it everywhere.
   bottom. Keep the bottom Save/Cancel bar too. (True for Events/Routines/Meal-log
   only as of 2026-08-13 — Recipe, Goal, Person, Family task, Work-manual section,
   and Shopping item editors were still missing it.)
+## Page-header law (standing rule, adopted 2026-08-22)
+Applies to every page in index.html. Linh, looking at the top of Life Map: "i need an
+app universal understanding that this type of title and spacing is NOT suitable for
+the app design." Book33 is a working tool opened dozens of times a day, on a phone, to
+do one thing fast. The retired pattern was a magazine cover sitting on every page: a
+full-width `.astro` "— BOOK 33 —" band, a centred `.bd-head` with an all-caps
+`.eyebrow` tagline, a 38px display `<h1>` restating the page name, then often a bold
+full-width instruction line — measured on Life Map at ~196px consumed before the first
+row of actual content, on a view whose whole purpose is fitting a week on one screen.
+The nav rail already names the page; the eyebrow says nothing the page doesn't. This
+is not a one-time cleanup — it applies to any new page, panel, or sheet from here on.
+A brief that asks for a "hero" or "title block" on a working page is answered with
+this rule, not with a hero.
+
+**The rule — a page header may not exceed 56px of vertical space, and may not restate
+what the nav already says:**
+1. **No eyebrow taglines.** `.eyebrow` above a page title is banned — atmosphere, not
+   information.
+2. **No display-size page titles.** A title, where one is needed at all, is body scale
+   — the same size as a section label, not 38px, and never the display font.
+3. **Prefer no page title at all.** The nav/tab bar already shows which page you're on,
+   highlighted. Include a title only when the page is reachable without the nav, or
+   when the title carries live information the nav can't (a date range, a count, a
+   status).
+4. **When a title earns its place, fold it into the content's own header row** — one
+   line, sharing space with whatever else that row needs. Never its own stacked block.
+5. **Instruction/help text is small and quiet** — regular weight, muted colour
+   (`--ink-soft`/`--ink-faint`), one line where possible. Never bold, never full-width
+   display text, never with its own large margin.
+6. **The "BOOK 33" masthead (`.astro`/`.app-title`) is not page chrome.** At most once,
+   on a genuine home/landing surface. Hidden on working pages via the same mechanism
+   the Day view already uses (`[data-desk-day] .astro { display: none; }`) — that's
+   the pattern, not the exception. Never delete `.astro`'s own markup/CSS — hide and
+   unhook, so it's reversible per page.
+7. **Spacing above the first real content follows 4/8/12/16/24/32, small end.**
+
+**The test**: measure from the top of the viewport to the first row of real content at
+~390px. ≤56px is correct. 56–100px needs a stated reason. >100px is a bug regardless
+of how it looks. Ask of every element above that first row: *what does the user learn
+from this that they didn't already know by tapping the thing that brought them here?*
+If nothing — delete it.
+
+**Not an argument against character** — Ink & Brass, gold accents, the line-icon set,
+the typographic care all stay exactly as they are. The objection is specifically to
+space spent restating the page's own name, and to display-scale type on utility
+screens. Ornament that costs no screen height is welcome.
+
+**2026-08-22 sweep**: her own count was 29 `.bd-head` pages; the actual sweep found
+**32** — three use a compound class (`rtn-bd-head` [Routines], `cbd-head` [CBD Work,
+carries a live progress line], `shop-lux-head` [Shopping, gold-glow title]) so they
+read visually different from the other 29's plain centred pattern even though
+structurally they're the same eyebrow+h1 chrome — all three included, same
+`[data-desk-day]`-style discrepancy-disclosure precedent as the Line-spacing law sweep
+below. `#cbdWorkProgress` (CBD Work) and `#wmbStats` (Work Day Board) are the only two
+headers carrying genuinely live data — that data lives in a sibling of the h1, not the
+h1 itself; preserved untouched. `.astro` was hidden on all 32 (no exception) — the
+app's actual landing surface is `#dayPage` (`state.view` defaults to `"day"`), which
+isn't part of this sweep and already suppresses `.astro` via its own established rule;
+no other `.bd-head` page reads as a genuine home/landing surface.
+
+## Modes law (standing rule, adopted 2026-08-22)
+Applies to every surface in index.html. Supersedes both the old "Work Mode / Personal
+Mode" system and the old event-tag Modes system — where anything elsewhere conflicts
+with this, this wins. **Documented here as the standard for future work — the actual
+system-collapse implementation (retiring the Work/Personal pill, hyperfocus takeover,
+per-Mode widget lists, colour re-theming, contrast checking) is a separate, large
+build not yet started as of adoption.**
+
+Linh: "i am confused on how to use it… the mode function is not at all how i want it
+to be. i thought the modes would change the whole visual of the app with minimal
+effort from me to navigate it." The confusion was structural: two different systems
+were both called "Mode" — a day-level Work/Personal pill driven by whether a CBD Work
+shift existed, and a separate per-event-tag Modes system (Morning/Work/Code/Study/
+Cleaning/Night/Travel/Sleep) whose "active" one was whichever tagged block the clock
+was inside. Same word, two systems, neither one she could actually switch, and the
+visible effect was far smaller than "Mode" promises. This law collapses them into one.
+
+**The rule, in one line: a Mode is an event. The calendar decides which Mode is
+active. The active Mode reshapes the whole app.**
+
+1. **One system.** The Work/Personal pill is retired. A CBD Work shift is simply an
+   event tagged `work`, activating Work Mode the same way any other tagged block
+   activates its own Mode. No second concept, no second word.
+2. **What decides the active Mode — automatic, from the calendar, in this order:**
+   (a) the longest containing block wins — a Pilates block inside a Work shift doesn't
+   switch the app to Pilates; (b) nothing tagged running right now → neutral default,
+   everything visible — a gap is a real signal, not a leftover state; (c) manual
+   override is allowed and expires on its own — holds until the calendar's next tagged
+   block naturally takes over. No other input decides the active Mode: not time of day
+   alone, not a stored preference, not which page she's on.
+3. **What an active Mode changes — everything it's entitled to, not one accent token:**
+   colour (accent, card backgrounds, borders, surfaces all take the Mode's colour
+   family; light/dark stays the user's own theme choice, never flipped by Mode); which
+   widgets/sections appear on Today (each Mode carries its own widget list — Work
+   shows pharmacy/board/patients tiles, Sleep hides fasting/weight, etc.); which items
+   are visible (existing filtering kept, including its non-negotiable "anything hidden
+   is announced by a tappable pill" rule).
+4. **Hyperfocus takeover.** Every tagged block takes over the screen for its duration
+   — not a separate feature or button, this is what being in a Mode means. During
+   takeover, exactly three things remain: the block itself (title, time remaining, its
+   own checklist), the Mode's own widgets (§3), and an "add something you picked up"
+   input. Everything else is gone until the block ends. There is always a visible way
+   out — a single control drops back to normal Today without changing/ending the Mode,
+   and an equally visible way back in. Takeover that traps her is a bug, not focus —
+   matters most on long blocks (a 10am–2pm shift, overnight Sleep).
+5. **Configuration lives in one place** — the Modes editor: name, letter, colour, icon,
+   order, widget list, per Mode. Sensible defaults ship; nothing needs setup to work,
+   but every one is editable. No Mode behaviour is configured by editing an event, a
+   page, or a setting elsewhere.
+6. **Readability is not optional.** A Mode's colour may never render text unreadable —
+   the old system tinted `--margin-rule` (also a text token), producing near-black
+   text on near-black backgrounds for some Modes. Any token a Mode re-colours must be
+   checked for contrast against every surface it lands on, in both themes. A Mode that
+   can't meet contrast doesn't get that colour.
+7. **The test** — during a tagged block: can she tell which Mode she's in without
+   reading any text (colour must answer this)? Is everything on screen relevant to
+   what she's doing right now (else §3/§4 is wrong)? Can she exit takeover in one tap
+   and back in one tap (else §4 is broken)? Can she read every word on screen (else §6
+   is broken)? Did she have to do anything to make this happen (if yes, §2 is broken)?
+8. **Applies to new work** — any new page, widget or panel declares which Modes it
+   belongs to. "Shows in every Mode" is a deliberate stated choice, not a default to
+   fall into.
+
 ## Before finishing
 - Confirm every rule is met; check dark AND light; check nothing is cut off or
   overlapping at 360px.
