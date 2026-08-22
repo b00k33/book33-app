@@ -1709,6 +1709,10 @@
   #workManualPage .span-note, #lifeMapPage .span-note, #eightDaysPage .span-note {
     font-size: 11px; color: var(--ink-faint);
   }
+  /* 2026-08-22 ("one-row header, reclaim the bottom"): #lmNote's old inline
+     margin-bottom:16px moved here, cut to the small end of the scale -- see its own
+     markup comment. */
+  #lifeMapPage .span-note { display: block; margin-bottom: 8px; }
   /* .expand-mode-btn / .hours.expand-armed: SUPERSEDED 2026-08-02 (Linh: "a better
      expanding function where i can drag" — the tap-arm-then-tap-a-block flow is gone,
      replaced by .block-resize-handle below). Rules kept, unused — #expandModeBtn is
@@ -4940,7 +4944,23 @@
      original 16px/18px, since only the week grid's own padding was too roomy. Bottom
      specifically trimmed further (8px, not 12px) -- that's the "dead space below the
      grid, between the +N-more line and the panel edge" she named separately. */
-  .lm-weekbox { flex: 1; min-width: 0; padding: 12px 12px 8px; }
+  .lm-weekbox { flex: 1; min-width: 0; padding: 12px 12px 4px; margin-bottom: 0; }
+  /* 2026-08-22 ("reclaim the bottom" -- STEP 3): #lifeMapPage's own bottom padding,
+     trimmed from the base .page rule's 32px (desktop)/24px (mobile) to the small end
+     of the scale. An id selector beats .page's class at any width, so one rule
+     covers both without touching the shared base rule or duplicating into each
+     media block. The 31px <p class="footnote"> below the page ("Entries marked ↻
+     repeat automatically from your Life Map…") is ALSO the single biggest piece of
+     the reclaimed space, and it's currently false -- nothing repeats from Life Map
+     yet (a separate, not-yet-built job) -- so it's hidden here too, Life-Map-only,
+     via the #wrap > direct-child combinator so this can't ever match one of the
+     several OTHER, page-scoped <p class="footnote"> elements elsewhere in the file
+     (People/Pregnancies/Categories all have their own). Not deleted and not changed
+     on any other page -- she hasn't decided its app-wide fate; the wording is
+     inaccurate everywhere it appears, not just here, which is a separate flag for
+     her, not something this job silently fixes. */
+  #lifeMapPage { padding-bottom: 8px; }
+  body[data-view="lifeMap"] #wrap > p.footnote { display: none; }
   /* 2026-08-21 (STEP 2b, same complaint): .wrap/.page's own horizontal padding is
      the OUTER layer of the same dead space -- already trimmed to near-zero for
      EVERY page below 640px (see the "reclaim the margins on small screens" block,
@@ -4965,18 +4985,39 @@
     .lm-strip { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
     .lm-sw-sep { width: 1px; height: 18px; margin: 0 2px; }
   }
-  .lm-grid-wrap { overflow-x: auto; }
+  /* 2026-08-22 ("grid fills the page" -- STEP 4): overflow-y:auto is the scroll-
+     inside-the-wrap fallback for the minimum-row-height case (see
+     lmComputeRowHeight()) -- a no-op, no visible scrollbar, whenever the grid's real
+     content height fits inside the JS-set max-height, which is every case except a
+     genuinely short window. max-height itself is left unset here (only ever set
+     inline by JS, per-render) so a page load before that JS has run doesn't clip
+     anything. */
+  .lm-grid-wrap { overflow-x: auto; overflow-y: auto; }
   /* 2026-08-21: 32px gutter and the 9.5/8.5/8px label sizes below are the approved
      mockup's own exact pixel values (an approved-sheet exception to the type scale,
      same standing precedent as the mobile Day-view/Body-page/Routines sheets in this
-     file) -- not rounded to the nearest scale step. */
+     file) -- not rounded to the nearest scale step. 2026-08-22: the 8.5/8px sizes
+     specifically are now a CLAMPED floor/ceiling around that same approved value
+     (see --lm-row-h below) rather than a fixed number, so a taller row doesn't leave
+     tiny fixed-size text floating in it -- the approved 32px gutter width and 9.5px
+     day-header size are untouched, neither one scales with row height. */
   .lm-grid { display: grid; grid-template-columns: 32px repeat(7, 1fr); gap: 1px; user-select: none; cursor: crosshair; }
   .lm-hd { font-size: 9.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 2px 0 5px; letter-spacing: .04em; }
-  .lm-hr-lbl { font-size: 8.5px; color: var(--ink-faint); text-align: right; padding-right: 5px; display: flex; align-items: center; justify-content: flex-end; }
+  .lm-hr-lbl {
+    font-size: clamp(8.5px, calc(var(--lm-row-h, 12px) * 0.5), 12px);
+    color: var(--ink-faint); text-align: right; padding-right: 5px; display: flex; align-items: center; justify-content: flex-end;
+  }
   /* 2026-08-21 (30-minute rows): 12px halves the old 22px hourly row while doubling
      row COUNT, so the week's total height stays about what it was (the mockup's own
-     value, matched exactly). */
-  .lm-cell { height: 12px; border-radius: 2px; background: var(--field-bg); cursor: crosshair; position: relative; transition: filter .08s ease; }
+     value, matched exactly).
+     2026-08-22 ("grid fills the page" -- STEP 4): 12px is now the FLOOR, not a fixed
+     value -- --lm-row-h is a CSS custom property, scoped to #lmGrid itself (never
+     :root -- this is Life Map's own layout knob, nothing else reads it), set ONCE per
+     render/resize by lmComputeRowHeight(), never per-cell -- every one of the 252
+     cells picks up the same value for free via inheritance, no per-cell JS write.
+     var(--lm-row-h, 12px) keeps 12px as the fallback for the instant between first
+     paint and that JS running. */
+  .lm-cell { height: var(--lm-row-h, 12px); border-radius: 2px; background: var(--field-bg); cursor: crosshair; position: relative; transition: filter .08s ease; }
   .lm-cell:hover { filter: brightness(1.35); }
   /* 2026-08-21 (Life Map: one simple week view): a filled cell IS the real schedule --
      mode-coloured (background set inline) or plain when untagged -- and stays tappable
@@ -4986,15 +5027,30 @@
      its run only. Colour is set inline per-cell (lmTextColorFor()/var(--ink)) -- never
      a fixed colour here, since one colour can't read on both a bright amber Mode and a
      near-black indigo one. */
-  .lm-cell-title { position: absolute; left: 3px; top: 0; height: 12px; line-height: 12px; font-size: 8px; font-weight: 600; white-space: nowrap; overflow: hidden; max-width: calc(100% - 4px); pointer-events: none; }
+  /* 2026-08-22: height/line-height/font-size all track --lm-row-h now (see .lm-cell's
+     own comment) instead of the fixed 12px/12px/8px this used to be -- a taller row
+     gets a proportionally bigger title instead of small fixed text floating in a
+     bigger box. font-size clamped so it never gets illegibly small OR absurdly big
+     at the row-height extremes. */
+  .lm-cell-title {
+    position: absolute; left: 3px; top: 0; height: var(--lm-row-h, 12px); line-height: var(--lm-row-h, 12px);
+    font-size: clamp(8px, calc(var(--lm-row-h, 12px) * 0.42), 11px);
+    font-weight: 600; white-space: nowrap; overflow: hidden; max-width: calc(100% - 4px); pointer-events: none;
+  }
   .lm-cell-empty { border: 1px dashed transparent; }
   .lm-cell-empty:hover { border-color: var(--gold); }
   /* STEP 6: the in-progress paint drag, translucent in the armed Mode's own colour
      (set inline alongside this class -- see the pointerdown/pointermove handlers)
      with a gold outline so it reads as "about to book," not "already booked." */
   .lm-cell-painting { opacity: .5; outline: 1.5px solid var(--gold); outline-offset: -1px; }
-  .lm-week-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+  /* 2026-08-22 (one-row header): no longer a standalone stacked row -- sits inside
+     .lm-week-head beside .lm-week-title now, so its own bottom margin is gone
+     (the row's own small margin-bottom, below, replaces it). flex:1 centres the
+     range+arrows in whatever width is left after the title claims its own space. */
+  .lm-week-nav { display: flex; align-items: center; justify-content: center; gap: 12px; flex: 1; min-width: 0; }
   .lm-week-range { font-size: 12.5px; font-weight: 700; color: var(--ink); min-width: 170px; text-align: center; }
+  .lm-week-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .lm-week-title { flex: none; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; }
   .lm-untimed { margin-top: 10px; }
   .lm-untimed-toggle {
     background: none; border: none; padding: 0; font: inherit; font-size: 11.5px;
@@ -18290,10 +18346,15 @@
        by renderLifeMap() (search LIFEMAP_KEY), reached via state.view = "lifeMap" from
        CH22's chapter menu and the nav strip — same triple every page here uses. -->
   <div class="page" id="lifeMapPage" hidden>
-    <div class="bd-head">
-      <h1>🗺 Life Map</h1>
-    </div>
-    <div class="span-note" style="display:block;margin-bottom:16px" id="lmNote">
+    <!-- 2026-08-22 (Linh: "one-row header, reclaim the bottom" -- supersedes the
+         separate .bd-head block + "Your week" .lm-panel-title + its own stacked
+         .lm-week-nav row this page used to carry, 77px of stacked header before any
+         grid content. Folded into ONE row, .lm-week-head, inside the panel itself --
+         see its own CSS/renderLifeMap() comments for the rest. #lmNote's old inline
+         style="display:block;margin-bottom:16px" is now a real CSS rule, small-end
+         margin (see #lifeMapPage .span-note below) -- the div was already block by
+         default (it's a <div>), so "display:block" was redundant. -->
+    <div class="span-note" id="lmNote">
       Pick a Mode from the palette, then tap or drag to paint your week — plain grey means no Mode yet.
     </div>
 
@@ -18304,8 +18365,14 @@
     <div class="lm-stage">
       <div class="lm-strip" id="lmStrip"></div>
       <div class="lm-panel lm-weekbox">
-        <div class="lm-panel-title">Your week</div>
-        <div class="lm-week-nav" id="lmWeekNav"></div>
+        <!-- 2026-08-22: title + week range + ◂▸ arrows, one line. #lmWeekNav's own
+             innerHTML wiring in renderLifeMap() is completely unchanged -- only its
+             CONTAINER moved, from its own stacked row below the title to sitting
+             beside it here. -->
+        <div class="lm-week-head">
+          <span class="lm-week-title">🗺 Life Map</span>
+          <div class="lm-week-nav" id="lmWeekNav"></div>
+        </div>
         <div class="lm-grid-wrap">
           <div class="lm-grid" id="lmGrid"></div>
         </div>
@@ -20667,7 +20734,78 @@
     renderLmUntimed(untimed);
     renderLmStrip();
     renderLmCellPanel();
+    lmComputeRowHeight();
   }
+  // 2026-08-22 ("grid fills the page" -- STEP 4): row height derived from real
+  // available space instead of a hardcoded 12px, so the week fills the panel at
+  // whatever window size she actually has rather than assuming one. Measures the
+  // grid's own top (already reflects the new compact one-row header from STEP 2/3 --
+  // this function doesn't need to know anything about the header, just where the
+  // grid itself currently starts), the untimed row's real rendered height (0 when
+  // hidden), and #lifeMapPage's own bottom padding, then divides what's left by
+  // LM_SLOTS.length after subtracting the day-header row and the grid's own
+  // between-row gaps. Sets exactly ONE CSS custom property (--lm-row-h, scoped to
+  // #lmGrid, read by .lm-cell/.lm-cell-title/.lm-hr-lbl -- see their own comments)
+  // plus ONE inline max-height on .lm-grid-wrap -- never touches an individual cell,
+  // so this stays cheap regardless of how often it's called.
+  // Min 12px: the row height this page already shipped at and she already approved
+  // as legible with an 8px title in it -- the floor, not a new guess. Below the
+  // space 36 rows at 12px needs, .lm-grid-wrap's own max-height (set below) is
+  // smaller than the grid's real content height, so it scrolls internally
+  // (overflow-y:auto, already on .lm-grid-wrap) instead of crushing rows further.
+  // Max 24px: the next stop up the 4/8/12/16/24/32 scale from 12px -- comfortably
+  // roomier without a 30-minute slot ballooning into a giant band. Above it,
+  // max-height is set LARGER than the (now capped) grid's real content height, so
+  // the box takes its natural, smaller size and the extra space sits below the
+  // panel as blank page space, per her explicit "let the extra space sit below
+  // rather than distorting the grid" -- max-height only ever caps, it never forces
+  // a box to grow to fill it.
+  const LM_ROW_MIN = 12, LM_ROW_MAX = 24;
+  let lmRowHeightRaf = null;
+  function lmComputeRowHeight() {
+    const gridWrap = document.querySelector(".lm-grid-wrap");
+    const grid = document.getElementById("lmGrid");
+    const untimed = document.getElementById("lmUntimed");
+    const page = document.getElementById("lifeMapPage");
+    const wrap = document.getElementById("wrap");
+    if (!gridWrap || !grid || !page || page.hidden) return;
+    const hd = grid.querySelector(".lm-hd");
+    const top = gridWrap.getBoundingClientRect().top;
+    const untimedH = untimed && !untimed.hidden ? untimed.getBoundingClientRect().height : 0;
+    const pagePadBottom = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+    const hdH = hd ? hd.getBoundingClientRect().height : 0;
+    const gapOverhead = LM_SLOTS.length; // grid gap:1px x one gap per slot row (below the header row)
+    const SAFETY = 4; // sub-pixel/border rounding cushion
+    // #wrap doesn't end where #lifeMapPage ends -- the flex column's gap, the
+    // "offline ready" banner, and #wrap's own padding-bottom all sit after the
+    // page. Measuring that live (rather than assuming the page owns the full
+    // viewport) is what keeps the page from overflowing: it's constant no matter
+    // how tall the page itself is, since page and wrap grow together.
+    const tailChrome = wrap ? Math.max(0, wrap.getBoundingClientRect().bottom - page.getBoundingClientRect().bottom) : 0;
+    // fullAvailable is .lm-grid-wrap's own budget (header row + gaps + all 36 cell
+    // rows); forCells is what's left of that for the 36 cell rows once the header
+    // row and the gaps are spoken for -- the number this actually gets divided by.
+    const fullAvailable = window.innerHeight - top - untimedH - pagePadBottom - tailChrome - SAFETY;
+    const forCells = fullAvailable - hdH - gapOverhead;
+    const raw = Math.floor(forCells / LM_SLOTS.length);
+    const rowH = Math.max(LM_ROW_MIN, Math.min(LM_ROW_MAX, raw));
+    grid.style.setProperty("--lm-row-h", rowH + "px");
+    // max-height only ever CAPS -- it can't force the box to grow -- so setting it
+    // to fullAvailable in every case is correct for all three outcomes above: below
+    // the minimum the real content is taller than fullAvailable and scrolls; above
+    // the maximum the real content is shorter than fullAvailable and just takes its
+    // own smaller size, leaving blank space below; in between the two are
+    // approximately equal by construction.
+    gridWrap.style.maxHeight = Math.max(fullAvailable, 0) + "px";
+  }
+  // recompute on resize (rAF-throttled so a drag-resize doesn't force layout on
+  // every pixel of movement) -- Life Map's own view check keeps this a no-op on
+  // every other page rather than measuring elements that don't exist.
+  window.addEventListener("resize", () => {
+    if (state.view !== "lifeMap") return;
+    if (lmRowHeightRaf) cancelAnimationFrame(lmRowHeightRaf);
+    lmRowHeightRaf = requestAnimationFrame(lmComputeRowHeight);
+  });
   // Paint-to-schedule drag -- a drag only ever spans one day/column (the
   // elementFromPoint hit-test below ignores a different day), so "contiguous cells in
   // one drag" resolves to one or more same-day runs on lmSelDay (see
