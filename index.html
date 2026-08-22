@@ -11323,6 +11323,39 @@
     background: var(--margin-rule); color: var(--accent-on);
     font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
   }
+  /* 2026-08-22 (fix: filter chrome covering the date nav/search bar on mobile):
+     .tl-hidden-pill-row is pure markup scaffolding (see its own HTML comment) --
+     display:contents by default so it adds no box on desktop/tablet, leaving
+     .tl-origin-hidden-pill's existing fixed/top/right rules completely untouched
+     above 640px, exactly per her STEP 4 ("desktop stays exactly as-is"). */
+  .tl-hidden-pill-row { display: contents; }
+  @media (max-width: 640px) {
+    /* Same in-flow shape as .todo-mode-hidden-pill just above (her own precedent
+       for "chrome that used to float, now sits in the page") -- position:static
+       (the default; just clearing fixed's top/right) turns .tl-origin-filter back
+       into a normal flex item of #wrap, which already gives every direct child
+       16px of gap and (via .page's own width:100% precedent) needs its own
+       width:100% since #wrap centers/shrink-wraps children by default. */
+    body[data-view="day"] .tl-origin-filter {
+      position: static; top: auto; right: auto;
+      width: 100%; box-sizing: border-box; margin: 0;
+      justify-content: flex-start;
+    }
+    /* the row wrapper: now a real flex-wrap container so the two pills below
+       share one line when both fit and drop to their own line when they don't --
+       her STEP 3 ask ("pills can share/wrap a row") -- rather than always
+       stacking full-width regardless of how short their text is. */
+    .tl-hidden-pill-row {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      width: 100%; box-sizing: border-box;
+    }
+    .tl-origin-hidden-pill {
+      position: static; top: auto; right: auto;
+      flex: 1 1 auto; min-width: 0; max-width: 100%;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tl-mode-hidden-pill { max-width: 100%; }
+  }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -16788,19 +16821,34 @@
     <button type="button" class="track-opt" data-origin-toggle="repeat" aria-pressed="true">Repeating</button>
     <button type="button" class="track-opt" data-origin-toggle="generated" aria-pressed="true">Generated</button>
   </div>
-  <!-- her spec, non-negotiable: "Whenever anything is hidden, show a small
-       persistent pill... Tapping it restores everything." Empty/hidden whenever
-       nothing is hidden -- see renderTlOriginFilter(). -->
-  <button type="button" class="tl-origin-hidden-pill" id="tlOriginHiddenPill" hidden></button>
+  <!-- 2026-08-22 (Linh: "filter chrome covers the date nav and search bar on
+       mobile" -- both pills were position:fixed, top-right-stacked over hardcoded
+       offsets sized for a fixed reserved top area that no longer exists once the
+       Day-view pull-handle drawer collapses to near-zero (see .day-top-drawer) --
+       confirmed live: the mode-hidden pill sat directly on top of #workModeBar's
+       "Switch to Work for today" link (elementFromPoint hit the pill, not the
+       button) even in the default collapsed state, and both pills sat on top of
+       the drawer's own date-nav row / quick-add bar once opened. This wrapper is
+       PURELY a layout hook for the ≤640px in-flow fix below (see .tl-hidden-
+       pill-row) -- display:contents on every wider width, so it adds no box and
+       changes nothing about how the two buttons already position themselves via
+       .tl-origin-hidden-pill's own fixed/top/right rules. Neither button's own
+       id/class/hidden-attribute/click-handler changes at all. -->
+  <div class="tl-hidden-pill-row" id="tlHiddenPillRow">
+    <!-- her spec, non-negotiable: "Whenever anything is hidden, show a small
+         persistent pill... Tapping it restores everything." Empty/hidden whenever
+         nothing is hidden -- see renderTlOriginFilter(). -->
+    <button type="button" class="tl-origin-hidden-pill" id="tlOriginHiddenPill" hidden></button>
 
-  <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached" (2026-08-20):
-       her spec's own non-negotiable rule, restated for THIS filter (§2: "this rule
-       applies to every filtered surface in the app, without exception") -- nothing
-       mode-filtering hides is ever silent. Same global-chrome placement as the origin
-       pill just above (a page-agnostic sibling, day-view-only via CSS) and the SAME
-       "tap to reveal everything" shape, but content-driven (names the top few hidden
-       items) rather than a static count, since her spec asks for both. -->
-  <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" hidden></button>
+    <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached" (2026-08-20):
+         her spec's own non-negotiable rule, restated for THIS filter (§2: "this rule
+         applies to every filtered surface in the app, without exception") -- nothing
+         mode-filtering hides is ever silent. Same global-chrome placement as the origin
+         pill just above (a page-agnostic sibling, day-view-only via CSS) and the SAME
+         "tap to reveal everything" shape, but content-driven (names the top few hidden
+         items) rather than a static count, since her spec asks for both. -->
+    <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" hidden></button>
+  </div>
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
