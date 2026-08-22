@@ -7139,7 +7139,7 @@
   #cpdActivity { flex: 1; min-width: 180px; }
 
   /* --- add form --- */
-  .add-row { display: flex; justify-content: center; margin-top: 24px; }
+  .add-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
   .add-btn { border: 1px dashed var(--note-line); background: transparent; color: var(--ink-soft); border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-body); }
   /* 2026-08-10 (STEP 5, "Book33 -- Add box, toggle, undo, cycle fix + day view" job):
      #addRow's own button only measures ~26px tall at this padding/font-size --
@@ -18725,6 +18725,13 @@
 
     <div class="add-row" id="shopLuxAddRow">
       <button class="add-btn shop-lux-btn" id="shopLuxAddBtn">+ Add an item</button>
+      <!-- 2026-08-23 (Linh: "a fast way to add a product to Shopping List AND the
+           Haircare catalog"): a second entry point beside the plain item add -- writes
+           BOTH stores in one submit (see #shopProdAddForm's own submit handler) instead
+           of the old five-tap route (Routines -> a wash -> Advanced -> a step's own
+           "+ Add new product…"), which is still there, unchanged, as a second valid way
+           in (STEP 6). -->
+      <button class="add-btn shop-lux-btn" id="shopProdAddBtn">🧴 Add a product</button>
     </div>
     <form class="add-form shop-lux-form" id="shopLuxAddForm" hidden>
       <div class="addform-head-saveonly full">
@@ -18750,6 +18757,49 @@
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="shopLuxCancelBtn">Cancel</button>
         <button type="submit" class="btn-save shop-lux-save" id="shopLuxSubmitBtn">Add item</button>
+      </div>
+    </form>
+    <!-- 2026-08-23: writes a HAIRD.products catalog entry AND a plain (non-hairProduct)
+         SHOP row in one submit -- see the #shopProdAddForm submit handler near
+         shopLuxForm's own for the exact two-store write. Own ids throughout, not a
+         repurposed #shopLuxAddForm -- distinct flow, per the brief. Same
+         .add-form/.field/.form-actions shape as shopLuxForm for visual consistency
+         (design44 §6). -->
+    <form class="add-form shop-lux-form" id="shopProdAddForm" hidden>
+      <div class="addform-head-saveonly full">
+        <button type="submit" class="addform-head-save" id="shopProdTopSaveBtn">Save</button>
+      </div>
+      <div class="field full">
+        <label for="shopProdName">Product name</label>
+        <input type="text" id="shopProdName" placeholder="e.g. Multi-Peptide Serum for Hair Density" autocomplete="off" required>
+      </div>
+      <div class="field">
+        <label for="shopProdSize">Size <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="shopProdSize" placeholder="e.g. 30mL" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="shopProdWhereBought">Where bought <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="shopProdWhereBought" placeholder="e.g. The Ordinary" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="shopProdPrice">Price <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="shopProdPrice" placeholder="e.g. $39.90" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="shopProdCat">Category <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="shopProdCat" value="Haircare" list="shopLuxCatList" autocomplete="off">
+      </div>
+      <div class="field full">
+        <label for="shopProdLink">Link <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="url" id="shopProdLink" placeholder="Paste the product page link" autocomplete="off">
+      </div>
+      <div class="field full">
+        <label for="shopProdRestock">Restock every <span style="text-transform:none;letter-spacing:0">N days (optional)</span></label>
+        <input type="number" id="shopProdRestock" min="0" placeholder="e.g. 60" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="shopProdCancelBtn">Cancel</button>
+        <button type="submit" class="btn-save shop-lux-save" id="shopProdSubmitBtn">Add product</button>
       </div>
     </form>
   </div>
@@ -48056,6 +48106,9 @@
                   <input type="text" class="rtnhnp-whereBought" placeholder="Where bought" value="${esc(rtnHairNewProdDraft.whereBought || "")}" aria-label="Where bought">
                   <input type="text" class="rtnhnp-price" placeholder="Price" value="${esc(rtnHairNewProdDraft.price || "")}" aria-label="Price">
                 </div>
+                <div class="rtn-pair">
+                  <input type="url" class="rtnhnp-link" placeholder="Link (optional)" value="${esc(rtnHairNewProdDraft.link || "")}" aria-label="Link">
+                </div>
                 <label class="rtnhnp-restock-label">Restock every <input type="number" class="rtnhnp-restock" min="0" placeholder="days" value="${esc(rtnHairNewProdDraft.restockEveryDays || "")}" aria-label="Restock every N days"> days</label>
                 <div class="rtnhnp-btns">
                   <button type="button" class="btn-save rtnhnp-confirm">Add product</button>
@@ -48123,6 +48176,7 @@
         howToUse: (rtnHairNewProdDraft.howToUse || "").trim(),
         whereBought: (rtnHairNewProdDraft.whereBought || "").trim(),
         price: (rtnHairNewProdDraft.price || "").trim(),
+        link: (rtnHairNewProdDraft.link || "").trim(),
         restockEveryDays: Math.max(0, parseInt(rtnHairNewProdDraft.restockEveryDays, 10) || 0) || null,
         lastBought: null,
       };
@@ -48168,6 +48222,7 @@
       else if (e.target.classList.contains("rtnhnp-howToUse")) rtnHairNewProdDraft.howToUse = e.target.value;
       else if (e.target.classList.contains("rtnhnp-whereBought")) rtnHairNewProdDraft.whereBought = e.target.value;
       else if (e.target.classList.contains("rtnhnp-price")) rtnHairNewProdDraft.price = e.target.value;
+      else if (e.target.classList.contains("rtnhnp-link")) rtnHairNewProdDraft.link = e.target.value;
       else if (e.target.classList.contains("rtnhnp-restock")) rtnHairNewProdDraft.restockEveryDays = e.target.value;
       return;
     }
@@ -48658,6 +48713,7 @@
   const shopLuxAddRow = document.getElementById("shopLuxAddRow");
   function closeShopLuxForm() { shopLuxForm.hidden = true; shopLuxAddRow.hidden = false; shopLuxForm.reset(); }
   document.getElementById("shopLuxAddBtn").addEventListener("click", () => {
+    closeShopProdForm();
     shopLuxAddRow.hidden = true; shopLuxForm.hidden = false;
     document.getElementById("shopLuxName").focus();
   });
@@ -48675,6 +48731,52 @@
     renderShoppingPage();
   });
   shopLuxForm.addEventListener("keydown", e => { if (e.key === "Escape") closeShopLuxForm(); });
+
+  // 2026-08-23 (Linh: "a fast way to add a product to Shopping List AND the Haircare
+  // catalog"): one submit, two stores -- a HAIRD.products catalog entry (exact same
+  // field construction the rtnhnp-confirm handler already uses, plus the new `link`
+  // field) and a plain hand-added SHOP row (shopHandAdded()'s own shape -- no
+  // hairProduct/hairProductId, so it renders in "Your list" like anything typed in
+  // directly, never mixed with syncHairRestock()'s own auto-managed "Running low" rows
+  // -- see that function's own comment for why the two must never share a row shape).
+  // lastBought is set to today, not left null, whenever a restock cadence is given --
+  // she's buying it right now, so the clock starts today, not "already overdue the
+  // moment syncHairRestock() next runs." syncHairRestock() itself is only ever called
+  // here, never edited -- it already treats "no lastBought" as immediately due, so
+  // skipping that stamp on a cadence'd product would misfire this exact flow.
+  const shopProdForm = document.getElementById("shopProdAddForm");
+  function closeShopProdForm() { shopProdForm.hidden = true; shopLuxAddRow.hidden = false; shopProdForm.reset(); }
+  document.getElementById("shopProdAddBtn").addEventListener("click", () => {
+    closeShopLuxForm();
+    shopLuxAddRow.hidden = true; shopProdForm.hidden = false;
+    document.getElementById("shopProdName").focus();
+  });
+  document.getElementById("shopProdCancelBtn").addEventListener("click", closeShopProdForm);
+  shopProdForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = document.getElementById("shopProdName").value.trim();
+    if (!name) return;
+    const size = document.getElementById("shopProdSize").value.trim();
+    const whereBought = document.getElementById("shopProdWhereBought").value.trim();
+    const price = document.getElementById("shopProdPrice").value.trim();
+    const link = document.getElementById("shopProdLink").value.trim();
+    const category = document.getElementById("shopProdCat").value.trim() || "Haircare";
+    const restockEveryDays = Math.max(0, parseInt(document.getElementById("shopProdRestock").value, 10) || 0) || null;
+    const p = {
+      id: "prod-" + uid(), name,
+      size, whatItDoes: "", howToUse: "", whereBought, price, link,
+      restockEveryDays,
+      lastBought: restockEveryDays ? keyOf(TODAY) : null,
+    };
+    HAIRD.products.push(p);
+    saveHairData();
+    SHOP.push({ id: uid(), name, size, step: null, bought: false, category, dueDate: "" });
+    saveShop(SHOP);
+    syncHairRestock();
+    closeShopProdForm();
+    renderShoppingPage();
+  });
+  shopProdForm.addEventListener("keydown", e => { if (e.key === "Escape") closeShopProdForm(); });
 
   // 2026-08-19 (three-surfaces build): "Running low" = SHOP rows syncHairRestock() auto-
   // added (hairProduct+hairProductId set) -- the only SHOP items with real price/cadence
