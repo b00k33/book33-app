@@ -1024,6 +1024,13 @@ active. The active Mode reshapes the whole app.**
    out — a single control drops back to normal Today without changing/ending the Mode,
    and an equally visible way back in. Takeover that traps her is a bug, not focus —
    matters most on long blocks (a 10am–2pm shift, overnight Sleep).
+   **Named exception (2026-08-22, Linh): Morning and Night deliberately do NOT
+   auto-takeover.** They default to a visible, recoloured ambient rail instead — Mode
+   name + progress + an all-at-once strip of the day's tagged items — with a manual
+   Focus button that escalates into the same shared takeover screen every other Mode
+   gets automatically. A knowing exception to "automatic, not a separate feature or
+   button" for these two specifically, not a contradiction of it: her call, made when
+   commissioning the Study/Cleaning/Morning/Night build.
 5. **Configuration lives in one place** — the Modes editor: name, letter, colour, icon,
    order, widget list, per Mode. Sensible defaults ship; nothing needs setup to work,
    but every one is editable. No Mode behaviour is configured by editing an event, a
