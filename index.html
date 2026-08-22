@@ -4961,6 +4961,11 @@
      her, not something this job silently fixes. */
   #lifeMapPage { padding-bottom: 8px; }
   body[data-view="lifeMap"] #wrap > p.footnote { display: none; }
+  /* 2026-08-22 ("no scrolling on this page whatsoever"): the "Works offline" banner
+     is the last real flex item in #wrap below the page -- reassurance text, not
+     something worth reserving budget or a scrollbar for. Hidden Life-Map-only, same
+     shape as the footnote rule just above; every other page keeps showing it. */
+  body[data-view="lifeMap"] #wrap > #offlineReady { display: none; }
   /* 2026-08-21 (STEP 2b, same complaint): .wrap/.page's own horizontal padding is
      the OUTER layer of the same dead space -- already trimmed to near-zero for
      EVERY page below 640px (see the "reclaim the margins on small screens" block,
@@ -4992,7 +4997,13 @@
      genuinely short window. max-height itself is left unset here (only ever set
      inline by JS, per-render) so a page load before that JS has run doesn't clip
      anything. */
-  .lm-grid-wrap { overflow-x: auto; overflow-y: auto; }
+  /* 2026-08-22 ("no scrolling on this page whatsoever"): overflow-y was auto -- a
+     budget that came out short turned into an internal scrollbar. The new rule
+     forbids that outright: lmComputeRowHeight() now guarantees content fits its
+     budget (shrinking the row-height floor before it would ever fall short), so
+     overflow-y:hidden is a pure safety net for sub-pixel rounding, never a real
+     scroll path. overflow-x stays auto -- unrelated, narrow-viewport day columns. */
+  .lm-grid-wrap { overflow-x: auto; overflow-y: hidden; }
   /* 2026-08-21: 32px gutter and the 9.5/8.5/8px label sizes below are the approved
      mockup's own exact pixel values (an approved-sheet exception to the type scale,
      same standing precedent as the mobile Day-view/Body-page/Routines sheets in this
@@ -20736,31 +20747,34 @@
     renderLmCellPanel();
     lmComputeRowHeight();
   }
-  // 2026-08-22 ("grid fills the page" -- STEP 4): row height derived from real
-  // available space instead of a hardcoded 12px, so the week fills the panel at
-  // whatever window size she actually has rather than assuming one. Measures the
-  // grid's own top (already reflects the new compact one-row header from STEP 2/3 --
-  // this function doesn't need to know anything about the header, just where the
-  // grid itself currently starts), the untimed row's real rendered height (0 when
-  // hidden), and #lifeMapPage's own bottom padding, then divides what's left by
-  // LM_SLOTS.length after subtracting the day-header row and the grid's own
-  // between-row gaps. Sets exactly ONE CSS custom property (--lm-row-h, scoped to
-  // #lmGrid, read by .lm-cell/.lm-cell-title/.lm-hr-lbl -- see their own comments)
-  // plus ONE inline max-height on .lm-grid-wrap -- never touches an individual cell,
-  // so this stays cheap regardless of how often it's called.
-  // Min 12px: the row height this page already shipped at and she already approved
-  // as legible with an 8px title in it -- the floor, not a new guess. Below the
-  // space 36 rows at 12px needs, .lm-grid-wrap's own max-height (set below) is
-  // smaller than the grid's real content height, so it scrolls internally
-  // (overflow-y:auto, already on .lm-grid-wrap) instead of crushing rows further.
-  // Max 24px: the next stop up the 4/8/12/16/24/32 scale from 12px -- comfortably
-  // roomier without a 30-minute slot ballooning into a giant band. Above it,
-  // max-height is set LARGER than the (now capped) grid's real content height, so
-  // the box takes its natural, smaller size and the extra space sits below the
-  // panel as blank page space, per her explicit "let the extra space sit below
-  // rather than distorting the grid" -- max-height only ever caps, it never forces
-  // a box to grow to fill it.
-  const LM_ROW_MIN = 12, LM_ROW_MAX = 24;
+  // 2026-08-22 ("grid fills the page" -- STEP 4, then "no scrolling on this page
+  // whatsoever" the same day): row height derived from real available space
+  // instead of a hardcoded 12px, so the week fills the panel at whatever window
+  // size she actually has rather than assuming one. Measures the grid's own top
+  // (already reflects the compact one-row header -- this function doesn't need to
+  // know anything about the header, just where the grid itself currently starts),
+  // the untimed row's real rendered height (0 when hidden), and #lifeMapPage's own
+  // bottom padding, then divides what's left by LM_SLOTS.length after subtracting
+  // the day-header row and the grid's own between-row gaps. Sets exactly ONE CSS
+  // custom property (--lm-row-h, scoped to #lmGrid, read by
+  // .lm-cell/.lm-cell-title/.lm-hr-lbl -- see their own comments) plus ONE inline
+  // max-height on .lm-grid-wrap -- never touches an individual cell, so this stays
+  // cheap regardless of how often it's called.
+  // Preferred min 12px: the row height this page already shipped at and she
+  // already approved as legible with an 8px title in it. Absolute min 9px: the new
+  // rule ("no scrolling, ever") means a short window can no longer fall back to an
+  // internal scrollbar -- it has to shrink the floor instead. Below 12px the title
+  // font is already pinned at its own 8px clamp floor (unchanged), so a smaller row
+  // only costs it breathing room, not legibility of the text itself; 9px is as far
+  // as that stays comfortable -- verified live at 1280x620, the shortest window
+  // this rule is asked to support. Max 24px: the next stop up the 4/8/12/16/24/32
+  // scale from 12px -- comfortably roomier without a 30-minute slot ballooning into
+  // a giant band. Above it, max-height is set LARGER than the (now capped) grid's
+  // real content height, so the box takes its natural, smaller size and the extra
+  // space sits below the panel as blank page space, per her explicit "let the extra
+  // space sit below rather than distorting the grid" -- max-height only ever caps,
+  // it never forces a box to grow to fill it.
+  const LM_ROW_PREFERRED_MIN = 12, LM_ROW_ABS_MIN = 9, LM_ROW_MAX = 24;
   let lmRowHeightRaf = null;
   function lmComputeRowHeight() {
     const gridWrap = document.querySelector(".lm-grid-wrap");
@@ -20776,26 +20790,49 @@
     const hdH = hd ? hd.getBoundingClientRect().height : 0;
     const gapOverhead = LM_SLOTS.length; // grid gap:1px x one gap per slot row (below the header row)
     const SAFETY = 4; // sub-pixel/border rounding cushion
-    // #wrap doesn't end where #lifeMapPage ends -- the flex column's gap, the
-    // "offline ready" banner, and #wrap's own padding-bottom all sit after the
-    // page. Measuring that live (rather than assuming the page owns the full
-    // viewport) is what keeps the page from overflowing: it's constant no matter
-    // how tall the page itself is, since page and wrap grow together.
-    const tailChrome = wrap ? Math.max(0, wrap.getBoundingClientRect().bottom - page.getBoundingClientRect().bottom) : 0;
+    // 2026-08-22 fix ("no scrolling on this page whatsoever"): the old tailChrome
+    // was `wrap.bottom - page.bottom`, on the claim that page and wrap grow
+    // together so the gap between them is constant. That claim is false often
+    // enough to matter -- measured live, it over-reserved space (Linh saw ~106px
+    // lost to it on her machine). This instead sums exactly what's really down
+    // there: #wrap's own padding-bottom (a real, constant reservation), plus every
+    // element after #lifeMapPage that's genuinely occupying flow space right now
+    // -- skipping anything display:none/hidden/fixed/absolute (a floating toast
+    // reserves nothing) -- each with one flex gap added for it. On Life Map today
+    // that's normally nobody (the offline-ready banner is hidden on this page, see
+    // its CSS rule) -- kept as a live walk rather than hardcoded so a future
+    // sibling added after the page can't silently go uncounted again.
+    const wrapCs = wrap ? getComputedStyle(wrap) : null;
+    const wrapPadBottom = wrapCs ? parseFloat(wrapCs.paddingBottom) || 0 : 0;
+    const wrapGap = wrapCs ? (parseFloat(wrapCs.rowGap) || parseFloat(wrapCs.gap) || 0) : 0;
+    let tailChrome = wrapPadBottom;
+    for (let sib = page.nextElementSibling; sib; sib = sib.nextElementSibling) {
+      const cs = getComputedStyle(sib);
+      if (cs.display === "none" || sib.hidden || cs.position === "fixed" || cs.position === "absolute") continue;
+      const h = sib.getBoundingClientRect().height;
+      if (h > 0) tailChrome += h + wrapGap;
+    }
     // fullAvailable is .lm-grid-wrap's own budget (header row + gaps + all 36 cell
     // rows); forCells is what's left of that for the 36 cell rows once the header
     // row and the gaps are spoken for -- the number this actually gets divided by.
     const fullAvailable = window.innerHeight - top - untimedH - pagePadBottom - tailChrome - SAFETY;
     const forCells = fullAvailable - hdH - gapOverhead;
     const raw = Math.floor(forCells / LM_SLOTS.length);
-    const rowH = Math.max(LM_ROW_MIN, Math.min(LM_ROW_MAX, raw));
+    // 2026-08-22 ("no scrolling, ever"): used to clamp up to a flat 12px floor and
+    // let .lm-grid-wrap's overflow-y:auto scroll internally when that didn't fit --
+    // forbidden now. Prefer 12px; only give up legibility headroom down to the 9px
+    // absolute floor when the window genuinely won't fit 12px rows, so a roomy
+    // window still gets the nicer 12px+ rows it already had.
+    const rowH = Math.max(LM_ROW_ABS_MIN, Math.min(LM_ROW_MAX, raw < LM_ROW_PREFERRED_MIN ? Math.max(raw, LM_ROW_ABS_MIN) : raw));
     grid.style.setProperty("--lm-row-h", rowH + "px");
     // max-height only ever CAPS -- it can't force the box to grow -- so setting it
-    // to fullAvailable in every case is correct for all three outcomes above: below
-    // the minimum the real content is taller than fullAvailable and scrolls; above
-    // the maximum the real content is shorter than fullAvailable and just takes its
-    // own smaller size, leaving blank space below; in between the two are
-    // approximately equal by construction.
+    // to fullAvailable in every case is correct: at/above the max the real content
+    // is shorter than fullAvailable and just takes its own smaller size, leaving
+    // blank space below; otherwise the row height above was already sized (down to
+    // the 9px floor) to make the real content fit within fullAvailable, so this
+    // never has to scroll -- overflow-y:hidden on .lm-grid-wrap is a rounding
+    // safety net, not a real path, except in a window too short even for 9px rows
+    // (STEP 3c: reported, not silently scrolled).
     gridWrap.style.maxHeight = Math.max(fullAvailable, 0) + "px";
   }
   // recompute on resize (rAF-throttled so a drag-resize doesn't force layout on
