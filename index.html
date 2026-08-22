@@ -5387,6 +5387,26 @@
   .shop-lux-item.bought { opacity: 0.55; }
   .shop-lux-item.bought .shop-lux-name { text-decoration: line-through; }
   .shop-lux-item.bought:hover { box-shadow: none; transform: none; border-color: color-mix(in oklab, var(--gold) 35%, var(--note-line)); }
+  /* To-do Mode grouping/tagging (2026-08-23) -- sections group the flat list by each
+     to-do's own .mode field (renderTodoPage()); the tag control on the row's second
+     line lets her set/clear it inline via a small in-flow popover (same "sits IN
+     FLOW, not floating" idiom as .todo-mode-hidden-pill above). */
+  .todo-mode-section { margin-bottom: 20px; }
+  .todo-mode-section:last-child { margin-bottom: 0; }
+  .todo-mode-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .todo-mode-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .todo-mode-section-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
+  .todo-mode-section-current { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; }
+  .todo-mode-section-count { font-size: 11px; color: var(--ink-faint); margin-left: auto; }
+  .todo-mode-section-list { display: flex; flex-direction: column; gap: 8px; }
+  .todo-row { align-items: flex-start; }
+  .todo-row .tick { margin-top: 2px; }
+  .todo-row .shop-del { margin-top: 2px; }
+  .todo-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .todo-mode-tag.is-tagged { border-style: solid; font-weight: 600; }
+  .todo-tag-popover { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); }
+  .todo-tag-popover .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
+  .todo-tag-popover .track-opt::before { display: none; }
 
   /* --- routines & events list rows --- */
   .evl-filters { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
@@ -54873,36 +54893,79 @@
   /* ================= TO-DO (2026-08-17, Event/Repeats collapse) =================
      Row markup/classes reused verbatim from Shopping List (.shop-lux-item etc.) --
      design44 §6: one component identical everywhere, no one-offs. */
+  // 2026-08-23 ("group by Mode, let existing to-dos be tagged/retagged"): id of the
+  // one to-do whose inline tag popover is open, or null -- one at a time, same
+  // module-level-state/conditional-render shape as rtnHairNewProdFor/lmPanel
+  // elsewhere in this file. NOT persisted -- a fresh render always starts closed.
+  let todoTagPopoverFor = null;
   function renderTodoPage() {
     const host = document.getElementById("todoList");
     if (!host) return;
-    // §4 to-do mode-tagging (stage 5) -- same filter, same reveal state as the Day
-    // timeline (stage 2); see modeVisible's own comment for why todos need no
-    // parallel filter function.
     const am = activeMode();
     syncModeReveal(am);
     // same reason as renderTimeline()'s own applyModeFocusClass() call -- a to-do save
     // re-renders via renderTodoPage() alone, not the full render().
     applyModeFocusClass(am);
-    const hidden = [];
-    const visible = TODOS.filter(t => { const ok = todoModeVisible(t, am); if (!ok) hidden.push(t); return ok; });
-    renderTodoModeHiddenPill(hidden, am);
-    const sorted = visible.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
-    const emptyMsg = TODOS.length && !visible.length
-      ? `Nothing here for ${esc(am.name)} mode right now.`
-      : "Nothing on your to-do list. Add one below.";
-    host.innerHTML = sorted.length ? sorted.map(t => {
+    // 2026-08-23: everything is always visible now -- no more todoModeVisible()
+    // filter / renderTodoModeHiddenPill() call here (both stay defined, and
+    // #tlModeHiddenPill on the Day view remains a fully independent way to reach
+    // state.modeRevealAll -- "one escape hatch, not two", see its own comment).
+    // Instead the flat list is grouped into sections by each to-do's own .mode
+    // field (never modeOf() -- that's routine-override resolution, for calendar
+    // items only). A stale/deleted Mode id folds into "No mode", matching the
+    // established convention for a deleted Mode's items (see lmModesDelete()'s
+    // own comment: they "simply render untagged").
+    const validIds = new Set(MODES.map(m => m.id));
+    const sortDone = arr => arr.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1));
+    const groups = new Map();
+    TODOS.forEach(t => {
+      const key = t.mode && validIds.has(t.mode) ? t.mode : "";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    });
+    const sections = [];
+    if (am.id !== "home" && groups.has(am.id)) sections.push({ mode: am, todos: groups.get(am.id), current: true });
+    MODES.slice().sort((a, b) => a.order - b.order).forEach(m => {
+      if (m.id === am.id) return;
+      if (groups.has(m.id)) sections.push({ mode: m, todos: groups.get(m.id), current: false });
+    });
+    if (groups.has("")) sections.push({ mode: null, todos: groups.get(""), current: false });
+    const rowHtml = t => {
       const bits = [t.category, TRACK_LABEL[t.track] || t.track].filter(Boolean);
-      return `<div class="shop-lux-item${t.done ? " bought" : ""}">
+      const tm = t.mode && validIds.has(t.mode) ? MODES.find(m => m.id === t.mode) : null;
+      const tagStyle = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
+      const tagLabel = tm ? `🏷 ${tm.emoji || ""} ${esc(tm.name)}` : "🏷 set mode";
+      const popoverOpen = todoTagPopoverFor === t.id;
+      return `<div class="shop-lux-item todo-row${t.done ? " bought" : ""}">
         <input type="checkbox" class="tick" data-todo-tick="${t.id}" ${t.done ? "checked" : ""} aria-label="Mark ${esc(t.title)} done">
         <div class="shop-lux-main">
           <span class="shop-lux-name">${esc(t.title)}</span>
           ${bits.length ? `<span class="shop-lux-meta">${bits.map(esc).join(" · ")}</span>` : ""}
+          <div class="todo-row-actions">
+            <button type="button" class="add-btn todo-mode-tag${tm ? " is-tagged" : ""}" data-todo-tag="${t.id}"${tagStyle} aria-expanded="${String(popoverOpen)}">${tagLabel}</button>
+            <button type="button" class="add-btn todo-make-event" data-todo-event="${t.id}">→ Make event</button>
+          </div>
+          ${popoverOpen ? `<div class="todo-tag-popover" role="group" aria-label="Set mode">
+            <button type="button" class="track-opt" data-todo-tag-set="" aria-pressed="${String(!tm)}">None</button>
+            ${MODES.map(m => `<button type="button" class="track-opt" data-todo-tag-set="${esc(m.id)}" aria-pressed="${String(t.mode === m.id)}">${m.emoji || ""} ${esc(m.name)}</button>`).join("")}
+          </div>` : ""}
         </div>
-        <button type="button" class="add-btn todo-make-event" data-todo-event="${t.id}">→ Make event</button>
         <button class="shop-del" data-todo-del="${t.id}" aria-label="Remove ${esc(t.title)}">×</button>
       </div>`;
-    }).join("") : `<div class="fam-empty">${emptyMsg}</div>`;
+    };
+    host.innerHTML = TODOS.length ? sections.map(sec => {
+      const dot = sec.mode && sec.mode.accent ? esc(sec.mode.accent) : "var(--ink-faint)";
+      const label = sec.mode ? `${sec.mode.emoji ? sec.mode.emoji + " " : ""}${esc(sec.mode.name)}` : "No mode";
+      return `<div class="todo-mode-section">
+        <div class="todo-mode-section-head">
+          <i class="todo-mode-dot" style="background:${dot}"></i>
+          <span class="todo-mode-section-name">${label}</span>
+          ${sec.current ? `<span class="todo-mode-section-current">current mode</span>` : ""}
+          <span class="todo-mode-section-count">${sec.todos.length}</span>
+        </div>
+        <div class="todo-mode-section-list">${sortDone(sec.todos).map(rowHtml).join("")}</div>
+      </div>`;
+    }).join("") : `<div class="fam-empty">Nothing on your to-do list. Add one below.</div>`;
   }
   // opens the shared Event form pre-filled from a to-do item -- convertingTodoId
   // (declared up by fRepeatChoice) tells the form's submit handler to remove this
@@ -54920,20 +54983,51 @@
     convertingTodoId = id;
   }
   document.getElementById("todoList").addEventListener("click", e => {
+    const tagBtn = e.target.closest("[data-todo-tag]");
+    if (tagBtn) {
+      const id = tagBtn.dataset.todoTag;
+      todoTagPopoverFor = todoTagPopoverFor === id ? null : id;
+      renderTodoPage();
+      return;
+    }
+    const chip = e.target.closest("[data-todo-tag-set]");
+    if (chip) {
+      const t = TODOS.find(x => x.id === todoTagPopoverFor);
+      if (t) {
+        const mode = chip.dataset.todoTagSet;
+        if (mode) t.mode = mode; else delete t.mode;
+        saveTodos(TODOS);
+      }
+      todoTagPopoverFor = null;
+      renderTodoPage();
+      return;
+    }
     const tick = e.target.closest("[data-todo-tick]");
     if (tick) {
+      todoTagPopoverFor = null;
       const t = TODOS.find(x => x.id === tick.dataset.todoTick);
       if (t) { t.done = tick.checked; saveTodos(TODOS); renderTodoPage(); }
       return;
     }
     const del = e.target.closest("[data-todo-del]");
     if (del) {
+      todoTagPopoverFor = null;
       TODOS = TODOS.filter(x => x.id !== del.dataset.todoDel);
       saveTodos(TODOS); renderTodoPage();
       return;
     }
     const mk = e.target.closest("[data-todo-event]");
-    if (mk) openFormFromTodo(mk.dataset.todoEvent);
+    if (mk) { todoTagPopoverFor = null; openFormFromTodo(mk.dataset.todoEvent); }
+  });
+  // Outside-tap closes the open tag popover without changing anything -- clicks on
+  // the tag button itself or inside the popover are handled by the delegate above
+  // (which already closes/re-renders), so this only fires for everything else.
+  document.addEventListener("click", e => {
+    if (!todoTagPopoverFor) return;
+    if (e.target.closest("[data-todo-tag]")) return;
+    if (e.target.closest(".todo-tag-popover")) return;
+    todoTagPopoverFor = null;
+    renderTodoPage();
   });
   function closeTodoForm() {
     document.getElementById("todoAddForm").hidden = true;
