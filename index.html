@@ -7263,6 +7263,26 @@
      primary one-tap control, e.g. Save/Cancel in the header). */
   #addForm .field { gap: 2px; }
   #addForm .field label { font-size: 11px; }
+  /* 2026-08-23 (Mode paints the whole editing block, approved interactive mock):
+     --ef-tint/--ef-ink are set live by applyEfTint() (search that name) from the
+     selected Mode's own .accent, falling back to the theme's own gold token here
+     when unset (e.g. this rule's own initial paint before JS runs once) -- scoped
+     entirely to #addForm so nothing else (Recipe/Goal/People editors sharing
+     .addform-head-save, the Routine editor, the global time-of-day theme) is
+     affected. */
+  #addForm { --ef-tint: var(--gold-bright); --ef-ink: var(--cosmic-gold-ink); }
+  #addForm {
+    background:
+      radial-gradient(140% 70% at 50% -10%, color-mix(in oklab, var(--ef-tint) 14%, transparent), transparent 62%),
+      var(--note-bg);
+    transition: background .3s ease;
+  }
+  #addForm .addform-head { border-bottom-color: color-mix(in oklab, var(--ef-tint) 30%, var(--note-line)); transition: border-color .3s ease; }
+  #addForm .addform-head-save { background: var(--ef-tint); color: var(--ef-ink); transition: background .3s ease, color .3s ease; }
+  #addForm #fModePicker .track-opt[aria-pressed="true"] {
+    background: var(--ef-tint); border-color: var(--ef-tint); color: var(--ef-ink); box-shadow: none; font-weight: 600;
+  }
+  #addForm .field-bare:focus-visible { outline-color: var(--ef-tint); }
   /* the old centered-card look's own dimming used to be a giant 100vmax box-shadow
      (no separate visible backdrop existed) -- now that #addForm has a real edge to
      dock against, #addFormBackdrop carries the dimming itself instead, same recipe as
@@ -7318,6 +7338,15 @@
   .efp-card[data-efp-card="basics"] { --efp-c: var(--gold-bright); }
   .efp-node[data-efp-node="basics"] { --efp-c: var(--gold-bright); }
   .efp-bar[data-efp-bar="1"] { --efp-c: var(--gold-bright); }
+  /* 2026-08-23: the three rules above are the shared component's own default
+     (this comment block, above, says so: "Shared by #addForm and #rtnAddForm...
+     no per-form duplicate CSS") -- so the Mode-tint override below is scoped to
+     #addForm specifically, an ID-qualified rule beating the bare one, rather than
+     edited in place. #rtnAddForm (the Routine editor) never sets --ef-tint, so
+     its own basics stage stays on plain --gold-bright, untouched. */
+  #addForm .efp-card[data-efp-card="basics"] { --efp-c: var(--ef-tint); }
+  #addForm .efp-node[data-efp-node="basics"] { --efp-c: var(--ef-tint); }
+  #addForm .efp-bar[data-efp-bar="1"] { --efp-c: var(--ef-tint); }
   .efp-card[data-efp-card="repeats"] { --efp-c: var(--cosmic-gold); }
   .efp-node[data-efp-node="repeats"] { --efp-c: var(--cosmic-gold); }
   .efp-bar[data-efp-bar="2"] { --efp-c: var(--cosmic-gold); }
@@ -8113,7 +8142,12 @@
   #addForm #whoPicker .track-opt[aria-pressed="true"],
   #addForm #fWeekdayPicker .track-opt[aria-pressed="true"], #addForm .rtn-sched-extra-days .track-opt[aria-pressed="true"],
   #addForm #durChips .track-opt[aria-pressed="true"] {
-    background: var(--margin-rule); border-color: var(--margin-rule); color: var(--accent-on); box-shadow: none; font-weight: 600;
+    /* 2026-08-23: was var(--margin-rule)/var(--accent-on) -- that pair drives the
+       UNRELATED time-of-day active-mode theme everywhere else in the app, so this
+       rule (Whose-job/Days-of-week/duration chips) now keys off the EVENT's own
+       selected Mode instead, matching Save/the Mode pill/the card wash above.
+       --margin-rule/--accent-on themselves are untouched anywhere else. */
+    background: var(--ef-tint); border-color: var(--ef-tint); color: var(--ef-ink); box-shadow: none; font-weight: 600;
   }
   /* 2026-08-09 (design44, "Add box redesign" job, STEP 1, "Colours come ONLY
      from the seed variables"): Part of life's selected chip fills with ITS OWN
@@ -20127,33 +20161,17 @@
                        rather than its own field-row so it costs no extra row height. -->
                   <button type="button" class="preset-save-btn" id="presetSaveBtn" aria-label="Save as preset" title="Save as preset">☆</button>
                 </div>
+                <!-- 2026-08-21: Mode, promoted out of the old collapsed More options into
+                     the always-visible basics card -- Linh's call, since the approved
+                     mockup shows it here with its own icon.
+                     2026-08-23 (field-order rework): repositioned to directly after What --
+                     her requested order is What / Mode / Day+Starts / Ends / How long /
+                     Where / Repeats, confirmed against her own STEP 7 re-test checklist. -->
                 <div class="efp-field-row">
-                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/></svg></div>
-                  <div class="field" id="fTrackField">
-                    <label>Part of life</label>
-                    <!-- 2026-08-22 (STEP 6, "Modes act as the category" -- checked before
-                         removing): track is read in ~136 places (calendar colouring,
-                         trackVisible()/PREFS.tracksOff filtering, etc.), so it can't just go
-                         unset. But no Mode maps to Family or Marriage (lmInferTrack() -- the
-                         SAME function Life Map's paint tool already uses, reused verbatim,
-                         not reinvented -- only "Work" mode has a single associated track;
-                         every other Mode falls back to "personal") -- fully hiding this
-                         picker would make Family/Marriage events unreachable through this
-                         form. Middle ground, same shape #whoPicker/whoSummaryBtn already use
-                         a few fields down: collapsed to a one-line inferred summary by
-                         default (syncTrackSummary(), auto-updates when Mode changes, unless
-                         she's already picked one herself this session), "Change" reveals the
-                         full 4-chip picker for the Family/Marriage case -- costs ~1 line
-                         instead of ~112px measured live, loses nothing. -->
-                    <button type="button" class="who-summary-btn" id="trackSummaryBtn" aria-expanded="false">
-                      <span id="trackSummaryText">Work</span><span class="who-edit">Change ›</span>
-                    </button>
-                    <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life" hidden>
-                      <button type="button" class="track-opt" data-track="work" aria-pressed="true">Work</button>
-                      <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
-                      <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-                      <button type="button" class="track-opt" data-track="personal" aria-pressed="false">Personal</button>
-                    </div>
+                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="13" rx="2.2"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><path d="M2.5 12.5h19"/></svg></div>
+                  <div class="field" id="fModeField">
+                    <label>Mode <span class="field-hint">optional</span></label>
+                    <div class="track-picker" id="fModePicker" role="group" aria-label="Mode"></div>
                   </div>
                 </div>
                 <!-- 2026-08-10 (Linh, "Compact the When/How long block" brief): Day+Starts
@@ -20168,6 +20186,24 @@
                       <div class="field ef" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" class="field-bare"></div>
                       <div class="field ef" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart" class="field-bare"></div>
                     </div>
+                  </div>
+                </div>
+                <!-- 2026-08-23 (field-order rework): "Ends" promoted out of the collapsed
+                     More options drawer into its own row here, right after Day/Starts and
+                     before How long -- it used to be a tap away, which is almost certainly
+                     why an overnight span (e.g. Sleep 10pm-6am) was hard to set. Doesn't
+                     change how #fEnd is read/saved/defaulted (syncEndFromDur()/
+                     buildRoutineFromCurrentForm()/the submit handler all untouched) -- layout
+                     and label only. #fEndNextDay is a live indicator, hidden by default,
+                     shown whenever Ends is numerically <= Starts (an overnight wrap) -- kept
+                     correct via efpSyncAddForm() (search that name), the form's existing
+                     single choke-point for "resync on open + on every live change". -->
+                <div class="efp-field-row">
+                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></svg></div>
+                  <div class="field" id="fEndField">
+                    <label for="fEnd">Ends <span class="field-hint">optional -- leave blank to use How long below; earlier than Starts means it ends the next day</span></label>
+                    <input type="time" id="fEnd" class="field-bare" style="max-width:140px">
+                    <span class="field-hint" id="fEndNextDay" hidden>→ next day</span>
                   </div>
                 </div>
                 <!-- 2026-08-09 (design44, "add a How long duration picker"): hours+minutes
@@ -20189,11 +20225,8 @@
                          doesn't match any of the 5 (see its own comment) -- same
                          "never hide what she's already filled in" rule as everywhere else. -->
                     <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
-                      <button type="button" class="track-opt" data-dur="15">15m</button>
                       <button type="button" class="track-opt" data-dur="30">30m</button>
-                      <button type="button" class="track-opt" data-dur="45">45m</button>
                       <button type="button" class="track-opt" data-dur="60">1h</button>
-                      <button type="button" class="track-opt" data-dur="90">1h 30</button>
                       <button type="button" class="track-opt" id="durCustomChip" data-dur-custom aria-pressed="false">Custom</button>
                     </div>
                     <div class="dur-boxes" id="durBoxes" hidden>
@@ -20202,18 +20235,12 @@
                     </div>
                   </div>
                 </div>
-                <!-- 2026-08-21: Mode/Where, promoted out of the old collapsed More
-                     options into the always-visible basics card -- Linh's call, since
-                     the approved mockup shows both here with their own icons. Confirmed
-                     live first that neither has any layout dependency on the More-
-                     options display:contents grid trick they used to sit inside. -->
-                <div class="efp-field-row">
-                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="13" rx="2.2"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7"/><path d="M2.5 12.5h19"/></svg></div>
-                  <div class="field" id="fModeField">
-                    <label>Mode <span class="field-hint">optional</span></label>
-                    <div class="track-picker" id="fModePicker" role="group" aria-label="Mode"></div>
-                  </div>
-                </div>
+                <!-- 2026-08-21: Where, promoted out of the old collapsed More options into
+                     the always-visible basics card -- Linh's call, since the approved
+                     mockup shows it here with its own icon. Confirmed live first it had no
+                     layout dependency on the More-options display:contents grid trick it
+                     used to sit inside. (Mode moved up to right after What, 2026-08-23 --
+                     see the field-row near the top of this card.) -->
                 <div class="efp-field-row">
                   <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10.5c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10.5" r="2.6"/></svg></div>
                   <div class="field" id="fLocField">
@@ -20395,7 +20422,28 @@
                  keeps working untouched — see syncDurFromBoxes(). -->
             <input type="hidden" id="fEst">
             <input type="hidden" id="fDur">
-            <div class="field full" id="fEndField"><label for="fEnd">Ends <span class="field-hint">overrides How long above</span></label><input type="time" id="fEnd" class="field-bare" style="max-width:140px"></div>
+            <!-- 2026-08-23 (field-order rework): relocated verbatim from the basics card
+                 (was the 2nd row there, right after What) -- Linh's requested order doesn't
+                 mention Part of life, so it moves here alongside Whose job/Category/Goal/
+                 Notes. Same block, same ids, same trackVisible()/PREFS.tracksOff behaviour --
+                 only its "full" class is new, needed because #addFormMore's children lay out
+                 directly in the outer 2-col grid (display:contents, see that rule's own
+                 comment) rather than the flex column .efp-body gave it before. -->
+            <div class="efp-field-row full">
+                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/></svg></div>
+                  <div class="field" id="fTrackField">
+                    <label>Part of life</label>
+                    <button type="button" class="who-summary-btn" id="trackSummaryBtn" aria-expanded="false">
+                      <span id="trackSummaryText">Work</span><span class="who-edit">Change ›</span>
+                    </button>
+                    <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life" hidden>
+                      <button type="button" class="track-opt" data-track="work" aria-pressed="true">Work</button>
+                      <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
+                      <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
+                      <button type="button" class="track-opt" data-track="personal" aria-pressed="false">Personal</button>
+                    </div>
+                  </div>
+            </div>
             <div class="allday-row" id="fAllDayRow">
               <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
             </div>
@@ -50541,6 +50589,22 @@
   // automatically whenever that's the case, so this stays correct either way.
   let formSelectedMode = "";
   let fModePickerExpanded = false;
+  // 2026-08-23 (Mode paints the whole editing block): reads whichever Mode is
+  // currently picked and tints #addForm's own accent -- falls back to the theme's
+  // own gold token (not a hand-picked hex) when no Mode is selected, so "None"
+  // stays correct in both light and dark automatically. accentOnFor() is the
+  // app's existing YIQ-brightness helper (already used by the time-of-day
+  // applyModeAccent() above) -- reused rather than guessing readable text per Mode.
+  function applyEfTint() {
+    const host = document.getElementById("addForm");
+    if (!host) return;
+    const m = formSelectedMode ? MODES.find(x => x.id === formSelectedMode) : null;
+    const tint = (m && m.accent) ||
+      getComputedStyle(document.documentElement).getPropertyValue("--gold-bright").trim() ||
+      "#EAC24E";
+    host.style.setProperty("--ef-tint", tint);
+    host.style.setProperty("--ef-ink", accentOnFor(tint));
+  }
   function mostUsedModeIds(n) {
     const counts = new Map();
     EVENTS.forEach(e => { if (e.mode) counts.set(e.mode, (counts.get(e.mode) || 0) + 1); });
@@ -50565,6 +50629,9 @@
     host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}">None</button>` +
       shown.map(modeBtn).join("") +
       (showAll || shown.length >= MODES.length ? "" : `<button type="button" class="track-opt" id="fModeMoreBtn">More ›</button>`);
+    // single choke-point: every one of the 5 places formSelectedMode changes calls
+    // this function right afterward, so this one call covers all of them.
+    applyEfTint();
   }
   renderFModePicker();
   document.getElementById("fModePicker").addEventListener("click", e => {
@@ -50800,6 +50867,13 @@
     if (habitCard) habitCard.hidden = !habitOn;
     if (habitNode) habitNode.hidden = !habitOn;
     if (bar2) bar2.hidden = !habitOn;
+    // 2026-08-23 (Ends field-order rework): "→ next day" shows whenever Ends is
+    // numerically <= Starts -- the same "earlier time = wrapped to tomorrow" rule
+    // itemEndMin and friends already use elsewhere in the app, just surfaced here
+    // as a visible hint instead of silent math. fStart/fEnd's own input listeners
+    // (below) call this whole function so it stays live as she types either one.
+    const fEndNextDay = document.getElementById("fEndNextDay");
+    if (fEndNextDay) fEndNextDay.hidden = !(fStart.value && fEnd.value && toMin(fEnd.value) <= toMin(fStart.value));
   }
   document.getElementById("fRepeatSummaryBtn").addEventListener("click", () => {
     const box = document.getElementById("fRepeatOptions");
@@ -51099,10 +51173,17 @@
     fEst.value = fDur.value;
     syncDurBoxesFromFDur();
     // auto-open More options if the event being edited already has data tucked in
-    // there (Who/All day/Category/Notes/Goal) — Ends and duration live on the main
-    // form now, Follow-ups has its own ghost row (setFollowUpsOpen below), and
-    // Mode/Where moved into the always-visible basics card (2026-08-21, visual
-    // progression rail) so neither is a reason to open More options any more either.
+    // there (Who/All day/Category/Notes/Goal) — Ends and How long both genuinely
+    // live in the basics card now (2026-08-23: Ends moved out of here into its own
+    // row there; this comment used to claim that while Ends was still stuck in this
+    // very drawer, which was the actual bug), Follow-ups has its own ghost row
+    // (setFollowUpsOpen below), and Mode/Where moved into the always-visible basics
+    // card (2026-08-21, visual progression rail) — so none of the three is a reason
+    // to open More options any more either. NOTE: Part of life moved INTO this
+    // drawer on 2026-08-23 (field-order rework) and isn't in hasExtra below — a
+    // disclosed, in-scope-as-asked gap (that spec was a pure layout move), so an
+    // existing Family/Marriage-tracked event's Part-of-life value won't by itself
+    // auto-reveal this drawer on edit, even though it's still saved/read correctly.
     const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || ev.note || ev.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(!!(ev.stages && ev.stages.length));
@@ -53985,11 +54066,11 @@
     if (fStart.value && dur > 0) fEnd.value = minToTime(toMin(fStart.value) + dur);
   }
   fDur.addEventListener("input", syncEndFromDur);
-  fStart.addEventListener("input", () => { if (fDur.value) syncEndFromDur(); });
+  fStart.addEventListener("input", () => { if (fDur.value) syncEndFromDur(); efpSyncAddForm(); });
   // manually typing an exact Ends overrides the picker -- clear the duration (it
   // would otherwise win back on the next Start edit) and un-pick the boxes/chips
   // so the form doesn't show a duration that's no longer what's actually saved
-  fEnd.addEventListener("input", () => { fDur.value = ""; syncDurBoxesFromFDur(); });
+  fEnd.addEventListener("input", () => { fDur.value = ""; syncDurBoxesFromFDur(); efpSyncAddForm(); });
   // 2026-08-09 (design44, How long picker): hours+minutes boxes and the quick
   // chips are both just a front-end over #fDur -- every path (typing a box,
   // tapping a chip) funnels through syncDurFromBoxes(), which writes #fDur,
@@ -54012,7 +54093,7 @@
     if (box) box.hidden = !open;
     if (chip) chip.setAttribute("aria-pressed", String(open));
   }
-  const DUR_PRESETS = [15, 30, 45, 60, 90];
+  const DUR_PRESETS = [30, 60];
   function syncDurChipState(totalMin) {
     durChips.querySelectorAll(".track-opt[data-dur]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.dur === totalMin)));
     setDurBoxesOpen(totalMin > 0 && !DUR_PRESETS.includes(totalMin));
