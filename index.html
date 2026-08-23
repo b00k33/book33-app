@@ -18314,6 +18314,22 @@
       <div class="rtn-bd-head-text">
         <h1>Routines</h1>
       </div>
+    </div>
+    <!-- 2026-08-24 (Presets get a home): a second, separate table onto SAVED_EVENTS --
+         the store and the New Event form's own #presetsRow card row (renderPresetsRow(),
+         ~line 51749) are completely untouched; this is only a new VIEW onto data that
+         already exists. Sits above the Routines section, her explicit call: what she
+         reaches for while booking something belongs above what's set once and left
+         alone. Filled by renderRtnPresets(). -->
+    <div class="rtn-presets-section" id="rtnPresetsSection">
+      <div class="rtg-hd"><h2>Presets</h2><span class="rtg-n" id="rtnPresetCount"></span></div>
+      <p class="field-hint" style="margin:2px 0 12px">Things you book often but not on a schedule. Tap one in New Event to fill the form in — the ☆ next to What saves whatever's currently filled in as a new preset.</p>
+      <div id="rtnPresetTable"></div>
+    </div>
+    <div class="bd-head rtn-bd-head" style="margin-top:28px">
+      <div class="rtn-bd-head-text">
+        <h2>Routines</h2>
+      </div>
       <div class="add-row" id="rtnAddRow">
         <button class="add-btn add-btn-gold" id="rtnAddBtn">＋ Add routine</button>
       </div>
@@ -39106,6 +39122,11 @@
       const n = ROUTINE_TASKS.filter(t => !qLib || t.title.toLowerCase().includes(qLib)).length;
       libCountEl.textContent = `${n} routine${n === 1 ? "" : "s"}`;
     }
+    // 2026-08-24 (Presets get a home): deliberately called here, BEFORE the two
+    // ROUTINE_TASKS-driven early returns just below -- presets have nothing to do
+    // with routines/search and must always render regardless of which of those paths
+    // this call takes.
+    renderRtnPresets();
     const manageEl = document.getElementById("rtnManage");
     rtnInlineDetach();   // pull #rtnAddForm out before innerHTML below can destroy it
     if (!ROUTINE_TASKS.length) {
@@ -39591,6 +39612,84 @@
       </table></div>`;
     rtnInlineRedock("table");
   }
+  // 2026-08-24 (Presets get a home, STEP 3): reuses .rtg-tbl/.rtg-name/.rtg-trk/
+  // .rtg-dot/.rtg-muted/.rtg-acts/.rtg-ic — the SAME classes renderRtnGridTable()
+  // just above uses — rather than a parallel style set, so the two tables read as
+  // siblings on one page. No <colgroup>/sort/resize/grouping here on purpose: a short
+  // preset list doesn't need the routine table's full spreadsheet machinery, only its
+  // look. presetSubline() (~line 51733, #addForm's own closure) is reused verbatim for
+  // the description column, so the two surfaces can never describe a preset
+  // differently. Colouring rows via .preset-card[data-mode]'s generated wash+stripe
+  // (regenerateModeStyles(), ~line 40808) was tried and skipped -- that treatment
+  // leans on a card's own ::after left stripe, which doesn't reuse cleanly onto a
+  // <tr>; a plain Mode-tinted dot (the same device Category/Track already use in the
+  // real routines table) reads consistently instead.
+  function renderRtnPresets() {
+    const host = document.getElementById("rtnPresetTable");
+    const countEl = document.getElementById("rtnPresetCount");
+    if (!host) return;
+    if (countEl) countEl.textContent = `${SAVED_EVENTS.length} preset${SAVED_EVENTS.length === 1 ? "" : "s"}`;
+    if (!SAVED_EVENTS.length) {
+      host.innerHTML = `<div class="fam-empty">No presets yet.<br>Open New Event, fill in what you'd reuse — title, Mode, how long, where — then tap the ☆ beside What.</div>`;
+      return;
+    }
+    const row = p => {
+      const sub = presetSubline(p);
+      const dotColor = p.mode ? modeById(p.mode).accent : "var(--ink-faint)";
+      return `<tr data-rtnp-row="${esc(p.id)}">
+        <td class="rtg-name"><span class="rtg-trk"><span class="rtg-dot" style="background:${dotColor}"></span><span class="rtg-txt">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span></span></td>
+        <td class="rtg-muted rtg-wrap">${sub ? esc(sub) : "—"}</td>
+        <td class="rtg-acts-td"><div class="rtg-acts">
+          <button type="button" class="rtg-ic" data-rtnp-edit="${esc(p.id)}" title="Edit" aria-label="Edit ${esc(p.title)}">✎</button>
+          <button type="button" class="rtg-ic rtg-ic-del" data-rtnp-del="${esc(p.id)}" title="Delete" aria-label="Delete ${esc(p.title)}">🗑</button>
+        </div></td>
+      </tr>`;
+    };
+    host.innerHTML = `<div class="rtg-tbl"><table>
+      <thead><tr><th>Preset</th><th>Details</th><th></th></tr></thead>
+      <tbody>${SAVED_EVENTS.map(row).join("")}</tbody>
+    </table></div>`;
+  }
+  // STEP 4: Edit reuses the EXACT in-form preset-edit path #presetsRow's own ✎ corner
+  // badge already uses (applyPreset() + presetEditingId, ~line 51811) rather than a
+  // second editor -- opening the form first is the only new step, since it's normally
+  // closed when reached from this page. openForm() defaults fDate to today, but
+  // nothing in the preset-save path (the #presetSaveBtn click handler, ~line 51848)
+  // ever reads date/time, so that default is inert here -- confirmed live.
+  function rtnPresetEdit(id) {
+    const p = SAVED_EVENTS.find(x => x.id === id);
+    if (!p) return;
+    openForm();
+    presetEditingId = id;
+    presetSelectedId = id;
+    applyPreset(p);
+    renderPresetsRow();
+  }
+  // A one-tap delete with no undo is out of character for this app (showUndoSnackbar
+  // is used everywhere else a real record disappears) -- reused here rather than a
+  // silent removal, even though a preset itself is low-stakes.
+  function rtnPresetDelete(id) {
+    const p = SAVED_EVENTS.find(x => x.id === id);
+    if (!p) return;
+    SAVED_EVENTS = SAVED_EVENTS.filter(x => x.id !== id);
+    saveSavedEvents();
+    if (presetSelectedId === id) presetSelectedId = null;
+    if (presetEditingId === id) presetEditingId = null;
+    renderRtnPresets();
+    renderPresetsRow();   // keeps #addForm's own card row in sync if it happens to be open
+    showUndoSnackbar(`Deleted "${p.title}"`, () => {
+      SAVED_EVENTS.push(p);
+      saveSavedEvents();
+      renderRtnPresets();
+      renderPresetsRow();
+    });
+  }
+  document.getElementById("rtnPresetTable").addEventListener("click", e => {
+    const editBtn = e.target.closest("[data-rtnp-edit]");
+    if (editBtn) { rtnPresetEdit(editBtn.dataset.rtnpEdit); return; }
+    const delBtn = e.target.closest("[data-rtnp-del]");
+    if (delBtn) { rtnPresetDelete(delBtn.dataset.rtnpDel); return; }
+  });
   // 2026-08-11 (Linh: grouped Track ▸ sub-category redesign): banded nested view. Track
   // (part-of-life) headers, sub-category sub-bands, rows tinted by the sub-category colour.
   // Track & Category are the headers, so rows drop those columns — each row shows only
