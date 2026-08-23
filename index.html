@@ -5279,7 +5279,13 @@
      here) is what turns "content wants to be taller than this box" into a clean
      clip instead of a page scrollbar, in the rare case the legible-row floor can't
      fully fit (see lmComputeRowHeight()'s own comment). */
-  .lm-grid-wrap { overflow-x: auto; overflow-y: hidden; flex: 1; min-height: 0; }
+  /* 2026-08-24 (Stickers): position:relative added so the sticker layer just below
+     (a sibling of #lmGrid, so it survives #lmGrid's own full innerHTML rebuild on
+     every render) has a real anchor -- .lm-grid itself already has position:relative
+     of its own, but that element is destroyed and rebuilt every render, so the layer
+     can't live inside it. overflow-x:auto/overflow-y:hidden here are unchanged and
+     still desirable: a sticker can never be dragged out of the week box. */
+  .lm-grid-wrap { position: relative; overflow-x: auto; overflow-y: hidden; flex: 1; min-height: 0; }
   /* 2026-08-21: 32px gutter and the 9.5/8.5/8px label sizes below are the approved
      mockup's own exact pixel values (an approved-sheet exception to the type scale,
      same standing precedent as the mobile Day-view/Body-page/Routines sheets in this
@@ -5304,6 +5310,39 @@
      bridge. pointer-events:none so it never steals a paint/erase/tap click from the
      cells it passes over. */
   .lm-sleep-moon { position: absolute; font-size: 11px; line-height: 1; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
+  /* 2026-08-24 (Stickers on Life Map): free-placed decoration layer, siblings of
+     #lmGrid inside .lm-grid-wrap (see that rule's own comment for why). The layer
+     itself never blocks a tap from reaching the grid underneath (pointer-events:none)
+     -- only an actual placed sticker or its toolbar re-enables pointer-events, exactly
+     like .lm-sleep-moon just above does for the same reason. z-index:5 sits above the
+     grid's own cells (no z-index of their own -> auto/0) but below every real popover
+     (.lm-popover is 400+), so a sticker never outranks the app's real UI chrome. */
+  .lm-sticker-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  .lm-sticker {
+    position: absolute; pointer-events: auto; cursor: grab; touch-action: none;
+    user-select: none; -webkit-user-select: none; transform-origin: 50% 50%;
+    filter: drop-shadow(0 3px 5px rgba(0,0,0,.8)); line-height: 0;
+  }
+  .lm-sticker:active { cursor: grabbing; }
+  .lm-sticker img { display: block; width: 46px; height: 46px; object-fit: contain; }
+  .lm-sticker.lm-sticker-sel { outline: 2px solid var(--gold-bright); outline-offset: 3px; border-radius: 4px; }
+  /* the four-button move/resize/tilt/peel toolbar for whichever sticker is selected --
+     a sibling of the stickers in the same layer, positioned by the same x%/y% as the
+     sticker it belongs to (see lmStickerToolbarHtml()) but deliberately NOT rotated or
+     scaled with it, so its own buttons stay upright and tappable at any tilt. */
+  .lm-sticker-toolbar {
+    position: absolute; z-index: 6; display: flex; gap: 4px; padding: 4px;
+    background: var(--note-bg); border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.45);
+    transform: translateX(-50%); pointer-events: auto;
+  }
+  .lm-sticker-toolbar button {
+    width: 26px; height: 26px; border-radius: 50%; border: none; background: var(--field-bg);
+    color: var(--ink-soft); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 13px; font-family: inherit; padding: 0;
+  }
+  .lm-sticker-toolbar button:hover, .lm-sticker-toolbar button:focus-visible { color: var(--gold-bright); background: color-mix(in oklab, var(--gold-bright) 14%, var(--field-bg)); }
+  .lm-sticker-toolbar .lm-sticker-peel { color: var(--danger); }
+  .lm-sticker-toolbar .lm-sticker-peel:hover, .lm-sticker-toolbar .lm-sticker-peel:focus-visible { color: #fff; background: var(--danger); }
   .lm-hd {
     font-size: 9.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 2px 0 5px; letter-spacing: .04em;
     display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -5395,6 +5434,27 @@
      expanded editor) runs taller than a single cell's info. No border, same as
      every other Life Map surface after the gold-outline removal above. */
   .lm-modes-panel { z-index: 410; width: min(320px, calc(100vw - 20px)); max-height: min(560px, calc(100vh - 20px)); overflow-y: auto; }
+  /* 2026-08-24 (Stickers): the sheet/tray flyout -- same .lm-popover floating shape
+     as .lm-modes-panel just above (own width/height cap, own z-index), placed by the
+     same lmPositionFlyout() helper .lm-modes-panel's own placer was refactored into. */
+  .lm-sticker-tray { z-index: 410; width: min(300px, calc(100vw - 20px)); max-height: min(520px, calc(100vh - 20px)); overflow-y: auto; }
+  .lm-sticker-tray-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .lm-sticker-tray-kb { font-size: 11px; color: var(--ink-faint); margin-bottom: 8px; }
+  .lm-sticker-tray-help { font-size: 12px; color: var(--ink-soft); line-height: 1.4; margin-bottom: 8px; }
+  .lm-sticker-tray-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
+  .lm-sticker-thumb {
+    position: relative; border-radius: var(--radius-sm); background: var(--field-bg); border: none;
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 6px;
+    transition: box-shadow .12s ease, background .12s ease;
+  }
+  .lm-sticker-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .lm-sticker-thumb-on { box-shadow: 0 0 0 2px var(--gold); background: color-mix(in oklab, var(--gold) 14%, var(--field-bg)); }
+  .lm-sticker-thumb-add { color: var(--ink-faint); font-size: 20px; }
+  .lm-sticker-thumb-add:hover { color: var(--gold-bright); background: color-mix(in oklab, var(--gold-bright) 10%, var(--field-bg)); }
+  .lm-sticker-thumb-del {
+    position: absolute; top: -5px; right: -5px; width: 17px; height: 17px; border-radius: 50%; border: none;
+    background: var(--danger); color: #fff; font-size: 10px; line-height: 17px; text-align: center; padding: 0; cursor: pointer;
+  }
   /* 2026-08-22 (Linh: "pin the tap panel to a fixed side panel" -- SUPERSEDES the
      floating-popover placement above for #lmCellPanel specifically; #lmModesPanel is
      untouched, still a .lm-popover). Desktop: a real flex sibling of .lm-weekbox
@@ -19000,6 +19060,10 @@
         </div>
         <div class="lm-grid-wrap">
           <div class="lm-grid" id="lmGrid"></div>
+          <!-- 2026-08-24 (Stickers): a SIBLING of #lmGrid, never a child -- #lmGrid's
+               own innerHTML is fully replaced on every renderLifeMap() call, which
+               would wipe a sticker layer living inside it. Filled by renderLmStickers(). -->
+          <div class="lm-sticker-layer" id="lmStickerLayer"></div>
         </div>
         <div class="lm-untimed" id="lmUntimed" hidden></div>
       </div>
@@ -19007,6 +19071,10 @@
     </div>
 
     <div class="lm-panel lm-popover lm-modes-panel" id="lmModesPanel" hidden></div>
+    <!-- 2026-08-24 (Stickers): the sheet/tray flyout, filled by renderLmStickerTray().
+         No built-in sticker set ships -- the sheet starts empty; she adds her own. -->
+    <div class="lm-panel lm-popover lm-sticker-tray" id="lmStickerTray" hidden></div>
+    <input type="file" id="stkFile" accept="image/png,image/webp,image/*" multiple hidden>
   </div>
 
   <!-- ================= 8 DAYS ================= -->
@@ -20843,6 +20911,30 @@
   function saveLifeMap() {
     try { localStorage.setItem(LIFEMAP_KEY, JSON.stringify(LIFEMAP)); } catch (e) {}
   }
+  // 2026-08-24 (Stickers on Life Map): a free-placed decorative layer on top of the
+  // week grid -- pure paper-diary decoration, never read by anything else in the app.
+  // sheet {id: dataURL} stores each uploaded sticker IMAGE exactly once; placed
+  // {mondayKey: [{id,x,y,s,r}]} stores lightweight per-placement records (x/y percent
+  // of .lm-grid-wrap, s scale, r rotation degrees) that reference a sheet id -- using
+  // one sticker fifty times costs one image, not fifty. Same load/save idiom as
+  // loadLifeMap/saveLifeMap just above. Never added to sync's EXCLUDE (see gather()) --
+  // she wants her stickers on her phone too.
+  const STICKERS_KEY = "book33-stickers";
+  function loadStickers() {
+    try {
+      const v = JSON.parse(localStorage.getItem(STICKERS_KEY));
+      if (v && typeof v === "object") return { sheet: v.sheet || {}, placed: v.placed || {} };
+    } catch (e) {}
+    return { sheet: {}, placed: {} };
+  }
+  let STICKERS = loadStickers();
+  // Images make hitting the localStorage quota a real possibility for the first time
+  // in this app -- unlike every other save*() here, this one reports a failure rather
+  // than swallowing it, so a full quota never just silently loses a sticker.
+  function saveStickers() {
+    try { localStorage.setItem(STICKERS_KEY, JSON.stringify(STICKERS)); }
+    catch (e) { rewardToast("Out of storage — remove a sticker from your sheet"); }
+  }
   // 2026-08-21 (Quick-plan week, STEP 2): a short library of "things I book often,"
   // separate from LIFEMAP.cells (an abstract recurring pattern) and ROUTINE_TASKS (a
   // real recurring commitment) -- these are shortcut TEMPLATES for one-off bookings.
@@ -20889,6 +20981,15 @@
   // persisted (a plain top-level var, no localStorage) -- an armed tool is transient
   // per-visit UI state, not data worth remembering across a reload.
   let lmArmedMode = null;
+  // 2026-08-24 (Stickers): a SECOND, separate arming state -- which sheet sticker (a
+  // real sticker id) is loaded and ready to drop on a tap, or null. Mutually exclusive
+  // with lmArmedMode -- arming one clears the other everywhere either is set, so a tap
+  // on the grid can never both paint a Mode block and place a sticker. Also transient,
+  // deliberately not persisted, same reasoning as lmArmedMode.
+  let lmArmedSticker = null;
+  let lmStickerTrayOpen = false;          // whether the sticker sheet/tray flyout is open
+  let lmStickerSelIdx = null;             // index into this week's STICKERS.placed[] array that's selected (shows the move/resize/tilt/peel toolbar), or null
+  let lmStickerDrag = null;               // in-progress drag state for a placed sticker, or null between drags
   // 2026-08-21 (Linh: "add function so i can edit the modes... bring a side tab for
   // it"): the Modes editor panel, opened from a gear chip at the bottom of the
   // strip. lmModesExpandedId is which row (a real mode id, or "new" for a
@@ -21143,6 +21244,9 @@
     // rays to confuse with "morning"'s sun). "dot" is the one non-strip entry: the
     // generic fallback a brand-new custom Mode gets until she picks a real icon.
     gear: '<path d="M12 2 4 6.5v11L12 22l8-4.5v-11z"/><circle cx="12" cy="12" r="3"/>',
+    // 2026-08-24 (Stickers): a rounded label with a peeled top-right corner -- reads
+    // distinctly from eraser/gear, same stroke convention as every icon above.
+    sticker: '<path d="M7 3h7l7 7v7a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4Z"/><path d="M14 3v5a2 2 0 0 0 2 2h5"/>',
     dot: '<circle cx="12" cy="12" r="5"/>',
   };
   function lmSvgIcon(id) {
@@ -21187,6 +21291,10 @@
       <div class="lm-sw-sep"></div>
       <button type="button" class="lm-sw${lmModesOpen ? " lm-sw-on" : ""}" data-lm-modes-toggle title="Edit Modes" style="color:var(--ink-faint)">
         ${lmSvgIcon("gear")}
+      </button>
+      <div class="lm-sw-sep"></div>
+      <button type="button" class="lm-sw${lmStickerTrayOpen || lmArmedSticker ? " lm-sw-on" : ""}" data-lm-stickers-toggle title="Stickers" style="color:var(--ink-faint)">
+        ${lmSvgIcon("sticker")}
       </button>`;
   }
   // 2026-08-21 (Modes editor): a small dedicated flyout placer, not a retrofit of
@@ -21197,13 +21305,15 @@
   // dropping below it when there isn't room -- the same side the strip itself moves
   // to under the 640px wrap breakpoint, so the fallback still reads as "next to the
   // strip" in that layout. Always clamped inside the viewport, never off-screen.
-  function lmPositionModesPanel() {
-    const host = document.getElementById("lmModesPanel");
-    const strip = document.getElementById("lmStrip");
-    if (!host || !strip) return;
+  // 2026-08-24 (Stickers, STEP 5): pulled out of what was a one-off lmPositionModesPanel
+  // so the new sticker tray flyout can reuse the exact same desktop-beside/mobile-below
+  // placement maths instead of a second copy -- lmPositionModesPanel below is now a
+  // thin wrapper, behaviour completely unchanged.
+  function lmPositionFlyout(host, anchor) {
+    if (!host || !anchor) return;
     const margin = 10;
     const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
-    const r = strip.getBoundingClientRect();
+    const r = anchor.getBoundingClientRect();
     host.style.left = "0px"; host.style.top = "0px";
     const hr = host.getBoundingClientRect();
     let left, top;
@@ -21216,6 +21326,125 @@
     }
     host.style.left = `${Math.round(left)}px`;
     host.style.top = `${Math.round(top)}px`;
+  }
+  function lmPositionModesPanel() {
+    lmPositionFlyout(document.getElementById("lmModesPanel"), document.getElementById("lmStrip"));
+  }
+  function lmPositionStickerTray() {
+    lmPositionFlyout(document.getElementById("lmStickerTray"), document.getElementById("lmStrip"));
+  }
+  // ── Stickers on Life Map (2026-08-24) ─────────────────────────────────────
+  // Pure decoration on top of the week grid -- nothing here reads or writes a real
+  // scheduled item; EVENTS/ROUTINE_TASKS/RECURRING_EVENTS are never touched by any
+  // function below.
+  function renderLmStickerTray() {
+    const host = document.getElementById("lmStickerTray");
+    if (!host) return;
+    if (!lmStickerTrayOpen) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    const ids = Object.keys(STICKERS.sheet);
+    // dataURL.length * 0.75 -- base64's own ~4/3 expansion over raw bytes, so she can
+    // see roughly what she's spending as she goes rather than discover a full quota
+    // via a failed save (this is the first feature in the app that can genuinely fill
+    // localStorage -- see saveStickers()'s own comment).
+    const totalKb = ids.reduce((sum, id) => sum + (STICKERS.sheet[id] || "").length * 0.75, 0) / 1024;
+    const sizeTxt = totalKb > 999 ? `${(totalKb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(totalKb))} KB`;
+    host.innerHTML = `
+      <div class="lm-sticker-tray-head">
+        <div class="lm-panel-title" style="margin:0">Stickers</div>
+        <button type="button" class="lm-modes-close" data-lm-sticker-tray-close aria-label="Close">✕</button>
+      </div>
+      ${ids.length
+        ? `<div class="lm-sticker-tray-kb">${ids.length} sticker${ids.length === 1 ? "" : "s"} · ~${sizeTxt}</div>`
+        : `<div class="lm-sticker-tray-help">Add a transparent PNG to start your sheet. On iPhone: long-press a sticker inside a photo → Copy Subject → save to Files — that lifts it off the background cleanly.</div>`}
+      <div class="lm-sticker-tray-grid">
+        ${ids.map(id => `
+          <button type="button" class="lm-sticker-thumb${lmArmedSticker === id ? " lm-sticker-thumb-on" : ""}" data-lm-sticker-arm="${id}" title="Tap to place">
+            <img src="${STICKERS.sheet[id]}" alt="" draggable="false">
+            <span class="lm-sticker-thumb-del" data-lm-sticker-remove="${id}" role="button" tabindex="0" aria-label="Remove from sheet" title="Remove from sheet">✕</span>
+          </button>`).join("")}
+        <button type="button" class="lm-sticker-thumb lm-sticker-thumb-add" data-lm-sticker-add aria-label="Add stickers" title="Add stickers">+</button>
+      </div>`;
+    lmPositionStickerTray();
+  }
+  // A sticker removed from the sheet must also drop every placement referencing it
+  // across every week, or a stale placement would try to render a missing image.
+  function lmStickerRemoveFromSheet(id) {
+    delete STICKERS.sheet[id];
+    Object.keys(STICKERS.placed).forEach(wk => {
+      STICKERS.placed[wk] = STICKERS.placed[wk].filter(p => p.id !== id);
+    });
+    if (lmArmedSticker === id) lmArmedSticker = null;
+    lmStickerSelIdx = null;
+    saveStickers();
+    renderLmStickerTray();
+    renderLmStrip();
+    renderLmStickers();
+  }
+  // The floating toolbar for whichever placement is selected -- deliberately NOT
+  // rotated/scaled with the sticker (see .lm-sticker-toolbar's own CSS comment), just
+  // lifted above it by roughly the sticker's own half-height at its current scale.
+  function lmStickerToolbarHtml(p) {
+    const liftPx = 23 * p.s + 22;
+    return `<div class="lm-sticker-toolbar" style="left:${p.x}%;top:calc(${p.y}% - ${liftPx}px);">
+      <button type="button" data-lm-sticker-action="smaller" title="Smaller" aria-label="Smaller">−</button>
+      <button type="button" data-lm-sticker-action="bigger" title="Bigger" aria-label="Bigger">+</button>
+      <button type="button" data-lm-sticker-action="tilt" title="Tilt" aria-label="Tilt">↻</button>
+      <button type="button" class="lm-sticker-peel" data-lm-sticker-action="peel" title="Peel off" aria-label="Peel off">✕</button>
+    </div>`;
+  }
+  // Renders the CURRENT week's placed stickers into the layer (a sibling of #lmGrid,
+  // see that element's own comment) plus the selected one's toolbar, if any. Called at
+  // the end of renderLifeMap() and again after every sticker change, same convention
+  // as renderLmStrip()/renderLmUntimed() beside it.
+  function renderLmStickers() {
+    const layer = document.getElementById("lmStickerLayer");
+    if (!layer) return;
+    const weekKey = keyOf(lmWeekStart || startOfWeek(TODAY));
+    const list = STICKERS.placed[weekKey] || [];
+    if (lmStickerSelIdx !== null && !list[lmStickerSelIdx]) lmStickerSelIdx = null;
+    layer.innerHTML = list.map((p, i) => {
+      const src = STICKERS.sheet[p.id];
+      if (!src) return "";   // stale placement referencing a removed sheet id -- never rendered
+      const sel = i === lmStickerSelIdx;
+      return `<div class="lm-sticker${sel ? " lm-sticker-sel" : ""}" data-lm-sticker-idx="${i}"
+        style="left:${p.x}%;top:${p.y}%;transform:translate(-50%,-50%) rotate(${p.r}deg) scale(${p.s});">
+        <img src="${src}" alt="" draggable="false"></div>`;
+    }).join("") + (lmStickerSelIdx !== null && list[lmStickerSelIdx] ? lmStickerToolbarHtml(list[lmStickerSelIdx]) : "");
+  }
+  // Converts a raw click point into percentages of .lm-grid-wrap's own box (not
+  // window/viewport-relative) and appends a new placement to the CURRENT week's
+  // array -- percentages, not pixels, so a sticker stays put when the grid resizes
+  // or she switches between phone and desktop. Lands slightly crooked (±7°) on
+  // purpose -- that's what reads as paper rather than as a placed icon.
+  function lmPlaceSticker(wrapEl, clientX, clientY) {
+    const r = wrapEl.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const x = Math.round(Math.min(100, Math.max(0, ((clientX - r.left) / r.width) * 100)) * 10) / 10;
+    const y = Math.round(Math.min(100, Math.max(0, ((clientY - r.top) / r.height) * 100)) * 10) / 10;
+    const weekKey = keyOf(lmWeekStart || startOfWeek(TODAY));
+    if (!STICKERS.placed[weekKey]) STICKERS.placed[weekKey] = [];
+    const rot = Math.round((Math.random() * 14 - 7) * 10) / 10;
+    STICKERS.placed[weekKey].push({ id: lmArmedSticker, x, y, s: 1, r: rot });
+    saveStickers();
+    lmStickerSelIdx = STICKERS.placed[weekKey].length - 1;
+    renderLmStickers();
+  }
+  // Toolbar actions on the currently-selected placement -- clamped to roughly
+  // 0.45–2.6 scale per STEP 6, saved on every action (not continuously), and
+  // re-rendered so the toolbar's own lift offset (which depends on scale) stays right.
+  function lmStickerToolbarAction(action) {
+    if (lmStickerSelIdx === null) return;
+    const weekKey = keyOf(lmWeekStart || startOfWeek(TODAY));
+    const list = STICKERS.placed[weekKey];
+    if (!list || !list[lmStickerSelIdx]) return;
+    const st = list[lmStickerSelIdx];
+    if (action === "bigger") st.s = Math.min(2.6, Math.round(st.s * 1.15 * 100) / 100);
+    else if (action === "smaller") st.s = Math.max(0.45, Math.round(st.s / 1.15 * 100) / 100);
+    else if (action === "tilt") st.r = Math.round(((st.r + 18) % 360) * 10) / 10;
+    else if (action === "peel") { list.splice(lmStickerSelIdx, 1); lmStickerSelIdx = null; }
+    saveStickers();
+    renderLmStickers();
   }
   function lmModeItemCount(id) {
     return EVENTS.filter(e => e.mode === id).length
@@ -21527,6 +21756,7 @@
     lmComputeRowHeight();
     lmEnsureRowHeightObserver();
     lmDrawSleepConnectors(lmMidnightBridges, lastSlotIdx);
+    renderLmStickers();   // 2026-08-24 (Stickers): #lmGrid.innerHTML above is unchanged; the sticker layer is a sibling, redrawn fresh every render
   }
   // 2026-08-22 (Linh: "connect Sleep across midnight"): the bridgeDays list is which
   // days (this week's d, 1..6) open on a continuation of the PREVIOUS day's run (see
@@ -21705,7 +21935,9 @@
   // cell, rather than relying on nothing else to remove them.
   document.addEventListener("pointerdown", e => {
     const cell = e.target.closest("[data-lm-empty-cell]");
-    if (!cell || !lmArmedMode || lmArmedMode === "eraser") return;
+    // 2026-08-24 (Stickers): bail while a sticker is armed, or dragging to place one
+    // would paint a streak of Mode blocks underneath it.
+    if (!cell || !lmArmedMode || lmArmedMode === "eraser" || lmArmedSticker) return;
     const day = Number(cell.dataset.lmDay), slot = Number(cell.dataset.lmSlot);
     lmSelecting = true;
     lmSelDay = day;
@@ -21753,6 +21985,102 @@
     lmSelecting = false;
     lmSelDay = null; lmSelSlots = null;
     renderLifeMap();
+  });
+  // 2026-08-24 (Stickers, STEP 6): move/select a PLACED sticker. A separate listener
+  // pair from the paint-drag ones just above -- .lm-sticker elements are never
+  // [data-lm-empty-cell], so the two never see the same pointerdown. setPointerCapture
+  // keeps the drag tracking the same pointer even if it strays off the sticker itself;
+  // a small movement tolerance (4px) tells a real drag apart from a tap that should
+  // select it instead -- pointerup with no movement selects/deselects, pointerup after
+  // real movement commits the new x/y. Toolbar buttons (data-lm-sticker-action) live
+  // inside the layer too but are excluded here so a tap on one of them can't also start
+  // a drag of the sticker underneath it.
+  document.addEventListener("pointerdown", e => {
+    if (e.target.closest(".lm-sticker-toolbar")) return;
+    const stk = e.target.closest(".lm-sticker");
+    if (!stk) return;
+    const wrap = document.querySelector(".lm-grid-wrap");
+    const idx = Number(stk.dataset.lmStickerIdx);
+    const weekKey = keyOf(lmWeekStart || startOfWeek(TODAY));
+    const list = STICKERS.placed[weekKey];
+    if (!wrap || !list || !list[idx]) return;
+    // 2026-08-24: setPointerCapture can throw (NotFoundError) if the browser's own
+    // pointer bookkeeping doesn't recognise this pointerId as active any more -- a real
+    // hardware-timing edge case, not a hypothetical (caught live testing this build).
+    // Uncaught, that would abort this handler before lmStickerDrag is ever set, same
+    // "interrupted gesture leaves state stuck" class of bug the paint-drag system
+    // elsewhere in this file already had to harden against -- swallow it and continue;
+    // pointerId tracking below still works fine without capture, just without the
+    // guarantee that a drag straying off the element keeps receiving its events.
+    try { stk.setPointerCapture(e.pointerId); } catch (err) {}
+    lmStickerDrag = {
+      idx, weekKey, pointerId: e.pointerId, startClientX: e.clientX, startClientY: e.clientY,
+      origX: list[idx].x, origY: list[idx].y, liveX: list[idx].x, liveY: list[idx].y,
+      moved: false, wrapRect: wrap.getBoundingClientRect(), el: stk,
+    };
+    e.preventDefault();
+  });
+  document.addEventListener("pointermove", e => {
+    if (!lmStickerDrag || e.pointerId !== lmStickerDrag.pointerId) return;
+    const dx = e.clientX - lmStickerDrag.startClientX, dy = e.clientY - lmStickerDrag.startClientY;
+    if (!lmStickerDrag.moved && Math.hypot(dx, dy) < 4) return;
+    lmStickerDrag.moved = true;
+    const r = lmStickerDrag.wrapRect;
+    const nx = Math.min(100, Math.max(0, lmStickerDrag.origX + (dx / r.width) * 100));
+    const ny = Math.min(100, Math.max(0, lmStickerDrag.origY + (dy / r.height) * 100));
+    lmStickerDrag.liveX = nx; lmStickerDrag.liveY = ny;
+    lmStickerDrag.el.style.left = `${nx}%`;
+    lmStickerDrag.el.style.top = `${ny}%`;
+  });
+  function lmStickerDragEnd() {
+    if (!lmStickerDrag) return;
+    const { idx, weekKey, moved, liveX, liveY } = lmStickerDrag;
+    const list = STICKERS.placed[weekKey];
+    if (moved && list && list[idx]) {
+      list[idx].x = Math.round(liveX * 10) / 10;
+      list[idx].y = Math.round(liveY * 10) / 10;
+      saveStickers();   // save on drag end only, not on every pointermove
+    } else if (!moved) {
+      lmStickerSelIdx = lmStickerSelIdx === idx ? null : idx;
+    }
+    lmStickerDrag = null;
+    renderLmStickers();
+  }
+  document.addEventListener("pointerup", e => {
+    if (lmStickerDrag && e.pointerId === lmStickerDrag.pointerId) lmStickerDragEnd();
+  });
+  document.addEventListener("pointercancel", e => {
+    if (lmStickerDrag && e.pointerId === lmStickerDrag.pointerId) { lmStickerDrag = null; renderLmStickers(); }
+  });
+  // Importing her own stickers -- modelled on the meal-photo handler (hidden file
+  // input -> FileReader -> downscale through an offscreen canvas), two differences:
+  // png not jpeg (transparency has to survive) and a smaller MAX (a sticker renders
+  // ~46px; 180 covers retina and a bit of zoom). #stkFile allows multiple, so several
+  // photographed stickers can be added in one picker trip.
+  document.getElementById("stkFile").addEventListener("change", ev => {
+    const files = [...ev.target.files];
+    if (!files.length) return;
+    let remaining = files.length;
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = loadEv => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 180, scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          STICKERS.sheet[uid()] = canvas.toDataURL("image/png");
+          saveStickers();
+          renderLmStickerTray();
+          remaining--;
+          if (remaining === 0) ev.target.value = "";   // lets picking the same file(s) twice re-fire change
+        };
+        img.src = loadEv.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
   });
   // 2026-08-22 (Linh, "select a cell that's already moded and change to a different
   // mode"): repainting a filled cell with a Mode armed used to be a flat no-op --
@@ -21881,10 +22209,60 @@
     renderLifeMap();
   }
   document.addEventListener("click", e => {
+    // 2026-08-24 (Stickers, STEP 5) -- deliberately FIRST, before every other branch
+    // in this delegate (Mode swatches, filled/empty cell). With a sticker armed, a tap
+    // on the grid must place it and return immediately -- never fall through into
+    // lmRepaintOccupied()/lmTryErase()/the "Pick a Mode" toast below.
+    const stkTrayToggle = e.target.closest("[data-lm-stickers-toggle]");
+    if (stkTrayToggle) {
+      lmStickerTrayOpen = !lmStickerTrayOpen;
+      if (lmStickerTrayOpen) { lmModesOpen = false; lmModesExpandedId = null; lmModesDraft = null; renderLmModesPanel(); }
+      renderLmStrip();
+      renderLmStickerTray();
+      return;
+    }
+    const stkTrayClose = e.target.closest("[data-lm-sticker-tray-close]");
+    if (stkTrayClose) { lmStickerTrayOpen = false; renderLmStrip(); renderLmStickerTray(); return; }
+    const stkAdd = e.target.closest("[data-lm-sticker-add]");
+    if (stkAdd) { document.getElementById("stkFile").click(); return; }
+    // the ✕ remove control is nested INSIDE the thumb's own arm button (see
+    // renderLmStickerTray()), so closest("[data-lm-sticker-arm]") would ALSO match a
+    // tap on it -- must be checked first, or removing a sticker would just arm it.
+    const stkRemove = e.target.closest("[data-lm-sticker-remove]");
+    if (stkRemove) { lmStickerRemoveFromSheet(stkRemove.dataset.lmStickerRemove); return; }
+    const stkArm = e.target.closest("[data-lm-sticker-arm]");
+    if (stkArm) {
+      const id = stkArm.dataset.lmStickerArm;
+      lmArmedSticker = lmArmedSticker === id ? null : id;
+      if (lmArmedSticker) lmArmedMode = null;   // mutual exclusion with the Mode palette
+      renderLmStrip();
+      renderLmStickerTray();
+      return;
+    }
+    const stkAction = e.target.closest("[data-lm-sticker-action]");
+    if (stkAction) { lmStickerToolbarAction(stkAction.dataset.lmStickerAction); return; }
+    const stkGridHit = e.target.closest(".lm-grid-wrap");
+    if (stkGridHit && lmArmedSticker && !e.target.closest(".lm-sticker") && !e.target.closest(".lm-sticker-toolbar")) {
+      lmPlaceSticker(stkGridHit, e.clientX, e.clientY);
+      return;
+    }
+    // clicking anywhere that isn't a placed sticker or its own toolbar deselects it --
+    // falls through (no return) so the click still does whatever else it was doing.
+    if (lmStickerSelIdx !== null && !e.target.closest(".lm-sticker") && !e.target.closest(".lm-sticker-toolbar")) {
+      lmStickerSelIdx = null;
+      renderLmStickers();
+    }
+    // same "any other click dismisses it" rule as the Modes panel below.
+    if (lmStickerTrayOpen && !e.target.closest("#lmStickerTray") && !e.target.closest("[data-lm-stickers-toggle]")) {
+      lmStickerTrayOpen = false;
+      renderLmStrip();
+      renderLmStickerTray();
+    }
     const swBtn = e.target.closest("[data-lm-mode]");
     if (swBtn) {
       const id = swBtn.dataset.lmMode;
       lmArmedMode = lmArmedMode === id ? null : id;
+      lmArmedSticker = null;   // mutual exclusion, see lmArmedSticker's own comment
       renderLmStrip();
       return;
     }
@@ -21892,6 +22270,7 @@
     if (modesToggle) {
       lmModesOpen = !lmModesOpen;
       if (!lmModesOpen) { lmModesExpandedId = null; lmModesDraft = null; }
+      if (lmModesOpen) { lmStickerTrayOpen = false; renderLmStickerTray(); }
       renderLmStrip();
       renderLmModesPanel();
       return;
