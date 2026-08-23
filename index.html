@@ -3051,6 +3051,17 @@
   .tl-detail-manage-danger { color: var(--danger); }
   .tl-detail-manage-danger .tl-detail-em { color: var(--danger); }
   .tl-detail-body { padding: 4px 24px 24px; overflow-y: auto; }
+  /* 2026-08-23 ("merge truly back-to-back same-named blocks"): sits between the
+     head and the body, same shell on mobile and desktop (unlike .tl-detail-hero,
+     which is mobile-only) -- renderTlMergeList (near openTlDetail) shows/hides and
+     fills it. Each row switches the WHOLE sheet to that occurrence's own id via
+     the normal openTlDetail() call, so Edit/Delete below stay completely
+     untouched for whichever one is currently open. */
+  .tl-detail-merge-list { padding: 12px 24px 0; display: flex; flex-direction: column; gap: 8px; }
+  .tl-merge-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); }
+  .tl-merge-rows { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tl-merge-row { border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-body); }
+  .tl-merge-row.on { box-shadow: inset 0 0 0 1.5px var(--margin-rule); color: var(--margin-rule); }
   .tl-detail-icon { width: 14px; height: 14px; border-radius: 4px; display: inline-block; margin-right: 12px; vertical-align: middle; }
   .tl-detail-title { font-size: 20px; font-weight: 700; color: var(--ink); line-height: var(--lh-tight); margin: 4px 0 16px; }
   /* 2026-08-15 (§6 mobile redesign): Zone 1, the coloured header — mobile only
@@ -14644,6 +14655,12 @@
   }
   /* edited-day marker: a small gold dot beside the title */
   .tl-ovr-dot { color: var(--cosmic-gold); font-size: 13px; line-height: 1; margin-right: 4px; flex: none; }
+  /* 2026-08-23 ("merge truly back-to-back same-named blocks"): the ×N badge on a
+     merged box's title row -- its only on-card sign that several real occurrences
+     are folded into this one shape. Reaching each of them individually is the
+     detail sheet's merge sub-list (.tl-detail-merge-list below), opened the same
+     way tapping any other block already does. */
+  .tl-merge-badge { flex: none; font-size: 10px; font-weight: 700; line-height: 1; padding: 2px 6px; border-radius: 999px; margin-right: 4px; background: color-mix(in oklab, var(--ink) 12%, transparent); color: var(--ink-soft); }
   /* part-of-life dot (Categories & colours brief) -- always the parent's own colour,
      never the sub's, so a Fitness-green block still visibly reads as Personal. */
   .tl-life-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; flex: none; }
@@ -17189,6 +17206,13 @@
         <button type="button" class="tl-detail-close" id="tlDetailClose" aria-label="Close">×</button>
         <div class="tl-detail-hero" id="tlDetailHero"></div>
       </div>
+      <!-- 2026-08-23 ("merge truly back-to-back same-named blocks"): only ever
+           filled/shown when the open item is part of a merge run
+           (TL_MERGE_GROUPS) -- renderTlMergeList, called from openTlDetail() and
+           refreshOpenTlDetail(). Own slot, not inside #tlDetailHero (mobile-only)
+           or #tlDetailBody (renderTlDetailBody's own kind-specific markup,
+           untouched by this feature), so it shows the same way at every width. -->
+      <div class="tl-detail-merge-list" id="tlDetailMergeList" hidden></div>
       <div class="tl-detail-body" id="tlDetailBody"></div>
       <!-- Zone 3, the manage block — SAME id as before (#tlDetailHeadActions), just
            relocated from inside .tl-detail-head above to here and re-skinned as
@@ -27970,6 +27994,13 @@
   // (openTlDetail, further below) can look one back up by id — generated items
   // (routines, hair, etc.) exist nowhere else queryable once a render pass is done
   let TL_ITEMS_BY_ID = {};
+  // 2026-08-23 ("merge truly back-to-back same-named blocks"): id -> that id's
+  // whole merge run (an array of {id, start, end}, every member pointing at the
+  // SAME shared array), only for ids that are actually part of a run (length >
+  // 1) -- see renderTimeline()'s merge step. Rebuilt fresh every render, same as
+  // TL_ITEMS_BY_ID above. Read by renderTlMergeList (near openTlDetail) to show
+  // every individual occurrence a merged box folded together.
+  let TL_MERGE_GROUPS = {};
   // 2026-08-14 (§1 multi-day calendar): pulled out of renderTimeline() below (which
   // now just calls this) so the new multi-day columns' own overlap handling
   // (renderMultiDayGrid()/mdColumnHtml()) uses the SAME side-by-side lane algorithm
@@ -28084,6 +28115,7 @@
     const H = HOUR_H();
     const outside = [], placed = [];
     TL_ITEMS_BY_ID = {};
+    TL_MERGE_GROUPS = {};
     // sidebar "Parts of life" checkboxes (desktop 1-day only — tracksOff is
     // always empty everywhere else, see trackVisible()'s own comment) hide a
     // life category from the grid without touching the underlying data.
@@ -28136,6 +28168,43 @@
       // math only) so the time label below still reads the item's real end time
       // even when it runs past the bottom of the visible hours.
       placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps });
+    });
+
+    // 2026-08-23 ("merge truly back-to-back same-named blocks"): before the top/h/
+    // -3/clusterOverlaps geometry below ever runs, collapse a RUN of consecutive-
+    // by-time `placed` entries that are genuinely the same repeated thing -- same
+    // title AND same track AND one's real painted end (ce) equals the next one's
+    // real painted start (cs), no gap -- into ONE entry spanning the run's first
+    // start to its last end. Two different adjacent items, or the same title with
+    // an actual gap, never match this and fall through as their own single-item
+    // "run" -- completely unchanged, hairline gap and all, same as every render
+    // before this. clusterOverlaps() below never even sees the difference: a
+    // merged run is just one placed entry like any other by the time it runs.
+    // Every individual occurrence inside a run stays reachable — see
+    // TL_MERGE_GROUPS above and renderTlMergeList (near openTlDetail).
+    placed.sort((a, b) => a.cs - b.cs);
+    const tlRuns = [];
+    placed.forEach(p => {
+      const run = tlRuns[tlRuns.length - 1];
+      const prev = run && run[run.length - 1];
+      const chains = prev && !isGhostItem(prev.e) && !isGhostItem(p.e)
+        && p.e.title === prev.e.title && p.e.track === prev.e.track && p.cs === prev.ce;
+      if (chains) run.push(p); else tlRuns.push([p]);
+    });
+    placed.length = 0;
+    tlRuns.forEach(run => {
+      if (run.length === 1) { placed.push(run[0]); return; }
+      const first = run[0], last = run[run.length - 1];
+      const members = run.map(p => ({ id: p.e.id, start: p.e.start, end: p.e.end || minToTime(p.trueEnd) }));
+      run.forEach(p => {
+        if (!isGhostItem(p.e) || !TL_ITEMS_BY_ID[p.e.id]) TL_ITEMS_BY_ID[p.e.id] = p.e;
+        TL_MERGE_GROUPS[p.e.id] = members;
+      });
+      placed.push({
+        e: first.e, cs: first.cs, ce: last.ce, trueEnd: last.trueEnd,
+        isBlock: (last.ce - first.cs >= 30) || run.some(p => p.isBlock),
+        mergeCount: run.length,
+      });
     });
 
     /* overlapping items share the hour side-by-side, so a crowded slot shows
@@ -28273,9 +28342,14 @@
       // her single-line variant is "name + START time", not the full range: at 9px in a
       // flex row beside the title there is room for one time, and the end time is one tap
       // away in the detail sheet. Non-tight blocks keep the full range exactly as before.
+      // 2026-08-23: a merged box's own e.end is just the FIRST occurrence's real
+      // end, not the run's -- e.end || minToTime(trueEnd) would read that instead
+      // of falling through, showing "8pm-8:30pm" on a box that visually spans to
+      // 10pm. Merged always reads trueEnd (already the run's last real end, set
+      // in the merge step above), never e.end.
       const meta = tight
         ? fmtTime(e.start)
-        : `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(trueEnd))}${metaTrack}`;
+        : `${fmtTime(e.start)} – ${fmtTime(p.mergeCount > 1 ? minToTime(trueEnd) : (e.end || minToTime(trueEnd)))}${metaTrack}`;
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
         + (isMarkerOverlay ? " tl-marker-overlay" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
@@ -28357,7 +28431,13 @@
       // birthdays, supplements…) have no stored home to resize into. Handles are pure
       // CSS-hidden on touch (see .tl-resize-handle's pointer:coarse rule) rather than
       // left out of the markup, so there's nothing device-specific to keep in sync here.
-      const resizable = isBlock && (!e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0);
+      // 2026-08-23: a merged box (mergeCount > 1) stands in for several real
+      // occurrences at once -- dragging/resizing it would only ever move the ONE
+      // representative id underneath, silently leaving the others behind and
+      // reintroducing the very gap this feature just closed. Not resizable/
+      // draggable while merged; every occurrence is still fully reachable and
+      // editable individually via the merge sub-list (renderTlMergeList).
+      const resizable = !p.mergeCount && isBlock && (!e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0);
       const resizeHandles = resizable
         ? `<div class="tl-resize-handle tl-resize-top" data-resize="top" aria-hidden="true"></div><div class="tl-resize-handle tl-resize-bottom" data-resize="bottom" aria-hidden="true"></div>`
         : "";
@@ -28400,8 +28480,16 @@
       // a sub-category's fill (e.g. Fitness green) still needs to read as its parent
       // (Personal) at a glance, so this carries the parent's own colour, never the sub's.
       const lifeDot = `<span class="tl-life-dot" style="background:${catDotColor(e)}" title="${esc(trackLabel(e.track))}" aria-hidden="true"></span>`;
-      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${e.generated ? "" : ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"`}>
-        <span class="tl-title">${tick}${ovrDot}${lifeDot}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}${ocNoteIc}</span>
+      // 2026-08-23: same reasoning as the resizable guard above -- a merged box's
+      // own data-move-id would only ever carry the ONE representative id, so
+      // press-and-hold-reschedule and right-click-edit (both keyed off this
+      // attribute) are skipped while merged rather than silently acting on just
+      // the first occurrence. A small ×N badge marks the box as standing in for
+      // several -- tapping it (like tapping anywhere on the box) opens the
+      // detail sheet, which shows the merge sub-list (renderTlMergeList).
+      const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} back-to-back occurrences">×${p.mergeCount}</span>` : "";
+      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
+        <span class="tl-title">${tick}${ovrDot}${lifeDot}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
       </div>`;
@@ -29354,6 +29442,7 @@
     // for "this is a routine occurrence". A plain event/task/recurring-event/fitness
     // session keeps the existing bottom sheet untouched.
     document.getElementById("tlDetailSheet").classList.toggle("tl-routine-panel", !!e.rtTaskId);
+    renderTlMergeList(id);
     renderTlDetailHeadActions(e);
     renderTlDetailBody(e);
     positionTlDetail(anchorEl);
@@ -29434,8 +29523,35 @@
     const ov = document.getElementById("tlDetailOverlay");
     if (ov.hidden || !ov.dataset.itemId) return;
     const e = TL_ITEMS_BY_ID[ov.dataset.itemId];
-    if (e) { renderTlDetailHeadActions(e); renderTlDetailBody(e); } else closeTlDetail();
+    if (e) { renderTlMergeList(ov.dataset.itemId); renderTlDetailHeadActions(e); renderTlDetailBody(e); } else closeTlDetail();
   }
+  // 2026-08-23 ("merge truly back-to-back same-named blocks"): shows the sub-list
+  // of every real occurrence a merged Day-timeline box folded together (see
+  // renderTimeline()'s merge step, TL_MERGE_GROUPS) -- hidden/empty whenever the
+  // currently open item isn't part of a run. Tapping another time in the list just
+  // re-opens the sheet on THAT occurrence's own id via the normal openTlDetail()
+  // call, so its Edit/Delete (renderTlDetailHeadActions/renderTlDetailBody, both
+  // untouched by this feature) work exactly as they already do for a single item.
+  function renderTlMergeList(id) {
+    const host = document.getElementById("tlDetailMergeList");
+    const run = TL_MERGE_GROUPS[id];
+    if (!run || run.length < 2) { host.hidden = true; host.innerHTML = ""; return; }
+    host.hidden = false;
+    host.innerHTML = `<div class="tl-merge-label">${run.length} back-to-back</div>
+      <div class="tl-merge-rows">${run.map(m => `<button type="button" class="tl-merge-row${m.id === id ? " on" : ""}" data-tl-merge-open="${esc(m.id)}">${fmtTime(m.start)} – ${fmtTime(m.end)}</button>`).join("")}</div>`;
+  }
+  document.getElementById("tlDetailMergeList").addEventListener("click", e => {
+    const b = e.target.closest("[data-tl-merge-open]");
+    if (!b) return;
+    // same fix, same reason as the star-rating handler's own comment just above:
+    // openTlDetail() -> renderTlMergeList() replaces this list's innerHTML
+    // synchronously, mid-click, detaching `b` before the event finishes bubbling
+    // to #tlDetailOverlay's own "click outside .tl-detail-sheet closes it"
+    // listener -- without this, switching to another occurrence closed the whole
+    // sheet instead of just showing it.
+    e.stopPropagation();
+    openTlDetail(b.dataset.tlMergeOpen, null);
+  });
 
   /* ============================================================
      OUTCOME PICKER (2026-08-06, Linh's outcomes spec): tap a block's status
