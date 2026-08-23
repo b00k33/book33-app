@@ -28831,10 +28831,87 @@
     if (cs === null || ce === null) return [];
     return clinicApptItems(all, cs, ce, cbd);
   }
+  // 2026-08-23 ("merge truly back-to-back same-named blocks"), loosened 2026-08-24
+  // ("same-named events on one day aren't all merging"): collapses a RUN of same-
+  // title/track/category (+ matching routine/recurrence anchor, if either carries
+  // one) items that sit within MERGE_GAP_TOLERANCE of each other into ONE entry
+  // spanning the run's earliest start to its latest end, rather than drawing a
+  // separate box per real logged fragment. The original rule required one's painted
+  // end to land EXACTLY on the next one's start -- real logged data never lines up
+  // that precisely (a routine logged 11:30pm-11:59pm butting against the next logged
+  // 12am-1am misses by 1 minute and fails to merge; two accidental double-taps of the
+  // same "log it" action produce two IDENTICAL time spans, which also fails the old
+  // "cs===prev.ce" test since neither touches the other's end). Confirmed live
+  // against the real book33-app data (2026-08-24): a single date carried up to 11
+  // separate "Sleep" events, several exact-duplicate time spans and one 1-minute
+  // short end -- not genuinely distinct sessions (a real second nap/sleep session
+  // sits hours away, far past the tolerance, and still renders as its own block).
+  // Every individual occurrence inside a run stays reachable at its own real time --
+  // see TL_MERGE_GROUPS above and renderTlMergeList (near openTlDetail) -- nothing
+  // here touches the underlying data, this is a display grouping only.
+  // 2026-08-24 pt.2 ("multi-day Sleep blocks don't merge"): pulled out of what was
+  // renderTimeline()'s own inline block so mdColumnHtml() (the 3/5/7-day per-column
+  // renderer, which builds its own `placed` array completely independently) can
+  // share the exact same rule -- that independent second copy is exactly how this
+  // gap happened: the multi-day view was built well after the original merge fix and
+  // never got it, so the SAME four real "Sleep" entries rendered correctly merged on
+  // the single-day timeline but as four separate stacked blocks in 3-day view.
+  // Works on a plain {e, cs, ce} shape -- trueEnd/isBlock are read/carried through
+  // when present (renderTimeline() sets them) but are optional (mdColumnHtml()
+  // doesn't use either, since multi-day cards have no line-vs-block distinction).
+  const MERGE_GAP_TOLERANCE = 60; // minutes: how far apart two same-title/track/
+  // category occurrences can sit and still read as "the same routine, done again"
+  // rather than a genuinely separate occurrence. Generous enough to absorb messy
+  // logged boundaries (the live data's worst case was 1 minute) while still miles
+  // short of the hours that separate a real distinct session later the same day.
+  function mergeAdjacentTlItems(placed) {
+    const tlMergeAnchor = e => e.rtTaskId || e.recurId || null;
+    placed = placed.slice().sort((a, b) => a.cs - b.cs);
+    const tlRuns = [];
+    placed.forEach(p => {
+      const run = tlRuns[tlRuns.length - 1];
+      const prev = run && run[run.length - 1];
+      let chains = false;
+      if (run && !isGhostItem(prev.e) && !isGhostItem(p.e)
+        && p.e.title === prev.e.title && p.e.track === prev.e.track
+        && (p.e.category || "") === (prev.e.category || "")) {
+        const prevAnchor = tlMergeAnchor(prev.e), pAnchor = tlMergeAnchor(p.e);
+        const anchorOk = (!prevAnchor && !pAnchor) || prevAnchor === pAnchor;
+        if (anchorOk) {
+          const runMaxCe = Math.max(...run.map(x => x.ce));
+          chains = (p.cs - runMaxCe) <= MERGE_GAP_TOLERANCE;
+        }
+      }
+      if (chains) run.push(p); else tlRuns.push([p]);
+    });
+    const out = [];
+    tlRuns.forEach(run => {
+      if (run.length === 1) { out.push(run[0]); return; }
+      const first = run[0];
+      let last = run[0];
+      run.forEach(p => { if (p.ce > last.ce) last = p; }); // the run's real max end, NOT
+      // run[run.length-1] -- a cs-sorted run can still contain a duplicate/nested item
+      // whose own ce isn't the largest (an out-of-order overlap), so the plain last
+      // array entry would understate the badge's true end time.
+      const lastEnd = last.trueEnd != null ? last.trueEnd : last.ce;
+      const members = run.map(p => ({ id: p.e.id, start: p.e.start, end: p.e.end || minToTime(p.trueEnd != null ? p.trueEnd : p.ce) }));
+      run.forEach(p => {
+        if (!isGhostItem(p.e) || !TL_ITEMS_BY_ID[p.e.id]) TL_ITEMS_BY_ID[p.e.id] = p.e;
+        TL_MERGE_GROUPS[p.e.id] = members;
+      });
+      out.push({
+        e: first.e, cs: first.cs, ce: last.ce, trueEnd: lastEnd,
+        isBlock: (last.ce - first.cs >= 30) || run.some(p => p.isBlock),
+        mergeCount: run.length,
+      });
+    });
+    return out;
+  }
   function renderTimeline(items) {
     const layer = document.getElementById("eventsLayer");
     const H = HOUR_H();
-    const outside = [], placed = [];
+    const outside = [];
+    let placed = [];   // let, not const -- mergeAdjacentTlItems() below reassigns it to the merged array
     TL_ITEMS_BY_ID = {};
     TL_MERGE_GROUPS = {};
     // sidebar "Parts of life" checkboxes (desktop 1-day only — tracksOff is
@@ -28888,76 +28965,10 @@
       placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps });
     });
 
-    // 2026-08-23 ("merge truly back-to-back same-named blocks"), loosened 2026-08-24
-    // ("same-named events on one day aren't all merging"): before the top/h/-3/
-    // clusterOverlaps geometry below ever runs, collapse a RUN of `placed` entries
-    // that are genuinely the same repeated thing into ONE entry spanning the run's
-    // earliest start to its latest end. The original rule required one's painted end
-    // (ce) to land EXACTLY on the next one's start (cs) -- real logged data never
-    // lines up that precisely (a routine logged 11:30pm-11:59pm butting against the
-    // next logged 12am-1am misses by 1 minute and fails to merge; two accidental
-    // double-taps of the same "log it" action produce two IDENTICAL time spans,
-    // which also fails the old "cs===prev.ce" test since neither touches the
-    // other's end). Confirmed live against the real book33-app data (2026-08-24):
-    // a single date carried up to 11 separate "Sleep" events, several exact-duplicate
-    // time spans and one 1-minute short end, which is exactly this failure mode --
-    // not genuinely distinct sessions (a real second nap/sleep session sits hours
-    // away, far past MERGE_GAP_TOLERANCE, and still renders as its own block below).
-    // Same key as before (title + track) plus category (her "title + category" ask --
-    // this file's "category" is the finer sub-tag alongside the coarser track/"part
-    // of life", so both are matched) plus, when either item carries a routine/
-    // recurrence anchor (rtTaskId/recurId), that anchor must match too -- two
-    // DIFFERENT routines/recurring series that just happen to share a title must
-    // never fold into one badge. The gap test compares against the RUN's running
-    // max end (not just the immediately-previous item) so out-of-order duplicates
-    // and a short item nested inside a longer one still merge correctly. Every
-    // individual occurrence inside a run stays reachable at its own real time --
-    // see TL_MERGE_GROUPS above and renderTlMergeList (near openTlDetail) -- nothing
-    // here touches the underlying data, this is a display grouping only.
-    const MERGE_GAP_TOLERANCE = 60; // minutes: how far apart two same-title/track/
-    // category occurrences can sit and still read as "the same routine, done again"
-    // rather than a genuinely separate occurrence. Generous enough to absorb messy
-    // logged boundaries (the live data's worst case was 1 minute) while still miles
-    // short of the hours that separate a real distinct session later the same day.
-    const tlMergeAnchor = e => e.rtTaskId || e.recurId || null;
-    placed.sort((a, b) => a.cs - b.cs);
-    const tlRuns = [];
-    placed.forEach(p => {
-      const run = tlRuns[tlRuns.length - 1];
-      const prev = run && run[run.length - 1];
-      let chains = false;
-      if (run && !isGhostItem(prev.e) && !isGhostItem(p.e)
-        && p.e.title === prev.e.title && p.e.track === prev.e.track
-        && (p.e.category || "") === (prev.e.category || "")) {
-        const prevAnchor = tlMergeAnchor(prev.e), pAnchor = tlMergeAnchor(p.e);
-        const anchorOk = (!prevAnchor && !pAnchor) || prevAnchor === pAnchor;
-        if (anchorOk) {
-          const runMaxCe = Math.max(...run.map(x => x.ce));
-          chains = (p.cs - runMaxCe) <= MERGE_GAP_TOLERANCE;
-        }
-      }
-      if (chains) run.push(p); else tlRuns.push([p]);
-    });
-    placed.length = 0;
-    tlRuns.forEach(run => {
-      if (run.length === 1) { placed.push(run[0]); return; }
-      const first = run[0];
-      let last = run[0];
-      run.forEach(p => { if (p.ce > last.ce) last = p; }); // the run's real max end, NOT
-      // run[run.length-1] -- a cs-sorted run can still contain a duplicate/nested item
-      // whose own ce isn't the largest (an out-of-order overlap), so the plain last
-      // array entry would understate the badge's true end time.
-      const members = run.map(p => ({ id: p.e.id, start: p.e.start, end: p.e.end || minToTime(p.trueEnd) }));
-      run.forEach(p => {
-        if (!isGhostItem(p.e) || !TL_ITEMS_BY_ID[p.e.id]) TL_ITEMS_BY_ID[p.e.id] = p.e;
-        TL_MERGE_GROUPS[p.e.id] = members;
-      });
-      placed.push({
-        e: first.e, cs: first.cs, ce: last.ce, trueEnd: last.trueEnd,
-        isBlock: (last.ce - first.cs >= 30) || run.some(p => p.isBlock),
-        mergeCount: run.length,
-      });
-    });
+    // 2026-08-24: this file's own single copy of the merge rule is now
+    // mergeAdjacentTlItems() (just above renderTimeline() itself), shared with
+    // mdColumnHtml() -- see that function's definition for the full reasoning.
+    placed = mergeAdjacentTlItems(placed);
 
     /* overlapping items share the hour side-by-side, so a crowded slot shows
        every task instead of stacking them under each other. top/bottom both go through
@@ -32879,10 +32890,17 @@
     const colStyle = cols > 1
       ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
       : "";
+    // 2026-08-24 ("multi-day Sleep blocks don't merge"): mirrors renderTimeline()'s
+    // own .tl-merge-badge/combined-range treatment for a mergeAdjacentTlItems() run
+    // (mdColumnHtml() below now shares that same merge step) -- a card standing in
+    // for several real occurrences says so, same as the single-day timeline already
+    // does, rather than silently showing just the first occurrence's own time.
+    const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
+    const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
     return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
       style="top:${top}px;height:${h}px;${colStyle}">
-      <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span></span>
-      <span class="md-item-time">${fmtTime(e.start)}</span>
+      <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
+      <span class="md-item-time">${timeTxt}</span>
     </div>`;
   }
   // compact-mode bar (5/7 days): pure colour, no text at all (§1) — tap wires to the
@@ -32895,11 +32913,14 @@
     const colStyle = cols > 1
       ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
       : "";
+    // 2026-08-24: no visible text on a bar either way, but a merged run's aria-label
+    // still says so, same reasoning as mdItemHtml()'s own badge just above.
+    const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
     return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
-      aria-label="${esc(e.title)} — ${fmtTime(e.start)}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
+      aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
   function mdColumnHtml(d, items, compact) {
-    const placed = [];
+    let placed = [];
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -32907,6 +32928,13 @@
       if (eEnd === null || s >= END_MIN || eEnd <= START_MIN) return;
       placed.push({ e, cs: Math.max(s, START_MIN), ce: Math.min(eEnd, END_MIN) });
     });
+    // 2026-08-24 ("multi-day Sleep blocks don't merge"): this column used to build its
+    // own `placed` array with no merge step at all -- the single-day timeline's own
+    // 2026-08-23 merge fix never reached here, so the SAME real "Sleep" fragments that
+    // correctly render as one "Sleep×4" badge in 1-day view drew as four separate
+    // stacked blocks the instant she switched to 3/5/7-day view. Same shared rule now,
+    // before top/h/clusterOverlaps run, same as renderTimeline().
+    placed = mergeAdjacentTlItems(placed);
     placed.forEach(p => {
       p.top = topForMin(p.cs);
       p.h = Math.max(topForMin(p.ce) - p.top - 3, compact ? 8 : 26);
