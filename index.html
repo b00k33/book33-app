@@ -47205,7 +47205,22 @@
     const todos = TODOS.filter(t => !t.done && modeOf(t) === modeId).map(t => ({ kind: "todo", id: t.id }));
     const routines = generatedFor(TODAY)
       .filter(o => o.rtTaskId && !o.ghostSkip && !o.ghostMoved && modeOf(o) === modeId && !isDone(o.id))
-      .map(o => ({ kind: "routine", id: o.id }));
+      // 2026-08-23 (Modes queue duties): a routine with its own steps expands into
+      // one queue entry per not-yet-done step instead of one lump "whole routine"
+      // entry -- cbdDuties()/cbdDutyId()/cbdRelevantOnDay() are the CBD Work
+      // board's own generic subtask system (nothing Work-specific despite the
+      // name), reused verbatim rather than a second "does this routine have
+      // steps" check. A routine with no subtasks (or whose template vanished)
+      // keeps behaving exactly as it did before -- one {kind:"routine"} entry.
+      .flatMap(o => {
+        const routine = ROUTINE_TASKS.find(r => r.id === o.rtTaskId);
+        const duties = routine ? cbdDuties(routine) : [];
+        if (!duties.length) return [{ kind: "routine", id: o.id }];
+        return duties
+          .filter(d => cbdRelevantOnDay(d, dowIndex(TODAY)))
+          .map(d => ({ kind: "duty", id: cbdDutyId(routine, d, keyOf(TODAY)), dutyText: d.text }))
+          .filter(d => !isDone(d.id));
+      });
     return [...todos, ...routines];
   }
   // one-at-a-time queue body -- same visual/interaction pattern as
@@ -47229,6 +47244,13 @@
       const t = TODOS.find(x => x.id === item.id);
       if (!t || t.done) { mtQueuePos++; return mtQueueBodyHtml(); }   // safety: vanished/finished some other way
       title = t.title;
+    } else if (item.kind === "duty") {
+      // text captured at queue-build time, not re-resolved live -- the queue only
+      // rebuilds when the active Mode changes (mtQueueForId !== modeId, see
+      // renderModeTakeover()), same as todo/routine above, and nothing in this
+      // queue edits a duty's text, only its done-state.
+      if (isDone(item.id)) { mtQueuePos++; return mtQueueBodyHtml(); }   // safety: ticked some other way (e.g. CBD Work board) since the queue was built
+      title = item.dutyText;
     } else {
       const o = generatedFor(TODAY).find(x => x.id === item.id);
       if (!o || isDone(item.id)) { mtQueuePos++; return mtQueueBodyHtml(); }
