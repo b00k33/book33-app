@@ -14614,6 +14614,19 @@
     .rail-chip .n { display: flex; align-items: center; justify-content: center; min-height: 30px; font-size: 16px; font-weight: 800; color: var(--gold-bright); font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
     .rail-chip .n.word { font-size: 12px; line-height: var(--lh-tight); white-space: normal; }
     .rail-chip .l { display: block; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-top: 4px; }
+    /* 2026-08-23 (Numerology card rework): icon sits above the value, per the approved
+       mockup -- .pl-mark/.moon are fixed-size drawn discs (12px, their own geometry, see
+       that CSS's own comment), sized up here since they're now a standalone tile icon
+       rather than sitting inline beside a word; .glyph/.rail-chip-ic-em (zodiac sign /
+       animal emoji) scale via font-size like everywhere else they're used. */
+    .rail-chip-ic { display: flex; align-items: center; justify-content: center; min-height: 20px; margin-bottom: 4px; }
+    .rail-chip-ic .pl-mark, .rail-chip-ic .moon { width: 16px; height: 16px; }
+    .rail-chip-ic .glyph, .rail-chip-ic-em { font-size: 18px; line-height: 1; }
+    /* same overflow fix as .dg-chip:nth-child(even) .num-hover-pop (renderDeskGlance's
+       own 2-up-per-row popover anchor flip) -- .rail-chips is the same repeat(2,1fr)
+       shape, so the right-column tiles need the same right-anchored popover to clear
+       the sidebar's edge instead of the default left-anchor overflowing it. */
+    .rail-chip:nth-child(even) .num-hover-pop { left: auto; right: 0; }
     .rail-cycle { display: flex; align-items: center; gap: 12px; }
     .rail-cycle-ring {
       width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--flow-med);
@@ -15547,6 +15560,18 @@
   .wr-num-value { font-size: 30px; font-weight: 800; color: var(--gold-bright); line-height: 1; }
   .wr-num-sub { font-size: 11px; color: var(--ink-soft); margin-top: 4px; line-height: var(--lh-snug); }
   .wr-num-sub b { display: block; color: var(--ink); font-weight: 700; }
+  /* 2026-08-23 (Numerology card rework, mobile): compact icon+label+value row per
+     reading -- this card's own existing visual language (a single wr-card block),
+     not the desktop rail's multi-tile grid. Same .wr-pat-row rhythm (icon slot,
+     flexible label, fixed-right value) already used elsewhere in this rail. */
+  .wr-num-list { margin-top: 10px; }
+  .wr-num-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--note-line); position: relative; }
+  .wr-num-row:last-child { border-bottom: none; }
+  .wr-num-row-ic { flex: none; width: 18px; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; }
+  .wr-num-row-ic .pl-mark, .wr-num-row-ic .moon { width: 12px; height: 12px; }
+  .wr-num-row-lbl { flex: 1; min-width: 0; font-size: 11px; color: var(--ink-faint); }
+  .wr-num-row-val { flex: none; font-size: 12px; font-weight: 700; color: var(--ink); text-align: right; }
+  .wr-num-row-val.word { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Cycle */
   .wr-cyc-day { font-size: 20px; font-weight: 800; }
   .wr-cyc-sub { font-size: 11px; color: var(--ink-soft); margin-top: 4px; }
@@ -32748,33 +32773,10 @@
   function dcxChipsHtml() {
     const d = state.anchor;
     const chips = [];
-    const mIdx = moonIndex(d);
-    // 2026-08-17 (Linh's mockup, "day-planet chip BEFORE the moon"): was pushed 3rd,
-    // after moon+sign, as a bare untappable glyph. Now first, with a drawn emblem
-    // (planetMarkHtml, same treatment as the moon) and the same day-ruler popover the
-    // desktop chip below gets — one pair of builders, both strips, so they can't drift.
-    const pl = planetOf(d);
-    // 2026-08-18 (Day-view top redesign, chip tint): each chip's own colour, at a subtle
-    // 15% wash (see the .dcx-chip[data-chip]/.ddh-chip[data-chip] CSS rule) rather than
-    // flat --raised — data-chip identifies which, --chip-tint carries the actual token so
-    // one shared CSS rule paints all four instead of four one-off background rules. Planet
-    // varies day to day (its own --planet-* accent, same lookup planetMarkHtml itself
-    // uses); moon/sign/cycle are fixed tokens (moon's own pale --planet-moon, the app's
-    // --cosmic-gold, and --flow-med — the same "the cycle's colour" default the cycle
-    // dot/bar already fall back to elsewhere). Birthday chip is deliberately untouched —
-    // only these four were asked for.
-    chips.push({ ic: planetMarkHtml(pl.planet, "dcx-chip-ic"), val: pl.planet, pop: dayRulerPopoverHtml(pl), chip: "planet", tint: `--planet-${PLANET_SLUG[pl.planet] || "sun"}` });
-    // 2026-08-16 (item 2): same popovers as the desktop #ddhChips copy — one pair of
-    // builders, both strips, so the two can't drift apart.
-    chips.push({ ic: moonHtml(mIdx), val: MOON_NAME[mIdx], pop: moonChipPopHtml(d), chip: "moon", tint: "--planet-moon" });
-    // 2026-08-16 (mobile Day tightening, item 1): SUN SIGN joins the strip. It used to
-    // print only in the header's own #numGroupStrip (#dayAstroBits' bare ♌ glyph) —
-    // that whole strip is hidden on mobile now (see its CSS gate), so the strip carries
-    // the reading instead, and as a NAME rather than a tap-only glyph. Same astroFor(d)
-    // call renderDay()'s header and #ddhChips already make; no new calculation, and the
-    // strip now matches the desktop day header chip-for-chip.
-    const a = astroFor(d);
-    chips.push({ ic: glyphHtml(a.sign.gl, "dcx-chip-ic"), val: a.sign.name, pop: signChipPopHtml(a.sign), chip: "sign", tint: "--cosmic-gold" });
+    // 2026-08-23 (Numerology card rework): planet/moon/sign chips moved into the
+    // "Today's widgets" Numerology card (wrCardHtml("focusTile")) -- same
+    // dayNumerologyChips(d)/astroFor(d)/planetOf(d) reads, just displayed there
+    // now, alongside PM/PY. Only cycle and birthday stay in this strip.
     const q = cycleQuickInfo(TODAY);
     // 2026-08-16 (item 1): two changes, both so this ONE chip can replace the retired
     // 5am grid marker (renderSleepBand) outright.
@@ -37679,13 +37681,29 @@
   // numerology display in the app already uses -- this just packages them as one
   // ordered, labelled set. `word: true` marks the two astrology entries whose value
   // is a name (Leo, Horse Year) rather than a number, for tiles that display either.
+  // 2026-08-23 (Numerology card rework): the day-ruler/moon/sun-sign pills that
+  // used to live in the top strip (#ddhChips desktop, #dayCtxChips mobile) read
+  // here now instead -- same planetOf()/moonIndex()/astroFor() calls those chips
+  // used, no new calculation. Two more additions: the existing "Animal" entry is
+  // relabelled "Zodiac Year" (same a.cy data, unchanged), and a genuinely new
+  // reading, Zodiac Month (a.cm -- the 12-animal SOLAR MONTH cycle, distinct from
+  // a.cy the zodiac YEAR -- already computed by astroFor() but never surfaced as
+  // its own tile anywhere until now). `ic` is the tile's icon (its own drawn/glyph
+  // builder, same one the retired chips used); `pop` is that reading's existing
+  // popover, reused verbatim -- both undefined for UD/PM/PY, which have no icon
+  // or popover and render as the plain bare-number tile they always have.
   function dayNumerologyChips(d) {
     const pm = personalMonth(d), py = personalYear(d), a = astroFor(d);
+    const pl = planetOf(d), mIdx = moonIndex(d);
+    const yi = ANIMAL_INFO[a.cy.animal], mi = ANIMAL_INFO[a.cm.animal];
     return [
       { code: "ud", label: "UD", value: universalDay(d).value, word: false },
       { code: "pm", label: "PM", value: pm != null ? masterLabel(pm) : "—", word: false },
-      { code: "sign", label: "Sign", value: a.sign.name, word: true },
-      { code: "animal", label: "Animal", value: `${a.cy.animal} Year`, word: true },
+      { code: "ruler", label: "Ruler", value: pl.planet, word: true, ic: planetMarkHtml(pl.planet), pop: dayRulerPopoverHtml(pl) },
+      { code: "moon", label: "Moon", value: MOON_NAME[mIdx], word: true, ic: moonHtml(mIdx), pop: moonChipPopHtml(d) },
+      { code: "sign", label: "Sign", value: a.sign.name, word: true, ic: glyphHtml(a.sign.gl), pop: signChipPopHtml(a.sign) },
+      { code: "zyear", label: "Zodiac Year", value: a.cy.animal, word: true, ic: `<span class="rail-chip-ic-em" aria-hidden="true">${yi.em}</span>`, pop: zodiacYearPopoverHtml(d) },
+      { code: "zmonth", label: "Zodiac Month", value: a.cm.animal, word: true, ic: `<span class="rail-chip-ic-em" aria-hidden="true">${mi.em}</span>`, pop: solarMonthPopoverHtml(a.cm.animal) },
       { code: "py", label: "PY", value: py != null ? masterLabel(py) : "—", word: false },
     ];
   }
@@ -44179,26 +44197,11 @@
     // #ddtDate (renderDeskDayTopbar) is the single date now. Chips only here.
     const chipsEl = document.getElementById("ddhChips");
     if (!chipsEl) return;
-    const mIdx = moonIndex(d);
-    const a = astroFor(d);
-    const pl = planetOf(d);
-    // 2026-08-16 (item 2): moon + sun-sign carry the same hover/tap popover the cosmic
-    // header buttons use. .num-hover-trigger supplies position:relative and the
-    // hover/focus/.pop-open reveal; the tap half is the existing global delegate, so no
-    // new handler. Popovers are chipPopoverHtml (all <span>) because .ddh-chip is a span.
-    // 2026-08-17 (Linh's mockup, "day-planet chip BEFORE the moon"): planetMarkHtml is
-    // the drawn emblem (same treatment/size as the drawn moon, .pl-mark beside .moon in
-    // CSS); dayRulerPopoverHtml is the same span-safe builder dcxChipsHtml's mobile copy
-    // now uses, so the two strips read the ruling planet from one shared source.
-    // 2026-08-18 (Day-view top redesign, chip tint): same data-chip/--chip-tint pairing
-    // dcxChipsHtml()'s mobile copy uses, and the same shared CSS rule paints both — see
-    // that function's own comment for the token choices (one pair of builders, one tint
-    // rule, so they can't drift).
-    const chips = [
-      `<span class="ddh-chip num-hover-trigger" data-chip="planet" style="--chip-tint:var(--planet-${PLANET_SLUG[pl.planet] || "sun"})">${planetMarkHtml(pl.planet)}<span>${esc(pl.planet)}</span>${dayRulerPopoverHtml(pl, "num-hover-pop--right")}</span>`,
-      `<span class="ddh-chip num-hover-trigger" data-chip="moon" style="--chip-tint:var(--planet-moon)">${moonHtml(mIdx)}<span>${esc(MOON_NAME[mIdx])}</span>${moonChipPopHtml(d, "num-hover-pop--right")}</span>`,
-      `<span class="ddh-chip num-hover-trigger" data-chip="sign" style="--chip-tint:var(--cosmic-gold)">${glyphHtml(a.sign.gl)}<span class="ddh-chip-gold">${esc(a.sign.name)}</span>${signChipPopHtml(a.sign, "num-hover-pop--right")}</span>`,
-    ];
+    // 2026-08-23 (Numerology card rework): the planet/moon/sign pills that used to
+    // live here moved into the Numerology card below the calendar (dayNumerologyChips()/
+    // renderDeskRail()) -- same data calls, just read from there now, not rebuilt here.
+    // Only the cycle/CD chip stays in this strip.
+    const chips = [];
     // cycle is a live fact about today, not a property of whichever day she's
     // browsing — same TODAY-not-state.anchor rule #numGrpCd/dcxChipsHtml already
     // follow (see their own comments), so this reads TODAY too.
@@ -44337,10 +44340,19 @@
     if (id === "focusTile") {
       const ud = universalDay(d);
       const f = focusFor(ud.value);
+      // 2026-08-23 (Numerology card rework): the same 5 readings the desktop rail
+      // (renderDeskRail()/dayNumerologyChips()) now shows, plus PM/PY which this
+      // card never carried before -- one shared data function, no recalculation,
+      // just this card's own compact icon+label+value row instead of the desktop
+      // rail's grid tile (this is a single wr-card block, not a multi-tile grid).
+      // UD itself is skipped here -- it's already the card's own big headline
+      // number above, showing it again as a row would just duplicate it.
+      const rows = dayNumerologyChips(d).filter(c => c.code !== "ud");
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Numerology</span>
         <div class="wr-num-value">${esc(String(ud.value))}</div>
         <div class="wr-num-sub">Universal day${f ? `<b>${esc(f.title)}</b>` : ""}</div>
+        <div class="wr-num-list">${rows.map(c => `<div class="wr-num-row${c.pop ? " num-hover-trigger" : ""}"${c.pop ? ' tabindex="0"' : ""}>${c.ic ? `<span class="wr-num-row-ic">${c.ic}</span>` : ""}<span class="wr-num-row-lbl">${esc(c.label)}</span><span class="wr-num-row-val${c.word ? " word" : ""}">${esc(c.value)}</span>${c.pop || ""}</div>`).join("")}</div>
       </div>`;
     }
     if (id === "railCycle") {
@@ -44907,8 +44919,16 @@
     const chips = document.getElementById("railNumChips");
     if (!chips) return;
     const d = state.anchor;
+    // 2026-08-23 (Numerology card rework): .rail-chip is a <div> now, not a <span> --
+    // zodiacYearPopoverHtml/solarMonthPopoverHtml build <div>-rooted popovers (unlike
+    // dayRulerPopoverHtml/moonChipPopHtml/signChipPopHtml's span-safe versions), and a
+    // div inside a span is invalid content model (the exact "orphaned popover" trap
+    // chipPopoverHtml's own comment already documents for the top-strip chips) -- a div
+    // host takes both popover shapes without that risk. Icon sits above the value,
+    // value above the label, per the approved mockup; tiles with no icon (UD/PM/PY)
+    // render exactly as before.
     chips.innerHTML = dayNumerologyChips(d)
-      .map(c => `<span class="rail-chip"><b class="n${c.word ? " word" : ""}">${esc(c.value)}</b><span class="l">${esc(c.label)}</span></span>`)
+      .map(c => `<div class="rail-chip${c.pop ? " num-hover-trigger" : ""}"${c.pop ? ' tabindex="0"' : ""}>${c.ic ? `<div class="rail-chip-ic">${c.ic}</div>` : ""}<b class="n${c.word ? " word" : ""}">${esc(c.value)}</b><span class="l">${esc(c.label)}</span>${c.pop || ""}</div>`)
       .join("");
     // Cycle — mini ring (42px, never giant), phase emoji inside, ring colour from the
     // same dotVar every other CD pill uses; whole card hides when nothing is logged
