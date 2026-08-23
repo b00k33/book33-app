@@ -15155,46 +15155,51 @@
 
   /* ---- 1. Chapters rail — 52px, fixed, EVERY desktop page (not gated on
      [data-desk-day1]: this is global nav chrome, the ≥1024px replacement for
-     #categoryTabs' chapter-tab row). 2 open states, ONE behaviour: hover-peek
-     and pinned both widen the rail to 238px AND push the page over.
+     #categoryTabs' chapter-tab row).
 
-     2026-08-16 — SUPERSEDES the old "hover-peek is an absolute overlay" design.
-     That version deliberately left the rail's own fixed box (and body's reserved
-     margin-left) at 52px while only .dnr-body grew, so peeking never reflowed
-     anything. Measured at 1440px: the peeked panel spanned x=0–238 while the
-     CALENDAR sidebar sat at x=53–267, i.e. it covered 185px of it and
-     elementFromPoint(150, 400) returned a .dnr-row instead of the calendar.
-     That is exactly the "it sits on top of the calendar instead of pushing it
-     over" Linh reported. Her call: "make hover act the same as pinned — always
-     reflow, no preview-without-committing. open = pushes, every time."
-     So .peek now takes the same declarations as [data-state="pinned"], and the
-     transient body.nav-rail-peek widens the reserved margin the same way
-     [data-nav-rail="pinned"] does. Nothing overlays anything any more.
+     2026-08-16 — the hover-peek/pinned 238px-expansion design this comment used
+     to describe (2 open states, one behaviour, both widening the rail and
+     pushing the page) is GONE as of 2026-08-24 ("nav becomes a launcher") — see
+     that date's comment on the JS renderDeskNavRail() block for the full story.
+     Kept as history since the underlying push-not-overlay measurement (peeked
+     panel covering the calendar sidebar, elementFromPoint returning a .dnr-row
+     instead of the calendar underneath) is still why THIS rail — as opposed to
+     an overlay — was the right shape to keep permanent at 52px rather than
+     revert to something that floats over content.
      Renders NAV_ITEMS — the SAME array the mobile drawer/tabs already use, one
-     source, new presentation. Persisted as book33-prefs.navRail. ---- */
+     source, new presentation. ---- */
   #deskNavRail { display: none; }
   @media (min-width: 1024px) {
     body { margin-left: 52px; }
-    /* the persisted pinned state and the transient hover state reserve the SAME
-       width — one number, so the two can never disagree about how far to push */
-    body[data-nav-rail="pinned"], body.nav-rail-peek { margin-left: 238px; }
     #deskNavRail {
       display: block; position: fixed; top: 0; left: 0; height: 100vh; width: 52px;
       z-index: 70; box-sizing: border-box;
     }
-    #deskNavRail[data-state="pinned"], #deskNavRail.peek { width: 238px; }
     .dnr-body {
       position: absolute; top: 0; left: 0; width: 52px; height: 100%; overflow: hidden;
       background: var(--paper); border-right: 1px solid var(--note-line);
       display: flex; flex-direction: column; box-sizing: border-box;
     }
-    /* no width transition on either open state: the page's margin-left can't be
-       animated in step with it (that would reflow the whole grid every frame),
-       and a rail that slides while the content it pushes jumps is worse than
-       both moving together instantly. */
-    #deskNavRail[data-state="pinned"] .dnr-body,
-    #deskNavRail.peek .dnr-body { position: static; width: 100%; transition: none; box-shadow: none; }
+    /* 2026-08-24 (nav becomes a launcher): the rail is a permanent 52px icon strip
+       now — no more hover-peek/pin 238px expansion (that whole mechanism, and
+       book33-prefs.navRail, is retired; see the launcher popover below instead). */
+    .dnr-head { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 6px; border-bottom: 1px solid var(--note-line); }
+    .dnr-hamburger {
+      width: 36px; height: 36px; border-radius: var(--radius-sm); border: none; background: none;
+      color: var(--ink-soft); font-size: 17px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .dnr-hamburger:hover, .dnr-hamburger[aria-expanded="true"] { background: var(--raised); color: var(--margin-rule); }
+    .dnr-date-badge {
+      width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--note-line); background: var(--paper);
+      color: var(--ink); font-size: 12px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .dnr-date-badge:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
     .dnr-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; padding: 8px 0; }
+    /* icon-only strip: rows in the permanent rail itself carry no label, just the
+       icon (+ an overlaid count dot) — the full icon+label list now lives in the
+       launcher popover instead (.dnr-launch-pop below), where there's room. */
+    #dnrScroll .dnr-row, #dnrFoot .dnr-avatar-row { width: 52px; justify-content: center; }
     /* 2026-08-20 (Linh, after two thin/gold passes still read as a thick bar on her
        screen, arrows and all): not worth continuing to fine-tune -- hide it outright,
        same idiom the file already uses for four other scrollable-but-bar-free strips
@@ -15211,7 +15216,12 @@
     .dnr-row.on { color: var(--margin-rule); background: var(--raised); }
     .dnr-row.on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--margin-rule); }
     .dnr-row:hover { background: var(--raised); }
-    .dnr-ic { flex: none; width: 52px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 20px; line-height: 1; }
+    .dnr-ic { flex: none; width: 52px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 20px; line-height: 1; position: relative; }
+    .dnr-ic-badge {
+      position: absolute; top: 2px; right: 6px; min-width: 15px; height: 15px; padding: 0 3px;
+      border-radius: 999px; background: var(--margin-rule); color: var(--accent-on);
+      font-size: 9.5px; font-weight: 800; line-height: 15px; text-align: center; box-sizing: border-box;
+    }
     /* 2026-08-23: marks the reopen-sidebar row's icon (search "reopen-sidebar") as
        "currently collapsed, tap to bring it back" rather than a normal nav
        destination -- every other row's icon has no border, this is the one
@@ -15232,11 +15242,31 @@
     .dnr-foot-meta { flex: 1; min-width: 0; }
     .dnr-foot-name { display: block; font-size: 11px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .dnr-foot-sync { display: block; font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
-    .dnr-pin {
-      flex: none; width: 28px; height: 28px; margin-right: 8px; border-radius: 999px; border: none;
-      background: none; color: var(--ink-faint); cursor: pointer; font-size: 11px;
+    /* 2026-08-24: the launcher popover opened by .dnr-hamburger — icon+label grid
+       of NAV_ITEMS (Google-launcher style), then the Chapters accordion (reusing
+       dnrChaptersHtml()'s existing .dnr-row/.dnr-chapter-* markup unchanged — the
+       base .dnr-row rule above, 238px, is exactly what a popover this wide wants),
+       then the Settings row and account footer. Anchored off #deskNavRail (its
+       nearest positioned ancestor), flush against the rail's right edge. */
+    .dnr-launch-pop {
+      position: absolute; top: 8px; left: 56px; width: 300px; max-height: calc(100vh - 16px);
+      overflow-y: auto; background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+      box-shadow: 0 12px 32px rgba(0,0,0,.22); z-index: 80; padding: 12px 8px;
     }
-    .dnr-pin:hover, .dnr-pin[aria-pressed="true"] { color: var(--gold-bright); background: color-mix(in oklab, var(--gold-bright) 14%, transparent); }
+    .dnr-launch-pop .dnr-row, .dnr-launch-pop .dnr-avatar-row { width: 100%; }
+    .dnr-launch-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .dnr-launch-grouplbl {
+      grid-column: 1 / -1; font-size: 10.5px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 10px 6px 2px;
+    }
+    .dnr-launch-cell {
+      display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px;
+      border: none; background: none; border-radius: var(--radius-sm); color: var(--ink-soft); cursor: pointer; font: inherit;
+    }
+    .dnr-launch-cell:hover { background: var(--raised); }
+    .dnr-launch-cell.on { color: var(--margin-rule); background: var(--raised); }
+    .dnr-launch-ic { position: relative; font-size: 21px; line-height: 1; }
+    .dnr-launch-lbl { font-size: 10.5px; text-align: center; line-height: 1.2; }
     /* 2026-08-20 (nav unification): the Chapters accordion, same .dnr-row/.dnr-ic/
        .dnr-lbl visual language as every pinned row above it -- only the head row's
        trailing caret and the indented sub-rows are new. */
@@ -15282,13 +15312,9 @@
     .ddt-left { flex: 0 0 auto; }
     .ddh-chips { flex: 1 1 auto; }
     .ddt-right { flex: 0 0 auto; }
-    /* 1024 with the chapters rail OPEN is the one combination that genuinely runs out:
-       ~750px of bar for ~870px of content, and the chips were being cut mid-word (no
-       ellipsis — .ddh-chip is white-space:nowrap). Drop them wholesale rather than draw
-       half of one; they're the enrichment, not the navigation, and the same moon / sign
-       / cycle facts are still on the Cycle widget card and the day's own context strip. */
-    body[data-nav-rail="pinned"] .ddh-chips,
-    body.nav-rail-peek .ddh-chips { display: none; }
+    /* 2026-08-24: the "chapters rail OPEN squeezes the chips" case this used to guard
+       against is gone — the rail is a permanent 52px strip now, never 238px, so the
+       chips always have the same ~750px+ to work with at this width. Rule retired. */
   }
   /* the gear popover anchors off its button's parent, which is now this cluster rather
      than the whole bar — the bar's own 16px padding already provides that inset. */
@@ -15364,6 +15390,18 @@
   [data-desk-day] #deskSidebar[data-open="false"] .dsb-group,
   [data-desk-day] #deskSidebar[data-open="false"] #dsbNumSlot,
   [data-desk-day] #deskSidebar[data-open="false"] #dsbBodySlot { display: none; }
+  /* 2026-08-24 (Linh: "weight leaves the left column"): #dsbBodySlot itself is
+     hidden — not just left empty — so its neighbours (#dsbNumSlot above,
+     #dsbSessionSlot below) sit flush with no residual gap. placeDeskGrid() no
+     longer reparents #dayBodyCard in here (see that function's own comment), so
+     it stays at its mobile home marker inside .day-main — which IS visible on
+     desktop (it's the centre column) — so #dayBodyCard needs its own direct
+     display:none too, confirmed live: without it the widget doesn't disappear,
+     it just resurfaces in the wrong place (the day timeline's own column).
+     The widget's data and renderer (renderBodyWidget()/bodyWidgetHTML()/
+     HEALTH.weights) are untouched for reuse elsewhere. Mobile/tablet and
+     #todayBodyCard (Today page) are a separate mount, out of scope, unaffected. */
+  [data-desk-day] #dsbBodySlot, [data-desk-day] #dayBodyCard { display: none; }
   .dsb-group { padding: 12px 0; border-top: 1px solid var(--note-line); }
   .dsb-group:first-child { padding-top: 0; border-top: none; }
   .dsb-group-head { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; }
@@ -17229,11 +17267,20 @@
 
   <!-- 2026-08-15 (desktop DAY view build, task #125): chapters rail — the
        ≥1024px replacement for #categoryTabs' chapter-tab row, GLOBAL chrome
-       (every desktop page, not just Day). Renders from NAV_ITEMS via
-       renderDeskNavRail(); 3 states (collapsed/peek/pinned) via
-       book33-prefs.navRail, wired near that function. -->
-  <div id="deskNavRail" data-state="collapsed">
+       (every desktop page, not just Day) — genuinely so, gated only by this
+       block's own @media (min-width:1024px), unlike .nav-tiers/.astro (see
+       [data-desk-day] — those go stale once you've visited Day and navigated
+       away, since nothing clears that attribute on other pages). Renders from
+       NAV_ITEMS via renderDeskNavRail(). 2026-08-24 ("nav becomes a launcher"):
+       permanent 52px icon strip, no more hover-peek/pin. #dnrLauncherBtn opens
+       the full icon+label grid (renderDnrLauncherPop()); #dnrDateBadge is a
+       live "today" shortcut, independent of which day is being viewed. -->
+  <div id="deskNavRail">
     <div class="dnr-body">
+      <div class="dnr-head">
+        <button type="button" class="dnr-hamburger" id="dnrLauncherBtn" aria-haspopup="true" aria-expanded="false" aria-label="Open navigation">☰</button>
+        <button type="button" class="dnr-date-badge" id="dnrDateBadge"></button>
+      </div>
       <div class="dnr-scroll" id="dnrScroll"></div>
       <div class="dnr-foot" id="dnrFoot"></div>
     </div>
@@ -32692,7 +32739,12 @@
   // accordion -- same free-fill-in via ntMerge, same "just add it to the literal"
   // convention as every key above it. Defaults to [] (all collapsed) per her
   // explicit "must look as calm as it does now on first open".
-  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", navRail: "collapsed", sideOpen: true, dayMax: false, tracksOff: [], dayStart: 6, dayEnd: 22, navOpenChapters: [] };
+  // navRail retired 2026-08-24 ("nav becomes a launcher"): the collapsed/pinned
+  // hover-peek rail is gone, replaced by a permanent icon strip + a hamburger-
+  // opened launcher popover — no more state to persist. Same harmless-orphan
+  // handling as hideNames above: a stale navRail in an already-saved book33-prefs
+  // is simply never read again.
+  const PREFS_DEFAULTS = { calDays: 3, navMode: "drawer", sideOpen: true, dayMax: false, tracksOff: [], dayStart: 6, dayEnd: 22, navOpenChapters: [] };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
   // pattern this file already relies on elsewhere, e.g. openPersonProfile), rather
@@ -44333,14 +44385,13 @@
     const addRowHome = document.getElementById("addRowHome");
     const fastEl = document.getElementById("fastStatus");
     const fastHome = document.getElementById("fastStatusHome");
-    // 2026-08-20: Weight->BMI widget -- on desktop it goes to the sidebar's
-    // #dsbBodySlot (see that slot's markup comment for why NOT #deskColLeft, which
-    // is display:none chrome now), same rNum/dsbNumSlot real-element pattern below;
-    // the else branch returns it to its .day-main home marker like everything else.
+    // 2026-08-24: #dayBodyCard (Weight->BMI) no longer reparents into the desktop
+    // sidebar at all — see the [data-desk-day] #dsbBodySlot CSS rule and the "on"
+    // branch below ("weight leaves the left column"). Still returned to its
+    // .day-main home marker on mobile/tablet by the "off" branch, unchanged.
     const bodyCard = document.getElementById("dayBodyCard");
     const bodyCardHome = document.getElementById("dayBodyCardHome");
-    const dsbBodySlot = document.getElementById("dsbBodySlot");
-    // Modes stage 3: same reparent shape as bodyCard/dsbBodySlot just above.
+    // Modes stage 3: same reparent shape bodyCard used to have, still live for sessionCard.
     const sessionCard = document.getElementById("daySessionCard");
     const sessionCardHome = document.getElementById("daySessionCardHome");
     const dsbSessionSlot = document.getElementById("dsbSessionSlot");
@@ -44422,7 +44473,6 @@
     // broader [data-desk-day] (deskDayActive()) instead, so it shows for 1/3/5/7 alike.
     document.documentElement.toggleAttribute("data-desk-day", on);
     document.documentElement.toggleAttribute("data-desk-day1", deskDay1Active());
-    document.body.dataset.navRail = PREFS.navRail === "pinned" ? "pinned" : "collapsed";
     applyDayMax();
     if (on) {
       if (logo && navTiers && logo.parentElement !== navTiers) navTiers.insertBefore(logo, navTiers.firstElementChild);
@@ -44442,8 +44492,10 @@
       if (prog && prog.parentElement !== colL) colL.appendChild(prog);
       if (addRowEl && addRowEl.parentElement !== colL) colL.appendChild(addRowEl);
       if (fastEl && fastEl.parentElement !== colL) colL.appendChild(fastEl);
-      if (bodyCard && dsbBodySlot && bodyCard.parentElement !== dsbBodySlot) dsbBodySlot.appendChild(bodyCard);
-      else if (bodyCard && !dsbBodySlot && bodyCard.parentElement !== colL) colL.appendChild(bodyCard);
+      // 2026-08-24 ("weight leaves the left column"): #dayBodyCard is deliberately
+      // NOT reparented into dsbBodySlot here any more — it stays at its mobile
+      // home marker (bodyCardHome, in the "off" branch below), invisible on
+      // desktop via [data-desk-day] #dsbBodySlot's own display:none (CSS).
       if (sessionCard && dsbSessionSlot && sessionCard.parentElement !== dsbSessionSlot) dsbSessionSlot.appendChild(sessionCard);
       else if (sessionCard && !dsbSessionSlot && sessionCard.parentElement !== colL) colL.appendChild(sessionCard);
       if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
@@ -44728,14 +44780,15 @@
   /* ============================================================
      CHAPTERS RAIL — 52px, GLOBAL desktop chrome (task #125). Renders NAV_ITEMS,
      the SAME array the mobile drawer/tabs already use (navPanelRowHtml/
-     navTabRowHtml, above) — one source, new presentation. 3 states persisted as
-     book33-prefs.navRail: "collapsed" (default; hover opens it after a 200ms
-     dwell and retracts on mouseleave) or "pinned" (stays open via the 📌 footer
-     control). 2026-08-16: BOTH open states now push the page — hover adds the
-     transient body.nav-rail-peek, pinned sets [data-nav-rail="pinned"], and the
-     CSS gives the two identical width/margin declarations. Hover used to be an
-     overlay that covered the calendar sidebar instead; see the CSS block's own
-     note for the measurement that killed it.
+     navTabRowHtml, above) — one source, new presentation.
+     2026-08-24 ("nav becomes a launcher"): the old 3-state hover-peek/pinned
+     238px expansion (book33-prefs.navRail) is retired — the rail is now a
+     permanent 52px icon strip (#dnrScroll, one icon per NAV_ITEMS entry, no
+     label — see title="…"/aria-label for the readable name). #dnrLauncherBtn
+     opens #dnrLauncherPop: the SAME destinations with labels, in a Google-
+     launcher-style grid, plus the Chapters accordion (dnrChaptersHtml(),
+     unchanged) and the account footer — all of which lost their home in the
+     rail itself once it stopped expanding.
      ============================================================ */
   // 2026-08-20 (nav unification, "every page gets a route"): the Chapters accordion
   // for the DESKTOP rail specifically. A sibling navPanelChaptersHtml() (near
@@ -44768,27 +44821,29 @@
         + viewsHtml;
     }).join("");
   }
+  // icon-only row for the permanent rail — no .dnr-lbl (see CSS: #dnrScroll
+  // .dnr-row is 52px, there's no room), title/aria-label carry the name instead,
+  // and any count moves from an inline .dnr-count pill (which the old clipped-
+  // width list relied on, invisibly, at 52px) to a proper overlaid .dnr-ic-badge.
+  function dnrRailRowHtml(item, active) {
+    const count = item.count ? item.count() : 0;
+    const badge = count > 0 ? `<span class="dnr-ic-badge">${count > 9 ? "9+" : count}</span>` : "";
+    return `<button type="button" class="dnr-row${active ? " on" : ""}" data-view="${item.viewId}" aria-current="${active ? "page" : "false"}" title="${esc(item.label)}" aria-label="${esc(item.label)}">`
+      + `<span class="dnr-ic">${navIconHtml(item)}${badge}</span></button>`;
+  }
   function renderDeskNavRail() {
     const scroll = document.getElementById("dnrScroll");
     const foot = document.getElementById("dnrFoot");
     const rail = document.getElementById("deskNavRail");
     if (!scroll || !foot || !rail) return;
     let html = "", lastGroup;
-    // 2026-08-20 (nav unification): TOP = today's NAV_ITEMS unchanged, minus the
-    // _footer entry (Settings moves to the very bottom, below Chapters, per her
-    // spec's 3-section order). Byte-for-byte the same row markup/grouping this loop
-    // always produced -- only the _footer row is no longer part of THIS pass.
     const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && lastGroup && item.group) {
         html += `<div class="dnr-sep" aria-hidden="true"></div>`;
       }
       lastGroup = item.group;
-      const active = item.viewId === state.view;
-      const count = item.count ? item.count() : 0;
-      const badge = count > 0 ? `<span class="dnr-count">${count > 99 ? "99+" : count}</span>` : "";
-      html += `<button type="button" class="dnr-row${active ? " on" : ""}" data-view="${item.viewId}" aria-current="${active ? "page" : "false"}">`
-        + `<span class="dnr-ic">${navIconHtml(item)}</span><span class="dnr-lbl">${esc(item.label)}</span>${badge}</button>`;
+      html += dnrRailRowHtml(item, item.viewId === state.view);
       // 2026-08-23 (Linh: "fold the collapsed sidebar into the icon nav rail -- one
       // rail, not two columns"): not a real NAV_ITEMS entry -- it doesn't navigate
       // anywhere, so it's hand-built here rather than added to that array. Shows
@@ -44799,41 +44854,19 @@
       // another page to tap.
       if (item.viewId === "day" && state.view === "day" && PREFS.sideOpen === false) {
         html += `<button type="button" class="dnr-row" data-action="reopen-sidebar" title="Show calendar sidebar" aria-label="Show calendar sidebar">`
-          + `<span class="dnr-ic dnr-ic-marked">${navIconHtml({ icon: "📅" })}</span><span class="dnr-lbl">Sidebar</span></button>`;
+          + `<span class="dnr-ic dnr-ic-marked">${navIconHtml({ icon: "📅" })}</span></button>`;
       }
     });
-    html += `<div class="dnr-sep" aria-hidden="true"></div>` + dnrChaptersHtml();
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) {
-      html += `<div class="dnr-sep" aria-hidden="true"></div>`;
-      const active = footerItem.viewId === state.view;
-      html += `<button type="button" class="dnr-row${active ? " on" : ""}" data-view="${footerItem.viewId}" aria-current="${active ? "page" : "false"}">`
-        + `<span class="dnr-ic">${navIconHtml(footerItem)}</span><span class="dnr-lbl">${esc(footerItem.label)}</span></button>`;
+      html += `<div class="dnr-sep" aria-hidden="true"></div>` + dnrRailRowHtml(footerItem, footerItem.viewId === state.view);
     }
     scroll.innerHTML = html;
-    const pinned = PREFS.navRail === "pinned";
-    const syncLbl = navSyncLabel();
-    foot.innerHTML = `<div class="dnr-avatar-row">
-        <span class="dnr-avatar-ic"><span class="dnr-avatar-badge">33</span></span>
-        <span class="dnr-foot-meta"><span class="dnr-foot-name">Book33</span>${syncLbl ? `<span class="dnr-foot-sync">${esc(syncLbl)}</span>` : ""}</span>
-        <button type="button" class="dnr-pin" id="dnrPinBtn" title="${pinned ? "Unpin the rail" : "Pin the rail open"}" aria-label="${pinned ? "Unpin the rail" : "Pin the rail open"}" aria-pressed="${pinned}">📌</button>
-      </div>`;
-    rail.dataset.state = pinned ? "pinned" : "collapsed";
-    document.body.dataset.navRail = pinned ? "pinned" : "collapsed";
-    // pinning while the cursor is still on the rail would otherwise leave the
-    // transient hover state stuck on underneath the persisted one — same width,
-    // so nothing moves, but unpinning later would then read as "still open".
-    if (pinned) { rail.classList.remove("peek"); document.body.classList.remove("nav-rail-peek"); }
+    foot.innerHTML = `<div class="dnr-avatar-row"><span class="dnr-avatar-ic"><span class="dnr-avatar-badge">33</span></span></div>`;
+    renderDnrHead();
+    renderDnrLauncherPop();
   }
   document.getElementById("dnrScroll")?.addEventListener("click", e => {
-    // 2026-08-20 (nav unification): a chapter-head row carries data-chapter-toggle,
-    // never data-view, so this must be checked first -- toggling just flips
-    // PREFS.navOpenChapters and re-renders THIS rail in place, no navigation.
-    const chToggle = e.target.closest("[data-chapter-toggle]");
-    if (chToggle) { navToggleChapter(chToggle.dataset.chapterToggle); renderDeskNavRail(); return; }
-    // the reopen-sidebar row carries data-action, not data-view -- checked before
-    // the data-view branch below for the same reason chapter-toggle is: it must
-    // never be mistaken for a navigation row.
     const reopenSidebar = e.target.closest('[data-action="reopen-sidebar"]');
     if (reopenSidebar) { PREFS.sideOpen = true; savePrefs(); renderDeskSidebar(); renderDeskNavRail(); return; }
     const row = e.target.closest("[data-view]");
@@ -44841,31 +44874,103 @@
     state.view = row.dataset.view;
     render();
   });
-  document.getElementById("dnrFoot")?.addEventListener("click", e => {
-    if (!e.target.closest("#dnrPinBtn")) return;
-    PREFS.navRail = PREFS.navRail === "pinned" ? "collapsed" : "pinned";
-    savePrefs();
-    renderDeskNavRail();
+  // 2026-08-24: the header block above the icon strip — a live "today" shortcut
+  // (independent of state.anchor, the day actually being viewed) plus the
+  // launcher trigger. Re-run on every renderDeskNavRail() pass so the badge
+  // never shows a stale date if the app stays open across midnight.
+  function renderDnrHead() {
+    const el = document.getElementById("dnrDateBadge");
+    if (!el) return;
+    const now = new Date();
+    el.textContent = String(now.getDate());
+    el.title = `${WD_FULL[dowIndex(now)]}, ${now.getDate()} ${MONTHS[now.getMonth()]} — Jump to today`;
+  }
+  document.getElementById("dnrDateBadge")?.addEventListener("click", () => {
+    // same jump-to-today snippet #todayPill/#deskTodayMenu's "today" row already
+    // use — one behaviour, now a third trigger for it, not a second implementation.
+    state.anchor = new Date(TODAY);
+    state.view = "day";
+    dnrLauncherOpen = false;
+    render();
   });
-  (function () {
-    const rail = document.getElementById("deskNavRail");
-    if (!rail) return;
-    let peekTimer = null;
-    // The 200ms dwell matters more now than it did as an overlay: opening also
-    // pushes the page 186px, so a cursor merely passing the left edge must not
-    // trigger it. Both classes go on and come off together — .peek widens the
-    // rail, body.nav-rail-peek widens the margin the page is laid out against.
-    const openPeek = () => { rail.classList.add("peek"); document.body.classList.add("nav-rail-peek"); };
-    const closePeek = () => { rail.classList.remove("peek"); document.body.classList.remove("nav-rail-peek"); };
-    rail.addEventListener("mouseenter", () => {
-      if (rail.dataset.state !== "collapsed") return;
-      peekTimer = setTimeout(openPeek, 200);
+  // Launcher popover — icon+label grid of NAV_ITEMS (Google-launcher style),
+  // then Chapters, then Settings, then the account footer. Created/removed on
+  // every toggle, same disposable-popover idiom as .wr-arrange-pop.
+  let dnrLauncherOpen = false;
+  function dnrLauncherGridHtml() {
+    let html = "", lastGroup;
+    NAV_ITEMS.filter(item => item.group !== "_footer").forEach(item => {
+      const newGroup = item.group && item.group !== lastGroup;
+      lastGroup = item.group;
+      if (newGroup) html += `<div class="dnr-launch-grouplbl">${esc(item.group)}</div>`;
+      const active = item.viewId === state.view;
+      const count = item.count ? item.count() : 0;
+      const badge = count > 0 ? `<span class="dnr-ic-badge">${count > 9 ? "9+" : count}</span>` : "";
+      html += `<button type="button" class="dnr-launch-cell${active ? " on" : ""}" data-view="${item.viewId}" aria-current="${active ? "page" : "false"}">`
+        + `<span class="dnr-launch-ic">${navIconHtml(item)}${badge}</span><span class="dnr-launch-lbl">${esc(item.label)}</span></button>`;
     });
-    rail.addEventListener("mouseleave", () => {
-      clearTimeout(peekTimer);
-      closePeek();
-    });
-  })();
+    return html;
+  }
+  function renderDnrLauncherPop() {
+    const btn = document.getElementById("dnrLauncherBtn");
+    document.getElementById("dnrLauncherPop")?.remove();
+    if (!btn) return;
+    btn.setAttribute("aria-expanded", String(dnrLauncherOpen));
+    if (!dnrLauncherOpen) return;
+    const sidebarRow = (state.view === "day" && PREFS.sideOpen === false)
+      ? `<button type="button" class="dnr-row" data-action="reopen-sidebar" title="Show calendar sidebar">`
+        + `<span class="dnr-ic dnr-ic-marked">${navIconHtml({ icon: "📅" })}</span><span class="dnr-lbl">Show calendar sidebar</span></button>`
+      : "";
+    const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
+    const footerRow = footerItem
+      ? `<button type="button" class="dnr-row${footerItem.viewId === state.view ? " on" : ""}" data-view="${footerItem.viewId}" aria-current="${footerItem.viewId === state.view ? "page" : "false"}">`
+        + `<span class="dnr-ic">${navIconHtml(footerItem)}</span><span class="dnr-lbl">${esc(footerItem.label)}</span></button>`
+      : "";
+    const syncLbl = navSyncLabel();
+    const pop = document.createElement("div");
+    pop.className = "dnr-launch-pop";
+    pop.id = "dnrLauncherPop";
+    pop.setAttribute("role", "dialog");
+    pop.setAttribute("aria-label", "Navigate");
+    pop.innerHTML = `<div class="dnr-launch-grid">${dnrLauncherGridHtml()}</div>`
+      + (sidebarRow ? `<div class="dnr-sep" aria-hidden="true"></div>${sidebarRow}` : "")
+      + `<div class="dnr-sep" aria-hidden="true"></div><div class="dnr-launch-chapters">${dnrChaptersHtml()}</div>`
+      + (footerRow ? `<div class="dnr-sep" aria-hidden="true"></div>${footerRow}` : "")
+      + `<div class="dnr-sep" aria-hidden="true"></div><div class="dnr-avatar-row">
+          <span class="dnr-avatar-ic"><span class="dnr-avatar-badge">33</span></span>
+          <span class="dnr-foot-meta"><span class="dnr-foot-name">Book33</span>${syncLbl ? `<span class="dnr-foot-sync">${esc(syncLbl)}</span>` : ""}</span>
+        </div>`;
+    document.getElementById("deskNavRail")?.appendChild(pop);
+  }
+  document.addEventListener("click", e => {
+    if (e.target.closest("#dnrLauncherBtn")) {
+      dnrLauncherOpen = !dnrLauncherOpen;
+      renderDnrLauncherPop();
+      return;
+    }
+    if (!dnrLauncherOpen) return;
+    const pop = document.getElementById("dnrLauncherPop");
+    if (!pop) return;
+    if (!pop.contains(e.target)) { dnrLauncherOpen = false; renderDnrLauncherPop(); return; }
+    // chapter-head carries data-chapter-toggle, never data-view -- checked first
+    // so it's never mistaken for a navigation row (same ordering the old inline
+    // rail delegate used).
+    const chToggle = e.target.closest("[data-chapter-toggle]");
+    if (chToggle) { navToggleChapter(chToggle.dataset.chapterToggle); renderDnrLauncherPop(); return; }
+    const reopenSidebar = e.target.closest('[data-action="reopen-sidebar"]');
+    if (reopenSidebar) { PREFS.sideOpen = true; savePrefs(); dnrLauncherOpen = false; renderDeskSidebar(); renderDeskNavRail(); return; }
+    const row = e.target.closest("[data-view]");
+    if (!row) return;
+    state.view = row.dataset.view;
+    dnrLauncherOpen = false;
+    render();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !dnrLauncherOpen) return;
+    dnrLauncherOpen = false;
+    renderDnrLauncherPop();
+    document.getElementById("dnrLauncherBtn")?.focus();
+  });
 
   /* ============================================================
      DAY TOP BAR — 54px, desktop 1-day only. Reuses the existing #prevDay/
