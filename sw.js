@@ -1,7 +1,7 @@
 ﻿// Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260823-repeat-icon-and-preset-editing";
+var CACHE_VERSION = "b33-20260824-origin-filter-flat-pill-and-overlap-fix";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
