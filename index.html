@@ -15474,6 +15474,66 @@
   @media (min-width: 1200px) and (max-width: 1439px) {
     [data-desk-day] #deskWidgetRail { width: 250px; }
   }
+  /* 2026-08-23 (Sunday plan-the-week, part D): wider, two-column rail -- Sunday
+     only, scoped to [data-sun-review] (see placeDeskGrid()) and nested inside
+     the SAME ≥1200px gate the width rules just above already use, since the
+     visual effect only makes sense at the same breakpoint #deskWidgetRail
+     itself only exists at. Widening the rail alone narrows #deskColMain (the
+     timeline) -- flex:1 1 auto already takes whatever's left, no separate rule
+     needed for that half. #wrCards's 2-col grid reuses the exact
+     display:grid; grid-template-columns:1fr 1fr; gap:8px idiom the existing
+     1024–1199px #wrFallback 2-up block just below already uses -- this isn't a
+     new layout idea for this rail, just a second place it applies. Whatever
+     cards are actually visible (normal ones + the four new Sunday ones) flow
+     into the grid in their existing Arrange order; drag-reorder's existing
+     Y-axis drop logic (see the dragover/drop delegates further down) still
+     inserts before/after the hovered card by DOM order either way, so it
+     continues to produce a valid reordering in two columns, just without an
+     X-aware "which half of this card" refinement -- verified live, not touched. */
+  @media (min-width: 1200px) {
+    [data-sun-review] #deskWidgetRail { width: 460px; }
+    /* minmax(0, 1fr), not bare 1fr -- a bare 1fr track's minimum is "auto" (its
+       widest child's min-content), so one long-text card (e.g. a patient name in
+       railPatients) silently drags its whole column wider than its neighbour,
+       an uneven split rather than the even two-up this is meant to be. minmax(0,..)
+       removes that floor; each card's own overflow/ellipsis rules (.wr-pat-name
+       etc., already min-width:0 internally) take it from there, verified live. */
+    [data-sun-review] #wrCards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+    [data-sun-review] #sunWeekAhead { display: block; margin: 0 0 16px; }
+  }
+  /* explicit base rule, not just relying on :empty -- content set by
+     renderSunWeekAhead() only refreshes on a full renderDay() pass, not on
+     every resize, so a card populated while desktop-Sunday would otherwise
+     still show its stale markup if the viewport later shrinks without a
+     re-render in between. Same "base display:none, unhidden only inside the
+     media query" shape #deskWidgetRail itself already uses just above. */
+  #sunWeekAhead { display: none; }
+  .sun-week-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
+  .sun-week-title { font-size: 15px; font-weight: 800; color: var(--ink); }
+  .sun-week-range { font-size: 12px; color: var(--ink-soft); }
+  .sun-week-open { margin-left: auto; font-size: 12px; }
+  .sun-week-chips { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .sun-week-chip {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    background: var(--raised); border: none; border-radius: var(--radius-md);
+    padding: 10px 8px; cursor: pointer; text-align: left; font: inherit;
+  }
+  .sun-week-chip:hover, .sun-week-chip:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
+  .sun-week-chip-wd { font-size: 11px; font-weight: 700; color: var(--ink); }
+  .sun-week-paint { display: flex; gap: 2px; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; }
+  .sun-week-seg { flex: 1; }
+  .sun-week-paint.sun-week-unpainted { height: auto; font-size: 10px; color: var(--ink-faint); font-style: italic; }
+  /* four Sunday review cards (part C) -- .h-stats/.h-stat is the app's own
+     shared stat-grid component (Weight/Fitness/Nutrition/Cycle/Review all reuse
+     it); scoped tighter here since this card is ~half the width those pages
+     give it. .wr-sun-dot mirrors .todo-mode-dot's own small-swatch shape.
+     .wr-sun-overdue mirrors .order-overdue's colour treatment, its own class
+     since it applies to a different card family. */
+  .wr-card[data-wr-id="sunWeekShape"] .h-stats { gap: 10px 14px; margin: 0; }
+  .wr-card[data-wr-id="sunWeekShape"] .h-stat { flex: 1 1 40%; min-width: 0; }
+  .wr-card[data-wr-id="sunWeekShape"] .h-stat .n { font-size: 16px; }
+  .wr-sun-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .wr-sun-overdue { color: var(--danger); font-weight: 600; }
   .wr-head { display: flex; align-items: center; margin-bottom: 12px; }
   .wr-head-lbl { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); }
   .wr-arrange-btn { margin-left: auto; border: none; background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
@@ -19583,6 +19643,17 @@
         <div id="tilesAbove" class="tile-shelf" hidden>
           <div class="tile-later-head"><h2>⤴ Above the calendar</h2><span class="rule"></span></div>
         </div>
+        <!-- 2026-08-23 (Sunday plan-the-week): "Plan the week ahead" hero card --
+             lives in-flow here, inside .day-main, so it travels with the rest of
+             this column through placeDeskGrid()'s existing dayMain reparent (no
+             new home-marker pair needed, this isn't a standalone travelling
+             piece). renderSunWeekAhead() (called from renderDay(), right before
+             placeDeskGrid()) empties it on any non-Sunday day -- CSS then hides
+             it outright below the desktop widget-rail breakpoint, same
+             base-display:none/unhidden-only-in-media pattern #deskWidgetRail
+             itself already uses, since this is explicitly desktop-only (no
+             mobile version attempted, see the build brief's own LEAVE ALONE). -->
+        <div id="sunWeekAhead"></div>
         <!-- 2026-08-02 (Linh: "wanted above the day calendar" — SUPERSEDES the previous
              two spots, page-head corner then above the mini-cal): "the calendar" she meant
              is THIS one — the Day's own hourly timeline right below — not the small
@@ -32847,6 +32918,65 @@
         : "");
   }
 
+  // 2026-08-23 (Sunday plan-the-week, part B): "Plan the week ahead" hero card,
+  // shown above the timeline Sunday only -- host is #sunWeekAhead, in-flow
+  // inside .day-main (see its own HTML comment). Emptied outright on any other
+  // day, same "cheap and safe, harmless dead weight" convention #dayTopDrawer's
+  // own comment already documents for this codebase -- CSS (scoped to
+  // [data-sun-review], the desktop widget-rail breakpoint) does the rest of the
+  // hiding, so this function doesn't need to know or care about screen width.
+  function renderSunWeekAhead() {
+    const host = document.getElementById("sunWeekAhead");
+    if (!host) return;
+    const d = state.anchor;
+    if (dowIndex(d) !== 6) { host.innerHTML = ""; return; }
+    // state.anchor is this week's Sunday, so startOfWeek(d) lands on THIS
+    // week's Monday -- +7 days is the coming Monday, matching the build brief's
+    // own nextMon formula verbatim (reused again in the click delegate below and
+    // in wrCardHtml()'s sunWeekShape branch, rather than stashed in module state
+    // -- state.anchor doesn't change between a render and its own click).
+    const nextMon = addDays(startOfWeek(d), 7);
+    const nextSun = addDays(nextMon, 6);
+    const rangeLbl = nextMon.getMonth() === nextSun.getMonth()
+      ? `${MONTHS[nextMon.getMonth()]} ${nextMon.getDate()}–${nextSun.getDate()}, ${nextSun.getFullYear()}`
+      : `${MONTHS[nextMon.getMonth()]} ${nextMon.getDate()} – ${MONTHS[nextSun.getMonth()]} ${nextSun.getDate()}, ${nextSun.getFullYear()}`;
+    // one lmWeekGrid() call for the whole card, per the build brief -- no new
+    // storage, just a read of Life Map's own existing grid function.
+    const { grid } = lmWeekGrid(nextMon);
+    const chipsHtml = Array.from({ length: 7 }, (_, i) => {
+      const cd = addDays(nextMon, i), ud = universalDay(cd);
+      const cells = grid[i].filter(Boolean);
+      const seen = new Set(), segs = [];
+      cells.forEach(c => { if (!seen.has(c.mode.id)) { seen.add(c.mode.id); segs.push(c.mode); } });
+      const paintHtml = segs.length
+        ? `<div class="sun-week-paint">${segs.map(m => `<span class="sun-week-seg" style="background:${esc(m.accent || "var(--ink-faint)")}" title="${esc(m.name)}"></span>`).join("")}</div>`
+        : `<div class="sun-week-paint sun-week-unpainted">Not painted</div>`;
+      return `<button type="button" class="sun-week-chip" data-sun-chip="${i}">
+        <span class="sun-week-chip-wd">${WD_FULL[i].slice(0, 3)} ${cd.getDate()}</span>
+        <span class="rv-ud" data-master="${ud.master}">UD <b>${ud.value}</b></span>
+        ${paintHtml}
+      </button>`;
+    }).join("");
+    host.innerHTML = `
+      <div class="sun-week-head">
+        <span class="sun-week-title">🚀 Plan the week ahead</span>
+        <span class="sun-week-range">${rangeLbl}</span>
+        <button type="button" class="tab-link sun-week-open" data-sun-open-lm>Open Life Map, next week →</button>
+      </div>
+      <div class="sun-week-chips">${chipsHtml}</div>`;
+  }
+  // tapping any day chip, or the header link, lands directly on Life Map already
+  // showing the coming week -- replaces jumping to the Day page for that day, per
+  // the build brief. Recomputes nextMon the same way renderSunWeekAhead() just
+  // did rather than reading it back off the DOM -- state.anchor is still today's
+  // Sunday at click time, so the two calculations agree.
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#sunWeekAhead [data-sun-open-lm], #sunWeekAhead [data-sun-chip]")) return;
+    lmWeekStart = addDays(startOfWeek(state.anchor), 7);
+    state.view = "lifeMap";
+    render();
+  });
+
   // 2026-08-02 (Linh: "the day time view shows 6am-10pm ... expandable button"): tracks
   // whether the timeline's scroll position has been set to 6am yet — see renderDay().
   let tlScrollInit = false;
@@ -33242,6 +33372,11 @@
     renderDeskFastCard();
     renderDeskRail();
     placeMiniCalDesk();
+    // 2026-08-23 (Sunday plan-the-week): before placeDeskGrid() so #sunWeekAhead
+    // (inside .day-main) is already populated -- or emptied, non-Sunday -- by
+    // the time that reparent runs; data-sun-review itself is stamped inside
+    // placeDeskGrid(), not here (see that function's own comment).
+    renderSunWeekAhead();
     // after placeMiniCalDesk so the right column already has the calendar at its top
     placeDeskGrid();
     // Modes law rule 4 (2026-08-22): after placeDeskGrid() specifically so this
@@ -43404,6 +43539,13 @@
     const dayLayout = document.querySelector("#dayPage .day-layout");
     if (!grid || !dayLayout) return;
     const on = deskGridMq.matches;
+    // 2026-08-23 (Sunday plan-the-week): single shared source of truth for both
+    // the CSS (wide 2-col widget rail, hero card visibility) and wrCardHtml()'s
+    // four Sunday-only cards below -- mirrors data-desk-day/data-desk-day1 just
+    // above this function's own call site in renderDay(), but lives here (not
+    // there) so a live resize crossing 1024px re-stamps it immediately via this
+    // function's own resize/matchMedia listeners, not just on the next render.
+    document.documentElement.toggleAttribute("data-sun-review", on && state.view === "day" && dowIndex(state.anchor) === 6);
     const colL = document.getElementById("deskColLeft");
     const colM = document.getElementById("deskColMain");
     const dateCard = document.getElementById("deskDateCard");
@@ -44177,8 +44319,15 @@
   // legitimately ABSENT some days (wrCardHtml returns "" when nothing's on state.anchor)
   // -- same "omit entirely, don't show an empty state" rule the old #tlAlldayRow banner
   // and the day-context birthday chip both already followed.
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "railBday", "biomechTip"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", railBday: "Birthday", biomechTip: "Biomechanics" };
+  // 2026-08-23 (Sunday plan-the-week, part C): sunWeekShape/sunTodoByMode/
+  // sunShopping/sunRoutines added to both lists -- real widget-rail cards, not a
+  // one-off block, so Arrange (show/hide), drag-reorder and TILE_PREFS ordering
+  // all apply to them for free (see renderDeskWidgetRail() just below). Each
+  // one's own wrCardHtml() branch returns "" unless dowIndex(state.anchor) === 6,
+  // same "legitimately absent most days" pattern railBday already uses -- so
+  // they simply don't appear Monday–Saturday, no special-casing needed here.
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "railBday", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunShopping", "sunRoutines"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", railBday: "Birthday", biomechTip: "Biomechanics", sunWeekShape: "This week's shape", sunTodoByMode: "To-do, by Mode", sunShopping: "Shopping list", sunRoutines: "Routines" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -44423,6 +44572,93 @@
           </div>
         </div>
         <div class="wr-dial-legend">${legend}</div>
+      </div>`;
+    }
+    // 2026-08-23 (Sunday plan-the-week, part C): four review cards, Sunday only --
+    // each stat/list below reuses a real existing function/store verbatim (Life
+    // Map's own grid, universalDay(), GOALS, SHOP, upcomingEightDays(),
+    // pileUpItems(), the To-do Mode grouping) per the build brief's own rule
+    // "nothing new invented."
+    if (id === "sunWeekShape") {
+      if (dowIndex(d) !== 6) return "";
+      const nextMon = addDays(startOfWeek(d), 7);
+      const { grid } = lmWeekGrid(nextMon);
+      const daysPlanned = grid.filter(day => day.some(Boolean)).length;
+      const goalsDue = GOALS.filter(g => !g.done && g.date && dayDiff(parseKey(g.date), TODAY) >= 0 && dayDiff(parseKey(g.date), TODAY) <= 7).length;
+      const next8 = upcomingEightDays(1)[0];
+      const next8Lbl = next8 ? `${WD_FULL[dowIndex(next8.date)].slice(0, 3)} ${next8.date.getDate()} ${MON_SHORT[next8.date.getMonth()]}${next8.date.getFullYear() !== TODAY.getFullYear() ? ` ${next8.date.getFullYear()}` : ""}` : "—";
+      const shopPending = SHOP.filter(s => !s.bought).length;
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">This week's shape</span>
+        <div class="h-stats">
+          <div class="h-stat"><div class="n">${daysPlanned}/7</div><div class="l">Days planned</div></div>
+          <div class="h-stat"><div class="n">${goalsDue}</div><div class="l">Goals due</div></div>
+          <div class="h-stat"><div class="n">${esc(next8Lbl)}</div><div class="l">Next 8-Day</div></div>
+          <div class="h-stat"><div class="n">${shopPending}</div><div class="l">Shopping</div></div>
+        </div>
+      </div>`;
+    }
+    if (id === "sunTodoByMode") {
+      if (dowIndex(d) !== 6) return "";
+      // same grouping renderTodoPage() itself computes (validIds/groups against
+      // MODES, a stale/missing mode id folds into "No mode") -- read here, not
+      // recomputed differently, just rendered as compact dot+name+count rows
+      // instead of the full editable list.
+      const validIds = new Set(MODES.map(m => m.id));
+      const groups = new Map();
+      TODOS.forEach(t => {
+        const key = t.mode && validIds.has(t.mode) ? t.mode : "";
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(t);
+      });
+      const rows = [];
+      MODES.slice().sort((a, b) => a.order - b.order).forEach(m => { if (groups.has(m.id)) rows.push({ mode: m, count: groups.get(m.id).length }); });
+      if (groups.has("")) rows.push({ mode: null, count: groups.get("").length });
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">To-do, by Mode</span>
+        ${rows.length ? rows.map(r => `<div class="wr-pat-row">
+            <span class="wr-sun-dot" style="background:${r.mode && r.mode.accent ? esc(r.mode.accent) : "var(--ink-faint)"}"></span>
+            <span class="wr-pat-name">${r.mode ? esc(`${r.mode.emoji ? r.mode.emoji + " " : ""}${r.mode.name}`) : "No mode"}</span>
+            <span class="wr-pat-state">${r.count}</span>
+          </div>`).join("") : `<div class="wr-pat-empty">Nothing on your to-do list.</div>`}
+        <button type="button" class="wr-pile-more" data-jump-view="todo">Open To-do →</button>
+      </div>`;
+    }
+    if (id === "sunShopping") {
+      if (dowIndex(d) !== 6) return "";
+      // same fields the real Shopping page rows use (name, category, dueDate),
+      // capped to 3 with a "+N more" -- mirrors railTodo's own capped-list-plus-
+      // link shape just above, not a one-off.
+      const pending = SHOP.filter(s => !s.bought);
+      const shown = pending.slice(0, 3);
+      const hiddenCount = pending.length - shown.length;
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Shopping list · ${pending.length}</span>
+        ${pending.length ? shown.map(s => {
+          const overdue = s.dueDate && s.dueDate < keyOf(TODAY);
+          const due = s.dueDate ? (() => { const dd = parseKey(s.dueDate); return `Due ${dd.getDate()} ${MON_SHORT[dd.getMonth()]}`; })() : "";
+          const bits = [s.category, due].filter(Boolean);
+          return `<div class="wr-pat-row">
+            <span class="wr-pat-name">${esc(s.name)}</span>
+            <span class="wr-pat-state${overdue ? " wr-sun-overdue" : ""}">${bits.map(esc).join(" · ")}</span>
+          </div>`;
+        }).join("") : `<div class="wr-pat-empty">Nothing on your shopping list.</div>`}
+        <button type="button" class="wr-pile-more" data-jump-view="shopping">${hiddenCount > 0 ? `+${hiddenCount} more →` : "Open Shopping →"}</button>
+      </div>`;
+    }
+    if (id === "sunRoutines") {
+      if (dowIndex(d) !== 6) return "";
+      // pileUpItems()'s own routine-streak check (streak >= 3), filtered for
+      // kind==="routine" -- not a second streak calculation. pileTickHtml/
+      // catDotColor/.wr-pile-* reused verbatim from pileupBox just above, same
+      // real tick-off-today action, not a read-only mockup of it.
+      const items = pileUpItems().filter(it => it.kind === "routine");
+      const restCount = Math.max(0, ROUTINE_TASKS.length - items.length);
+      return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
+        <span class="wr-label">Routines</span>
+        ${items.length ? items.map(it => `<div class="wr-pile-row">${pileTickHtml(it)}<span class="wr-pile-dot" style="background:${catDotColor(it)}"></span><span class="wr-pile-name">${esc(it.title)}</span><span class="wr-pile-age wr-sun-overdue">${esc(it.detail)}</span></div>`).join("") : `<div class="wr-pat-empty">No missed streaks.</div>`}
+        ${restCount ? `<div class="wr-pat-empty">${restCount} other routine${restCount === 1 ? "" : "s"} on track.</div>` : ""}
+        <button type="button" class="wr-pile-more" data-jump-view="routines">Open Routines →</button>
       </div>`;
     }
     return "";
