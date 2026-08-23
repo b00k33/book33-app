@@ -5090,9 +5090,20 @@
      children (.lm-week-head / .lm-grid-wrap / #lmUntimed) can be told which of them
      is fixed height and which one (.lm-grid-wrap) should claim the rest. */
   .lm-weekbox {
-    flex: 1; min-width: 0; min-height: 0; padding: 12px 0 4px 12px; margin-bottom: 0;
+    flex: 1; min-width: 0; min-height: 0; padding: 4px 0 0 12px; margin-bottom: 0;
     display: flex; flex-direction: column;
   }
+  /* 2026-08-23 ("reclaim more top/bottom space" -- STEP 3, birthday badges freed up the
+     bottom list): top 12px->4px (the scale floor, matches the bottom-padding value this
+     already used). Bottom 4px->0 -- #lifeMapPage's own bottom padding (below) is a
+     second, OUTER padding layer that already sits between #lmUntimed and the true page
+     edge, so keeping 4px here on top of that was doubling up the same clearance; 0 here
+     leaves exactly one floor (#lifeMapPage's), not two stacked. Measured live at 1280x900
+     before this change: page padding 8/8 + weekbox padding 12/4 cost 20px above the grid
+     and 12px below it (28px total, not counting the 8px lm-week-head/lm-grid-wrap gap and
+     the #lmNote->.lm-stage gap, neither of which this touches) -- this trim reclaims 16px
+     of it (8 top, 8 bottom) for .lm-grid-wrap's own flex:1, which still does 100% of the
+     actual stretching, unchanged. */
   /* 2026-08-22 ("reclaim the bottom" -- STEP 3): #lifeMapPage's own bottom padding,
      trimmed from the base .page rule's 32px (desktop)/24px (mobile) to the small end
      of the scale. An id selector beats .page's class at any width, so one rule
@@ -5114,7 +5125,7 @@
      the base .page rule's inherited 24px to 8px, the small end of the scale -- same
      move as the existing padding-bottom trim just below, now covering both. */
   #lifeMapPage {
-    padding-top: 8px; padding-bottom: 8px;
+    padding-top: 4px; padding-bottom: 4px;
     display: flex; flex-direction: column; flex: 1; min-height: 0;
   }
   body[data-view="lifeMap"] #wrap > p.footnote { display: none; }
@@ -5221,7 +5232,17 @@
      bridge. pointer-events:none so it never steals a paint/erase/tap click from the
      cells it passes over. */
   .lm-sleep-moon { position: absolute; font-size: 11px; line-height: 1; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
-  .lm-hd { font-size: 9.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 2px 0 5px; letter-spacing: .04em; }
+  .lm-hd {
+    font-size: 9.5px; font-weight: 700; color: var(--ink-faint); text-align: center; padding: 2px 0 5px; letter-spacing: .04em;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  /* 2026-08-23 ("birthdays move to the day header"): icon-only, uncapped -- a day with
+     none renders this row's own div at zero (bdayHtml is "" -- see renderLifeMap()),
+     so .lm-hd's gap (only ever between 2+ flex children) adds no space on a birthday-
+     free day. Full "Name turns N"/anniversary text lives only in the title= hover, not
+     as visible text -- this row stays a small icon strip, not a second label line. */
+  .lm-hd-bdays { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; line-height: 1; }
+  .lm-hd-bday { font-size: 10px; cursor: default; }
   .lm-hr-lbl {
     font-size: clamp(8.5px, calc(var(--lm-row-h, 12px) * 0.5), 12px);
     color: var(--ink-faint); text-align: right; padding-right: 5px; display: flex; align-items: center; justify-content: flex-end;
@@ -21412,12 +21433,31 @@
       <button type="button" class="lm-tool" data-lm-week="-1" aria-label="Previous week">◂</button>
       <span class="lm-week-range">${weekRangeTxt}</span>
       <button type="button" class="lm-tool" data-lm-week="1" aria-label="Next week">▸</button>`;
+    const { grid, untimed } = lmWeekGrid(start);
+    // 2026-08-23 (Linh: "birthdays move to the day header"): split the week's untimed
+    // items by day BEFORE the header row is built, so each day's .lm-hd cell can show
+    // its own birthdays as a small badge instead of them only surfacing in the bottom
+    // "+N more" list below the grid. Covers both real birthdays (generatedFor()'s
+    // category:"Birthdays"/icon:"🎂" items from birthdaysOn()) and belled person-dates
+    // (anniversaries/first-met/custom -- PP_DATE_ICON()'s own icon) identically, since
+    // generatedFor() already tags both the same category specifically so every other
+    // view treats them the same way; the badge reuses each item's own icon rather than
+    // a hardcoded 🎂 so an anniversary shows 💍/🤝/📅, not a birthday cake.
+    const untimedByDay = [[], [], [], [], [], [], []];
+    const untimedRest = [];
+    untimed.forEach(u => {
+      if (u.item && u.item.category === "Birthdays") untimedByDay[u.dayIdx].push(u.item);
+      else untimedRest.push(u);
+    });
+    LM_AUTO_UNTIMED = untimedRest;
     let gridHtml = `<div class="lm-hd"></div>` + Array.from({ length: 7 }, (_, d) => {
       const dd = addDays(start, d);
-      return `<div class="lm-hd">${WD_FULL[d].slice(0, 3)} ${dd.getDate()}</div>`;
+      const bdays = untimedByDay[d];
+      const bdayHtml = bdays.length
+        ? `<div class="lm-hd-bdays">${bdays.map(b => `<span class="lm-hd-bday" title="${esc(b.title)}">${b.icon || "🎂"}</span>`).join("")}</div>`
+        : "";
+      return `<div class="lm-hd">${bdayHtml}<span class="lm-hd-date">${WD_FULL[d].slice(0, 3)} ${dd.getDate()}</span></div>`;
     }).join("");
-    const { grid, untimed } = lmWeekGrid(start);
-    LM_AUTO_UNTIMED = untimed;
     // 2026-08-22 (Linh: "connect Sleep across midnight"): which days (this loop's `d`)
     // open with a slot-0 cell that's really the tail of the PREVIOUS day's overnight
     // run, not a new one -- collected here (where grid[d-1] is already in scope) and
@@ -21488,7 +21528,7 @@
       }
     });
     document.getElementById("lmGrid").innerHTML = gridHtml;
-    renderLmUntimed(untimed);
+    renderLmUntimed(untimedRest);
     renderLmStrip();
     renderLmCellPanel();
     lmComputeRowHeight();
@@ -21587,8 +21627,15 @@
     // intrinsic content size is what gets measured every time -- 1fr tracks (not
     // "auto") are what absorb leftover space once real fr tracks exist.
     grid.style.gridTemplateRows = `auto repeat(${slotCount}, 1fr)`;
-    const hd = grid.querySelector(".lm-hd");
-    const hdH = hd ? hd.getBoundingClientRect().height : 0;
+    // 2026-08-23 (birthday header badges): the corner cell (first .lm-hd in DOM order)
+    // is always empty, but a day cell with a birthday badge now renders a real 2nd row
+    // taller than it -- CSS Grid sizes the "auto" row track to the TALLEST cell in it,
+    // so measuring only the first/corner cell would under-measure a badge week and let
+    // rows compute taller than they actually fit (a "no scrolling" violation). Max
+    // across all 8 header cells instead, cheap (8 elements) and self-correcting if a
+    // future change gives the corner cell content of its own.
+    let hdH = 0;
+    grid.querySelectorAll(".lm-hd").forEach(el => { const h = el.getBoundingClientRect().height; if (h > hdH) hdH = h; });
     const gapPx = parseFloat(getComputedStyle(grid).rowGap) || parseFloat(getComputedStyle(grid).columnGap) || 0;
     // the box we were actually given -- .lm-grid-wrap's own measured clientHeight,
     // never window.innerHeight. This is the entire fix: measure, don't guess.
