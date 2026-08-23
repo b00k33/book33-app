@@ -3860,9 +3860,19 @@
      above; Biomechanics/Piling up/Also-today/Shopping already had one) — the generic
      tile-ctl name strip on top of them is pure duplication, hide the whole strip, not
      just the buttons. #tileGrp-num keeps its tile-ctl (PD/Birthdays rows use it as
-     their only heading + fold control). */
-  #wellnessBox > .tile-ctl, #herbAlertBox > .tile-ctl,
-  #pileupBox > .tile-ctl, #alsoToday > .tile-ctl, #shopSlot > .tile-ctl { display: none; }
+     their only heading + fold control).
+     2026-08-24 fix (":not(.tile-off)" added): this rule didn't account for the FOLDED
+     state. The general fold system (.tile-off > :not(.tile-ctl) { display:none }, a
+     few thousand lines down) already hides everything except .tile-ctl when one of
+     these is folded — leaving .tile-ctl as the fallback "▸ 🧾 Shopping"-style label
+     pill every other folded tile gets. This rule then force-hid THAT too, so a folded
+     Shopping/Wellness/Herb alert/Piling up/Also-today tile rendered as a bare, empty
+     outlined pill with nothing inside it. Scoping to :not(.tile-off) means this only
+     applies OPEN (exactly as before — the duplicate heading still hides when open);
+     folded, .tile-ctl is no longer force-hidden and the normal labeled-pill fallback
+     takes back over, same as every other tile. Confirmed live. */
+  #wellnessBox:not(.tile-off) > .tile-ctl, #herbAlertBox:not(.tile-off) > .tile-ctl,
+  #pileupBox:not(.tile-off) > .tile-ctl, #alsoToday:not(.tile-off) > .tile-ctl, #shopSlot:not(.tile-off) > .tile-ctl { display: none; }
   #dayPage .tile-later-head { display: none; }
   #dayPage #tileGrp-work .tile-grp-head,
   #dayPage #tileGrp-home .tile-grp-head,
@@ -3890,16 +3900,12 @@
   .qa-res-empty { font-size: 13px; color: var(--ink-soft); padding: 8px 4px; }
   .qa-res-more { font-size: 11px; color: var(--ink-faint); padding: 4px 8px; }
   /* ---- two-person system (2026-07-27, Linh: "allocate tasks for my husband … a 2 people
-     system"). Hers stay unmarked; his and shared items carry a small badge everywhere. ---- */
+     system"). Still powers the Us page's division-of-labour columns below (.us-col[data-
+     who], --who-partner/--who-both colour their borders). The calendar-card badge these
+     vars used to also colour (.who-chip, from whoChip()) was retired 2026-08-24 along with
+     the add/edit form's "Whose job" field — see the retired-features doc — so that rule is
+     gone; the shared colour tokens stay. ---- */
   :root { --who-partner: #5b8fd6; --who-both: #b985d8; }
-  .who-chip {
-    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    font-size: 11px; font-weight: 800; letter-spacing: .04em; line-height: 1;
-    padding: 4px 8px; border-radius: 999px; margin-right: 4px; vertical-align: 1px;
-    background: var(--who-partner); color: var(--accent-on); white-space: nowrap;
-  }
-  .who-chip.who-both { background: var(--who-both); }
-  .tl-item .who-chip { font-size: 11px; padding: 4px 4px; }
   /* the Day-page two-person card — identity (background/border/shadow) comes from the
      Widget Colour System's topaz family via .w-card (applyWidgetSkins adds it at
      runtime); this rule only sets layout the shared card doesn't own. */
@@ -6460,7 +6466,10 @@
     .ppl-table .ppl-ghead th { display: block; padding: 0; border: none; }
     .ppl-table td { display: block; padding: 0; border: none; }
     .ppl-table td:first-child { flex: 1 1 100%; }
-    .ppl-table td:nth-child(2), .ppl-table td:nth-child(3) { flex: none; }
+    /* 2026-08-24: was nth-child(2), nth-child(3) -- the Part-of-life column (2) is
+       retired (see the retired-features doc), so Birthday shifted from 3rd to 2nd;
+       this now targets it alone, same flex:none it always had. */
+    .ppl-table td:nth-child(2) { flex: none; }
     /* connections get their own full line and wrap INSIDE the card (they used to
        overflow past the right edge — flex items min-width:auto), clamped to 2 lines;
        the full list is one tap away in the person's profile sheet */
@@ -7389,13 +7398,6 @@
      explanations crammed onto the same line as the caps label): moved to their own quiet
      sub-line instead, and shortened, so the label itself stays scannable. */
   .field-hint { display: block; text-transform: none; letter-spacing: normal; font-size: 11px; font-weight: 400; color: var(--ink-faint); opacity: 0.8; margin-top: 4px; }
-  .who-summary-btn {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
-    background: var(--field-bg); border: 1px solid var(--note-line); border-radius: 3px;
-    padding: 8px 12px; font-size: 13px; font-family: var(--font-body); color: var(--ink); cursor: pointer;
-  }
-  .who-summary-btn .who-edit { font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
-  .who-summary-btn:hover, .who-summary-btn:focus-visible { border-color: var(--nav-active); }
   .field input[type="text"], .field input[type="time"], .field input[type="number"] {
     font-family: var(--font-body); font-size: 13px; color: var(--ink);
     background: var(--field-bg); border: 1px solid var(--note-line); border-radius: 3px; padding: 8px 12px; width: 100%;
@@ -8145,61 +8147,26 @@
   #addForm textarea.field-bare { border-radius: var(--field-radius-area); font-size: 13px; line-height: var(--lh-read); resize: vertical; }
   #addForm .field-bare::placeholder { color: var(--ink-faint); opacity: 1; }
   #addForm .field-bare:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 1px; }
-  #addForm .who-summary-btn { border: none; background: var(--field-bg); }
-  /* Part of life + Whose job: compact colour chips, natural width instead of flex:1
-     stretching to fill the row, wrapping into tidy rows; a filled high-contrast
-     "selected" state (gold fill, dark text) replaces the thin inset ring. */
-  #addForm #trackPicker.track-picker, #addForm #whoPicker.track-picker,
+  /* Whose job + Part of life pickers retired 2026-08-24 (see the retired-features
+     doc) -- both used to be grouped into these shared chip rules alongside the
+     weekday/duration pickers below, which are still very much alive; only the
+     dead #trackPicker/#whoPicker/#rtnTrackPicker selectors were pulled out. */
   #addForm #fWeekdayPicker.track-picker, #addForm .rtn-sched-extra-days.track-picker,
   #addForm #durChips.track-picker { flex-wrap: wrap; gap: 8px; }
-  #addForm #trackPicker .track-opt, #addForm #whoPicker .track-opt,
   #addForm #fWeekdayPicker .track-opt, #addForm .rtn-sched-extra-days .track-opt,
   #addForm #durChips .track-opt {
     flex: 0 0 auto; border: 1px solid var(--note-line); background: none;
     border-radius: 999px; padding: 4px 12px; font-size: 13px;
   }
-  #addForm #whoPicker .track-opt[aria-pressed="true"],
   #addForm #fWeekdayPicker .track-opt[aria-pressed="true"], #addForm .rtn-sched-extra-days .track-opt[aria-pressed="true"],
   #addForm #durChips .track-opt[aria-pressed="true"] {
     /* 2026-08-23: was var(--margin-rule)/var(--accent-on) -- that pair drives the
        UNRELATED time-of-day active-mode theme everywhere else in the app, so this
-       rule (Whose-job/Days-of-week/duration chips) now keys off the EVENT's own
-       selected Mode instead, matching Save/the Mode pill/the card wash above.
+       rule (Days-of-week/duration chips) now keys off the EVENT's own selected
+       Mode instead, matching Save/the Mode pill/the card wash above.
        --margin-rule/--accent-on themselves are untouched anywhere else. */
     background: var(--ef-tint); border-color: var(--ef-tint); color: var(--ef-ink); box-shadow: none; font-weight: 600;
   }
-  /* 2026-08-09 (design44, "Add box redesign" job, STEP 1, "Colours come ONLY
-     from the seed variables"): Part of life's selected chip fills with ITS OWN
-     track seed colour instead of the shared uniform brass fill every other chip
-     group here uses -- --accent-on is the app's existing "readable text over a
-     saturated fill" pairing token (same one the brass-filled chips use), reused
-     here since Work/Marriage/Personal's seeds are similarly mid-toned. */
-  #addForm #trackPicker .track-opt[aria-pressed="true"] {
-    color: var(--accent-on); box-shadow: none; font-weight: 600;
-  }
-  /* 2026-08-11: was one hardcoded rule per data-track id (work/marriage/personal) --
-     a 4th (Family) needed a 4th copy-pasted rule just to pick up a colour that was
-     already sitting in --family-seed via applyCategoryColours(). Read the seed
-     generically off the button's own data-track instead, so any future life category
-     (added the normal way, via "+ Add part of life") lights up here with zero new CSS. */
-  #addForm #trackPicker .track-opt[aria-pressed="true"] { background: var(--track-seed); border-color: var(--track-seed); }
-  #addForm #trackPicker .track-opt[data-track="work"] { --track-seed: var(--work-seed); }
-  #addForm #trackPicker .track-opt[data-track="family"] { --track-seed: var(--family-seed); }
-  #addForm #trackPicker .track-opt[data-track="marriage"] { --track-seed: var(--marriage-seed); }
-  #addForm #trackPicker .track-opt[data-track="personal"] { --track-seed: var(--personal-seed); }
-  /* 2026-08-09 (readable + tessellated mobile editor brief, "Part-of-life selected
-     chip fills with its OWN track colour... so the choice reads at a glance"):
-     mirrors #addForm #trackPicker directly above, verbatim pattern, just retargeted
-     at the routine form's own Part-of-life picker -- same central --*-seed
-     variables, same --accent-on text pairing, not a re-derived one-off. Applies
-     everywhere #rtnAddForm renders (inline AND desktop), same as its event-form
-     twin, since a track colour reading true isn't a mobile-only concern. */
-  #rtnAddForm #rtnTrackPicker .track-opt[aria-pressed="true"] {
-    color: var(--accent-on); box-shadow: none; font-weight: 600;
-  }
-  #rtnAddForm #rtnTrackPicker .track-opt[data-track="work"][aria-pressed="true"] { background: var(--work-seed); border-color: var(--work-seed); }
-  #rtnAddForm #rtnTrackPicker .track-opt[data-track="marriage"][aria-pressed="true"] { background: var(--marriage-seed); border-color: var(--marriage-seed); }
-  #rtnAddForm #rtnTrackPicker .track-opt[data-track="personal"][aria-pressed="true"] { background: var(--personal-seed); border-color: var(--personal-seed); }
   /* 2026-08-09 (design44, How long picker): the hours/minutes pair reuses the
      same borderless field-bg pill every other #addForm number/time input uses
      (see #addForm .field-bare above) — just two of them side by side in one row,
@@ -8349,10 +8316,6 @@
      chips above; margin-top just stops them looking glued to the chip row's bottom
      edge when the browser's own wrap happens to land them close together. */
   #addForm .dur-boxes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-  /* Whose job (More options): the summary button already reads as a single
-     compact row -- just brought onto the same "well" ring language as .num
-     above so every field in the form (not just How-long) shares one language. */
-  #addForm .who-summary-btn { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--margin-rule) 22%, transparent); }
   /* 2026-08-22 ("i want pre set events to choose from" -- STEP 3): one non-wrapping
      row, horizontal scroll for anything past what fits -- same "cap visible items"
      shape design44 §3 already establishes elsewhere (Cap visible items then "+N
@@ -16709,80 +16672,16 @@
      page IS the source of truth (nothing here is itself reading from a fixed
      var), so raw hexes are fine in the swatch/preview/picker markup only.
      ============================================================ */
-  /* 2026-08-16 full-bleed pass: canvas full-width, content column keeps its cap */
+  /* 2026-08-16 full-bleed pass: canvas full-width, content column keeps its cap.
+     The whole .cat-* table/row/reassign/add-row block that used to follow here
+     (the "Categories & colours" management table's own styling) was removed
+     2026-08-24 along with the feature itself -- see the retired-features doc.
+     Its JS (renderCategories()/catRowHtml()/catReassignHtml(), ~line 55527) is
+     left in place, null-guarded and unreachable, not deleted -- disclosed there. */
   #categoriesPage { max-width: none; }
   #categoriesPage > * { max-width: 760px; width: 100%; margin-left: auto; margin-right: auto; }
-  #categoriesPage .nt-intro { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; line-height: var(--lh-read); }
-  .cat-table-wrap { overflow-x: auto; border: 1px solid var(--note-line); border-radius: var(--radius-md); }
-  .cat-table { width: 100%; border-collapse: collapse; min-width: 640px; }
-  .cat-table th {
-    text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-    color: var(--ink-faint); font-weight: 700; padding: 12px 12px; border-bottom: 1px solid var(--note-line);
-  }
-  .cat-table td { padding: 8px 12px; border-bottom: 1px solid var(--note-line); vertical-align: middle; }
-  .cat-table tr:last-child td { border-bottom: none; }
-  .cat-row-sub .cat-cell-name { padding-left: 32px; }
-  .cat-cell-name { display: flex; align-items: center; gap: 8px; min-width: 160px; }
-  .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-  .cat-name-input {
-    border: none; background: transparent; color: var(--ink); font: inherit; font-size: 13px;
-    font-weight: 600; padding: 4px 8px; border-radius: 8px; min-width: 0; flex: 1;
-  }
-  .cat-name-input:hover, .cat-name-input:focus { background: var(--field-bg); outline: none; }
-  .cat-cell-type select, .cat-cell-under select {
-    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink);
-    font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 8px; cursor: pointer;
-  }
-  .cat-dash { color: var(--ink-faint); }
-  .cat-cell-colour { display: flex; align-items: center; gap: 8px; }
-  .cat-color-picker {
-    width: 26px; height: 26px; border: 1px solid var(--note-line); border-radius: 7px;
-    padding: 0; cursor: pointer; background: none; flex: none;
-  }
-  .cat-color-picker::-webkit-color-swatch-wrapper { padding: 4px; }
-  .cat-color-picker::-webkit-color-swatch { border: none; border-radius: 5px; }
-  .cat-hex-input {
-    width: 78px; border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink);
-    font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; padding: 4px 8px;
-    border-radius: 8px; text-transform: uppercase;
-  }
-  .cat-contrast { font-size: 13px; flex: none; }
-  .cat-contrast.ok { color: var(--fit-workout); }
-  .cat-contrast.warn { color: var(--warn); }
-  .cat-preview-chip {
-    position: relative; display: inline-flex; width: 46px; height: 22px; border-radius: 7px; flex: none;
-  }
-  .cat-preview-dot {
-    position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%;
-    border: 1.5px solid var(--paper);
-  }
-  .cat-del-btn {
-    border: none; background: transparent; color: var(--ink-faint); font-size: 13px;
-    padding: 8px; border-radius: 8px; cursor: pointer; line-height: 1;
-  }
-  .cat-del-btn:hover { background: color-mix(in oklab, var(--warn) 14%, transparent); color: var(--warn); }
-  .cat-reassign { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .cat-reassign select {
-    border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink);
-    font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 8px;
-  }
-  .cat-reassign-go {
-    border: 1px solid var(--margin-rule); background: var(--margin-rule); color: var(--accent-on);
-    font: inherit; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap;
-  }
-  .cat-reassign-cancel {
-    border: none; background: transparent; color: var(--ink-faint); font-size: 13px;
-    padding: 4px 8px; cursor: pointer; line-height: 1;
-  }
-  .cat-reassign-note { font-size: 11px; color: var(--ink-faint); font-style: italic; }
-  .cat-add-row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-  #categoriesPage .add-btn-gold {
-    border: 1px solid var(--margin-rule); background: var(--margin-rule); color: var(--accent-on);
-    padding: 8px 16px; font-weight: 600;
-  }
   @media (max-width: 640px) {
-    #categoriesPage .bd-head, #categoriesPage .nt-intro { padding: 0 4px; }
-    .cat-hex-input { width: 66px; }
+    #categoriesPage .bd-head { padding: 0 4px; }
   }
   /* permission status banner */
   #notifyPage .nt-banner {
@@ -18006,8 +17905,10 @@
       </div>
       <div class="tl-detail-body">
         <input class="hb-name-in" id="hbName" placeholder="Habit name">
-        <div class="hb-lab">Category</div>
-        <div class="hb-row" id="hbCats"></div>
+        <!-- Category (a "Part of life" picker in colour-swatch form) retired 2026-08-24
+             -- see the retired-features doc. hbDraft.track stays hardcoded from the
+             habit's existing value / "personal" default, same as every other retired
+             track picker. -->
         <div class="hb-lab">Aim</div>
         <div class="hb-row" id="hbAim"></div>
         <div id="hbDays" class="hb-days" hidden></div>
@@ -18216,14 +18117,8 @@
           <select id="pplGroup"></select>
         </div>
       </div>
-      <div class="field full">
-        <label>Part of life</label>
-        <div class="track-picker" id="pplTrackPicker" role="group" aria-label="Part of life">
-          <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
-          <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-          <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
-        </div>
-      </div>
+      <!-- "Part of life" picker retired 2026-08-24 (see the retired-features doc) --
+           pplTrack stays hardcoded "personal" below (its own pre-existing default). -->
       <div class="full ppl-bday-row">
         <div class="field"><label for="pplDay">Birthday — day</label><input type="number" id="pplDay" min="1" max="31"></div>
         <div class="field"><label for="pplMonth">Month</label><input type="number" id="pplMonth" min="1" max="12"></div>
@@ -18416,19 +18311,16 @@
         </div>
         <div class="efp-body">
           <div class="efp-card" data-efp-card="basics">
-            <div class="field rtn-g8">
+            <!-- "Part of life" picker retired 2026-08-24 (see the retired-features doc) --
+                 rtnTrack stays written on save (a real value the colour engine's quiet
+                 fallback still needs) but is no longer user-choosable; Name (was rtn-g8,
+                 paired with this field's rtn-g4 to fill one 12-col row) takes the whole
+                 row now so removing this field collapses cleanly, no empty gap. -->
+            <div class="field full">
               <label for="rtnTitle">Name</label>
               <div class="rtn-name-row">
                 <input type="text" id="rtnIcon" class="rtn-icon-input" placeholder="＋" maxlength="8" autocomplete="off" aria-label="Icon (optional, tap to type an emoji)">
                 <input type="text" id="rtnTitle" class="field-bare" placeholder="e.g. Laundry, Bins out, Water the plants" autocomplete="off" required>
-              </div>
-            </div>
-            <div class="field rtn-g4" id="rtnTrackField">
-              <label>Part of life</label>
-              <div class="track-picker" id="rtnTrackPicker" role="group" aria-label="Part of life">
-                <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
-                <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-                <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
               </div>
             </div>
             <div class="field full" id="rtnPhaseField">
@@ -18836,10 +18728,13 @@
     <div class="rtg-hd" style="margin-top:24px"><h2>Routine Library</h2><span class="rtg-n" id="rtnLibCount"></span></div>
     <div class="rtg-toolbar">
       <input type="search" class="rtg-search" id="rtgSearch" placeholder="Search routines…">
+      <!-- 2026-08-24: the "Track ▸ Category" and "Track" options are retired (Track =
+           Part of life, see the retired-features doc). Category is now its own top-level
+           grouping and the default -- it was already the second half of the old
+           "trackcat" nesting, so the sub-headings she actually reads are unchanged. -->
       <select class="rtg-grp" id="rtgGroupBy" aria-label="Group by">
-        <option value="trackcat" selected>Group by: Track ▸ Category</option>
+        <option value="subcat" selected>Group by: Category</option>
         <option value="none">Group by: None</option>
-        <option value="track">Group by: Track</option>
         <option value="phase">Group by: Phase</option>
         <option value="month">Group by: Month</option>
       </select>
@@ -19147,13 +19042,11 @@
     <div class="bd-head">
       <h1>All Events</h1>
     </div>
+    <!-- "Filter by life area" retired 2026-08-24 (see the retired-features doc) --
+         state.evlTrack now stays permanently undefined; renderEventsPage() and the
+         .ics export click handler (search "state.evlTrack") both read it with an
+         `|| "all"` fallback, so nothing here needs the value to ever be set again. -->
     <div class="evl-filters">
-      <div class="track-picker" id="evlTrackPicker" role="group" aria-label="Filter by life area">
-        <button type="button" class="track-opt" data-evltrack="all" aria-pressed="true">All</button>
-        <button type="button" class="track-opt" data-track="work" data-evltrack="work" aria-pressed="false">Work</button>
-        <button type="button" class="track-opt" data-track="marriage" data-evltrack="marriage" aria-pressed="false">Marriage</button>
-        <button type="button" class="track-opt" data-track="personal" data-evltrack="personal" aria-pressed="false">Personal</button>
-      </div>
       <div class="evl-range">
         <label for="evlFrom">From</label><input type="date" id="evlFrom">
         <label for="evlTo">To</label><input type="date" id="evlTo">
@@ -19202,18 +19095,26 @@
   <!-- ================= CATEGORIES ================= -->
   <div class="page" id="categoriesPage" hidden>
     <div class="bd-head">
-      <h1>🎨 Categories</h1>
+      <h1>🎨 Appearance</h1>
     </div>
-    <p class="nt-intro">Rename, recolour, add or remove a part of life or its sub-categories — every block, chip, dot and legend in Book33 reads its colour from here.</p>
-    <!-- 2026-08-15 (Day mode, Phase 1): the Night / Day / Auto choice. This page is the
-         app's settings home for anything to do with colour ("One source of truth for every
-         colour"), and there is no other global Settings page in this file — so the theme
-         preference lives with the palette rather than in a new page of its own.
-         Built from the pattern the file's ONE existing settings row already uses (the Cycle
-         page's "What counts as day 1"): .section-head + .cyc-settings + .cyc-settings-label
-         + a .track-picker / .track-opt segmented control driven by aria-pressed. No new
-         control type invented; .track-opt already carries the 44px mobile tap target. -->
-    <div class="section-head"><h2>Appearance</h2><span class="rule"></span></div>
+    <!-- "Categories & colours" management (rename/recolour/add/remove/reassign a part
+         of life) retired 2026-08-24 along with every Part-of-life picker/tag/filter --
+         see the retired-features doc. This page's own intro + #catBody table + "Add
+         part of life"/"Add sub-category" buttons are gone with it; renderCategories()
+         (~line 55527) is left in place but null-guards on #catBody and never fires
+         again. CATS itself, saveCategories(), and regenerateCategoryStyles() are
+         UNTOUCHED -- existing categories still render their existing colours as the
+         calendar's quiet fallback fill (see Mode law / the retired-features doc for
+         why), there is just no more UI to rename/recolour/add/remove/reassign them.
+         2026-08-15 (Day mode, Phase 1): the Night / Day / Auto choice below is the only
+         thing left on this page now -- still built from the pattern the file's ONE
+         existing settings row used (the Cycle page's "What counts as day 1"):
+         .cyc-settings + .cyc-settings-label + a .track-picker / .track-opt segmented
+         control driven by aria-pressed. No new control type invented; .track-opt
+         already carries the 44px mobile tap target. Its own .section-head + &lt;h2&gt;
+         ("Appearance", to separate it from the Categories section above) is dropped
+         now that this page's own &lt;h1&gt; already says "Appearance" and there's only
+         one section left underneath it -- keeping both read as a duplicated heading. -->
     <div class="cyc-settings" id="themeModeRow">
       <span class="cyc-settings-label">Theme</span>
       <div class="track-picker" id="themeModePicker" role="group" aria-label="Theme">
@@ -19223,8 +19124,6 @@
       </div>
       <span class="footnote" id="themeModeNote" style="text-align:left;max-width:none;margin:0">Auto follows your phone or computer's own light/dark setting, and changes with it.</span>
     </div>
-    <div class="section-head" style="margin-top:24px"><h2>Categories &amp; colours</h2><span class="rule"></span></div>
-    <div id="catBody"></div>
   </div>
 
   <!-- ================= TO-DO (2026-08-17, Event/Repeats collapse) =================
@@ -19250,15 +19149,9 @@
         <label for="todoTitle">What</label>
         <input type="text" id="todoTitle" class="field-bare" placeholder="e.g. Book the dentist, Return the parcel" autocomplete="off" required>
       </div>
-      <div class="field full">
-        <label>Part of life</label>
-        <div class="track-picker" id="todoTrackPicker" role="group" aria-label="Part of life">
-          <button type="button" class="track-opt" data-track="work" aria-pressed="false">Work</button>
-          <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
-          <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-          <button type="button" class="track-opt" data-track="personal" aria-pressed="true">Personal</button>
-        </div>
-      </div>
+      <!-- "Part of life" picker retired 2026-08-24 (see the retired-features doc) --
+           saveTodo() below now hardcodes track:"personal" for every new to-do, same
+           precedent the widget-rail quick-jot paths already used with no picker at all. -->
       <div class="field full">
         <label>Mode <span class="field-hint">optional</span></label>
         <div class="track-picker" id="todoModePicker" role="group" aria-label="Mode"></div>
@@ -20561,21 +20454,11 @@
             <span id="moreOptsLabel">More options</span><span class="moreopts-chevron">›</span>
           </button>
           <div class="addform-more" id="addFormMore" hidden>
-            <!-- two-person system (Linh 2026-07-27): every item can be hers, his, or shared.
-                 2026-08-02 (code44, "easier to read and fill in" — she almost always picks
-                 "Mine" per her own answer): collapsed to a one-line summary by default; tap
-                 "change" to reveal the full picker. See syncWho()/whoSummaryBtn wiring. -->
-            <div class="field full" id="fWhoField">
-              <label>Whose job</label>
-              <button type="button" class="who-summary-btn" id="whoSummaryBtn" aria-expanded="false">
-                <span id="whoSummaryText">🙋‍♀️ Mine</span><span class="who-edit">Change ›</span>
-              </button>
-              <div class="track-picker" id="whoPicker" role="group" aria-label="Whose job" hidden>
-                <button type="button" class="track-opt who-opt" data-who="me" aria-pressed="true">🙋‍♀️ Mine</button>
-                <button type="button" class="track-opt who-opt" data-who="partner" aria-pressed="false">🙋‍♂️ <span class="who-name">David</span></button>
-                <button type="button" class="track-opt who-opt" data-who="both" aria-pressed="false">👫 Both of us</button>
-              </div>
-            </div>
+            <!-- "Whose job" (Mine/Partner/Both picker) retired 2026-08-24 -- see the
+                 retired-features doc. formWho stays permanently "me" now; whoOf/WHO_IDS/
+                 whoLabel/whoEm are untouched (the Us page's own division-of-labour board
+                 and the quick-add bar still read/write e.who through their own separate
+                 controls, not this form). -->
             <!-- 2026-08-09 (design44): "Honestly, how long?" and "Or duration" are
                  retired as visible fields — the How long picker on the main form
                  above is the one control now. Kept as hidden inputs, same ids, so
@@ -20583,28 +20466,10 @@
                  keeps working untouched — see syncDurFromBoxes(). -->
             <input type="hidden" id="fEst">
             <input type="hidden" id="fDur">
-            <!-- 2026-08-23 (field-order rework): relocated verbatim from the basics card
-                 (was the 2nd row there, right after What) -- Linh's requested order doesn't
-                 mention Part of life, so it moves here alongside Whose job/Category/Goal/
-                 Notes. Same block, same ids, same trackVisible()/PREFS.tracksOff behaviour --
-                 only its "full" class is new, needed because #addFormMore's children lay out
-                 directly in the outer 2-col grid (display:contents, see that rule's own
-                 comment) rather than the flex column .efp-body gave it before. -->
-            <div class="efp-field-row full">
-                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor" stroke="none"/></svg></div>
-                  <div class="field" id="fTrackField">
-                    <label>Part of life</label>
-                    <button type="button" class="who-summary-btn" id="trackSummaryBtn" aria-expanded="false">
-                      <span id="trackSummaryText">Work</span><span class="who-edit">Change ›</span>
-                    </button>
-                    <div class="track-picker" id="trackPicker" role="group" aria-label="Part of life" hidden>
-                      <button type="button" class="track-opt" data-track="work" aria-pressed="true">Work</button>
-                      <button type="button" class="track-opt" data-track="family" aria-pressed="false">Family</button>
-                      <button type="button" class="track-opt" data-track="marriage" aria-pressed="false">Marriage</button>
-                      <button type="button" class="track-opt" data-track="personal" aria-pressed="false">Personal</button>
-                    </div>
-                  </div>
-            </div>
+            <!-- "Part of life" picker retired 2026-08-24 (see the retired-features doc) --
+                 state.track stays written on every save (a real value the colour engine's
+                 quiet fallback still needs, see regenerateCategoryStyles()) but is no
+                 longer user-choosable; closeForm() keeps resetting it to a fixed default. -->
             <div class="allday-row" id="fAllDayRow">
               <input type="checkbox" id="fAllDay"><label for="fAllDay">All day / no set time</label>
             </div>
@@ -22272,12 +22137,12 @@
   const whoOf = e => (e && WHO_IDS.includes(e.who)) ? e.who : "me";
   const whoLabel = w => w === "partner" ? partnerName() : w === "both" ? "Both of us" : "Mine";
   const whoEm = w => w === "partner" ? "🙋‍♂️" : w === "both" ? "👫" : "🙋‍♀️";
-  // her own items stay unmarked so the calendar doesn't get noisy — only his and shared show a badge
-  const whoChip = e => {
-    const w = whoOf(e);
-    if (w === "me") return "";
-    return `<span class="who-chip who-${w}" title="${esc(whoLabel(w))}">${w === "both" ? "👫 Both" : esc(partnerName())}</span>`;
-  };
+  // whoOf/WHO_IDS/whoLabel/whoEm stay -- still read by the Us page (division-of-labour
+  // board) and the quick-add bar's own who parsing, both untouched by the 2026-08-24
+  // "retire Whose Job" brief (that brief is about the add/edit FORM's own field, which
+  // this app happens to share a data property with -- see the retired-features doc).
+  // whoChip (the small badge this used to print on a calendar card) is gone: it was
+  // this field's only "tag... on event cards" per that brief's STEP 2.
   const pad = n => String(n).padStart(2, "0");
   const key = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
   const keyOf = date => key(date.getFullYear(), date.getMonth() + 1, date.getDate());
@@ -27426,8 +27291,11 @@
         { id: "lifeMap", label: "Life Map", group: "Plan" },
         { id: "review", label: "Weekly Review", group: "Settings" },
         // 2026-08-09 (build brief): daybook-categories' one home — same settings-ish
-        // cluster as Notifications, not a separate settings page.
-        { id: "categories", label: "Categories", group: "Settings" },
+        // cluster as Notifications, not a separate settings page. Relabeled "Appearance"
+        // 2026-08-24: its Categories & colours management retired (see the retired-
+        // features doc), leaving only the Theme picker -- "Categories" would now be a
+        // misleading label for a page with none left. Same page id/route, untouched.
+        { id: "categories", label: "Appearance", group: "Settings" },
         // 2026-08-05 ("B33 Notification"): the phone-notification settings panel —
         // the chapter menu is the app's settings home, so the page lives here.
         { id: "notify", label: "Notifications", group: "Settings" } ] },
@@ -28619,31 +28487,65 @@
       placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps });
     });
 
-    // 2026-08-23 ("merge truly back-to-back same-named blocks"): before the top/h/
-    // -3/clusterOverlaps geometry below ever runs, collapse a RUN of consecutive-
-    // by-time `placed` entries that are genuinely the same repeated thing -- same
-    // title AND same track AND one's real painted end (ce) equals the next one's
-    // real painted start (cs), no gap -- into ONE entry spanning the run's first
-    // start to its last end. Two different adjacent items, or the same title with
-    // an actual gap, never match this and fall through as their own single-item
-    // "run" -- completely unchanged, hairline gap and all, same as every render
-    // before this. clusterOverlaps() below never even sees the difference: a
-    // merged run is just one placed entry like any other by the time it runs.
-    // Every individual occurrence inside a run stays reachable — see
-    // TL_MERGE_GROUPS above and renderTlMergeList (near openTlDetail).
+    // 2026-08-23 ("merge truly back-to-back same-named blocks"), loosened 2026-08-24
+    // ("same-named events on one day aren't all merging"): before the top/h/-3/
+    // clusterOverlaps geometry below ever runs, collapse a RUN of `placed` entries
+    // that are genuinely the same repeated thing into ONE entry spanning the run's
+    // earliest start to its latest end. The original rule required one's painted end
+    // (ce) to land EXACTLY on the next one's start (cs) -- real logged data never
+    // lines up that precisely (a routine logged 11:30pm-11:59pm butting against the
+    // next logged 12am-1am misses by 1 minute and fails to merge; two accidental
+    // double-taps of the same "log it" action produce two IDENTICAL time spans,
+    // which also fails the old "cs===prev.ce" test since neither touches the
+    // other's end). Confirmed live against the real book33-app data (2026-08-24):
+    // a single date carried up to 11 separate "Sleep" events, several exact-duplicate
+    // time spans and one 1-minute short end, which is exactly this failure mode --
+    // not genuinely distinct sessions (a real second nap/sleep session sits hours
+    // away, far past MERGE_GAP_TOLERANCE, and still renders as its own block below).
+    // Same key as before (title + track) plus category (her "title + category" ask --
+    // this file's "category" is the finer sub-tag alongside the coarser track/"part
+    // of life", so both are matched) plus, when either item carries a routine/
+    // recurrence anchor (rtTaskId/recurId), that anchor must match too -- two
+    // DIFFERENT routines/recurring series that just happen to share a title must
+    // never fold into one badge. The gap test compares against the RUN's running
+    // max end (not just the immediately-previous item) so out-of-order duplicates
+    // and a short item nested inside a longer one still merge correctly. Every
+    // individual occurrence inside a run stays reachable at its own real time --
+    // see TL_MERGE_GROUPS above and renderTlMergeList (near openTlDetail) -- nothing
+    // here touches the underlying data, this is a display grouping only.
+    const MERGE_GAP_TOLERANCE = 60; // minutes: how far apart two same-title/track/
+    // category occurrences can sit and still read as "the same routine, done again"
+    // rather than a genuinely separate occurrence. Generous enough to absorb messy
+    // logged boundaries (the live data's worst case was 1 minute) while still miles
+    // short of the hours that separate a real distinct session later the same day.
+    const tlMergeAnchor = e => e.rtTaskId || e.recurId || null;
     placed.sort((a, b) => a.cs - b.cs);
     const tlRuns = [];
     placed.forEach(p => {
       const run = tlRuns[tlRuns.length - 1];
       const prev = run && run[run.length - 1];
-      const chains = prev && !isGhostItem(prev.e) && !isGhostItem(p.e)
-        && p.e.title === prev.e.title && p.e.track === prev.e.track && p.cs === prev.ce;
+      let chains = false;
+      if (run && !isGhostItem(prev.e) && !isGhostItem(p.e)
+        && p.e.title === prev.e.title && p.e.track === prev.e.track
+        && (p.e.category || "") === (prev.e.category || "")) {
+        const prevAnchor = tlMergeAnchor(prev.e), pAnchor = tlMergeAnchor(p.e);
+        const anchorOk = (!prevAnchor && !pAnchor) || prevAnchor === pAnchor;
+        if (anchorOk) {
+          const runMaxCe = Math.max(...run.map(x => x.ce));
+          chains = (p.cs - runMaxCe) <= MERGE_GAP_TOLERANCE;
+        }
+      }
       if (chains) run.push(p); else tlRuns.push([p]);
     });
     placed.length = 0;
     tlRuns.forEach(run => {
       if (run.length === 1) { placed.push(run[0]); return; }
-      const first = run[0], last = run[run.length - 1];
+      const first = run[0];
+      let last = run[0];
+      run.forEach(p => { if (p.ce > last.ce) last = p; }); // the run's real max end, NOT
+      // run[run.length-1] -- a cs-sorted run can still contain a duplicate/nested item
+      // whose own ce isn't the largest (an out-of-order overlap), so the plain last
+      // array entry would understate the badge's true end time.
       const members = run.map(p => ({ id: p.e.id, start: p.e.start, end: p.e.end || minToTime(p.trueEnd) }));
       run.forEach(p => {
         if (!isGhostItem(p.e) || !TL_ITEMS_BY_ID[p.e.id]) TL_ITEMS_BY_ID[p.e.id] = p.e;
@@ -28726,7 +28628,6 @@
       // on 2026-08-15 and only stopped short of acting on. metaTrack now carries the
       // desktop-1-day variant alone (clinic patient counts, metaDesk) and is empty at
       // every other width, so a mobile block's second line is a plain time range again.
-      const trackLbl = trackLabel(e.track);
       // 2026-08-15 (desktop DAY view build, §4.4): a second, desktop-1-day-only
       // variant of the mobile "time + track" subline just below — the column is
       // wide there (only one of it), so the spec asks for real context instead of
@@ -28743,12 +28644,15 @@
       // always 0 there. Gated to the CBD Work block itself (isClinicBlock, the
       // real "this is clinic hours" signal — see clinicApptItems' own comment)
       // AND a real count ≥1, so a clinic day with nothing booked yet still falls
-      // back to the plain trackLbl reading instead of a bare "0 patients".
+      // back to a plain time range instead of a bare "0 patients". The non-clinic
+      // fallback used to read " · <Part of life>" (trackLbl) -- retired 2026-08-24
+      // along with every other Part-of-life tag/label (see the retired-features
+      // doc), so it's a plain time range now, same as every other width already
+      // shows for a non-clinic block.
       const isClinicBlock = e.track === "work" && normTitle(e.title) === "cbd work";
       const patCount = isClinicBlock ? deskBlockPatientCount(e, items, p.cs, p.ce) : 0;
-      const metaDesk = deskWidgetsActive() && isBlock
-        ? (isClinicBlock && patCount >= 1 ? ` · ${patCount} patients` : (trackLbl ? ` · ${esc(trackLbl)}` : ""))
-        : "";
+      const metaDesk = deskWidgetsActive() && isBlock && isClinicBlock && patCount >= 1
+        ? ` · ${patCount} patients` : "";
       const metaTrack = metaDesk;
       // 2026-08-06 (Linh: "remove the edit and delete icons from every event block --
       // they're faint and cluttered"): the per-card .tl-edit/.tl-del pencil/× are gone --
@@ -28855,9 +28759,10 @@
       // time below it... remove the tiny icons/emoji cluttering events"): the per-kind
       // glyph (● event / ↻ routine) and the recurring-item ↻ badge are dropped — pure
       // decoration once every card already reads its kind from its uniform card style
-      // + colour. whoChip/stagedLabel/stageChip stay: they're real information (whose
-      // job it is, a staged task's current step, "2/3" progress) with no other home in
-      // this view, not decoration. tl-cat (the track-name corner tag) was already
+      // + colour. stagedLabel/stageChip stay: they're real information (a staged
+      // task's current step, "2/3" progress) with no other home in this view, not
+      // decoration. whoChip (whose job it was) was dropped 2026-08-24 — see the
+      // retired-features doc. tl-cat (the track-name corner tag) was already
       // display:none everywhere — dropped from the render entirely rather than left as
       // dead markup.
       // tapping the block opens the detail sheet (openTlDetail, wired in the click
@@ -28928,7 +28833,12 @@
       // 2026-08-09 (Categories & colours brief): the part-of-life dot always shows —
       // a sub-category's fill (e.g. Fitness green) still needs to read as its parent
       // (Personal) at a glance, so this carries the parent's own colour, never the sub's.
-      const lifeDot = `<span class="tl-life-dot" style="background:${catDotColor(e)}" title="${esc(trackLabel(e.track))}" aria-hidden="true"></span>`;
+      // 2026-08-24: dropped the title="Personal" tooltip (a text label naming the
+      // retired Part-of-life field, see the retired-features doc) -- the dot itself
+      // is quiet colour only now, same as it's always been aria-hidden (never read
+      // aloud) and same as its multi-day-column twin a few hundred lines down
+      // (search "md-item-title .tl-life-dot") already rendered with no title at all.
+      const lifeDot = `<span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span>`;
       // 2026-08-23: same reasoning as the resizable guard above -- a merged box's
       // own data-move-id would only ever carry the ONE representative id, so
       // press-and-hold-reschedule and right-click-edit (both keyed off this
@@ -28936,9 +28846,9 @@
       // the first occurrence. A small ×N badge marks the box as standing in for
       // several -- tapping it (like tapping anywhere on the box) opens the
       // detail sheet, which shows the merge sub-list (renderTlMergeList).
-      const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} back-to-back occurrences">×${p.mergeCount}</span>` : "";
+      const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
       return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
-        <span class="tl-title">${tick}${ovrDot}${lifeDot}${whoChip(e)}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}</span>
+        <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
       </div>`;
@@ -29815,7 +29725,13 @@
       <div class="tl-detail-title tl-detail-mobile-hide"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
       <div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🕐", "tl-detail-em")}<span>${timeLabel}${freqLabelShort ? `<span class="tl-detail-sub">${esc(freqLabelShort)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row tl-detail-row-where">${glyphHtml("📍", "tl-detail-em")}<span>${path.map(esc).join(" › ")}</span></div>` : ""}
-      ${e.track ? `<div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(trackLabel(e.track))}${e.category ? `<span class="tl-detail-sub">${esc(e.category)}</span>` : ""}</span></div>` : ""}
+      <!-- 2026-08-24: this row used to lead with trackLabel(e.track) ("Personal" etc.,
+           a Part-of-life tag, retired -- see the retired-features doc), with e.category
+           tucked in as a smaller sub-span next to it, and was gated on e.track (which
+           always has a value, so it always rendered). Now it's e.category alone,
+           gated on e.category actually being set, so a plain event with no category
+           shows no empty tag row at all. -->
+      ${e.category ? `<div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(e.category)}</span></div>` : ""}
       ${repeatsRowHtml}
       ${originRowHtml}
       ${nextAfterHtml}
@@ -29842,8 +29758,11 @@
     document.getElementById("tlDetailHead").dataset.track = e.track || "";
     document.getElementById("tlDetailHead").dataset.mode = modeOf(e) || "";
     document.getElementById("tlDetailHead").dataset.category = e.category || "";
+    // 2026-08-24: was `🏷 ${trackLabel(e.track)}${category ? " › "+category : ""} ·
+    // ${kind}`, gated on e.track (always set, so always rendered). trackLabel() is
+    // retired (see the retired-features doc) -- category leads now, only when set.
     document.getElementById("tlDetailHero").innerHTML = `
-      ${e.track ? `<div class="tl-detail-crumb">🏷 ${esc(trackLabel(e.track))}${e.category ? ` › ${esc(e.category)}` : ""} · ${kind === "routine" ? "↻ routine" : esc(kind)}</div>` : ""}
+      <div class="tl-detail-crumb">${e.category ? `🏷 ${esc(e.category)} · ` : ""}${kind === "routine" ? "↻ routine" : esc(kind)}</div>
       <div class="tl-detail-hero-title">${esc(e.title)}</div>
       <div class="tl-detail-when">${heroWhenHtml}</div>
     `;
@@ -29987,7 +29906,7 @@
     const run = TL_MERGE_GROUPS[id];
     if (!run || run.length < 2) { host.hidden = true; host.innerHTML = ""; return; }
     host.hidden = false;
-    host.innerHTML = `<div class="tl-merge-label">${run.length} back-to-back</div>
+    host.innerHTML = `<div class="tl-merge-label">${run.length} occurrences today</div>
       <div class="tl-merge-rows">${run.map(m => `<button type="button" class="tl-merge-row${m.id === id ? " on" : ""}" data-tl-merge-open="${esc(m.id)}">${fmtTime(m.start)} – ${fmtTime(m.end)}</button>`).join("")}</div>`;
   }
   document.getElementById("tlDetailMergeList").addEventListener("click", e => {
@@ -33742,7 +33661,10 @@
       // Routines-list row instead (hairRoutineRowHtml).
       const list = ROUTINE_TASKS.filter(t => t.track === tk && t.freq !== "sinceLastDone");
       if (!list.length) return;
-      g += `<div class="hb-grp">${esc(trackLabel(tk))}</div>`;
+      // 2026-08-24: the Part-of-life band that used to head each track's run of rows
+      // here is retired (see the retired-features doc). The rows themselves still come
+      // out grouped by track (this loop is unchanged) -- just no longer labelled with
+      // the life-category's name, same as the Routines list's own flattening.
       list.forEach(t => {
         g += `<div class="hb-hl" data-hb-edit="${t.id}"><span class="hb-nm">${esc(t.title)}</span><span class="hb-aim">${esc(routineFreqLabel(t))}</span></div>`;
         let doneCount = 0;
@@ -33794,16 +33716,20 @@
       g += `<div class="hb-mcell${today ? " today" : ""}" style="${has ? "background:var(--personal-seed)" : ""}" data-hb-weight="${k}"></div>`;
     }
     g += `</div>`;
-    const seen = new Set(); let lg = "";
-    HB_TRACKS().forEach(tk => { if (ROUTINE_TASKS.some(t => t.track === tk)) lg += `<span class="hb-lg"><span class="hb-sw" style="background:var(--${tk}-seed)"></span>${esc(trackLabel(tk))}</span>`; });
-    document.getElementById("hbView").innerHTML = `<div class="hb-scroll">${g}</div><div class="hb-legend">${lg}</div>`;
+    // 2026-08-24: the Part-of-life colour legend under this grid is retired (see the
+    // retired-features doc) -- it existed only to name each track's swatch colour,
+    // which is exactly the kind of visible Part-of-life label that went. The cells
+    // themselves keep their colours (quiet fallback fill, unchanged).
+    document.getElementById("hbView").innerHTML = `<div class="hb-scroll">${g}</div>`;
   }
   function renderHbManage() {
     let g = `<div class="hb-tbl">`;
     HB_TRACKS().forEach(tk => {
       ROUTINE_TASKS.filter(t => t.track === tk).forEach(t => {
         g += `<div class="hb-tn" data-hb-edit="${t.id}">${esc(t.title)}</div>`;
-        g += `<div class="hb-tcat" data-hb-edit="${t.id}"><span class="hb-sw" style="background:var(--${t.track}-seed)"></span>${esc(trackLabel(t.track))}</div>`;
+        // 2026-08-24: was a swatch + trackLabel() name (a Part-of-life tag, retired --
+        // see the retired-features doc). The swatch stays as quiet colour; the name went.
+        g += `<div class="hb-tcat" data-hb-edit="${t.id}"><span class="hb-sw" style="background:var(--${t.track}-seed)"></span></div>`;
         g += `<div class="hb-ta" data-hb-edit="${t.id}">${esc(routineFreqLabel(t))}</div>`;
       });
     });
@@ -33845,16 +33771,15 @@
     hbDraft = { track: t ? t.track : "personal", aim: hbAimFromRoutine(t) };
     document.getElementById("hbName").value = t ? t.title : "";
     document.getElementById("hbDelBtn").hidden = !hbEditingId;
-    drawHbCats(); drawHbAim();
+    drawHbAim();
     document.getElementById("hbOverlay").hidden = false;
     document.getElementById("hbName").focus();
   }
   function closeHbEditor() { document.getElementById("hbOverlay").hidden = true; }
-  function drawHbCats() {
-    document.getElementById("hbCats").innerHTML = HB_TRACKS().map(tk =>
-      `<span class="hb-pill" data-hb-track="${tk}" aria-pressed="${hbDraft.track === tk}"><span class="hb-sw" style="background:var(--${tk}-seed)"></span>${esc(trackLabel(tk))}</span>`
-    ).join("");
-  }
+  // drawHbCats() (the "Category" colour-swatch track picker) retired 2026-08-24 along
+  // with it -- see the retired-features doc. hbDraft.track is set once in
+  // openHbEditor() above (from the habit's existing value, or "personal" for a new
+  // one) and never reassigned now that its picker is gone.
   const HB_AIMS = [{ t: "daily", l: "Daily" }, { t: "count", l: "× per week" }, { t: "days", l: "Specific days" }];
   function drawHbAim() {
     document.getElementById("hbAim").innerHTML = HB_AIMS.map(a =>
@@ -38255,19 +38180,21 @@
     // with a repeated Group column becomes group SECTIONS (one tbody per TREE_GROUP,
     // labelled header row + count), alphabetical within each group. The Group column
     // is gone — the section header carries it — which also frees width on phones.
+    // "Part of life" column retired 2026-08-24 (see the retired-features doc) --
+    // was Name/Part of life/Birthday/Connections/actions (colspan 5 on the group-
+    // header row); now Name/Birthday/Connections/actions (colspan 4).
     el.innerHTML = `<div class="ppl-table-wrap"><table class="ppl-table">
-      <thead><tr><th>Name</th><th>Part of life</th><th>Birthday</th><th>Connections</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Birthday</th><th>Connections</th><th></th></tr></thead>
       ${groupsWithPeople.map(({ g, list }) => {
         const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
         return `<tbody class="ppl-group">
-        <tr class="ppl-ghead"><th colspan="5">${esc(g.label)}<span class="cnt">${list.length}</span></th></tr>
+        <tr class="ppl-ghead"><th colspan="4">${esc(g.label)}<span class="cnt">${list.length}</span></th></tr>
         ${sorted.map(p => {
           const bdText = p.day && p.month ? `${p.day} ${MON_SHORT[p.month - 1]}${p.year ? ` ${p.year}` : ""}` : "—";
           const rels = relationsFor(p.id);
           const relText = rels.length ? rels.map(r => `${esc(REL_KIND_LABEL[r.kind])} ${esc(r.other.name)}`).join(", ") : "—";
           return `<tr id="ppl-${p.id}" data-ppl-profile="${p.id}" title="Open ${esc(p.name)}'s profile">
             <td><span class="nm">${esc(p.name)}</span>${p.relation ? `<span class="rel"> — ${esc(p.relation)}</span>` : ""}</td>
-            <td><span class="rtn-track-dot" style="background:${TRACK_INK[p.track] || "var(--ink-faint)"}"></span>${trackLabel(p.track) || "—"}</td>
             <td class="meta">${esc(bdText)}</td>
             <td class="meta ppl-rels">${relText}</td>
             <td class="ppl-actions">
@@ -38622,12 +38549,15 @@
       const d = new Date(r.deletedAt);
       const when = `${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
       const seriesTag = r.kind === "recur" ? " · series" : "";
-      const subLabel = r.archiveKind === "meal" ? "Meal log" : trackLabel(r.track);
+      // 2026-08-24: non-meal rows used to sub-label with trackLabel(r.track) (a
+      // Part-of-life name, retired -- see the retired-features doc). They now show
+      // just the series tag + deletion date; the leading " · " is dropped with it.
+      const subLabel = r.archiveKind === "meal" ? "Meal log" : "";
       const restoreAttr = r.archiveKind === "routine" ? `data-rtn-archive-restore="${esc(r.id)}"`
         : r.archiveKind === "meal" ? `data-meal-archive-restore="${esc(r.id)}"`
         : `data-event-archive-restore="${esc(r.id)}"`;
       return `<div class="rtn-archive-row">
-        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${esc(subLabel)}${seriesTag} · deleted ${when}</span></div>
+        <div class="rtn-archive-info"><span class="rtn-archive-title">${esc(r.title)}</span><span class="field-hint">${subLabel ? esc(subLabel) : ""}${seriesTag}${subLabel || seriesTag ? " · " : ""}deleted ${when}</span></div>
         <button type="button" class="rtn-archive-restore" ${restoreAttr}>Restore</button>
       </div>`;
     }).join("");
@@ -38865,7 +38795,11 @@
     // RTN_SUBS's own suggested order first (so it reads the same as the picker),
     // then anything custom-typed that isn't in the list, alphabetically after.
     // Routines with no category stay flat at the top, exactly as before.
-    const groupFor = (area, label, dotColor, list) => {
+    // 2026-08-24: `label`/`dotColor` (the Part-of-life group header this used to
+    // print) are gone -- see the retired-features doc. The routines list is one flat
+    // sequence now, still sub-headed by t.category (a separate, un-retired field)
+    // exactly as before; only the "WORK / MARRIAGE / PERSONAL" band between them went.
+    const groupFor = list => {
       if (!list.length) return "";
       const uncategorized = list.filter(t => !t.category);
       const byCat = new Map();
@@ -38873,7 +38807,11 @@
         if (!byCat.has(t.category)) byCat.set(t.category, []);
         byCat.get(t.category).push(t);
       });
-      const order = RTN_SUBS[area] || [];
+      // RTN_SUBS was keyed by the (now-retired) track/area to order that area's own
+      // suggested sub-categories. With one flat list, every area's suggestions merge
+      // into one order list, then anything custom-typed sorts alphabetically after --
+      // same two-tier rule as before, just no longer per-area.
+      const order = Object.values(RTN_SUBS).flat();
       const catNames = [...byCat.keys()].sort((a, b) => {
         const ia = order.indexOf(a), ib = order.indexOf(b);
         if (ia === -1 && ib === -1) return a.localeCompare(b);
@@ -38884,19 +38822,10 @@
       const catsHtml = catNames.map(cat =>
         `<div class="rtn-subhead">${esc(cat)}</div>${panelFor(byCat.get(cat))}`
       ).join("");
-      const bodyHtml = `${panelFor(uncategorized)}${catsHtml}`;
-      return `<div class="rtn-group">
-        <div class="rtn-group-head"><span class="rtn-track-dot" style="background:${dotColor}"></span><span class="rtn-group-name">${esc(label)}</span><span class="rtn-group-count">${list.length}</span></div>
-        ${bodyHtml}
-      </div>`;
+      return `<div class="rtn-group">${panelFor(uncategorized)}${catsHtml}</div>`;
     };
-    const knownAreas = new Set(AREA_ORDER);
     const visibleTasks = ROUTINE_TASKS.filter(t => !qLib || t.title.toLowerCase().includes(qLib));
-    const groupsHtml = AREA_ORDER.map(area =>
-      groupFor(area, trackLabel(area), `var(--${area}-seed)`, visibleTasks.filter(t => t.track === area))
-    ).join("");
-    const otherHtml = groupFor("other", "Other", "var(--ink-faint)", visibleTasks.filter(t => !knownAreas.has(t.track)));
-    manageEl.innerHTML = groupsHtml + otherHtml;
+    manageEl.innerHTML = groupFor(visibleTasks);
     rtnInlineRedock("list");
   }
   // 2026-08-06 (Linh pasted a "3-phase table by category" mock; a sibling session
@@ -39056,7 +38985,9 @@
      that field (openRtnForm's new 2nd param) rather than growing real per-cell
      mini-editors -- far less surface area, reuses everything already working. */
   let rtnGridSort = { col: "title", dir: 1 };
-  let rtnGridGroupBy = "trackcat";
+  // 2026-08-24: was "trackcat" (Track ▸ Category). Track = Part of life, retired --
+  // see the retired-features doc. Category alone is the default now.
+  let rtnGridGroupBy = "subcat";
   let rtnGridSearch = "";
   // 2026-08-07 (Linh, "allow for adjusting table width"): per-device display
   // preference, not app data -- deliberately NOT "book33-"-prefixed (see bakExport/
@@ -39072,7 +39003,9 @@
   // its immediate neighbour (see the drag handler below) instead of growing the
   // table. New localStorage key: the old one held px values that would otherwise be
   // silently misread as percentages (a saved "100" meant 100px, not 100%).
-  const RTG_COLS = ["title", "track", "subcat", "phase", "freq", "time", "auto", "acts"];
+  // 2026-08-24: "track" (Part of life) dropped -- see the retired-features doc. Its
+  // 10% went to title, the widest wrap-friendly column, so the row still fills 100%.
+  const RTG_COLS = ["title", "subcat", "phase", "freq", "time", "auto", "acts"];
   const RTG_COL_MIN = 5;   // percent
   // 2026-08-07 (actions-column rebuild, Linh's "option b": Edit+Delete visible,
   // one-off/chain behind a ⋯ menu): acts/auto both went up from their original
@@ -39083,7 +39016,7 @@
   // 2026-08-10 (Linh: "add subcategory column"): title and freq gave up 5/4 points
   // to make room for it -- both still the widest columns since they're the only
   // wrap-friendly multi-word text (see .rtg-txt/.rtg-wrap).
-  const RTG_COL_DEFAULTS = { title: 16, track: 10, subcat: 9, phase: 9, freq: 15, time: 8, auto: 15, acts: 18 };
+  const RTG_COL_DEFAULTS = { title: 26, subcat: 9, phase: 9, freq: 15, time: 8, auto: 15, acts: 18 };
   let rtnGridColWidths = (() => {
     let saved = {};
     try { saved = JSON.parse(localStorage.getItem("b33-rtg-col-widths-pct") || "{}"); } catch (e) {}
@@ -39129,7 +39062,7 @@
     const PHASE_ORDER = { before: 0, during: 1, after: 2 };
     const sorters = {
       title: (a, b) => a.title.localeCompare(b.title),
-      track: (a, b) => (trackLabel(a.track) || "Other").localeCompare(trackLabel(b.track) || "Other") || a.title.localeCompare(b.title),
+      // `track` sorter dropped 2026-08-24 with its column (see the retired-features doc)
       subcat: (a, b) => (a.category || "").localeCompare(b.category || "") || a.title.localeCompare(b.title),
       phase: (a, b) => (PHASE_ORDER[rtnGridPhaseOf(a)] - PHASE_ORDER[rtnGridPhaseOf(b)]) || a.title.localeCompare(b.title),
       freq: (a, b) => routineFreqLabel(a).localeCompare(routineFreqLabel(b)) || a.title.localeCompare(b.title),
@@ -39144,7 +39077,9 @@
     rows.sort(sorters[rtnGridSort.col] || sorters.title);
     if (rtnGridSort.dir === -1) rows.reverse();
     if (rtnGridGroupBy === "none") return [{ label: null, items: rows }];
-    const groupKeyOf = t => rtnGridGroupBy === "track" ? (trackLabel(t.track) || "Other")
+    // 2026-08-24: the "track" branch (trackLabel(t.track), a Part-of-life name) is
+    // retired -- see the retired-features doc. "subcat" is the new default.
+    const groupKeyOf = t => rtnGridGroupBy === "subcat" ? (t.category || "Uncategorised")
       : rtnGridGroupBy === "phase" ? (rtnGridPhaseOf(t) === "during" ? "Event" : rtnGridPhaseOf(t)[0].toUpperCase() + rtnGridPhaseOf(t).slice(1))
       : rtnGridMonthGroup(t);   // "month"
     const groups = new Map();
@@ -39173,7 +39108,9 @@
     // — Track headers, sub-category sub-bands, rows tinted by sub-category colour, Track/
     // Category dropped as columns (they're the headers now). Its own renderer so the
     // sortable-column table is untouched for the other Group-by modes.
-    if (rtnGridGroupBy === "trackcat") { renderRtnGridNested(host); return; }
+    // 2026-08-24: renderRtnGridNested()'s "trackcat" mode is unreachable now (Track =
+    // Part of life, retired -- see the retired-features doc); the generic segmented
+    // renderer below handles every remaining Group-by mode, "subcat" included.
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; return; }
     const segments = rtnGridRows();
     if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; return; }
@@ -39223,7 +39160,6 @@
       const calOn = t.calOn !== false;
       return `<tr data-rtg-row="${esc(t.id)}">
         <td class="rtg-name" data-rtg-cell="rtnTitle"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(t.title)}</span></span></td>
-        <td data-rtg-cell="rtnTrack"><span class="rtg-trk">${dot}<span class="rtg-txt">${esc(trackLabel(t.track) || "Other")}</span></span></td>
         <td data-rtg-cell="rtnCategory">${catLabel ? `<span class="rtg-trk">${catDot}<span class="rtg-txt">${esc(catLabel)}</span></span>` : `<span class="rtg-muted">—</span>`}</td>
         <td data-rtg-cell="rtnPhase"><span class="rtg-phase phase-lbl-${phase}">${phaseLbl}</span></td>
         <td class="rtg-muted rtg-wrap" data-rtg-cell="rtnFreqGroup">${esc(routineFreqLabel(t))}</td>
@@ -39250,7 +39186,7 @@
     host.innerHTML = `
       <div class="rtg-tbl"><table>
         ${colgroupHtml}
-        <thead><tr>${th("title", "Routine")}${th("track", "Track")}${th("subcat", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Cal</th><th></th></tr></thead>
+        <thead><tr>${th("title", "Routine")}${th("subcat", "Category")}${th("phase", "Phase")}${th("freq", "Repeats")}${th("time", "Time")}<th class="rtg-auto-h">Cal</th><th></th></tr></thead>
         <tbody>${bodyHtml}</tbody>
       </table></div>`;
     rtnInlineRedock("table");
@@ -39282,6 +39218,13 @@
     const em = t.title.match(RTN_EMOJI_RE);
     return { ic: em ? `<span class="rn-tile">${em[1]}</span>` : `<span class="rn-tile"></span>`, name: em ? t.title.slice(em[0].length) : t.title };
   };
+  // DEAD CODE as of 2026-08-24: this and renderRtnGridCardsNested() below were only
+  // ever reached via rtnGridGroupBy === "trackcat" (Track ▸ Category), and Track =
+  // Part of life is retired -- the option is gone from #rtgGroupBy, the default moved
+  // to "subcat", and both call sites were removed. Left in place rather than torn out
+  // (same call as renderCategories()): they're self-contained, harmless, and are the
+  // only surviving implementation of the banded nested layout if it's ever wanted for
+  // a non-retired grouping. Their trackLabel() calls are unreachable, not live.
   function renderRtnGridNested(host) {
     const q = rtnGridSearch.trim().toLowerCase();
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
@@ -39355,7 +39298,8 @@
   // rtnGridRows() segments the classic sortable table renders, so switching
   // Group-by away from Track ▸ Category never leaves Cards blank.
   function renderRtnGridCards(host) {
-    if (rtnGridGroupBy === "trackcat") { renderRtnGridCardsNested(host); return; }
+    // 2026-08-24: same as renderRtnGrid() above -- the nested Track ▸ Category renderer
+    // is unreachable now that Track (Part of life) is retired.
     if (!ROUTINE_TASKS.length) { host.innerHTML = `<div class="fam-empty">No routines yet.</div>`; rtnInlineRedock("table"); return; }
     const segments = rtnGridRows();
     if (!segments) { host.innerHTML = `<div class="fam-empty">No routines match "${esc(rtnGridSearch.trim())}".</div>`; rtnInlineRedock("table"); return; }
@@ -39768,22 +39712,10 @@
       sel.focus();
       return;
     }
-    if (field === "rtnTrack") {
-      const orig = t.track;
-      const opts = ["work", "marriage", "personal"].map(v =>
-        `<option value="${v}"${v === orig ? " selected" : ""}>${trackLabel(v)}</option>`).join("");
-      cell.innerHTML = `<select class="rtg-edit-in">${opts}</select>`;
-      const sel = cell.querySelector("select");
-      let committed = false;
-      sel.addEventListener("change", () => {
-        committed = true;
-        t.track = sel.value;
-        saveRoutines(); renderRtnGrid();
-      });
-      sel.addEventListener("blur", () => { if (!committed) renderRtnGrid(); });
-      sel.focus();
-      return;
-    }
+    // The "rtnTrack" branch (an in-cell Part-of-life dropdown for the Routine Library's
+    // Track column) was removed 2026-08-24 with the column itself -- see the retired-
+    // features doc. No cell carries data-rtg-cell="rtnTrack" any more, so nothing can
+    // reach it.
     if (field === "rtnFitLink") {
       // a closed set (the same FITNESS_TYPES list the form's own "Fitness tracker
       // link" select offers) -- a picker, not free text. Ticking this routine off
@@ -43059,10 +42991,6 @@
   document.getElementById("hbCloseBtn").addEventListener("click", closeHbEditor);
   document.getElementById("hbSaveBtn").addEventListener("click", saveHbHabit);
   document.getElementById("hbDelBtn").addEventListener("click", deleteHbHabit);
-  document.getElementById("hbCats").addEventListener("click", e => {
-    const b = e.target.closest("[data-hb-track]"); if (!b) return;
-    hbDraft.track = b.dataset.hbTrack; drawHbCats();
-  });
   document.getElementById("hbAim").addEventListener("click", e => {
     const b = e.target.closest("[data-hb-aim]"); if (!b) return;
     const type = b.dataset.hbAim;
@@ -48697,10 +48625,6 @@
     openRtnForm(null);
   });
   document.getElementById("rtnCancelBtn").addEventListener("click", closeRtnForm);
-  document.getElementById("rtnTrackPicker").addEventListener("click", e => {
-    const b = e.target.closest("[data-track]"); if (!b) return;
-    rtnTrack = b.dataset.track; syncRtnTrackButtons(); renderRtnCatList();
-  });
   document.getElementById("rtnPhasePicker").addEventListener("click", e => {
     const b = e.target.closest("[data-phase]"); if (!b) return;
     const which = b.dataset.phase;
@@ -49407,10 +49331,6 @@
       } catch (err) {}
     });
   }
-  document.getElementById("pplTrackPicker").addEventListener("click", e => {
-    const b = e.target.closest("[data-track]"); if (!b) return;
-    pplTrack = b.dataset.track; syncPplTrackButtons();
-  });
   pplForm.addEventListener("submit", e => {
     e.preventDefault();
     const name = document.getElementById("pplName").value.trim();
@@ -49757,14 +49677,9 @@
       if (ev) openFormForEdit(ev);
     }
   });
-  document.getElementById("evlTrackPicker").addEventListener("click", e => {
-    const b = e.target.closest("[data-evltrack]"); if (!b) return;
-    state.evlTrack = b.dataset.evltrack;
-    document.querySelectorAll("#evlTrackPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    renderEventsPage();
-  });
   // her spec 2026-08-20: independent toggles, not a single-choice picker like
-  // evlTrackPicker just above -- each button flips its own membership in
+  // the old evlTrackPicker used to be (retired 2026-08-24, see the retired-
+  // features doc) -- each button flips its own membership in
   // state.tlOriginHidden. Session-only; nothing here is written to any store.
   document.getElementById("tlOriginFilter").addEventListener("click", e => {
     const b = e.target.closest("[data-origin-toggle]"); if (!b) return;
@@ -49806,7 +49721,12 @@
   const icsDate = k => k.replace(/-/g, "");
   document.getElementById("evlExport").addEventListener("click", () => {
     const from = document.getElementById("evlFrom").value, to = document.getElementById("evlTo").value;
-    const tr = state.evlTrack;
+    // 2026-08-24: was a bare `state.evlTrack` with no fallback -- harmless while its
+    // picker existed (always at least "all"), but now that the picker's retired (see
+    // the retired-features doc) state.evlTrack is permanently undefined, which made
+    // `tr === "all"` false and silently exported ZERO events (every e.track === tr
+    // check failed too). Same `|| "all"` fallback filterEvl() already uses above.
+    const tr = state.evlTrack || "all";
     const evs = EVENTS.filter(e => (!from || e.date >= from) && (!to || e.date <= to) && (tr === "all" || e.track === tr));
     const rtFrom = from || keyOf(TODAY);
     const rtTo = to || keyOf(addDays(parseKey(rtFrom), 90));
@@ -51094,10 +51014,15 @@
   document.getElementById("fDate").addEventListener("input", updateEachWeekdayLabel);
   syncFFillCalToggle();
 
-  // whose job is it — Mine / his / Both (two-person system)
-  let formWho = "me";
-  // 2026-08-02 (code44): picking always re-collapses back to the summary line —
-  // same "pick then closes" pattern as the Type/Part-of-life pickers feel like at a glance.
+  // whose job is it — Mine / his / Both (two-person system). The picker UI is retired
+  // (2026-08-24, see the retired-features doc) but formWho itself and this sync function
+  // stay: formWho still gets set from an existing item's real e.who when opening it for
+  // edit (search `formWho = whoOf(ev)` / `formWho = t.who` below) purely so re-saving that
+  // edit round-trips the value unchanged instead of wiping it — STEP 3 of the retirement
+  // brief is explicit that existing whoseJob data must survive untouched. syncWho()'s own
+  // body was already null-guarded for every #whoPicker/#whoSummaryBtn/.who-name lookup, so
+  // with those elements gone it's just a harmless no-op now — kept rather than stripped out
+  // of every one of its call sites, which exist for that data round-trip, not for this.
   function syncWho() {
     document.querySelectorAll("#whoPicker .who-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.who === formWho)));
     document.querySelectorAll(".who-name").forEach(el => { el.textContent = partnerName(); });
@@ -51106,15 +51031,7 @@
     const picker = document.getElementById("whoPicker"), btn = document.getElementById("whoSummaryBtn");
     if (picker && btn) { picker.hidden = true; btn.hidden = false; btn.setAttribute("aria-expanded", "false"); }
   }
-  document.getElementById("whoPicker").addEventListener("click", e => {
-    const b = e.target.closest(".who-opt");
-    if (b) { formWho = b.dataset.who; syncWho(); }
-  });
-  document.getElementById("whoSummaryBtn").addEventListener("click", () => {
-    document.getElementById("whoPicker").hidden = false;
-    document.getElementById("whoSummaryBtn").hidden = true;
-    document.getElementById("whoSummaryBtn").setAttribute("aria-expanded", "true");
-  });
+  let formWho = "me";
   // 2026-08-02 (Linh, book44: "one click outside if nothing filled; a small warning
   // if something was filled"): true the instant any field is touched (see the form's
   // "input"/"change" delegation below), reset false every time the form opens fresh.
@@ -51137,8 +51054,9 @@
   // 2026-08-09 (design44, "Add box redesign" job, STEP 1): Follow-ups' own quiet
   // ghost row, independent of More options -- tapping it swaps the "+ Add
   // follow-up steps" trigger for the actual textarea; there's no need for a
-  // re-collapse affordance (same precedent as .who-summary-btn just above --
-  // clearing the field and closing the form is enough).
+  // re-collapse affordance (same precedent the old Whose-job summary button used
+  // to set, before it was retired 2026-08-24 -- clearing the field and closing
+  // the form is enough).
   function setFollowUpsOpen(open) {
     const body = document.getElementById("fStagesBody");
     const btn = document.getElementById("fStagesToggle");
@@ -51169,11 +51087,14 @@
     setFollowUpsOpen(false);
     formSelectedMode = ""; fModePickerExpanded = false; renderFModePicker();
     trackManuallySet = false;
-    document.getElementById("trackPicker").hidden = true;
-    document.getElementById("trackSummaryBtn").hidden = false;
-    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "false");
     setPresetSelected(null);
   }
+  // Part of life picker retired 2026-08-24 (see the retired-features doc) -- syncTrack/
+  // syncTrackSummary stay, same reasoning as syncWho()/formWho above: state.track is
+  // still a real value every save path writes (the colour engine's quiet fallback
+  // needs one), and syncTrackFromMode() below still needs somewhere to write an
+  // inferred value when a Mode is picked -- these two just no longer have any live
+  // picker DOM to paint it onto, so their body is a harmless no-op now.
   function syncTrack() {
     document.querySelectorAll("#trackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === state.track)));
     syncTrackSummary();
@@ -51216,7 +51137,11 @@
   function presetSubline(p) {
     const parts = [];
     const mode = p.mode ? modeById(p.mode) : null;
-    parts.push(mode ? mode.name : trackLabel(p.track));
+    // 2026-08-24: was `mode ? mode.name : trackLabel(p.track)` -- always pushed
+    // SOMETHING, since track always has a value. trackLabel() is retired (see the
+    // retired-features doc), so a mode-less preset's subline now just leads with
+    // duration/location instead, same as it already omits either of those when unset.
+    if (mode) parts.push(mode.name);
     if (p.durationMin) parts.push(fmtPresetDur(p.durationMin));
     if (p.loc) parts.push(p.loc);
     return parts.join(" · ");
@@ -51233,13 +51158,21 @@
       host.innerHTML = `<span class="presets-empty-hint">Tap ☆ next to Title to save your first preset</span>`;
     } else {
       host.hidden = false;
-      host.innerHTML = SAVED_EVENTS.map(p => `
+      // 2026-08-24: the sub-line span only renders when presetSubline() actually
+      // returns something. It used to always have content (a mode name or the
+      // Part-of-life label), but with trackLabel() retired a preset carrying no
+      // mode/duration/location produces "" -- and an empty span still cost the
+      // card's own 2px flex gap, i.e. a sliver of dead space under the title.
+      host.innerHTML = SAVED_EVENTS.map(p => {
+        const sub = presetSubline(p);
+        return `
         <button type="button" class="preset-card${p.mode ? " preset-card-mode" : ""}" data-preset-id="${esc(p.id)}" data-mode="${esc(p.mode || "")}" aria-pressed="${String(p.id === presetSelectedId)}">
           <span class="preset-card-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
-          <span class="preset-card-sub">${esc(presetSubline(p))}</span>
+          ${sub ? `<span class="preset-card-sub">${esc(sub)}</span>` : ""}
           <span class="preset-card-edit" data-preset-edit="${esc(p.id)}" aria-label="Edit preset" title="Edit preset">✎</span>
           <span class="preset-card-del" data-preset-del="${esc(p.id)}" aria-label="Delete preset" title="Delete preset">✕</span>
-        </button>`).join("");
+        </button>`;
+      }).join("");
     }
     const saveBtn = document.getElementById("presetSaveBtn");
     if (saveBtn) {
@@ -51418,7 +51351,7 @@
     fEst.value = fDur.value;
     syncDurBoxesFromFDur();
     // auto-open More options if the event being edited already has data tucked in
-    // there (Who/All day/Category/Notes/Goal) — Ends and How long both genuinely
+    // there (All day/Category/Notes/Goal) — Ends and How long both genuinely
     // live in the basics card now (2026-08-23: Ends moved out of here into its own
     // row there; this comment used to claim that while Ends was still stuck in this
     // very drawer, which was the actual bug), Follow-ups has its own ghost row
@@ -51429,7 +51362,11 @@
     // disclosed, in-scope-as-asked gap (that spec was a pure layout move), so an
     // existing Family/Marriage-tracked event's Part-of-life value won't by itself
     // auto-reveal this drawer on edit, even though it's still saved/read correctly.
-    const hasExtra = whoOf(ev) !== "me" || ev.allDay || ev.category || ev.note || ev.goal;
+    // Whose job dropped out of this list 2026-08-24: the field it used to justify
+    // auto-revealing no longer exists in the drawer at all (retired, see the
+    // retired-features doc) — an old who="partner" event no longer has any visible
+    // reason to pop the drawer open on edit, so its own hasExtra vote is removed too.
+    const hasExtra = ev.allDay || ev.category || ev.note || ev.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(!!(ev.stages && ev.stages.length));
     efpSyncAddForm();
@@ -51473,8 +51410,10 @@
     formKind = "event"; syncKind();
     // duration lives on the main form now (always visible for an event/series),
     // so it's no longer a signal that something "extra" needs surfacing -- neither
-    // is Mode/Where any more (2026-08-21, moved into the always-visible basics card)
-    const hasExtra = (t.who && t.who !== "me") || t.category || t.note || t.goal;
+    // is Mode/Where any more (2026-08-21, moved into the always-visible basics card).
+    // Whose job dropped out 2026-08-24 (field retired, see the retired-features doc) --
+    // same reasoning as openFormForEdit's own hasExtra just above.
+    const hasExtra = t.category || t.note || t.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(false);   // recurring events are never formKind "task" -- the whole field stays hidden
     efpSyncAddForm();
@@ -52676,7 +52615,11 @@
       return `<button type="button" class="qa-res-row" data-qa-go-date="${e.date}">
         <span class="qa-res-em">${kind === "event" ? "📅" : kind === "routine" ? "↻" : "☑"}</span>
         <span class="qa-res-main"><span class="qa-res-t">${qaMark(e.title, q)}</span>
-          <span class="qa-res-sub">${esc(trackLabel(e.track))}${(e.locPath || []).length ? " · 📍 " + esc(e.locPath.join(" › ")) : ""}${e.start ? " · " + fmtTime(e.start) : ""}</span></span>
+          <span class="qa-res-sub">${[
+            e.category ? esc(e.category) : "",
+            (e.locPath || []).length ? "📍 " + esc(e.locPath.join(" › ")) : "",
+            e.start ? fmtTime(e.start) : "",
+          ].filter(Boolean).join(" · ")}</span></span>
         <span class="qa-res-when">${isPast ? "" : ""}${qaDayLbl(d)}</span></button>`;
     };
     const rtRow = t => `<button type="button" class="qa-res-row" data-qa-go-view="routines">
@@ -54274,20 +54217,6 @@
     addFormConfirm.hidden = true;
     form.requestSubmit();
   });
-  document.getElementById("trackPicker").addEventListener("click", e => {
-    const b = e.target.closest(".track-opt"); if (!b) return;
-    state.track = b.dataset.track; trackManuallySet = true; syncTrack();
-    // picking always re-collapses back to the summary line -- same "pick then
-    // closes" pattern #whoPicker/whoSummaryBtn already use just below.
-    document.getElementById("trackPicker").hidden = true;
-    document.getElementById("trackSummaryBtn").hidden = false;
-    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "false");
-  });
-  document.getElementById("trackSummaryBtn").addEventListener("click", () => {
-    document.getElementById("trackPicker").hidden = false;
-    document.getElementById("trackSummaryBtn").hidden = true;
-    document.getElementById("trackSummaryBtn").setAttribute("aria-expanded", "true");
-  });
   fAllDay.addEventListener("change", () => {
     fStart.disabled = fEnd.disabled = fDur.disabled = fAllDay.checked;
     setDurDisabled(fAllDay.checked);
@@ -55590,6 +55519,14 @@
         : `<button type="button" class="cat-del-btn" data-cat-del="${c.id}" aria-label="Delete ${esc(c.name)}" title="${!isSub && inUse ? "In use — reassign first" : "Delete"}">🗑</button>`}</td>
     </tr>`;
   }
+  // Categories & colours management retired 2026-08-24 (see the retired-features
+  // doc) -- #catBody no longer exists, so this and catRowHtml()/catReassignHtml()/
+  // the categoriesPage click|change|input delegates' cat-specific branches below
+  // are unreachable dead code now, deliberately left rather than torn out (they're
+  // already safe: this null-guards immediately, the delegates' branches all gate
+  // on data-cat-* elements that no longer exist in the DOM). catInUse()/CAT_BY_ID/
+  // CATS/saveCategories()/regenerateCategoryStyles() are NOT part of this -- those
+  // still run, they're what the calendar's quiet colour fallback depends on.
   function renderCategories() {
     const host = document.getElementById("catBody");
     if (!host) return;
@@ -55873,10 +55810,6 @@
     document.querySelectorAll("#todoTrackPicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.track === "personal")));
     document.querySelectorAll("#todoModePicker .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === "")));
   }
-  document.getElementById("todoTrackPicker").addEventListener("click", e => {
-    const b = e.target.closest(".track-opt"); if (!b) return;
-    document.querySelectorAll("#todoTrackPicker .track-opt").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-  });
   document.getElementById("todoAddBtn").addEventListener("click", () => {
     document.getElementById("todoAddRow").hidden = true;
     document.getElementById("todoAddForm").hidden = false;

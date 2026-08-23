@@ -1,5 +1,9 @@
 # Book33 — design rules (read before ANY UI change)
 Also read ABOUT-ME.md before any work — build to this user's preferences.
+**Also read RETIRED-FEATURES.md before adding ANY field, picker, tag, column, filter,
+legend or settings page** — it lists what Linh has deliberately removed and must never
+come back unasked. Where anything in THIS file conflicts with it, that file wins (its
+removals are newer); flag the conflict rather than quietly reinstating the feature.
 Book33 is a single-file mobile web app (index.html). It must always look clean,
 symmetrical, aligned and organized. Follow every rule, then re-check your work.
 ## design44 — the standing design system (Linh's own words, 2026-08-16)
