@@ -15542,16 +15542,37 @@
   .sun-week-range { font-size: 12px; color: var(--ink-soft); }
   .sun-week-open { margin-left: auto; font-size: 12px; }
   .sun-week-chips { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
-  .sun-week-chip {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    background: var(--raised); border: none; border-radius: var(--radius-md);
-    padding: 10px 8px; cursor: pointer; text-align: left; font: inherit;
+  /* 2026-08-23 (empty-day flag / birthdays / quick-add rebuild): the chip is now a
+     wrapping div, not a button -- it holds the original tap-to-Life-Map button
+     (.sun-week-chip-main, unchanged content) PLUS a sibling quick-add button, and a
+     <button> can't contain another <button>. This rule now styles the outer div only
+     (background/radius/position), the button-specific properties moved down onto
+     .sun-week-chip-main below. */
+  .sun-week-chip { position: relative; background: var(--raised); border-radius: var(--radius-md); }
+  .sun-week-chip.sun-week-chip-empty {
+    background: color-mix(in oklab, var(--gold-bright) 8%, var(--raised));
+    outline: 1px dashed color-mix(in oklab, var(--gold-bright) 55%, transparent);
+    outline-offset: -1px;
   }
-  .sun-week-chip:hover, .sun-week-chip:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
+  .sun-week-chip-main {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%;
+    background: none; border: none; padding: 10px 8px; cursor: pointer; text-align: left; font: inherit;
+  }
+  .sun-week-chip-main:hover, .sun-week-chip-main:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
   .sun-week-chip-wd { font-size: 11px; font-weight: 700; color: var(--ink); }
-  .sun-week-paint { display: flex; gap: 2px; width: 100%; height: 6px; border-radius: 999px; overflow: hidden; }
-  .sun-week-seg { flex: 1; }
-  .sun-week-paint.sun-week-unpainted { height: auto; font-size: 10px; color: var(--ink-faint); font-style: italic; }
+  .sun-week-status { font-size: 10.5px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .sun-week-status-bday, .sun-week-status-empty { color: var(--gold-bright); font-weight: 700; }
+  .sun-week-quickadd {
+    position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
+    background: color-mix(in oklab, var(--ink) 10%, transparent); border: none; color: var(--ink-soft);
+    font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* --accent-on measured live in dark theme resolves to plain white here, and
+     white-on-gold-bright is ~1.7:1 contrast (see .tl-mode-hidden-pill[aria-pressed]'s
+     own comment, same finding) -- #241B04 is the same proven dark-on-gold-bright
+     pairing used there and by .cad-variant-btn[aria-pressed], not a new guess. */
+  .sun-week-quickadd:hover { background: var(--gold-bright); color: #241B04; }
   /* four Sunday review cards (part C) -- .h-stats/.h-stat is the app's own
      shared stat-grid component (Weight/Fitness/Nutrition/Cycle/Review all reuse
      it); scoped tighter here since this card is ~half the width those pages
@@ -32955,21 +32976,41 @@
       ? `${MONTHS[nextMon.getMonth()]} ${nextMon.getDate()}–${nextSun.getDate()}, ${nextSun.getFullYear()}`
       : `${MONTHS[nextMon.getMonth()]} ${nextMon.getDate()} – ${MONTHS[nextSun.getMonth()]} ${nextSun.getDate()}, ${nextSun.getFullYear()}`;
     // one lmWeekGrid() call for the whole card, per the build brief -- no new
-    // storage, just a read of Life Map's own existing grid function.
-    const { grid } = lmWeekGrid(nextMon);
+    // storage, just a read of Life Map's own existing grid function. untimed is
+    // now read too (2026-08-23, "flag empty days / show birthdays" rebuild) --
+    // it was already computed by lmWeekGrid() every time, just not looked at here.
+    const { grid, untimed } = lmWeekGrid(nextMon);
     const chipsHtml = Array.from({ length: 7 }, (_, i) => {
-      const cd = addDays(nextMon, i), ud = universalDay(cd);
-      const cells = grid[i].filter(Boolean);
-      const seen = new Set(), segs = [];
-      cells.forEach(c => { if (!seen.has(c.mode.id)) { seen.add(c.mode.id); segs.push(c.mode); } });
-      const paintHtml = segs.length
-        ? `<div class="sun-week-paint">${segs.map(m => `<span class="sun-week-seg" style="background:${esc(m.accent || "var(--ink-faint)")}" title="${esc(m.name)}"></span>`).join("")}</div>`
-        : `<div class="sun-week-paint sun-week-unpainted">Not painted</div>`;
-      return `<button type="button" class="sun-week-chip" data-sun-chip="${i}">
-        <span class="sun-week-chip-wd">${WD_FULL[i].slice(0, 3)} ${cd.getDate()}</span>
-        <span class="rv-ud" data-master="${ud.master}">UD <b>${ud.value}</b></span>
-        ${paintHtml}
-      </button>`;
+      const cd = addDays(nextMon, i), ud = universalDay(cd), dateKey = keyOf(cd);
+      // distinct SCHEDULED THINGS that day, not half-hour slots -- a single 2-hour
+      // block fills 4 grid cells, so dedupe by the real item's id before counting.
+      const seenIds = new Set();
+      grid[i].filter(Boolean).forEach(c => { if (c.item && c.item.id != null) seenIds.add(c.item.id); });
+      const dayUntimed = untimed.filter(u => u.dayIdx === i);
+      const dayBdays = dayUntimed.filter(u => u.item && u.item.category === "Birthdays");
+      const dayOtherUntimed = dayUntimed.filter(u => !(u.item && u.item.category === "Birthdays"));
+      const scheduledCount = seenIds.size + dayOtherUntimed.length;
+      // empty means genuinely nothing that day -- no Mode painted is NOT the test
+      // (a mode-less item is still a real scheduled thing), matching STEP 2 exactly.
+      const isEmpty = seenIds.size === 0 && dayUntimed.length === 0;
+      let statusHtml;
+      if (dayBdays.length) {
+        const extra = dayBdays.length > 1 ? ` +${dayBdays.length - 1} more` : "";
+        const fullTxt = `🎂 ${dayBdays[0].title}${extra}`;
+        statusHtml = `<span class="sun-week-status sun-week-status-bday" title="${esc(fullTxt)}">🎂 ${esc(dayBdays[0].title)}${extra}</span>`;
+      } else if (isEmpty) {
+        statusHtml = `<span class="sun-week-status sun-week-status-empty">Nothing planned yet</span>`;
+      } else {
+        statusHtml = `<span class="sun-week-status">${scheduledCount} scheduled</span>`;
+      }
+      return `<div class="sun-week-chip${isEmpty ? " sun-week-chip-empty" : ""}">
+        <button type="button" class="sun-week-chip-main" data-sun-chip="${i}">
+          <span class="sun-week-chip-wd">${WD_FULL[i].slice(0, 3)} ${cd.getDate()}</span>
+          <span class="rv-ud" data-master="${ud.master}">UD <b>${ud.value}</b></span>
+          ${statusHtml}
+        </button>
+        <button type="button" class="sun-week-quickadd" data-sun-quickadd="${dateKey}" title="Add to ${WD_FULL[i]} ${cd.getDate()}">+</button>
+      </div>`;
     }).join("");
     host.innerHTML = `
       <div class="sun-week-head">
@@ -32985,6 +33026,12 @@
   // did rather than reading it back off the DOM -- state.anchor is still today's
   // Sunday at click time, so the two calculations agree.
   document.addEventListener("click", e => {
+    // quick-add (2026-08-23) is checked FIRST and returns -- it's a sibling of
+    // .sun-week-chip-main, not nested inside it, so it will never also match
+    // [data-sun-chip] below, but keeping this branch first and early-returning
+    // means that stays true even if the markup ever changes.
+    const quickadd = e.target.closest("#sunWeekAhead [data-sun-quickadd]");
+    if (quickadd) { openFormForDate(quickadd.dataset.sunQuickadd); return; }
     if (!e.target.closest("#sunWeekAhead [data-sun-open-lm], #sunWeekAhead [data-sun-chip]")) return;
     lmWeekStart = addDays(startOfWeek(state.anchor), 7);
     state.view = "lifeMap";
@@ -51155,6 +51202,17 @@
     renderPresetsRow();
     efpSyncAddForm();
     fTitle.focus();
+  }
+  // 2026-08-23 (Sunday "Plan the week ahead" card, quick-add "+"): openForm() always
+  // writes fDate to state.anchor's own key (today's Sunday) -- fine for every OTHER
+  // "Add to this day" trigger on the Day page since they only ever mean today, but
+  // the Sunday card's chips are a week ahead. Overriding fDate straight after, rather
+  // than touching state.anchor itself, keeps every other reader of state.anchor (the
+  // rest of the Day page, two clicks away) undisturbed by a quick-add on this card.
+  function openFormForDate(dateKey) {
+    openForm();
+    fDate.value = dateKey;
+    updateEachWeekdayLabel();
   }
   function openFormForEdit(ev) {
     armBackGuard();
