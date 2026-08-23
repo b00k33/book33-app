@@ -11858,7 +11858,48 @@
      page's own calDays>1 mode -- renderCalDaysUI()/renderMultiDayGrid() both
      assert state.view==="day" before doing anything. */
   body[data-view="day"] .tl-origin-filter { display: flex; }
-  .tl-origin-filter .track-opt { flex: none; min-height: 0; padding: 5px 10px; font-size: 10.5px; border-radius: 999px; }
+  /* 2026-08-24 (Linh: "outlined pill style has come back... colour and space, not
+     boxes and lines" -- bug report). Root cause: .track-opt's shared BASE rule
+     (search `border: 1px solid var(--note-line)`) is the app's generic FORM-PICKER
+     button -- correct and untouched everywhere it actually styles a form control
+     (the Repeats picker, the Mode picker chips inside #addForm/#rtnAddForm, etc.).
+     This filter row's own 2026-08-20 build comment (see the HTML above) explicitly
+     chose to reuse .track-opt "verbatim" to match #evlTrackPicker (the All Events
+     page's own track filter, which still uses the plain bordered look today and is
+     untouched here -- a different page, out of scope for this report). But sitting
+     fixed over the live calendar, right beside .tl-origin-hidden-pill/.tl-mode-
+     hidden-pill just below (both already flat, no-border pills), the bordered/boxed
+     look reads as a regression of the exact rule those two already follow. Fixed
+     with a scoped override here -- not touching .track-opt's shared base (which
+     stays correct for real forms), and not a page-local inline hack either, this is
+     the file's own established idiom for a per-context .track-opt look (compare
+     #fModePicker .track-opt, #rtnTrackPicker .track-opt, etc. just above/below).
+     Flat text by default; a subtle gold wash only when a type is actually SHOWN
+     (aria-pressed="true" here means "visible", not hidden by this filter -- see
+     tlOriginVisible()/renderTlOriginFilter()) -- unpressed/hidden reads quieter on
+     purpose. No coloured dot: unlike Track/Category/Mode, itemOrigin()'s 4 values
+     (once/routine/repeat/generated) don't map to any existing colour token, so a
+     dot here would be inventing a new one-off colour meaning rather than reusing
+     one -- design44 §6 says reuse, not invent. */
+  .tl-origin-filter .track-opt {
+    position: relative; flex: none; min-height: 0; padding: 5px 10px; font-size: 10.5px;
+    border: none; border-radius: 999px; background: none; box-shadow: none;
+    color: var(--ink-faint); font-weight: 500;
+  }
+  /* "grow the target not the art" -- same invisible-hit-area idiom as
+     .preset-card-del/.preset-card-edit's own ::before pad (search that phrase).
+     Each real button here is already well over 44px WIDE at this font size, so
+     only height needs it: full button width, 44px tall, centred -- absolutely
+     positioned so it can't widen sideways into a neighbour's own hit-area across
+     the row's 8px gaps, which a horizontal inset would have risked. */
+  .tl-origin-filter .track-opt::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%);
+  }
+  .tl-origin-filter .track-opt[aria-pressed="true"] {
+    background: color-mix(in oklab, var(--gold) 10%, var(--paper));
+    color: var(--ink); font-weight: 600; box-shadow: none;
+  }
   .tl-origin-hidden-pill {
     position: fixed; z-index: 190;
     top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px);
@@ -11906,6 +11947,26 @@
     max-width: min(280px, calc(100vw - 28px));
     display: flex; align-items: center; gap: 8px;
   }
+  /* 2026-08-24 (Linh: "filter row overlaps a label" -- bug report). Root cause: all
+     three `top` formulas above assume .theme-toggle (34px tall, 14px from the top)
+     is the real floating icon they're stacking under -- true almost everywhere, but
+     NOT on the desktop Day view. [data-desk-day] .nav-tiers (search that selector)
+     hides .theme-toggle's whole container there, and #deskDayTopbar's own 🌙/⚙
+     buttons (#ddtTheme/#ddtGear) take over as the real top-right icons instead --
+     a normal-FLOW pair inside a 54px in-page bar, not fixed chrome. Confirmed live:
+     #deskDayTopbar is 54px tall (+1px border-bottom) and #deskWidgetRail's "Today's
+     widgets" label already starts right after it (top:66px) -- .tl-origin-filter's
+     old .theme-toggle-based top (56px) landed it 10px below the topbar but squarely
+     ON that label (which spans 66-80px), because the filter's positioning had no
+     idea #deskDayTopbar existed. Same 8px/6px gaps as the base formulas above, just
+     re-anchored to the real 55px bar (54px height + 1px border) instead of the
+     hidden icon's 14px+34px. Scoped to [data-desk-day] specifically (not narrower
+     [data-desk-day1]) since #deskDayTopbar/the .nav-tiers hide apply to BOTH desktop
+     Day widths (1 day and multi-day) identically -- confirmed live, same 54px height
+     in the >=1280px grid layout and the 1024-1279px flex fallback. */
+  [data-desk-day] .tl-origin-filter { top: calc(54px + 1px + 8px); }
+  [data-desk-day] .tl-origin-hidden-pill { top: calc(54px + 1px + 8px + 34px + 6px); }
+  [data-desk-day] .tl-mode-hidden-pill { top: calc(54px + 1px + 8px + 34px + 6px + 34px + 6px); }
   .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tl-mode-hidden-pill .tlmp-hint {
     flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
@@ -15537,9 +15598,34 @@
   @media (min-width: 1200px) {
     [data-desk-day] #deskWidgetRail {
       display: flex; flex-direction: column; width: 286px; flex: none; box-sizing: border-box;
-      background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px; overflow-y: auto;
+      background: var(--paper); border-left: 1px solid var(--note-line); padding: 46px 12px 12px; overflow-y: auto;
     }
   }
+  /* 2026-08-24 (Linh: "filter row overlaps a label" -- bug report, cont'd): the
+     rail's own top padding, bumped from a plain 12px to 46px specifically here --
+     measured live, the reported bug's actual cause. #tlOriginFilter (see its own
+     [data-desk-day] top override above, now correctly re-anchored to #deskDayTopbar
+     instead of the hidden .theme-toggle) still floats fixed over this rail's own
+     top-right corner regardless -- it's real chrome she needs reachable from every
+     page, not something to relocate for one page's sake. Its own bottom edge lands
+     at screen-y ~92px live; the rail's own box already starts at screen-y 54px (the
+     first live measurement mistakenly forgot that and used a padding value as if
+     0 were the reference, landing "Today's widgets" 63px lower than intended --
+     caught and fixed before publish), so padding-top needs (92-54)+8px gap = 46px,
+     not the raw 92-or-100 screen figure. Scoped to #deskWidgetRail only
+     (not #deskColMain, the timeline) -- nothing floats over the timeline's own
+     top-right, only the rail's column does, so #deskColMain needs no matching
+     change. Disclosed, not silently left as a gap: .tl-origin-hidden-pill/.tl-
+     mode-hidden-pill (the two pills that stack BELOW the filter, only visible when
+     she's actually hidden a type this session) can still reach down to ~166px in
+     the rare case both show at once -- past this 100px clearance. Reserving space
+     for that permanently would push "Today's widgets" ~66px further down on the
+     overwhelming majority of visits when neither pill is showing, which trades a
+     common annoyance for a rare one; same tradeoff already accepted for these two
+     pills existing as floating-over-content chrome on Day view specifically (the
+     2026-08-22 "pill floating over a cell" fix scoped its OWN prevention to Life
+     Map only, not Day view). Flag this if the rare case bothers her live -- not
+     fixed here since the reported bug is specifically the filter row, always-on. */
   @media (min-width: 1200px) and (max-width: 1439px) {
     [data-desk-day] #deskWidgetRail { width: 250px; }
   }
