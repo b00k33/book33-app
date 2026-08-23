@@ -11801,100 +11801,17 @@
   }
   .theme-toggle:hover { transform: scale(1.08); }
 
-  /* Origin filter (her spec 2026-08-20): docked directly under .theme-toggle
-     just above -- same right edge/safe-area formula, the one existing
-     top-right-floating fixed element in the whole file, rather than inventing
-     a second floating position. z-index below it (200) so nothing here can
-     ever sit above a real overlay/modal. */
-  .tl-origin-filter {
-    position: fixed; z-index: 190;
-    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px);
-    right: max(14px, env(safe-area-inset-right));
-    display: none; padding: 3px; border-radius: 999px;
-    background: var(--paper); box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  }
-  /* day-only, not week/month too: confirmed live that #weekPage/#monthPage
-     never render a single .tl-item -- renderWeek()'s own .wk-ev rows and
-     renderMonth()'s .mo-chip/.mo-bd grid are separate, older components (see
-     itemOrigin()'s own report on this). Every .tl-item this spec covers,
-     compact "week grid" bars included, only ever appears inside the Day
-     page's own calDays>1 mode -- renderCalDaysUI()/renderMultiDayGrid() both
-     assert state.view==="day" before doing anything. */
-  body[data-view="day"] .tl-origin-filter { display: flex; }
-  /* 2026-08-24 (Linh: "outlined pill style has come back... colour and space, not
-     boxes and lines" -- bug report). Root cause: .track-opt's shared BASE rule
-     (search `border: 1px solid var(--note-line)`) is the app's generic FORM-PICKER
-     button -- correct and untouched everywhere it actually styles a form control
-     (the Repeats picker, the Mode picker chips inside #addForm/#rtnAddForm, etc.).
-     This filter row's own 2026-08-20 build comment (see the HTML above) explicitly
-     chose to reuse .track-opt "verbatim" to match #evlTrackPicker (the All Events
-     page's own track filter, which still uses the plain bordered look today and is
-     untouched here -- a different page, out of scope for this report). But sitting
-     fixed over the live calendar, right beside .tl-origin-hidden-pill/.tl-mode-
-     hidden-pill just below (both already flat, no-border pills), the bordered/boxed
-     look reads as a regression of the exact rule those two already follow. Fixed
-     with a scoped override here -- not touching .track-opt's shared base (which
-     stays correct for real forms), and not a page-local inline hack either, this is
-     the file's own established idiom for a per-context .track-opt look (compare
-     #fModePicker .track-opt, #rtnTrackPicker .track-opt, etc. just above/below).
-     Flat text by default; a subtle gold wash only when a type is actually SHOWN
-     (aria-pressed="true" here means "visible", not hidden by this filter -- see
-     tlOriginVisible()/renderTlOriginFilter()) -- unpressed/hidden reads quieter on
-     purpose. No coloured dot: unlike Track/Category/Mode, itemOrigin()'s 4 values
-     (once/routine/repeat/generated) don't map to any existing colour token, so a
-     dot here would be inventing a new one-off colour meaning rather than reusing
-     one -- design44 §6 says reuse, not invent. */
-  .tl-origin-filter .track-opt {
-    position: relative; flex: none; min-height: 0; padding: 5px 10px; font-size: 10.5px;
-    border: none; border-radius: 999px; background: none; box-shadow: none;
-    color: var(--ink-faint); font-weight: 500;
-  }
-  /* "grow the target not the art" -- same invisible-hit-area idiom as
-     .preset-card-del/.preset-card-edit's own ::before pad (search that phrase).
-     Each real button here is already well over 44px WIDE at this font size, so
-     only height needs it: full button width, 44px tall, centred -- absolutely
-     positioned so it can't widen sideways into a neighbour's own hit-area across
-     the row's 8px gaps, which a horizontal inset would have risked. */
-  .tl-origin-filter .track-opt::after {
-    content: ""; position: absolute; left: 0; right: 0; top: 50%;
-    height: 44px; transform: translateY(-50%);
-  }
-  .tl-origin-filter .track-opt[aria-pressed="true"] {
-    background: color-mix(in oklab, var(--gold) 10%, var(--paper));
-    color: var(--ink); font-weight: 600; box-shadow: none;
-  }
-  .tl-origin-hidden-pill {
-    position: fixed; z-index: 190;
-    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px);
-    right: max(14px, env(safe-area-inset-right));
-    padding: 6px 12px; border-radius: 999px; border: none;
-    background: var(--gold); color: #1a1408; font-size: 11px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  }
-  /* 2026-08-22 (Linh: her screenshot showed this pill floating over a Life Map cell)
-     bug fix, belt-and-braces: both hidden-pills' own `hidden` attribute is driven
-     purely by count/flag logic with no page check at all -- #tlOriginHiddenPill's
-     origin-hidden state is session-only and can be left "on" from Day view with
-     nothing to ever clear it walking away; #tlModeHiddenPill is only ever touched
-     inside renderTimeline() (Day-view-only), so once shown it stays hidden=false on
-     every other page forever. .tl-hidden-pill-row (their wrapper) is deliberately
-     display:contents (no box, see its own comment) so it can't scope them either.
-     Real page-scoping here, keyed off #wrap's own data-view (kept current on every
-     navigation by render(), see its "document.getElementById('wrap').dataset.view =
-     state.view" line) -- this holds even if some future code path forgets to
-     re-hide one of these correctly, the same way this bug happened in the first
-     place. Day-view behaviour (click handler, text, two-way toggle) untouched --
-     this is pure visibility, layered on top of the existing hidden-attribute logic. */
-  #wrap[data-view]:not([data-view="day"]) .tl-origin-hidden-pill { display: none !important; }
-  @media (max-width: 640px) {
-    .tl-origin-filter .track-opt { padding: 5px 8px; font-size: 9.5px; }
-  }
-  /* Mode-hidden pill, stage 2 of the modes build (2026-08-20): stacks one slot
-     BELOW the origin-hidden pill (top offset +34px+6px again) rather than sharing
-     its spot -- the two filters are independent and can both have something to
-     report at once (origin-hidden and mode-hidden are different sets of items).
-     Same shape, its own accent (--margin-rule instead of --gold) so the two read
-     as related-but-distinct chrome, not one pill mysteriously changing its text.
+  /* Mode-hidden pill, stage 2 of the modes build (2026-08-20).
+     2026-08-24: this used to be a SECOND class layered on top of .tl-origin-hidden-pill
+     (the markup carried both), which supplied position/right/padding/radius/shadow.
+     The origin filter and its pill were removed that day (Linh doesn't use them), so
+     those base declarations are folded in here and the extra class dropped from the
+     markup -- deleting .tl-origin-hidden-pill outright would have silently stripped
+     this pill of its positioning.
+     The old stacking maths is gone with them: it sat THREE slots down (under the
+     filter row and the origin pill, +34+6+34+6), reserving space for two elements
+     that no longer exist. It now takes the top slot directly, re-measured live on
+     both mobile and desktop -- see the [data-desk-day] override below.
      2026-08-22 (Linh: "make the hidden-by-Mode control obvious and reversible" --
      she didn't know this was a control, or that tapping it revealed everything):
      was plain textContent, single-state (only ever rendered while something was
@@ -11905,31 +11822,42 @@
      node, and a visibly distinct "on" (revealed) look instead of relying on
      text alone to carry the state. */
   .tl-mode-hidden-pill {
-    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px + 34px + 6px + 34px + 6px);
+    position: fixed; z-index: 190;
+    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px);
+    right: max(14px, env(safe-area-inset-right));
+    padding: 6px 12px; border-radius: 999px; border: none;
+    font-size: 11px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     background: var(--margin-rule); color: var(--accent-on);
     max-width: min(280px, calc(100vw - 28px));
     display: flex; align-items: center; gap: 8px;
   }
-  /* 2026-08-24 (Linh: "filter row overlaps a label" -- bug report). Root cause: all
-     three `top` formulas above assume .theme-toggle (34px tall, 14px from the top)
-     is the real floating icon they're stacking under -- true almost everywhere, but
-     NOT on the desktop Day view. [data-desk-day] .nav-tiers (search that selector)
-     hides .theme-toggle's whole container there, and #deskDayTopbar's own 🌙/⚙
-     buttons (#ddtTheme/#ddtGear) take over as the real top-right icons instead --
-     a normal-FLOW pair inside a 54px in-page bar, not fixed chrome. Confirmed live:
-     #deskDayTopbar is 54px tall (+1px border-bottom) and #deskWidgetRail's "Today's
-     widgets" label already starts right after it (top:66px) -- .tl-origin-filter's
-     old .theme-toggle-based top (56px) landed it 10px below the topbar but squarely
-     ON that label (which spans 66-80px), because the filter's positioning had no
-     idea #deskDayTopbar existed. Same 8px/6px gaps as the base formulas above, just
-     re-anchored to the real 55px bar (54px height + 1px border) instead of the
-     hidden icon's 14px+34px. Scoped to [data-desk-day] specifically (not narrower
-     [data-desk-day1]) since #deskDayTopbar/the .nav-tiers hide apply to BOTH desktop
-     Day widths (1 day and multi-day) identically -- confirmed live, same 54px height
-     in the >=1280px grid layout and the 1024-1279px flex fallback. */
-  [data-desk-day] .tl-origin-filter { top: calc(54px + 1px + 8px); }
-  [data-desk-day] .tl-origin-hidden-pill { top: calc(54px + 1px + 8px + 34px + 6px); }
-  [data-desk-day] .tl-mode-hidden-pill { top: calc(54px + 1px + 8px + 34px + 6px + 34px + 6px); }
+  /* 2026-08-22 (Linh: her screenshot showed this pill floating over a Life Map cell)
+     bug fix, belt-and-braces: the pill's own `hidden` attribute is driven purely by
+     flag logic with no page check at all -- it's only ever touched inside
+     renderTimeline() (Day-view-only), so once shown it stays hidden=false on every
+     other page forever. .tl-hidden-pill-row (its wrapper) is deliberately
+     display:contents (no box, see its own comment) so it can't scope it either.
+     Real page-scoping here, keyed off #wrap's own data-view (kept current on every
+     navigation by render(), see its "document.getElementById('wrap').dataset.view =
+     state.view" line) -- this holds even if some future code path forgets to
+     re-hide it correctly, the same way this bug happened in the first place.
+     Day-view behaviour (click handler, text, two-way toggle) untouched -- this is
+     pure visibility, layered on top of the existing hidden-attribute logic. */
+  #wrap[data-view]:not([data-view="day"]) .tl-mode-hidden-pill { display: none !important; }
+  /* 2026-08-24 (originally: "filter row overlaps a label" -- bug report). Root cause:
+     the `top` formula above assumes .theme-toggle (34px tall, 14px from the top) is
+     the real floating icon it's stacking under -- true almost everywhere, but NOT on
+     the desktop Day view. [data-desk-day] .nav-tiers (search that selector) hides
+     .theme-toggle's whole container there, and #deskDayTopbar's own 🌙/⚙ buttons
+     (#ddtTheme/#ddtGear) take over as the real top-right icons instead -- a
+     normal-FLOW pair inside a 54px in-page bar, not fixed chrome. Re-anchored to that
+     real 55px bar (54px height + 1px border) with the same 8px gap. Scoped to
+     [data-desk-day] specifically (not narrower [data-desk-day1]) since
+     #deskDayTopbar/the .nav-tiers hide apply to BOTH desktop Day widths (1 day and
+     multi-day) identically -- confirmed live, same 54px height in the >=1280px grid
+     layout and the 1024-1279px flex fallback. */
+  [data-desk-day] .tl-mode-hidden-pill { top: calc(54px + 1px + 8px); }
   .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tl-mode-hidden-pill .tlmp-hint {
     flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
@@ -11959,36 +11887,27 @@
   }
   /* 2026-08-22 (fix: filter chrome covering the date nav/search bar on mobile):
      .tl-hidden-pill-row is pure markup scaffolding (see its own HTML comment) --
-     display:contents by default so it adds no box on desktop/tablet, leaving
-     .tl-origin-hidden-pill's existing fixed/top/right rules completely untouched
-     above 640px, exactly per her STEP 4 ("desktop stays exactly as-is"). */
+     display:contents by default so it adds no box on desktop/tablet, leaving the
+     pill's own fixed/top/right rules completely untouched above 640px, exactly per
+     her STEP 4 ("desktop stays exactly as-is"). */
   .tl-hidden-pill-row { display: contents; }
   @media (max-width: 640px) {
-    /* Same in-flow shape as .todo-mode-hidden-pill just above (her own precedent
-       for "chrome that used to float, now sits in the page") -- position:static
-       (the default; just clearing fixed's top/right) turns .tl-origin-filter back
-       into a normal flex item of #wrap, which already gives every direct child
-       16px of gap and (via .page's own width:100% precedent) needs its own
-       width:100% since #wrap centers/shrink-wraps children by default. */
-    body[data-view="day"] .tl-origin-filter {
-      position: static; top: auto; right: auto;
-      width: 100%; box-sizing: border-box; margin: 0;
-      justify-content: flex-start;
-    }
-    /* the row wrapper: now a real flex-wrap container so the two pills below
-       share one line when both fit and drop to their own line when they don't --
-       her STEP 3 ask ("pills can share/wrap a row") -- rather than always
-       stacking full-width regardless of how short their text is. */
+    /* Same in-flow shape as .todo-mode-hidden-pill just above (her own precedent for
+       "chrome that used to float, now sits in the page") -- position:static (just
+       clearing fixed's top/right) turns the pill back into a normal flex item of
+       #wrap, which already gives every direct child 16px of gap and (via .page's own
+       width:100% precedent) needs its own width since #wrap centers/shrink-wraps
+       children by default. 2026-08-24: the wrapper's flex-wrap row and the pill's
+       static-position rule were both written for TWO pills sharing/wrapping a line;
+       with the origin pill removed there is only ever one child, so the row is a
+       plain full-width block and the surviving pill fills it. */
     .tl-hidden-pill-row {
-      display: flex; flex-wrap: wrap; gap: 6px;
-      width: 100%; box-sizing: border-box;
+      display: flex; width: 100%; box-sizing: border-box;
     }
-    .tl-origin-hidden-pill {
+    .tl-mode-hidden-pill {
       position: static; top: auto; right: auto;
       flex: 1 1 auto; min-width: 0; max-width: 100%;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .tl-mode-hidden-pill { max-width: 100%; }
   }
   /* ============ ASTRO STRIP ============ */
   .astro {
@@ -15561,34 +15480,29 @@
   @media (min-width: 1200px) {
     [data-desk-day] #deskWidgetRail {
       display: flex; flex-direction: column; width: 286px; flex: none; box-sizing: border-box;
-      background: var(--paper); border-left: 1px solid var(--note-line); padding: 46px 12px 12px; overflow-y: auto;
+      background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px; overflow-y: auto;
     }
   }
-  /* 2026-08-24 (Linh: "filter row overlaps a label" -- bug report, cont'd): the
-     rail's own top padding, bumped from a plain 12px to 46px specifically here --
-     measured live, the reported bug's actual cause. #tlOriginFilter (see its own
-     [data-desk-day] top override above, now correctly re-anchored to #deskDayTopbar
-     instead of the hidden .theme-toggle) still floats fixed over this rail's own
-     top-right corner regardless -- it's real chrome she needs reachable from every
-     page, not something to relocate for one page's sake. Its own bottom edge lands
-     at screen-y ~92px live; the rail's own box already starts at screen-y 54px (the
-     first live measurement mistakenly forgot that and used a padding value as if
-     0 were the reference, landing "Today's widgets" 63px lower than intended --
-     caught and fixed before publish), so padding-top needs (92-54)+8px gap = 46px,
-     not the raw 92-or-100 screen figure. Scoped to #deskWidgetRail only
-     (not #deskColMain, the timeline) -- nothing floats over the timeline's own
-     top-right, only the rail's column does, so #deskColMain needs no matching
-     change. Disclosed, not silently left as a gap: .tl-origin-hidden-pill/.tl-
-     mode-hidden-pill (the two pills that stack BELOW the filter, only visible when
-     she's actually hidden a type this session) can still reach down to ~166px in
-     the rare case both show at once -- past this 100px clearance. Reserving space
-     for that permanently would push "Today's widgets" ~66px further down on the
-     overwhelming majority of visits when neither pill is showing, which trades a
-     common annoyance for a rare one; same tradeoff already accepted for these two
-     pills existing as floating-over-content chrome on Day view specifically (the
-     2026-08-22 "pill floating over a cell" fix scoped its OWN prevention to Life
-     Map only, not Day view). Flag this if the rare case bothers her live -- not
-     fixed here since the reported bug is specifically the filter row, always-on. */
+  /* The 46px top padding that sat here 2026-08-24 (bumped from 12px so the rail's
+     "Today's widgets" label cleared #tlOriginFilter, which floated fixed over this
+     rail's top-right corner) is REVERTED to a plain 12px the same day: that filter
+     row was removed entirely a few hours later, so the clearance is reserving space
+     for an element that no longer exists. Nothing always-on floats over this corner
+     any more. The one thing that still CAN is .tl-mode-hidden-pill, and only while a
+     Mode is actively hiding something -- the same "don't permanently reserve space
+     for a conditional pill" tradeoff that was already documented and accepted here,
+     now the only case left. */
+  /* ...and the one case that DOES still need clearing: while .tl-mode-hidden-pill is
+     up it floats across this rail's own "Today's widgets" label (measured live: pill
+     63-89px, label 66-81.75px). body.mode-pill-on is set/cleared by
+     renderModeHiddenPill() to mirror exactly that -- see its comment for why this is
+     toggled rather than permanently reserved. 34px = the pill's own bottom (89px)
+     minus the rail's box top (54px), plus a 6px gap, on the same 12px base padding. */
+  @media (min-width: 1200px) {
+    /* NB selector order: data-desk-day is stamped on <html>, not <body> (verified
+       live -- documentElement carries it), so the body class has to come SECOND. */
+    [data-desk-day] body.mode-pill-on #deskWidgetRail { padding-top: 41px; }
+  }
   @media (min-width: 1200px) and (max-width: 1439px) {
     [data-desk-day] #deskWidgetRail { width: 250px; }
   }
@@ -17014,8 +16928,8 @@
      just Work" -- now keyed off the real Modes engine (activeMode()/modeVisible()'s own
      state.modeRevealAll), via ONE class -- .mode-focus on <body> -- toggled from
      syncModeFocus() (below activeMode(), called from the global render() dispatcher, the
-     same "current on every navigation" hook renderNavExtras()/renderTlOriginFilter() already
-     use). Because syncModeFocus() checks state.modeRevealAll before adding the class,
+     same "current on every navigation" hook renderNavExtras() already uses).
+     Because syncModeFocus() checks state.modeRevealAll before adding the class,
      tapping the EXISTING "reveal everything" pill (#tlModeHiddenPill/#todoModeHiddenPill)
      brings all of this back too, for free, with zero new UI -- one escape hatch, not two.
      display:none only, same reversible pattern #astroLine already used when it was retired
@@ -17486,22 +17400,12 @@
     </div>
   </div>
 
-  <!-- Origin filter (her spec 2026-08-20): global chrome, a sibling of every .page
-       rather than nested inside #dayPage/#weekPage/#monthPage, so it's ONE piece
-       of markup instead of three near-duplicates and doesn't need to be threaded
-       through each page's own mobile/desktop reparenting rules -- same "global,
-       not per-page" reasoning #editPanelOverlay just above and renderDeskNavRail()
-       (JS) already use. Shown only on the three calendar views (CSS, keyed off
-       body[data-view]). Reuses .track-picker/.track-opt verbatim -- the exact
-       component #evlTrackPicker (All Events page) already uses for a track
-       filter -- rather than a new button style; toggling here does NOT persist
-       (state.tlOriginHidden only, see that field's own comment). -->
-  <div class="track-picker tl-origin-filter" id="tlOriginFilter" role="group" aria-label="Filter by type">
-    <button type="button" class="track-opt" data-origin-toggle="once" aria-pressed="true">One-off</button>
-    <button type="button" class="track-opt" data-origin-toggle="routine" aria-pressed="true">Routine</button>
-    <button type="button" class="track-opt" data-origin-toggle="repeat" aria-pressed="true">Repeating</button>
-    <button type="button" class="track-opt" data-origin-toggle="generated" aria-pressed="true">Generated</button>
-  </div>
+  <!-- The One-off / Routine / Repeating / Generated filter row (#tlOriginFilter, her
+       spec 2026-08-20) and its companion "N types hidden" pill (#tlOriginHiddenPill)
+       were REMOVED 2026-08-24 -- Linh doesn't use them. itemOrigin()/tlItemCanMove()
+       deliberately survive: they still stamp data-origin on every .tl-item, which is
+       what draws the 4px left-edge origin rail (solid / dashed / dotted) on the blocks
+       themselves. That rail is a separate, still-wanted feature. -->
   <!-- 2026-08-22 (Linh: "filter chrome covers the date nav and search bar on
        mobile" -- both pills were position:fixed, top-right-stacked over hardcoded
        offsets sized for a fixed reserved top area that no longer exists once the
@@ -17512,15 +17416,12 @@
        the drawer's own date-nav row / quick-add bar once opened. This wrapper is
        PURELY a layout hook for the ≤640px in-flow fix below (see .tl-hidden-
        pill-row) -- display:contents on every wider width, so it adds no box and
-       changes nothing about how the two buttons already position themselves via
-       .tl-origin-hidden-pill's own fixed/top/right rules. Neither button's own
-       id/class/hidden-attribute/click-handler changes at all. -->
+       changes nothing about how the pill positions itself via its own fixed/top/
+       right rules. The pill's id/hidden-attribute/click-handler are untouched.
+       2026-08-24: this held TWO pills until the origin filter was removed; the
+       Mode pill below is the only child now, and it absorbed the base styling
+       the removed pill's class used to supply. -->
   <div class="tl-hidden-pill-row" id="tlHiddenPillRow">
-    <!-- her spec, non-negotiable: "Whenever anything is hidden, show a small
-         persistent pill... Tapping it restores everything." Empty/hidden whenever
-         nothing is hidden -- see renderTlOriginFilter(). -->
-    <button type="button" class="tl-origin-hidden-pill" id="tlOriginHiddenPill" hidden></button>
-
     <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached" (2026-08-20):
          her spec's own non-negotiable rule, restated for THIS filter (§2: "this rule
          applies to every filtered surface in the app, without exception") -- nothing
@@ -17537,7 +17438,7 @@
          (false); two child spans (state text + a small fixed hint) instead of one,
          same shape #trackSummaryBtn/.who-edit already use for "label + small
          uppercase hint". -->
-    <button type="button" class="tl-origin-hidden-pill tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
+    <button type="button" class="tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
   </div>
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
@@ -27370,18 +27271,13 @@
                   cycAnchor: new Date(TODAY.getFullYear(), TODAY.getMonth(), 1),
                   cycSelectedDate: keyOf(TODAY),
                   moShowEvents: true, evlTrack: "all",
-                  // her spec 2026-08-20: which of once/routine/repeat/generated are
-                  // hidden from the calendar right now. A plain Set on `state`, same
-                  // "lives on state, never written to a store" shape every other
-                  // session-only field here already has -- deliberately NOT PREFS
-                  // (that IS persisted, see trackVisible()'s own tracksOff): her
-                  // explicit ask was "I should never open the app tomorrow wondering
-                  // where half my day went."
-                  tlOriginHidden: new Set(),
+                  // (tlOriginHidden lived here until 2026-08-24 -- filter row removed)
                   // Modes stage 2 (2026-08-20): "reveal everything" for the active mode's
-                  // filter -- same session-only reasoning as tlOriginHidden just above
-                  // (never PREFS; a mode's filtering is tied to right-now, not a lasting
-                  // preference). Cleared back to false on every real mode CHANGE (see
+                  // filter -- session-only by design (never PREFS; a mode's filtering is
+                  // tied to right-now, not a lasting preference), the same reasoning the
+                  // removed origin filter followed: Linh's explicit ask was "I should
+                  // never open the app tomorrow wondering where half my day went."
+                  // Cleared back to false on every real mode CHANGE (see
                   // modeVisible()'s own comment) so a reveal from an old mode never
                   // silently carries into a new one.
                   modeRevealAll: false, modeRevealAllFor: null,
@@ -28437,10 +28333,7 @@
     // always empty everywhere else, see trackVisible()'s own comment) hide a
     // life category from the grid without touching the underlying data.
     items = items.filter(e => trackVisible(e.track));
-    // her spec 2026-08-20: same call shape as trackVisible just above, one line
-    // down -- a hidden origin type disappears from this view exactly the way a
-    // hidden track already does.
-    items = items.filter(tlOriginVisible);
+    // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     // Modes stage 2 (2026-08-20, "Filtering the day"): same call shape again,
     // one line further down. activeMode() is resolved ONCE here (it does a real
     // day-assembly scan; calling it per-item would be a second scan of the same
@@ -28978,33 +28871,11 @@
     if (e.fromRoutine && e.rtTaskId) return "routine";
     return "once";
   }
-  // her spec 2026-08-20: same shape as trackVisible()/PREFS.tracksOff just below
-  // (a one-line predicate consulted right where each renderer's item list is
-  // built), backed by state.tlOriginHidden instead of a persisted preference.
-  function tlOriginVisible(e) { return !state.tlOriginHidden.has(itemOrigin(e)); }
-  // her spec, non-negotiable: "Whenever anything is hidden, show a small
-  // persistent pill... Tapping it restores everything." Global chrome, called
-  // from render() itself (see that function's own renderDeskNavRail() line) so
-  // it stays current on every navigation, not only a calendar re-render.
-  function renderTlOriginFilter() {
-    const bar = document.getElementById("tlOriginFilter");
-    if (bar) bar.querySelectorAll("[data-origin-toggle]").forEach(b => {
-      b.setAttribute("aria-pressed", String(!state.tlOriginHidden.has(b.dataset.originToggle)));
-    });
-    const pill = document.getElementById("tlOriginHiddenPill");
-    if (!pill) return;
-    const n = state.tlOriginHidden.size;
-    pill.hidden = n === 0;
-    if (n) pill.textContent = `${n} type${n === 1 ? "" : "s"} hidden · show all`;
-  }
-  // Every .tl-item this filter touches -- single-day timeline, the compact
-  // "week grid" bars, the wider multi-day cards -- lives inside renderDay()
-  // (confirmed: renderCalDaysUI()/renderMultiDayGrid() both bail unless
-  // state.view==="day"; #weekPage/#monthPage render their own separate,
-  // non-.tl-item widgets and are untouched by this spec). The filter bar
-  // itself is CSS-gated to state.view==="day" too, so this only ever runs
-  // from there -- one call, not a page-name switch.
-  function rerenderDayForOriginFilter() { renderDay(); }
+  // tlOriginVisible() / renderTlOriginFilter() / rerenderDayForOriginFilter() lived
+  // here until 2026-08-24, when the One-off/Routine/Repeating/Generated filter row was
+  // removed (Linh doesn't use it). itemOrigin() above STAYS -- it still stamps
+  // data-origin on every .tl-item for the 4px left-edge origin rail, which is a
+  // separate feature. See the #tlOriginFilter note in the markup.
   /* ---- §6 "Move / Reschedule — scope first" (2026-08-15) ----
      The three small pieces the move panel needs. Kept out of renderTlDetailBody so the
      confirm label can be recomputed live (refreshTlMoveConfirm, below) from the same
@@ -32615,10 +32486,7 @@
   // anchor, is static markup, so the row lands in the same place either way.)
   // Same isGhostItem guard as every other seeding site, for the same reason.
   function renderDayAlldayRow(bdays, others) {
-    // her spec 2026-08-20: same filter, same reasoning as renderTimeline()'s own
-    // tlOriginVisible line -- birthdays/all-day events hide the same way timed
-    // blocks do.
-    bdays = bdays.filter(tlOriginVisible); others = others.filter(tlOriginVisible);
+    // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     if (calDaysActive() > 1) { document.getElementById("dayAlldayRow")?.remove(); return; }
     const others2 = others.concat(closedDaysOn(state.anchor));
     [...bdays, ...others2].forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
@@ -32673,13 +32541,10 @@
   // Removed from the DOM entirely (see alldayRowMount()) the moment NO visible day
   // has any all-day item at all.
   function renderMdAlldayRow(dayList) {
-    // her spec 2026-08-20: same filter as the single-day all-day row and the
-    // multi-day timed grid just above -- applied here rather than inside
-    // alldayItemsFor() itself, which has no other caller today but is written
-    // as a general per-day item source, not a display-only one.
+    // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     const perDay = dayList.map(({ d }) => {
       const a = alldayItemsFor(d);
-      return { d, dk: keyOf(d), bdays: a.bdays.filter(tlOriginVisible), others: a.others.filter(tlOriginVisible) };
+      return { d, dk: keyOf(d), bdays: a.bdays, others: a.others };
     });
     const count = perDay.reduce((n, p) => n + p.bdays.length + p.others.length, 0);
     alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), count, () =>
@@ -32708,10 +32573,8 @@
     const dayList = [];
     for (let i = 0; i < days; i++) {
       const d = addDays(state.anchor, i);
-      // her spec 2026-08-20: filtered here, not inside dayItemsFor() itself --
-      // that function is also read for real, unfiltered counts elsewhere (see
-      // its own callers), which must stay true regardless of what's hidden.
-      dayList.push({ d, items: dayItemsFor(d).filter(tlOriginVisible) });
+      // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
+      dayList.push({ d, items: dayItemsFor(d) });
     }
     let shared = null;
     dayList.forEach(({ items }) => {
@@ -40561,7 +40424,7 @@
   // activeMode() on every one of their own renders already) can reuse their own result
   // instead of a second scan; syncModeFocus() is the convenience wrapper for spots that
   // don't already have one -- render()'s own "global chrome, current on every
-  // navigation" spot (same as renderNavExtras()/renderTlOriginFilter()), and the
+  // navigation" spot (same as renderNavExtras()), and the
   // #tlModeHiddenPill/#todoModeHiddenPill/#moShowAnywayBtn handlers, none of which
   // resolve activeMode() themselves.
   function applyModeFocusClass(am) {
@@ -40612,13 +40475,26 @@
   // needs it, see that function's own comment -- a real reason, not a default left
   // alone), but there is no longer a moment where the control just isn't there to
   // check; whatever the real state is, this says so the instant she looks.
+  // 2026-08-24: body.mode-pill-on mirrors this pill's own visibility, purely so the
+  // desktop widget rail can yield the top of its column while the pill is floating
+  // over it (see that class's CSS). The pill sits in the very top-right slot now --
+  // the origin filter that used to occupy it was removed the same day -- and measured
+  // live it spans screen-y 63-89px, straight across the rail's own "Today's widgets"
+  // label at 66-81.75px. That's the exact overlap bug the earlier chrome fix was
+  // about, so it can't just be re-accepted here. Reserving the space permanently was
+  // the other option and is worse: this pill shows for EVERY non-Home mode (not only
+  // when something is actually hidden -- see this function's own comment above), but
+  // Home is still a real and frequent state, and on Home the gap would be dead space
+  // for nothing. Toggling it is honest in both directions.
+  function setModePillFlag(on) { document.body.classList.toggle("mode-pill-on", !!on); }
   function renderModeHiddenPill(hidden, am) {
     const pill = document.getElementById("tlModeHiddenPill");
     const stateEl = document.getElementById("tlModeHiddenPillState");
     const hintEl = document.getElementById("tlModeHiddenPillHint");
     if (!pill || !stateEl || !hintEl) return;
-    if (am.id === "home") { pill.hidden = true; return; }
+    if (am.id === "home") { pill.hidden = true; setModePillFlag(false); return; }
     pill.hidden = false;
+    setModePillFlag(true);
     pill.setAttribute("aria-pressed", String(!!state.modeRevealAll));
     if (state.modeRevealAll) {
       stateEl.textContent = "Showing everything";
@@ -41546,11 +41422,7 @@
     // just above, so its active row follows every navigation, not only a Day-page
     // renderDay() pass.
     renderDeskNavRail();
-    // her spec 2026-08-20: same "global chrome, current on every navigation"
-    // hook point -- keeps the origin-filter toggles' pressed state and the
-    // hidden-pill right even after a page switch that didn't itself touch
-    // state.tlOriginHidden.
-    renderTlOriginFilter();
+    // (renderTlOriginFilter() was called here until 2026-08-24 -- filter row removed)
     // 2026-08-20 (Linh, "numerology in every mode"): same hook point again -- .mode-focus
     // needs to be current before renderMonth()/renderWeek() below read it, and before a
     // page switch that never itself calls renderTimeline()/renderTodoPage() (the two
@@ -49677,23 +49549,8 @@
       if (ev) openFormForEdit(ev);
     }
   });
-  // her spec 2026-08-20: independent toggles, not a single-choice picker like
-  // the old evlTrackPicker used to be (retired 2026-08-24, see the retired-
-  // features doc) -- each button flips its own membership in
-  // state.tlOriginHidden. Session-only; nothing here is written to any store.
-  document.getElementById("tlOriginFilter").addEventListener("click", e => {
-    const b = e.target.closest("[data-origin-toggle]"); if (!b) return;
-    const k = b.dataset.originToggle;
-    if (state.tlOriginHidden.has(k)) state.tlOriginHidden.delete(k); else state.tlOriginHidden.add(k);
-    renderTlOriginFilter();
-    rerenderDayForOriginFilter();
-  });
-  // "Tapping it restores everything" -- her spec, non-negotiable.
-  document.getElementById("tlOriginHiddenPill").addEventListener("click", () => {
-    state.tlOriginHidden.clear();
-    renderTlOriginFilter();
-    rerenderDayForOriginFilter();
-  });
+  // (the #tlOriginFilter / #tlOriginHiddenPill click handlers lived here until
+  // 2026-08-24, when that filter row was removed -- see the markup note)
   document.getElementById("evlFrom").addEventListener("change", renderEventsPage);
   document.getElementById("evlTo").addEventListener("change", renderEventsPage);
   document.getElementById("evlThisMonth").addEventListener("click", () => {
