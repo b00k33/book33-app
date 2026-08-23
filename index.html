@@ -5419,6 +5419,43 @@
   .todo-tag-popover .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
   .todo-tag-popover .track-opt::before { display: none; }
 
+  /* Orders & deliveries (2026-08-23, "easy add") -- own class names throughout, per
+     her own instruction, even though the interaction MODEL (one popover open at a
+     time, in-flow directly under the row, outside-tap closes) is copied from the
+     to-do tag popover just above. */
+  .order-add-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .order-add-row input { flex: 1 1 auto; min-width: 0; }
+  .order-add-row .btn-save { flex: none; }
+  .order-row { align-items: flex-start; }
+  .order-row .tick { margin-top: 2px; }
+  .order-row .shop-del { margin-top: 2px; }
+  /* .shop-lux-main's shared base rule (flex:1, no min-width) never needed one before
+     -- Shopping/To-do never put anything wider than a small pill inside it. A native
+     date input resists shrinking below its own intrinsic width, so without this the
+     whole row (and the page) widened past the viewport at 375px -- found live, fixed
+     scoped to .order-row only, the shared base rule is untouched for every other
+     .shop-lux-item consumer. */
+  .order-row .shop-lux-main { min-width: 0; }
+  .order-row-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  /* the untagged/dashed state reuses .add-btn's own base look (dashed pill) verbatim,
+     same as .todo-mode-tag does -- no extra rule needed for that state itself. */
+  .order-details-summary {
+    border: none; background: transparent; padding: 0; margin-top: 4px;
+    font-size: 11px; color: var(--ink-soft); cursor: pointer; font-family: var(--font-body); text-align: left;
+  }
+  .order-details-summary:hover { color: var(--ink); }
+  .order-details-sep { color: var(--ink-faint); }
+  .order-overdue { color: var(--danger); font-weight: 600; }
+  .order-detail-popover { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); }
+  /* .rtn-pair's own base rule (line ~7436) sets min-width:0 on ITSELF, not on plain
+     <input> children -- its one existing consumer (.rtn-hairwash-newprod) wraps each
+     input in a .field div, which is what actually carries the min-width:0 (.rtn-pair
+     > .field). These inputs sit directly in .rtn-pair with no .field wrapper, so
+     without this they kept their native intrinsic width (a date input's is wide) and
+     overflowed the popover at 375px -- found live, not guessed. */
+  .order-detail-popover .rtn-pair > input { flex: 1 1 auto; min-width: 0; }
+  .order-detail-btns { display: flex; gap: 8px; }
+
   /* --- routines & events list rows --- */
   .evl-filters { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
   .evl-range { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em; flex-wrap: wrap; }
@@ -20458,12 +20495,22 @@
 
   <!-- ================= HOME ADMIN — routable stub, 2026-08-19 =================
        Linh's call (design-scope question): full plumbing now, real content (postage/
-       deliveries/cleaner/who's home tracking) is a later task once she's specified it. -->
+       deliveries/cleaner/who's home tracking) is a later task once she's specified it.
+       2026-08-23: Orders & deliveries is the first real section -- the cleaner/who's
+       home pieces are still unbuilt, so this page will likely grow more .section-head
+       blocks below this one later rather than being renamed. -->
   <div class="page" id="homeAdminPage" hidden>
     <div class="bd-head">
       <h1>Home admin</h1>
     </div>
-    <div class="beauty-note">Postage, deliveries, the cleaner, who's home — not built yet. This page just has a home to move into.</div>
+    <div class="section-head"><h2>Orders &amp; deliveries</h2><span class="rule"></span></div>
+    <!-- always-visible, one field + Enter/Add -- NOT a toggleable add-form like
+         Shopping's own #shopLuxAddForm. A real <form> gives Enter-to-submit for free. -->
+    <form class="order-add-row" id="orderAddForm">
+      <input type="text" id="orderAddName" placeholder="What did you order?" autocomplete="off">
+      <button type="submit" class="btn-save">Add</button>
+    </form>
+    <div id="orderList"></div>
   </div>
 
   <div class="page" id="birthdaysPage" hidden>
@@ -25168,7 +25215,154 @@
   }
   // 2026-08-19 (three-surfaces build): routable stub, static content lives in the
   // page HTML itself -- nothing dynamic to render yet (design-scope call, Linh).
-  function renderHomeAdmin() {}
+  // 2026-08-23 ("Orders & deliveries — easy add"): first real content. Adding an
+  // order is one field + Enter/Add (#orderAddForm's own submit handler, below) --
+  // where-from/expected-date/tracking-link are always optional, added after the
+  // fact from a per-row popover copying the To-do tag popover's exact interaction
+  // model (one open at a time, in-flow, outside-tap closes without saving) but
+  // with its OWN class names throughout, per her instruction not to touch/extend
+  // .todo-tag-popover itself.
+  //
+  // id of the one order whose detail popover is open, or null; orderDetailDraft
+  // holds that popover's IN-PROGRESS (uncommitted) field values -- same shape as
+  // rtnHairNewProdFor/rtnHairNewProdDraft elsewhere in this file. Seeded from the
+  // order's own current values on open, so editing pre-fills; discarded (not
+  // written back) on Cancel or an outside tap, matching her explicit "outside tap
+  // closes without saving unsaved changes" rule.
+  let orderDetailPopoverFor = null;
+  let orderDetailDraft = {};
+  function renderHomeAdmin() {
+    const host = document.getElementById("orderList");
+    if (!host) return;
+    if (!ORDERS.length) { host.innerHTML = `<div class="fam-empty">Nothing ordered yet. Add one above.</div>`; return; }
+    const todayKey = keyOf(TODAY);
+    // same not-arrived-first-by-soonest-expected, arrived-sink-to-bottom sort as
+    // renderShoppingPage()'s own sorted = SHOP.slice().sort(...) -- read, not touched.
+    const sorted = ORDERS.slice().sort((a, z) => {
+      if (!!a.arrivedDate !== !!z.arrivedDate) return a.arrivedDate ? 1 : -1;
+      const ad = a.expectedDate || "9999-99-99", zd = z.expectedDate || "9999-99-99";
+      return ad.localeCompare(zd) || a.name.localeCompare(z.name);
+    });
+    host.innerHTML = sorted.map(o => {
+      const arrived = !!o.arrivedDate;
+      const overdue = !arrived && o.expectedDate && o.expectedDate < todayKey;
+      const hasDetails = !!(o.whereFrom || o.expectedDate || o.trackingLink);
+      const popoverOpen = orderDetailPopoverFor === o.id;
+      const draft = popoverOpen ? orderDetailDraft : {};
+      const parts = [];
+      if (o.whereFrom) parts.push(`<span>${esc(o.whereFrom)}</span>`);
+      if (o.expectedDate) {
+        const d = parseKey(o.expectedDate);
+        parts.push(`<span${overdue ? ` class="order-overdue"` : ""}>Expected ${d.getDate()} ${MON_SHORT[d.getMonth()]}</span>`);
+      }
+      if (o.trackingLink) parts.push(`<span>🔗 Tracking</span>`);
+      const summaryHtml = parts.join(`<span class="order-details-sep"> · </span>`);
+      return `<div class="shop-lux-item order-row${arrived ? " bought" : ""}">
+        <input type="checkbox" class="tick" data-order-tick="${o.id}" ${arrived ? "checked" : ""} aria-label="Mark ${esc(o.name)} arrived">
+        <div class="shop-lux-main">
+          <span class="shop-lux-name">${esc(o.name)}</span>
+          <div class="order-row-actions">
+            ${hasDetails
+              ? `<button type="button" class="order-details-summary" data-order-details="${o.id}">${summaryHtml}</button>`
+              : `<button type="button" class="add-btn order-details-btn" data-order-details="${o.id}">+ add details</button>`}
+          </div>
+          ${popoverOpen ? `<div class="order-detail-popover" role="group" aria-label="Order details">
+            <div class="rtn-pair">
+              <input type="text" class="od-where" placeholder="Where from" value="${esc(draft.whereFrom ?? o.whereFrom ?? "")}" aria-label="Where from">
+              <input type="date" class="od-expected" value="${esc(draft.expectedDate ?? o.expectedDate ?? "")}" aria-label="Expected date">
+            </div>
+            <input type="url" class="od-link" placeholder="Tracking link (optional)" value="${esc(draft.trackingLink ?? o.trackingLink ?? "")}" aria-label="Tracking link">
+            <div class="order-detail-btns">
+              <button type="button" class="btn-save" data-order-save="${o.id}">Save</button>
+              <button type="button" class="btn-cancel" data-order-cancel="${o.id}">Cancel</button>
+            </div>
+          </div>` : ""}
+        </div>
+        <button class="shop-del" data-order-del="${o.id}" aria-label="Remove ${esc(o.name)}">×</button>
+      </div>`;
+    }).join("");
+  }
+  document.getElementById("orderAddForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const nameEl = document.getElementById("orderAddName");
+    const name = nameEl.value.trim();
+    if (!name) return;
+    ORDERS.push({ id: uid(), name, whereFrom: "", expectedDate: "", trackingLink: "", arrivedDate: null, createdAt: keyOf(TODAY) });
+    saveOrders(ORDERS);
+    nameEl.value = "";
+    renderHomeAdmin();
+  });
+  document.getElementById("orderList").addEventListener("click", e => {
+    const detailsBtn = e.target.closest("[data-order-details]");
+    if (detailsBtn) {
+      e.stopPropagation();
+      const id = detailsBtn.dataset.orderDetails;
+      if (orderDetailPopoverFor === id) { orderDetailPopoverFor = null; orderDetailDraft = {}; }
+      else {
+        const o = ORDERS.find(x => x.id === id);
+        if (!o) return;
+        orderDetailPopoverFor = id;
+        orderDetailDraft = { whereFrom: o.whereFrom || "", expectedDate: o.expectedDate || "", trackingLink: o.trackingLink || "" };
+      }
+      renderHomeAdmin();
+      return;
+    }
+    const saveBtn = e.target.closest("[data-order-save]");
+    if (saveBtn) {
+      e.stopPropagation();
+      const o = ORDERS.find(x => x.id === saveBtn.dataset.orderSave);
+      if (o) {
+        o.whereFrom = (orderDetailDraft.whereFrom || "").trim();
+        o.expectedDate = orderDetailDraft.expectedDate || "";
+        o.trackingLink = (orderDetailDraft.trackingLink || "").trim();
+        saveOrders(ORDERS);
+      }
+      orderDetailPopoverFor = null; orderDetailDraft = {};
+      renderHomeAdmin();
+      return;
+    }
+    const cancelBtn = e.target.closest("[data-order-cancel]");
+    if (cancelBtn) {
+      e.stopPropagation();
+      orderDetailPopoverFor = null; orderDetailDraft = {};
+      renderHomeAdmin();
+      return;
+    }
+    const tick = e.target.closest("[data-order-tick]");
+    if (tick) {
+      orderDetailPopoverFor = null; orderDetailDraft = {};
+      const o = ORDERS.find(x => x.id === tick.dataset.orderTick);
+      if (o) { o.arrivedDate = tick.checked ? keyOf(TODAY) : null; saveOrders(ORDERS); renderHomeAdmin(); }
+      return;
+    }
+    const del = e.target.closest("[data-order-del]");
+    if (del) {
+      orderDetailPopoverFor = null; orderDetailDraft = {};
+      ORDERS = ORDERS.filter(x => x.id !== del.dataset.orderDel);
+      saveOrders(ORDERS);
+      renderHomeAdmin();
+      return;
+    }
+  });
+  // draft-only -- no save, no re-render (a re-render here would fight the live
+  // input's own cursor/focus mid-keystroke, same reason rtnHairNewProdDraft's own
+  // input delegate works this way).
+  document.getElementById("orderList").addEventListener("input", e => {
+    if (e.target.classList.contains("od-where")) orderDetailDraft.whereFrom = e.target.value;
+    else if (e.target.classList.contains("od-expected")) orderDetailDraft.expectedDate = e.target.value;
+    else if (e.target.classList.contains("od-link")) orderDetailDraft.trackingLink = e.target.value;
+  });
+  // Outside-tap closes without saving -- matches the to-do tag popover's own
+  // outside-click behaviour exactly (her explicit instruction), including the
+  // stopPropagation() calls above that keep a Save/Cancel/re-render from being
+  // misread as "outside" once the click's own target detaches mid-dispatch.
+  document.addEventListener("click", e => {
+    if (!orderDetailPopoverFor) return;
+    if (e.target.closest("[data-order-details]")) return;
+    if (e.target.closest(".order-detail-popover")) return;
+    orderDetailPopoverFor = null; orderDetailDraft = {};
+    renderHomeAdmin();
+  });
   document.addEventListener("click", e => {
     const jump = e.target.closest("[data-jump-view]");
     if (jump) { state.view = jump.dataset.jumpView; render(); }
@@ -25637,6 +25831,17 @@
   // DONE-map id-namespacing needed, unlike calendar occurrences).
   function loadTodos() { try { return JSON.parse(localStorage.getItem(TODO_KEY) || "[]"); } catch (e) { return []; } }
   function saveTodos(list) { try { localStorage.setItem(TODO_KEY, JSON.stringify(list)); } catch (e) {} }
+  // 2026-08-23 ("Orders & deliveries — easy add"): {id, name, whereFrom, expectedDate,
+  // trackingLink, arrivedDate, createdAt} -- same shape/save pattern as loadShop/
+  // saveShop just above. arrivedDate doubles as both the tick-state AND the stamp
+  // (truthy = arrived) rather than a separate boolean, so the two can never disagree --
+  // ticking sets it to today, unticking clears it to null. whereFrom/expectedDate/
+  // trackingLink are always optional, added after the fact from the row's own
+  // detail popover (see orderDetailPopoverFor, homeAdmin render code). "book33-"
+  // prefix keeps it inside bakExport's existing full-backup key collection for free.
+  const ORDERS_KEY = "book33-orders";
+  function loadOrders() { try { return JSON.parse(localStorage.getItem(ORDERS_KEY) || "[]"); } catch (e) { return []; } }
+  function saveOrders(list) { try { localStorage.setItem(ORDERS_KEY, JSON.stringify(list)); } catch (e) {} }
   let EVENTS = loadEvents();
   // 2026-08-22 (Linh: "i tried to add sleep and its not adding" -- STEP 3, repairing
   // data broken before the STEP 2 fix above): any EVENTS entry saved with end:"00:00"
@@ -25751,6 +25956,7 @@
   let OUTCOMES = loadOutcomes();
   let SHOP = loadShop();
   let TODOS = loadTodos();
+  let ORDERS = loadOrders();
   syncHairRestock();   // 2026-08-19: catch up the SHOP list on load, e.g. a day rolled over
   // one-time: add Linh's L'Oreal scalp serum to the shopping list (2026-07-26)
   (function addScalpSerum2026() {
