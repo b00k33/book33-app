@@ -15624,6 +15624,13 @@
   /* Plan-the-week's 7 day chips: a 7-across grid gives ~30px per chip here. Two rows of
      four keeps every chip readable and still reads as one week block. */
   #wrPinned .sun-week-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Shopping (2026-08-24, "move to widget panel on RHS"): .shop-box's base rule is
+     `width: min(100%,380px); aspect-ratio: 1` -- a deliberate square for the wide
+     two-up layouts it used to sit in. .day-side already carried its own
+     `aspect-ratio:auto; width:100%` override for the same reason; #wrPinned needs the
+     equivalent or the card renders as a 380px square in a 286px column (measured).
+     Height follows the list's real length here instead. */
+  #wrPinned .shop-box { width: 100%; aspect-ratio: auto; }
   .wr-card { position: relative; background: var(--raised); border-radius: var(--radius-md); padding: 12px 12px; margin-bottom: 8px; }
   .wr-grip { position: absolute; top: 9px; right: 9px; font-size: 11px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
   .wr-grip:active { cursor: grabbing; }
@@ -20090,6 +20097,12 @@
              she writes the avoidance down, names the smallest move, and the book
              answers gently and remembers that she got going before. -->
         <div id="unstickBox" class="unstick" hidden></div>
+        <!-- home marker for the desktop reparent into #wrPinned (2026-08-24). Needed
+             even though #shopSlot is a tile with its own TILE_HOME marker: that marker
+             is planted lazily from wherever the element happens to be sitting, so once
+             the rail owns it a first mobile pass would have planted "home" INSIDE the
+             rail. This static marker is the honest anchor. -->
+        <div id="shopSlotHome" hidden></div>
         <div id="shopSlot"></div>
         <!-- invisible fixed-position host for the CD-badge cycle-log panel -->
         <div id="dayHealthBody"></div>
@@ -31754,6 +31767,12 @@
       // ordering/visibility — this mobile/tablet tile-shelf sweep must never touch
       // their real DOM elements (no .tile-ctl strip, no reparenting into a group box).
       if (def.railOnly) return;
+      // 2026-08-24 (Linh: "move to widget panel on RHS"): on a desktop Day view
+      // #shopSlot is owned by placeDeskGrid(), which pins it into the widget rail --
+      // leave its DOM alone here so the two don't reparent it back and forth on every
+      // render. Below the desktop breakpoint there is no rail, so this shelf keeps it
+      // exactly as before. Same shape as the railOnly guard directly above.
+      if (def.id === "shopSlot" && deskDayActive()) return;
       const el = document.getElementById(def.id);
       if (!el) return;
       el.setAttribute("data-tile", def.id);
@@ -43670,6 +43689,16 @@
     const ctxWrapHome = document.getElementById("dayCtxWrapHome");
     const ambRail = document.getElementById("modeAmbientRail");
     const ambRailHome = document.getElementById("modeAmbientRailHome");
+    // 2026-08-24 (Linh, screenshot of the wide Shopping card: "move to widget panel on
+    // RHS"): #shopSlot joins the pinned set. It's a real element with its own renderer
+    // (renderShopping()), and its rows are genuinely interactive -- tick to mark bought,
+    // × to remove -- so it moves as itself rather than being rebuilt as a read-only
+    // wrCardHtml() string. It is ALSO a tile (data-tile, managed by applyDayTiles), so
+    // that function skips it while the desktop rail owns it -- see its own guard --
+    // otherwise the two placers would reparent it back and forth every render, exactly
+    // the fight placeMiniCalDesk()'s 2026-08-06 comment describes.
+    const shopSlotEl = document.getElementById("shopSlot");
+    const shopSlotHome = document.getElementById("shopSlotHome");
     grid.hidden = !on;
     // 2026-08-16 (desktop multi-day build): was `if (on && calDaysActive() === 1)`
     // with a second, separate "else if (on)" branch below it holding the OLD
@@ -43750,7 +43779,7 @@
       // appending before it would destroy these three at the 1024-1199px width.
       // #wrPinned is never rebuilt, so the order is only load-bearing for the fallback.
       if (pinnedHost) {
-        [sunWeek, ctxWrap, ambRail].forEach(el => {
+        [sunWeek, ctxWrap, ambRail, shopSlotEl].forEach(el => {
           if (el && el.parentElement !== pinnedHost) pinnedHost.appendChild(el);
         });
       }
@@ -43804,6 +43833,13 @@
       if (sunWeekHome && sunWeek && sunWeekHome.nextElementSibling !== sunWeek) sunWeekHome.after(sunWeek);
       if (ctxWrapHome && ctxWrap && ctxWrapHome.nextElementSibling !== ctxWrap) ctxWrapHome.after(ctxWrap);
       if (ambRailHome && ambRail && ambRailHome.nextElementSibling !== ambRail) ambRailHome.after(ambRail);
+      // Shopping: pull it out of EITHER rail host (#wrPinned >=1200px, #wrFallback
+      // 1024-1199px) back beside its marker -- then stop. Deliberately conditional,
+      // unlike the three unconditional returns above: #shopSlot is also a tile, so once
+      // it's out of the rail applyDayTiles() owns it and moves it on to whichever
+      // shelf/group her prefs say. Returning it unconditionally every render would
+      // yank it back off that shelf and the two placers would fight forever.
+      if (shopSlotHome && shopSlotEl && (shopSlotEl.parentElement === pinnedSlot || shopSlotEl.parentElement === wrFallbackEl)) shopSlotHome.after(shopSlotEl);
       if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
       if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
     }
@@ -44373,8 +44409,15 @@
   // an id that isn't in it is simply never read -- verified, no Arrange-popover break.
   // focusTile ("Numerology") was already filtered out of both desktop surfaces before
   // this change; nothing else left in the list is cosmic.
-  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunShopping", "sunRoutines"];
-  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", biomechTip: "Biomechanics", sunWeekShape: "This week's shape", sunTodoByMode: "To-do, by Mode", sunShopping: "Shopping list", sunRoutines: "Routines" };
+  // 2026-08-24 (Linh: "move to widget panel on RHS", of the real Shopping card):
+  // sunShopping is dropped from the rail. It was a Sunday-only, READ-ONLY summary of
+  // the same SHOP list -- with the real #shopSlot card now pinned in the rail every
+  // day (tickable, removable, and carrying the shopping-day line), keeping it would
+  // have shown Shopping twice in the same column on Sundays. Its wrCardHtml() branch
+  // is left in place, unreachable, rather than torn out; a stored TILE_PREFS entry for
+  // it is harmless (both rail surfaces iterate THIS list).
+  const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunRoutines"];
+  const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", biomechTip: "Biomechanics", sunWeekShape: "This week's shape", sunTodoByMode: "To-do, by Mode", sunRoutines: "Routines" };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
