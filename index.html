@@ -8357,21 +8357,30 @@
      row, horizontal scroll for anything past what fits -- same "cap visible items"
      shape design44 §3 already establishes elsewhere (Cap visible items then "+N
      more"), just via native scroll instead of a count-and-truncate since these are
-     tap targets, not a list. #presetsRow stays `hidden` (see markup) whenever
-     SAVED_EVENTS is empty -- renderPresetsRow()'s own short-circuit -- so this CSS
-     never shows an empty strip. */
+     tap targets, not a list. 2026-08-23: #presetsRow no longer stays hidden when
+     SAVED_EVENTS is empty (see renderPresetsRow()'s own comment) -- .presets-empty-hint
+     below is what that state shows instead of a blank strip. */
   .presets-row {
     display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
     margin: -4px 0 4px; -webkit-overflow-scrolling: touch;
   }
+  /* 2026-08-23 ("I didn't know where my presets were"): one quiet line, roughly one
+     preset-card row's worth of vertical space (padding tuned by eye against the real
+     card height) so the row doesn't visibly jump in height the moment a first real
+     preset gets saved and this hint is replaced. */
+  .presets-empty-hint { color: var(--ink-faint); font-size: 12px; padding: 10px 2px; }
   .preset-card {
     position: relative; flex: 0 0 auto; max-width: 168px; min-width: 96px;
     display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
     background: var(--field-bg); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
-    padding: 8px 10px; font-family: var(--font-body); cursor: pointer; text-align: left; min-height: 44px;
+    padding: 18px 10px 8px; font-family: var(--font-body); cursor: pointer; text-align: left; min-height: 44px;
   }
   .preset-card:hover, .preset-card:focus-visible { border-color: var(--nav-active); }
   .preset-card[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--margin-rule); border-color: var(--margin-rule); }
+  /* 2026-08-23 (Mode-linked presets): the left stripe (::after, added in
+     regenerateModeStyles()) sits under the title text at the base padding -- only the
+     Mode-tinted variant needs the extra clearance, a plain preset keeps its own. */
+  .preset-card.preset-card-mode { padding-left: 14px; }
   .preset-card-title { font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .preset-card-sub { font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   /* small, unobtrusive per STEP 4 -- an invisible ::before pad keeps a real 44px tap
@@ -8384,6 +8393,16 @@
   }
   .preset-card-del::before { content: ""; position: absolute; inset: -13px; }
   .preset-card-del:hover, .preset-card-del:focus-visible { color: var(--ink); }
+  /* 2026-08-23 ("edit a saved preset in place"): the ✕ badge's exact treatment,
+     mirrored onto the top-left corner -- same size/pad-trick/hover shift, so the two
+     corner actions read as siblings rather than a new visual system. */
+  .preset-card-edit {
+    position: absolute; top: -2px; left: -2px; width: 18px; height: 18px; border-radius: 999px;
+    border: none; background: var(--paper); color: var(--ink-faint); font-size: 11px; line-height: 1;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .preset-card-edit::before { content: ""; position: absolute; inset: -13px; }
+  .preset-card-edit:hover, .preset-card-edit:focus-visible { color: var(--ink); }
   /* ☆ Save as preset -- sits beside the Title field, quiet until tapped (unfilled
      star), gold-filled once the current title has actually been saved as a preset
      this session (savePresetFromForm() toggles the class) so tapping it twice in a
@@ -21516,9 +21535,18 @@
           // var(--ink) for the mode-less neutral fill is itself theme-flipping, so it
           // tracks that fill's own light/dark contrast automatically in both themes.
           const textColor = hasMode ? lmTextColorFor(cell.mode.accent) : "var(--ink)";
+          // 2026-08-23 ("small icon on any block that repeats"): itemOrigin() (already
+          // built for the Day-view origin rail) reads real fields already on cell.item
+          // (fromRoutine/rtTaskId, fromRecurringEvent/recurId) -- "repeat"/"routine" are
+          // its two genuinely-repeating values; "generated" (birthdays, family tasks,
+          // supplements) and "once" don't count, per her "not really repeating in the
+          // sense she means". Text-prefix convention, same as renderLmUntimed()'s own
+          // `${u.mode.emoji || ""} ${esc(u.title)}` -- not a separately positioned badge
+          // that could overlap a neighbouring narrow column.
+          const isRepeating = ["routine", "repeat"].includes(itemOrigin(cell.item));
           gridHtml += `<div class="lm-cell lm-cell-filled${hasMode ? "" : " lm-cell-nomode"}" data-lm-filled-cell data-lm-day="${d}" data-lm-slot="${si}"
             style="${fillStyle}"
-            title="${esc(cell.title)} — ${cell.rangeTxt}">${runStart ? `<span class="lm-cell-title" style="color:${textColor}">${esc(cell.title)}</span>` : ""}</div>`;
+            title="${esc(cell.title)} — ${cell.rangeTxt}">${runStart ? `<span class="lm-cell-title" style="color:${textColor}">${isRepeating ? "🔁 " : ""}${esc(cell.title)}</span>` : ""}</div>`;
         } else {
           const paintStyle = painting ? `background:${modeById(lmArmedMode).accent}` : "";
           gridHtml += `<div class="lm-cell lm-cell-empty${painting ? " lm-cell-painting" : ""}" data-lm-empty-cell data-lm-day="${d}" data-lm-slot="${si}"
@@ -40353,6 +40381,14 @@
       css += `:root[data-theme="light"] .tl-item[data-mode="${m.id}"][data-track], :root[data-theme="light"] .tl-detail-head[data-mode="${m.id}"][data-track] { --cat-c: var(--mode-${m.id}); --cat-t: var(--mode-${m.id}-on); }\n`;
       css += `.mo-chip[data-mode="${m.id}"] { background: var(--mode-${m.id}); color: var(--mode-${m.id}-on); }\n`;
       css += `.tl-allday-chip[data-mode="${m.id}"], #dayAlldayRow .ad-chip[data-mode="${m.id}"], .wk-bd[data-mode="${m.id}"], .mo-bd[data-mode="${m.id}"] { background: var(--mode-${m.id}); color: var(--mode-${m.id}-on); }\n`;
+      // 2026-08-23 ("colour presets by Mode"): a quiet wash + left stripe, not a solid
+      // fill like .mo-chip above -- a small card in a horizontally-scrolling row reads
+      // better tinted than fully painted, same restrained idiom applyEfTint()'s own
+      // --ef-tint radial-gradient already uses on the Edit Event form itself. Title/sub
+      // text stay --ink/--ink-faint -- a wash, not a solid block, needs no --mode-*-on
+      // contrast recompute.
+      css += `.preset-card[data-mode="${m.id}"] { border-color: color-mix(in oklab, var(--mode-${m.id}) 45%, var(--note-line)); background: radial-gradient(120% 90% at 12% 0%, color-mix(in oklab, var(--mode-${m.id}) 24%, transparent), transparent 70%), var(--field-bg); }\n`;
+      css += `.preset-card[data-mode="${m.id}"]::after { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 2px; background: var(--mode-${m.id}); }\n`;
     });
     el.textContent = css;
   }
@@ -51081,6 +51117,11 @@
   // routine-seeded entries that predate this (no mode/loc) still render and apply
   // fine, just filling less.
   let presetSelectedId = null;
+  // 2026-08-23 ("edit a saved preset in place"): which preset (if any) the form is
+  // currently editing -- distinct from presetSelectedId (which just tracks which card
+  // reads as pressed/applied). Only the ✎ corner badge sets this; a plain card tap is
+  // always "apply as a fresh one-off", never "resume editing something else".
+  let presetEditingId = null;
   function fmtPresetDur(min) {
     if (!min) return "";
     const h = Math.floor(min / 60), m = min % 60;
@@ -51094,21 +51135,38 @@
     if (p.loc) parts.push(p.loc);
     return parts.join(" · ");
   }
-  // renders NOTHING (stays hidden) when SAVED_EVENTS is empty -- no empty state,
-  // per her own explicit spec -- so this costs zero space until she's saved one.
+  // 2026-08-23 ("I didn't know where my presets were"): REVERSES the old "renders
+  // nothing when empty" spec above -- that silence was itself the problem (zero
+  // presets saved, so there was nothing to see and nothing pointing at ☆). Gone again
+  // the moment a first preset is saved, same guard.
   function renderPresetsRow() {
     const host = document.getElementById("presetsRow");
     if (!host) return;
-    if (!SAVED_EVENTS.length) { host.hidden = true; host.innerHTML = ""; return; }
-    host.hidden = false;
-    host.innerHTML = SAVED_EVENTS.map(p => `
-      <button type="button" class="preset-card" data-preset-id="${esc(p.id)}" aria-pressed="${String(p.id === presetSelectedId)}">
-        <span class="preset-card-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
-        <span class="preset-card-sub">${esc(presetSubline(p))}</span>
-        <span class="preset-card-del" data-preset-del="${esc(p.id)}" aria-label="Delete preset" title="Delete preset">✕</span>
-      </button>`).join("");
+    if (!SAVED_EVENTS.length) {
+      host.hidden = false;
+      host.innerHTML = `<span class="presets-empty-hint">Tap ☆ next to Title to save your first preset</span>`;
+    } else {
+      host.hidden = false;
+      host.innerHTML = SAVED_EVENTS.map(p => `
+        <button type="button" class="preset-card${p.mode ? " preset-card-mode" : ""}" data-preset-id="${esc(p.id)}" data-mode="${esc(p.mode || "")}" aria-pressed="${String(p.id === presetSelectedId)}">
+          <span class="preset-card-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
+          <span class="preset-card-sub">${esc(presetSubline(p))}</span>
+          <span class="preset-card-edit" data-preset-edit="${esc(p.id)}" aria-label="Edit preset" title="Edit preset">✎</span>
+          <span class="preset-card-del" data-preset-del="${esc(p.id)}" aria-label="Delete preset" title="Delete preset">✕</span>
+        </button>`).join("");
+    }
+    const saveBtn = document.getElementById("presetSaveBtn");
+    if (saveBtn) {
+      saveBtn.textContent = presetEditingId ? "✎" : "☆";
+      saveBtn.setAttribute("aria-label", presetEditingId ? "Update preset" : "Save as preset");
+      saveBtn.title = presetEditingId ? "Update preset" : "Save as preset";
+    }
   }
-  function setPresetSelected(id) { presetSelectedId = id; renderPresetsRow(); }
+  function setPresetSelected(id) {
+    presetSelectedId = id;
+    if (id === null) presetEditingId = null;
+    renderPresetsRow();
+  }
   // fills Title/Mode/How long/Where in one tap -- day/time and Save stay hers.
   function applyPreset(p) {
     fTitle.value = p.title || "";
@@ -51131,6 +51189,19 @@
       SAVED_EVENTS = SAVED_EVENTS.filter(p => p.id !== id);
       saveSavedEvents();
       if (presetSelectedId === id) presetSelectedId = null;
+      if (presetEditingId === id) presetEditingId = null;
+      renderPresetsRow();
+      return;
+    }
+    const editBtn = e.target.closest("[data-preset-edit]");
+    if (editBtn) {
+      e.stopPropagation();
+      const id = editBtn.dataset.presetEdit;
+      const p = SAVED_EVENTS.find(x => x.id === id);
+      if (!p) return;
+      presetEditingId = id;
+      presetSelectedId = id;
+      applyPreset(p);
       renderPresetsRow();
       return;
     }
@@ -51140,6 +51211,7 @@
     // tapping the already-selected card again clears the fill, per her spec
     if (presetSelectedId === id) {
       presetSelectedId = null;
+      presetEditingId = null;
       fTitle.value = ""; fLoc.value = "";
       formSelectedMode = ""; fModePickerExpanded = false; renderFModePicker();
       durHours.value = ""; durMinutes.value = ""; syncDurFromBoxes();
@@ -51148,6 +51220,9 @@
     }
     const p = SAVED_EVENTS.find(x => x.id === id);
     if (!p) return;
+    // a plain card tap is always "apply as a fresh one-off" -- never silently keeps
+    // editing whatever OTHER preset was mid-edit (see presetEditingId's own comment).
+    presetEditingId = null;
     presetSelectedId = id;
     applyPreset(p);
     renderPresetsRow();
@@ -51159,12 +51234,30 @@
     const title = fTitle.value.trim();
     if (!title) { fTitle.focus(); return; }
     const durTotal = (parseInt(durHours.value, 10) || 0) * 60 + (parseInt(durMinutes.value, 10) || 0);
-    SAVED_EVENTS.push({
-      id: uid(), title, track: state.track, category: fCat.value.trim(), icon: "",
-      ...(formSelectedMode ? { mode: formSelectedMode } : {}),
-      ...(durTotal > 0 ? { durationMin: durTotal } : {}),
-      ...(fLoc.value.trim() ? { loc: fLoc.value.trim() } : {}),
-    });
+    // mode/durationMin/loc set to undefined (never conditionally omitted) rather than
+    // only ever added -- JSON.stringify drops an undefined-valued key exactly like a
+    // missing one, so a brand-new preset comes out identical either way, but editing
+    // an EXISTING preset (below) spreads these fields over its old values, and a
+    // conditionally-omitted key would leave a since-cleared Mode/duration/Where stuck
+    // on the old value forever instead of actually clearing.
+    const fields = {
+      title, track: state.track, category: fCat.value.trim(), icon: "",
+      mode: formSelectedMode || undefined,
+      durationMin: durTotal > 0 ? durTotal : undefined,
+      loc: fLoc.value.trim() || undefined,
+    };
+    // 2026-08-23 ("edit a saved preset in place"): presetEditingId (only ever set by
+    // the ✎ corner badge) updates that SAME entry in place -- spreading the old entry
+    // first keeps its id (so it doesn't jump position in the row) and anything fields
+    // doesn't carry this time (e.g. she cleared Where), then overwriting with fields
+    // so a cleared optional field actually clears rather than sticking around.
+    const idx = presetEditingId ? SAVED_EVENTS.findIndex(x => x.id === presetEditingId) : -1;
+    if (idx > -1) {
+      SAVED_EVENTS[idx] = { ...SAVED_EVENTS[idx], ...fields };
+    } else {
+      SAVED_EVENTS.push({ id: uid(), ...fields });
+    }
+    presetEditingId = null;
     saveSavedEvents();
     renderPresetsRow();
     const btn = document.getElementById("presetSaveBtn");
