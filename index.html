@@ -311,7 +311,17 @@
        night, and an even fainter gold for day (the cream page is already warm, so it
        needs less push). Dark mode's values (below) are unchanged from before. */
     --sky-night: rgba(94, 74, 140, 0.055);
-    --sky-day: rgba(217, 169, 63, 0.045);
+    --sky-day: rgba(217, 169, 63, 0.045);   /* 2026-08-24: no longer painted by renderSky()
+      below (the gradient blend it fed is retired) — left defined in case something else
+      reads it later; the flat night bands now use --quiet-tint instead. */
+    /* 2026-08-24 (Linh: "no grey anywhere in the calendar or the widget rail... one
+       flat colour"): --sky-night composited over the page reads as a near-neutral grey
+       at its ~5% alpha (that's fine blended into --sky-day, which is how it always
+       shipped, but wrong as a flat standalone band) — this is a deliberately, visibly
+       saturated soft blue instead, shared by the night bands (renderSky()) and the
+       widget rail (#deskWidgetRail) so both read as one palette and a shade change is
+       a single edit here, not a find-and-replace. */
+    --quiet-tint: #E7EFF8;
 
     /* derived — resolve against whatever --tone-mix/seeds are active */
     --margin-rule: color-mix(in oklab, var(--accent-seed), var(--tone-mix) var(--jewel-mix));
@@ -510,6 +520,15 @@
       --pb-money-bg: color-mix(in oklab, #2BE57E 55%, black 45%);     --pb-money-text: #EAFFF2;
       --sky-night: rgba(18, 22, 46, 0.12);
       --sky-day: rgba(217, 169, 63, 0.07);
+      /* 2026-08-24: --quiet-tint's light-theme value (#E7EFF8, opaque) painted flat on
+         this near-black page reads as a stark pale rectangle, not atmosphere -- same
+         blue family, translucent instead, so it composites to a deliberately blue dark
+         band rather than the near-black-on-near-black non-effect a low-alpha version of
+         the pale hex would give (measured: that read grey again, the exact trap the
+         light value was chosen to avoid). Only the sky band reads this here -- the
+         widget rail's own --quiet-tint use is light-theme-scoped, so it never sees this
+         value at all. */
+      --quiet-tint: rgba(70, 120, 190, 0.16);
       --dl-num: #EAC24E; --dl-day: #EFE7D6; --dl-small: #9C8F79; --dl-sep: #5F5645;
     }
   }
@@ -547,6 +566,7 @@
     --pb-money-bg: color-mix(in oklab, #2BE57E 55%, black 45%);     --pb-money-text: #EAFFF2;
     --sky-night: rgba(18, 22, 46, 0.12);
     --sky-day: rgba(217, 169, 63, 0.07);
+    --quiet-tint: rgba(70, 120, 190, 0.16);   /* see the media-query block's copy of this token, above, for the why */
     --dl-num: #EAC24E; --dl-day: #EFE7D6; --dl-small: #9C8F79; --dl-sep: #5F5645;
   }
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -2086,6 +2106,18 @@
     mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, black 0%, black 85%, transparent 100%);
   }
+  /* RETIRED on desktop 1-day only 2026-08-24 (Linh, GCal-style pass: "kill the grey
+     wash over hours that have already passed... the events that have finished fade
+     back — the grid itself stays clean"; scoped to [data-desk-day1], mobile/tablet
+     keep the wash exactly as before — not part of this pass). display:none rather
+     than deleting the base rule above (this file's convention for retired things) —
+     renderElapsedFade() (search it) still sizes and un-hides #elapsedLayer every tick
+     on every surface, that JS is untouched, it just no longer paints anything HERE.
+     The finished-event fade this replaced it with on desktop lives on .tl-item.tl-past
+     (search it) instead. The now-line half of renderElapsedFade() (#nowLine, further
+     down) is a completely separate element and still renders exactly as before,
+     everywhere. */
+  [data-desk-day1] .elapsed-layer { display: none; }
 
   /* live "now" line — 2026-08-01 ("calendar does not look like mockup"): was a vivid-red
      2px rule with a red time pill; the mockup's .tl-now is a 1px GOLD hairline with a
@@ -4330,27 +4362,39 @@
     background-image: repeating-linear-gradient(to bottom,
       rgba(255,255,255,.55) 0, rgba(255,255,255,.55) 9px, transparent 9px, transparent 13px);
   }
-  /* A marker floating on top of a session it doesn't narrow (see isMarkerOverlay, JS) —
-     a border in the page's own background colour reads as "cut out and pinned on top"
-     without a drop-shadow, matching the existing flat/no-shadow rule every other block
-     already follows. Same border-ring technique .phase-dot already uses for the same
-     "separate this from what's behind it" job.
+  /* A marker floating on top of a session it doesn't narrow (see isMarkerOverlay, JS).
      2026-08-18: this is desktop-only ([data-desk-day], ≥1024px — both single-day and
      3/5/7-day, same attribute the Option C block rules below key off) by deliberate
      scope, NOT because p.cols>1 only happens on desktop — the 2026-08-06 "overlapping
      events need to display overlap" fix gave MOBILE the identical side-by-side lane
      split, so isMarkerOverlay fires there too and this rule would otherwise apply
      un-asked-for on a narrow, already-tight mobile column.
-     2026-08-19 (Linh, "i dont like the black border around morning block"): --paper
-     is near-black in Night, so the "page-coloured cutout ring" this rule intended
-     reads as a heavy black outline instead — the technique only worked in Day, where
-     --paper is white. z-index:2 alone still keeps the marker stacked above the
-     session it overlaps; Day's own separate override just below (light-day1 specific,
-     needed there for an unrelated specificity fight against the Option C swatch
-     borders) is untouched and keeps its white cutout ring exactly as before. */
-  [data-desk-day] .tl-item.tl-marker-overlay {
-    z-index: 2;
+     2026-08-24 (Linh, GCal-style pass, #5: "show it like Google Calendar's nested
+     events — a small card inside the session, not a same-height box beside it"):
+     SUPERSEDES the page-coloured cutout-ring technique the 2026-08-19 comment used to
+     describe here (a border alone, no shadow, no background swap) — this now reads as
+     an actual raised card: near-white fill + dark ink text regardless of theme (a
+     marker no longer sits on its own track colour at all, so the white-text rule below
+     doesn't apply to it), a real drop shadow, and a touch more corner rounding than a
+     plain block. This base rule is the one that matters for dark theme (which never had
+     ANY marker-overlay treatment before this) and for light-theme desktop MULTI-day
+     (Option C's own swatches are day1-only, see the block below) — day1 light needs a
+     second copy at matching specificity to beat those swatches (search "Option C swatch
+     rules above each set their own"), same fight the old border-ring rule already had
+     to win, still true of the new fill.
+     #dayTimelineWrap in the selector (not just the [data-desk-day] attribute) is load-
+     bearing, found live: [data-desk-day1] #dayTimelineWrap .tl-item sets its own
+     border-radius:3px, and [data-desk-day1] #dayTimelineWrap .tl-item .tl-title sets
+     color:var(--blk-txt) (search "id-scoped to beat" for that rule's own reasoning) —
+     both carry an ID, which beats any number of plain classes/attributes no matter the
+     source order. Repeating the same ID here is the only way to actually win, not a
+     stylistic choice. */
+  [data-desk-day] #dayTimelineWrap .tl-item.tl-marker-overlay {
+    z-index: 2; background: #FAFAF7; border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.28);
   }
+  [data-desk-day] #dayTimelineWrap .tl-item.tl-marker-overlay .tl-title,
+  [data-desk-day] #dayTimelineWrap .tl-item.tl-marker-overlay .tl-meta { color: #242424; }
   /* 2026-08-01 ("the font looks ugly, and the color contrast is terrible"): SUPERSEDES
      the serif title — the mockup's .tl-event/.tl-task text is always --sans (Inter), never
      the display serif. A bold display serif at 14.5px inside a small solid-colour chip is
@@ -12703,6 +12747,17 @@
   :root[data-theme="dark"] .hour-row[data-hour="15"] .hour-label,
   :root[data-theme="dark"] .hour-row[data-hour="16"] .hour-label { color: var(--hr-spec-dusk); }
   :root[data-theme="dark"] .hour-row[data-hour="17"] .hour-label { color: var(--hr-spec-dusk-deep); }
+  /* 2026-08-24 (Linh, GCal-style pass, #6: "hour labels: plain and muted, not the
+     dawn/day/dusk colour shift"): desktop Day view only -- the spectrum above is
+     shared with mobile/multi-day (see its own comment, "one rule set for every
+     calendar view"), which keep it untouched. [data-hour] (always present) matches
+     the spectrum rules' own 5-selector specificity; placed after them, same
+     match-then-order technique already used elsewhere in this file. --ink-soft, not
+     the plainer app-wide --ink-faint -- matches the desktop-day1 LIGHT override just
+     below (search "[data-desk-day1][data-theme=\"light\"] .timeline-wrap"), so both
+     themes land on the same one muted treatment here rather than two different
+     mutes. */
+  [data-desk-day1][data-theme="dark"] .hour-row[data-hour] .hour-label { color: var(--ink-soft); }
 
   /* ---- gold ticks (2026-07-23, Linh: "make the tick squares and circles gold") ----
      every tick control — square checkboxes and round timeline ticks — rides the one
@@ -16552,9 +16607,15 @@
     --margin-rule: #b8860b; --tpl-sleep-bg: #5f584c;
   }
   /* sidebar + widget rail deliberately DON'T inherit the new white --paper —
-     the spec frames the white centre with a light-grey rail either side. */
-  [data-desk-day][data-theme="light"] #deskSidebar,
-  [data-desk-day][data-theme="light"] #deskWidgetRail { background: var(--rail); }
+     the spec frames the white centre with a rail either side. */
+  [data-desk-day][data-theme="light"] #deskSidebar { background: var(--rail); }
+  /* 2026-08-24 (Linh, GCal-style pass: "no grey anywhere... the widget rail is cool
+     grey — make it one flat soft blue, the same colour as the night band"): SUPERSEDES
+     var(--rail) (a flat grey, #eef0f3) for THIS element specifically — #deskSidebar
+     above is untouched, out of scope. Reads the same --quiet-tint renderSky() now
+     paints the night bands with, so the rail and the night hours read as one deliberate
+     palette rather than two unrelated tints. */
+  [data-desk-day][data-theme="light"] #deskWidgetRail { background: var(--quiet-tint); }
   /* the centre column had no background of its own anywhere upstream (item 0
      zeroed #dayPage's card chrome entirely) — without this, "pure white"
      wouldn't actually paint here, it would just show whatever's behind the
@@ -16607,51 +16668,53 @@
      ~60% toward white, border ~45% toward white, title ~50% toward black;
      checked against her green swatch: 40% #2f8f56 + 60% white lands within a
      few RGB units of her #a9d6b6), not invented from scratch. ---- */
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="work"] {
-    background: #a9d6b6; border: 1px solid #8ac89f; border-left: 4px solid #2f8f56;
-  }
+  /* 2026-08-24 (Linh, GCal-style pass, #4: "one flat solid fill" — SUPERSEDES the
+     pastel-fill + 1px border + 4px left-accent three-layer treatment above's own
+     comment describes): each swatch's own accent hex (the old border-left colour)
+     becomes the WHOLE fill now, flat, no border of any kind — the same "background:
+     var(--cat-c), flat, no border" model dark theme's .tl-block already uses, just
+     hand-hex'd here to match this block's own hand-tuned Option C swatches rather
+     than switching it onto the --cat-c custom-property system. White text throughout
+     (the old dark-ink titles were tuned for a pale fill; a flat mid-tone accent needs
+     the opposite direction) except the ungated fallback, which keeps its already-dark
+     #41464f — its own fill is the lightest of the five and white-on-it measured under
+     4:1, no live case is known to actually reach this swatch (real content only ever
+     carries work/marriage/personal), but "your call, as long as legible" ruled
+     against guessing wrong on the one swatch with no given colour. */
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="work"] { background: #2f8f56; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="work"] .tl-title,
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="work"] .tl-meta { color: #124a2c; }
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="marriage"] {
-    background: #a6caf0; border: 1px solid #86bce9; border-left: 4px solid #3a86c4;
-  }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="work"] .tl-meta { color: #fff; }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="marriage"] { background: #3a86c4; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="marriage"] .tl-title,
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="marriage"] .tl-meta { color: #164567; }
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"] {
-    background: #bcc0f2; border: 1px solid #a4a8ec; border-left: 4px solid #5b63c4;
-  }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="marriage"] .tl-meta { color: #fff; }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"] { background: #5b63c4; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"] .tl-title,
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"] .tl-meta { color: #2a2f77; }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"] .tl-meta { color: #fff; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track]:not([data-track="work"]):not([data-track="marriage"]):not([data-track="personal"]) {
-    background: #d4d7dd; border: 1px solid #c4c8ce; border-left: 4px solid #8a8f98;
+    background: #8a8f98;
   }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track]:not([data-track="work"]):not([data-track="marriage"]):not([data-track="personal"]) .tl-title,
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track]:not([data-track="work"]):not([data-track="marriage"]):not([data-track="personal"]) .tl-meta { color: #41464f; }
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Fitness"] {
-    background: color-mix(in srgb, #2fa564 40%, white);
-    border: 1px solid color-mix(in srgb, #2fa564 55%, white);
-    border-left: 4px solid #2fa564;
-  }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Fitness"] { background: #2fa564; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Fitness"] .tl-title,
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Fitness"] .tl-meta { color: color-mix(in srgb, #2fa564 50%, black); }
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] {
-    background: color-mix(in srgb, #c2567f 40%, white);
-    border: 1px solid color-mix(in srgb, #c2567f 55%, white);
-    border-left: 4px solid #c2567f;
-  }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Fitness"] .tl-meta { color: #fff; }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] { background: #c2567f; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] .tl-title,
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] .tl-meta { color: color-mix(in srgb, #c2567f 50%, black); }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item[data-track="personal"][data-category="Beauty / Self Grooming"] .tl-meta { color: #fff; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item .tl-title { font-weight: 800; }
   [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item .tl-meta { opacity: .68; }
-  /* the four Option C swatch rules above each set their own per-track border (including
-     a 4px border-left), at (0,1,4,0) specificity — higher than the plain
-     .tl-item.tl-marker-overlay rule near the base .tl-item styles, so on desktop-day1's
-     Day theme specifically the marker's separation ring was silently losing that fight
-     and never painting. Same selector shape (same specificity) placed after them wins by
-     source order instead. */
-  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item.tl-marker-overlay {
-    border: 2px solid var(--paper);
+  /* the four Option C swatch rules above each set their own flat fill at (0,1,4,0)
+     specificity — higher than the plain .tl-item.tl-marker-overlay rule near the base
+     .tl-item styles (search it), so on desktop-day1's Day theme specifically the
+     marker's own card treatment was silently losing that fight and never painting.
+     [data-track] (always present on a real item) matches the swatch rules' own
+     specificity shape; placed after them, same technique this fight already needed
+     before 2026-08-24's GCal-style pass (border-ring → white card), still true now. */
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item.tl-marker-overlay[data-track] {
+    background: #FAFAF7; border-radius: 5px; box-shadow: 0 2px 6px rgba(0,0,0,.28);
   }
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item.tl-marker-overlay[data-track] .tl-title,
+  [data-desk-day1][data-theme="light"] #dayTimelineWrap .tl-item.tl-marker-overlay[data-track] .tl-meta { color: #242424; }
   /* done: "keep the fill, no faded strikethrough" — overrides the app-wide
      .tl-item.done rule (opacity:.55 + strikethrough) at this breakpoint only,
      and adds the top-right check the spec asks for in its place. No markup
@@ -16663,6 +16726,18 @@
     content: "\2713"; position: absolute; top: 4px; right: 6px;
     font-size: 12px; font-weight: 800; color: var(--ink);
   }
+  /* 2026-08-24 (Linh, GCal-style pass, #2: "the events that have finished fade back —
+     the grid itself stays clean"): replaces the retired .elapsed-layer wash (see its
+     own comment) with a per-block fade instead, stamped as .tl-past in JS
+     (renderTimeline(), search it) whenever the block's own end time has already
+     passed today — no separate light/dark rule needed, this is theme-agnostic.
+     Deliberately LOWER specificity than the .done override just above (no [data-theme]
+     attribute here) — a block that's both done AND past keeps that override's "no
+     fade, checkmark instead" treatment in light desktop-day1 rather than fading too;
+     that was an earlier, explicit design choice for the done state specifically and
+     this doesn't relitigate it. Dark theme has no such override (base .tl-item.done
+     already fades to the same .55), so there's nothing to reconcile there. */
+  [data-desk-day1] #dayTimelineWrap .tl-item.tl-past { opacity: .55; }
 
   /* ---- Section 3: side columns ---- */
   /* section labels: PARTS OF LIFE / QUICK ADD (left), TODAY'S WIDGETS +
@@ -28489,14 +28564,19 @@
     const { sunrise, sunset } = sunTimesFor(state.anchor);
     const span = END_HOUR - START_HOUR;
     const pct = h => Math.max(0, Math.min(100, (h - START_HOUR) / span * 100));
-    // 2026-08-02 ("day calendar colour looks ugly" — a muddy grey in light mode): reads
-    // the theme-aware --sky-night/--sky-day tokens instead of hardcoded dark-tuned rgba,
-    // so light mode gets its own warm twilight-plum/gold pair (see the :root tokens).
-    const night = "var(--sky-night)", day = "var(--sky-day)";
+    // 2026-08-24 (Linh, GCal-style pass: "no gradients — one flat colour per thing"):
+    // SUPERSEDES the soft night→day→night blend this used to paint (--sky-night/
+    // --sky-day with fuzzed ±0.3/±0.5h offsets so the bands faded into each other).
+    // Two flat --quiet-tint bands now, hard-stopped exactly at sunrise/sunset — each
+    // boundary is two colour-stops at the SAME percentage, which is what makes a CSS
+    // gradient render a clean edge instead of a blend. Daytime is transparent (the
+    // plain page shows through), not a painted band.
+    const tint = "var(--quiet-tint)";
+    const sunriseP = pct(sunrise), sunsetP = pct(sunset);
     const stops = [
-      `${night} 0%`, `${night} ${pct(sunrise - 0.5)}%`,
-      `${day} ${pct(sunrise + 0.3)}%`, `${day} ${pct(sunset - 0.3)}%`,
-      `${night} ${pct(sunset + 0.5)}%`, `${night} 100%`,
+      `${tint} 0%`, `${tint} ${sunriseP}%`,
+      `transparent ${sunriseP}%`, `transparent ${sunsetP}%`,
+      `${tint} ${sunsetP}%`, `${tint} 100%`,
     ];
     layer.style.background = `linear-gradient(to bottom, ${stops.join(", ")})`;
 
@@ -29497,6 +29577,11 @@
     const H = HOUR_H();
     const outside = [];
     let placed = [];   // let, not const -- mergeAdjacentTlItems() below reassigns it to the merged array
+    // 2026-08-24 (Linh, GCal-style pass: "the events that have finished fade back"):
+    // same today-only guard renderElapsedFade()'s now-line already uses, computed once
+    // here rather than per item -- null on any other day, so the .tl-past check below
+    // is a single comparison against a value that's already false everywhere but today.
+    const todayNowMin = keyOf(state.anchor) === keyOf(TODAY) ? (new Date().getHours() * 60 + new Date().getMinutes()) : null;
     TL_ITEMS_BY_ID = {};
     TL_MERGE_GROUPS = {};
     // sidebar "Parts of life" checkboxes (desktop 1-day only — tracksOff is
@@ -29689,6 +29774,13 @@
       // comment) — flagged here so CSS can visually separate the two layers instead of
       // letting them read as clashing/overlapping blocks.
       const isMarkerOverlay = p.cols > 1 && (ce - p.cs) < 30;
+      // 2026-08-24 (Linh, GCal-style pass: "the grid stays clean, the finished events
+      // fade back" -- replaces the old .elapsed-layer grey wash, see its own retirement
+      // comment): stamped at render time from the same ce this file already computes for
+      // placement -- no second time source, and the day view already re-renders on its own
+      // tick, so a block fades in on its own the moment it crosses "now". Applies to every
+      // finished block, nested marker overlays (#5) included -- neither is excluded here.
+      const isPast = todayNowMin !== null && ce <= todayNowMin;
       // her single-line variant is "name + START time", not the full range: at 9px in a
       // flex row beside the title there is room for one time, and the end time is one tap
       // away in the detail sheet. Non-tight blocks keep the full range exactly as before.
@@ -29701,7 +29793,7 @@
         ? fmtTime(e.start)
         : `${fmtTime(e.start)} – ${fmtTime(p.mergeCount > 1 ? minToTime(trueEnd) : (e.end || minToTime(trueEnd)))}${metaTrack}`;
       const cls = (isBlock ? "tl-block" : "tl-point") + (tight ? " tl-tight" : "")
-        + (isMarkerOverlay ? " tl-marker-overlay" : "")
+        + (isMarkerOverlay ? " tl-marker-overlay" : "") + (isPast ? " tl-past" : "")
         + (e.fromChain ? ` tl-chained${e.chainPin ? " tl-chain-pin" : ""}` : "");
       const chainAttr = e.fromChain ? ` data-chain="${esc(e.fromChain)}"` : "";
       // 2026-08-11 (STEP 6 investigation): tried a min-width floor here so a 5-way
@@ -29717,10 +29809,19 @@
       // - 6px)` — 3px in from the lane's left edge and 3px clear of the next lane, one
       // symmetric 3px gutter. The width subtrahend was 8px, which took an extra 2px off
       // every lane for no stated reason; 6px is the number her design asks for.
+      // 2026-08-24 (Linh, GCal-style pass, #5: "slightly inset from its lane's own
+      // edges so it floats inside the session rather than touching its edges"): a
+      // marker-overlay gets a bigger gutter than a genuine side-by-side overlap's
+      // normal 3px/6px pair below — scoped to isMarkerOverlay only, the ordinary lane
+      // math for two real overlapping sessions (gutter stays 3) is untouched. Same
+      // idea vertically: nudging top down (and, for the rare hasSteps block variant,
+      // shrinking height to match) rather than touching clusterOverlaps() itself.
+      const gutter = isMarkerOverlay ? 8 : 3;
       const colStyle = p.cols > 1
-        ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + 3px);width:calc(${(100 / p.cols).toFixed(2)}% - 6px);right:auto;`
+        ? `left:calc(${(p.col / p.cols * 100).toFixed(2)}% + ${gutter}px);width:calc(${(100 / p.cols).toFixed(2)}% - ${gutter * 2}px);right:auto;`
         : "";
-      const style = (isBlock ? `top:${p.top}px;height:${p.h}px;` : `top:${p.top}px;`) + colStyle;
+      const topNudge = isMarkerOverlay ? 4 : 0;
+      const style = (isBlock ? `top:${p.top + topNudge}px;height:${Math.max(14, p.h - topNudge * 2)}px;` : `top:${p.top + topNudge}px;`) + colStyle;
       const done = isDone(e.id);
       // 2026-08-04 (desktop styling spec, point 3): items with a real logged rating show
       // their stars on the block face, right-aligned — desktop only (.tl-rate is
