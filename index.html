@@ -15840,7 +15840,7 @@
      that used to fill them for multi-day was deleted, see placeDeskGrid()). */
   [data-desk-day] #deskGrid { display: flex; align-items: stretch; grid-template-columns: none; gap: 0; margin: 0; }
   [data-desk-day] #deskColLeft, [data-desk-day] #deskColRight { display: none !important; }
-  [data-desk-day] #deskColMain { flex: 1 1 auto; min-width: 0; gap: 0; }
+  [data-desk-day] #deskColMain { flex: 1 1 auto; min-width: 0; gap: 0; transition: margin-right .18s ease; }
   /* 2026-08-24 ("the widgets become an icon rail"): a fixed 56px icon-only strip
      at every desktop width -- the old 286px/250px card-list column (and Sunday's
      460px 2-col widening, immediately below) is retired entirely along with it;
@@ -15852,6 +15852,26 @@
       display: flex; flex-direction: column; align-items: center; width: 56px; flex: none; box-sizing: border-box;
       gap: 4px; background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px 0; overflow-y: auto; overflow-x: visible;
     }
+    /* 2026-08-24 (Linh, "the calendar should narrow, GCal-style, not just have
+       the panel float on top"): #deskColMain gives up the panel's own 320px --
+       same number as .wr-panel's width (search that class) -- so the two read
+       as "the calendar gave up its width" rather than a floating overlay. The
+       panel itself keeps its existing fixed/transform slide untouched (see its
+       own comment, "slides in via transform, not layout"); this is purely the
+       calendar-side effect, timed with the SAME .18s ease so neither edge
+       reaches its rest position before the other. data-wr-panel-open is stamped/
+       cleared in renderWrPanel() (search that name), mirroring the
+       [data-sun-review] attribute-on-<html> idiom already used elsewhere here. */
+    /* NOT `[data-wr-panel-open] [data-desk-day] #deskColMain` -- both attributes
+       land on the SAME element (<html>, confirmed via grep: both are
+       document.documentElement.toggleAttribute(...) calls), so a descendant
+       combinator between them matches nothing (an element can't be its own
+       descendant). data-wr-panel-open can only ever be true while
+       deskWidgetsActive() is (renderWrPanel()'s own guard), which already
+       requires day-view + this same >=1200px width, so the second attribute
+       check was redundant as well as broken -- confirmed live before this fix
+       (margin-right read 0px with the panel open) and after (320px). */
+    [data-wr-panel-open] #deskColMain { margin-right: 320px; }
   }
   /* 2026-08-24 pt.2: the rail used to reserve 41px of top padding whenever
      body.mode-pill-on was set, purely to get out of the way of .tl-mode-hidden-pill
@@ -46257,7 +46277,19 @@
     const body = document.getElementById("wrPanelBody");
     const offstage = document.getElementById("wrPinned");
     if (!panel || !title || !body || !offstage) return;
-    if (!deskWidgetsActive()) { panel.classList.remove("open"); panel.setAttribute("aria-hidden", "true"); return; }
+    // 2026-08-24 ("the calendar gives up its width to the panel"): same
+    // toggleAttribute-on-<html> idiom [data-sun-review] already uses (search that
+    // name) -- #deskColMain's own margin-right rule (search "data-wr-panel-open")
+    // reads this to narrow in sync with the panel's slide, scoped to the same
+    // >=1200px gate #deskWidgetRail's width rules use. Stamped/cleared at every
+    // return point below, not just the main branch, so a widget auto-closing
+    // (content gone empty, desktop width dropping below 1200px) narrows the
+    // calendar back out too, not just an explicit tap on the close button.
+    if (!deskWidgetsActive()) {
+      panel.classList.remove("open"); panel.setAttribute("aria-hidden", "true");
+      document.documentElement.toggleAttribute("data-wr-panel-open", false);
+      return;
+    }
     const pinnedEls = {};
     WR_PINNED_IDS.forEach(id => { pinnedEls[id] = document.getElementById(id); });
     // auto-close if the open id's content has gone empty for the CURRENTLY
@@ -46268,11 +46300,13 @@
     if (!wrOpenId) {
       panel.classList.remove("open");
       panel.setAttribute("aria-hidden", "true");
+      document.documentElement.toggleAttribute("data-wr-panel-open", false);
       Object.values(pinnedEls).forEach(el => { if (el && el.parentElement !== offstage) offstage.appendChild(el); });
       return;
     }
     panel.classList.add("open");
     panel.setAttribute("aria-hidden", "false");
+    document.documentElement.toggleAttribute("data-wr-panel-open", true);
     if (WR_PINNED_IDS.includes(wrOpenId)) {
       title.textContent = WR_PINNED_LABELS[wrOpenId];
       const el = pinnedEls[wrOpenId];
