@@ -4785,11 +4785,30 @@
        near-white too, leaving the light-gold title/text below unreadable. Built from
        black warmed by a sliver of the gold accent instead of a theme surface token, so
        it's opaque and reliably dark regardless of the page's own theme. */
-    position: relative; overflow: hidden; width: 100%; min-height: 44px;
-    padding: 12px 16px 12px; cursor: default; font-size: 13px; color: var(--ink);
+    /* 2026-08-24 (Linh, "make it one slim horizontal bar"): row, not the inherited
+       .tl-item column (that base rule is for absolutely-positioned timed blocks, not
+       this banner -- nothing in .bday-ribbon overrode it before, which was most of
+       the extra height). flex-wrap stays as the fallback for anywhere too narrow to
+       fit one row -- the @media(max-width:640px) rule below still applies, this is
+       just no longer the ONLY thing preventing a squeezed layout. min-height dropped
+       from 44px toward the icon-only buttons' own ~30px; padding tightened to match --
+       verified live, chip height dropped from ~95px to ~52px at desktop width. */
+    position: relative; overflow: hidden; width: 100%; min-height: 36px;
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+    padding: 8px 12px; cursor: default; font-size: 13px; color: var(--ink);
     background: radial-gradient(120% 160% at 18% -40%, color-mix(in oklab, var(--accent-seed) 30%, transparent), transparent 62%), color-mix(in oklab, black, var(--accent-seed) 6%);
     box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-seed) 32%, transparent);
   }
+  /* scoped to .bday-ribbon specifically -- a plain chip's own 260px cap
+     (#dayAlldayRow .ad-chip.tl-item, search that rule) stays untouched. Bumped to
+     clear it: icon-only buttons (search "icon-only") need far less room than a
+     first pass with full-text buttons did (that tested at 640px) -- verified live,
+     this comfortably fits icon + name/role + three small round buttons with no
+     wrap at desktop width. [data-category] repeats the same specificity-bump this
+     file's other .bday-ribbon override already documents (search "specificity"
+     a few lines up) so this doesn't need !important either. */
+  #dayAlldayRow .ad-chip.bday-ribbon[data-category],
+  #mdAlldayRow .ad-chip.bday-ribbon[data-category] { max-width: 380px; }
   .tl-allday-chip.bday-ribbon::before {
     content: ""; position: absolute; top: 3px; left: 0; right: 0; height: 6px; pointer-events: none;
     background-repeat: no-repeat; background-size: 4px 4px;
@@ -4810,15 +4829,47 @@
   }
   .tl-allday-chip.bday-ribbon .tlac-ic { font-size: 22px; line-height: 1; }
   .tl-allday-chip.bday-ribbon .bd-txt { min-width: 0; display: flex; flex-direction: column; }
-  .tl-allday-chip.bday-ribbon .tlac-ttl { white-space: normal; font-size: 13px; font-weight: 800; color: color-mix(in oklab, var(--accent-seed), white 22%); line-height: var(--lh-tight); }
+  /* nowrap+ellipsis, same pattern .ad-chip-t already uses elsewhere in this same
+     all-day-row system (search that class) -- a safety net now that icon-only
+     buttons leave much more room than before, so a long name truncates instead of
+     pushing the buttons around/wrapping the row, rather than the row growing to
+     fit it. .bd-open/.bd-txt both already carry min-width:0 (needed for this to
+     take effect inside a flex chain). */
+  .tl-allday-chip.bday-ribbon .tlac-ttl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 800; color: color-mix(in oklab, var(--accent-seed), white 22%); line-height: var(--lh-tight); }
+  /* 2026-08-24 follow-up (live-measured at 5/7-day desktop): #dayAlldayRow's own
+     380px cap keeps this to one line at every real name length, so nowrap+ellipsis
+     above is correct there -- but #mdAlldayRow's columns narrow to ~200px or less at
+     5/7 days (deskGrid width ÷ day count), where the same rule silently clipped
+     "Tal Eloss turns 47" mid-word. Letting the title wrap back to 2 lines there costs
+     a little row height (already variable per day-count, measured 48px→62px) but
+     shows the whole name -- picked over shrinking type further, which stops being
+     legible under ~11px. */
+  #mdAlldayRow .tl-allday-chip.bday-ribbon .tlac-ttl { white-space: normal; overflow: visible; text-overflow: clip; }
+  /* 2026-08-24 follow-up pt.2 (live-measured at 7-day desktop): .bd-open's own
+     min-width:0 (needed elsewhere so it can shrink to make room) means flex-wrap
+     never actually triggers here -- it just shrinks .bd-open toward zero forever,
+     so at ~150px columns the name disappeared entirely rather than wrapping.
+     Giving it back a real floor here forces a genuine overflow once acts + open
+     can't both fit, which flex-wrap (already on the base rule) then resolves by
+     dropping acts to its own line -- same "buttons get their own line" move the
+     ≤640px rule below already makes for narrow viewports, just triggered by a
+     narrow COLUMN instead of a narrow window. */
+  #mdAlldayRow .tl-allday-chip.bday-ribbon .bd-open { min-width: 70px; }
+  #mdAlldayRow .tl-allday-chip.bday-ribbon .bd-acts { margin-left: 0; flex: 1 1 100%; margin-top: 4px; }
   /* fixed light tone, not the theme-flipping --ink-soft -- the banner itself is always
      dark (see its own comment), so a subtitle that goes dark-brown in light theme would
      go unreadable the same way the title would have. */
   .tl-allday-chip.bday-ribbon .tlac-turns { font-size: 11px; font-weight: 600; color: color-mix(in oklab, var(--accent-seed), white 40%); margin-top: 4px; }
   .bd-acts { margin-left: auto; display: flex; gap: 8px; position: relative; z-index: 1; flex: none; }
+  /* 2026-08-24 (icon-only): text labels dropped from the button CONTENT (search
+     "icon-only" in alldayChipHtml()'s Birthdays branch) -- aria-label/title carry
+     the meaning instead, same as any other icon-only control in this app. Sizing
+     shrunk to match: 6px 9px padding, ~15px icon reads as a clean small round pill
+     and still an easy tap, verified live. Functionally unchanged --
+     .bd-act-solid/.bd-act-ghost's own colours below are untouched. */
   .bd-act {
-    display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; font-size: 13px;
-    font-weight: 700; padding: 8px 12px; cursor: pointer; white-space: nowrap; font-family: var(--font-body);
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-size: 15px;
+    line-height: 1; padding: 6px 9px; cursor: pointer; white-space: nowrap; font-family: var(--font-body);
   }
   .bd-act-solid { background: var(--accent-seed); color: color-mix(in oklab, var(--accent-seed), black 78%); border: none; }
   .bd-act-ghost { background: rgba(0,0,0,.22); color: color-mix(in oklab, var(--accent-seed), white 22%); border: 1px solid color-mix(in oklab, var(--accent-seed) 34%, transparent); }
@@ -15709,8 +15760,19 @@
   [data-desk-day] #railPatients { display: none !important; }
 
   /* ---- 4.3 All-day row — re-enabled at this breakpoint (mobile-only gate
-     above hid it too); gutter widened to match the 46px hour rail. ---- */
-  [data-desk-day1] .ad-row { display: flex !important; }
+     above hid it too); gutter widened to match the 46px hour rail.
+     2026-08-24 (Linh, "show the slimmed birthday banner on 3/5/7-day desktop
+     too"): broadened from [data-desk-day1] to [data-desk-day] -- the same
+     "every desktop day count, not just 1" swap this build's 2026-08-16
+     multi-day pass already made for .cal-days-row/#dayPage .section-head/.wrap/
+     .astro/#deskDayTopbar/#deskSidebar (search any of those for the same
+     comment shape). #mdAlldayRow (the multi-day version of this row) is
+     already fed correct per-day content by the same alldayChipHtml() the
+     single-day row uses -- it was only ever this one CSS gate hiding it on
+     desktop above 1 day. Verified live at 3/5/7 days: shows, sits under the
+     right day's own column, single row, no title truncation even at that
+     column's narrower width. No JS change needed. */
+  [data-desk-day] .ad-row { display: flex !important; }
   [data-desk-day1] #dayAlldayRow .ad-gutter { width: 46px; font-size: 11px; }
 
   /* ---- 4.4 The grid — one column, --hour-h 60px, fasting tints the whole
@@ -26353,6 +26415,25 @@
     // (function declaration, hoisted -- same pattern the rest of this file relies on).
     const bd = e.target.closest("[data-bday-person]");
     if (bd && bd.dataset.bdayPerson) { e.stopPropagation(); openPersonProfile(bd.dataset.bdayPerson); }
+    // 2026-08-24 (Linh, "Mark messaged" on the Day-view birthday banner): reuses
+    // p.msgDone exactly as the Person Profile Sheet's own [data-pp-msgdone] handler
+    // does (search that name) -- same toggle, same map, deliberately NOT routed
+    // through #ppOverlay's own delegate since this button lives in the banner, not
+    // the sheet. reRenderCurrent() (not a targeted repaint) so the banner's own
+    // icon swap and the sheet's tick (if open on the same person) both pick up the
+    // new state immediately, same as every other cross-surface toggle in this file.
+    const bdMsg = e.target.closest("[data-bday-msgdone]");
+    if (bdMsg) {
+      e.stopPropagation();
+      const k = bdMsg.dataset.bdayMsgdone;
+      const p = bdMsg.dataset.bdayMsgperson ? personById(bdMsg.dataset.bdayMsgperson) : null;
+      if (p && k) {
+        p.msgDone = p.msgDone || {};
+        if (p.msgDone[k]) delete p.msgDone[k]; else p.msgDone[k] = true;
+        savePeople();
+        reRenderCurrent();
+      }
+    }
   });
 
   // 2026-08-15 — ONE shared test for "this generated item is a placeholder, not a real
@@ -33461,14 +33542,38 @@
       // A continuation chip (a later column of a multi-day span) keeps the plain compact
       // form: the ribbon's buttons would be a second, misleading copy of the controls.
       if (!cont) {
+        // 2026-08-24 (Linh, "slim it down + icon-only + a Mark-messaged tick"): reuses
+        // the Person Profile Sheet's own p.msgDone/ppReachOut()/ppReachKey() (search
+        // those names) rather than a second data shape -- e.personId is the same field
+        // the [data-bday-person] delegate already reads, so resolving the person here
+        // and asking ppReachOut() for its own "soonest due" reach-out gives the exact
+        // occurrence this banner is already showing (it only ever renders for
+        // something due today/within the reach-out window, so the two can't disagree).
+        // mk stays null (button omitted) only in the genuinely-unexpected case a
+        // birthday item's personId doesn't resolve to a live reach-out.
+        const p = e.personId ? personById(e.personId) : null;
+        const reach = p ? ppReachOut(p) : null;
+        const mk = reach ? ppReachKey(reach) : null;
+        const msgd = mk ? !!(p.msgDone || {})[mk] : false;
+        // ticked: swaps the Message button for a lone ✓ (still tappable, un-marks) and
+        // drops the separate ☐ -- same one-button collapse .pp-reach's own "done" state
+        // already does, just icon-only here instead of "✓ Messaged" with a label.
+        // data-bday-msgperson carries the person id directly on the tick button itself
+        // (not data-bday-person -- that name is reserved for the [data-bday-person]
+        // delegate that opens the profile, and this tap must never also do that)
+        // so the click handler below can resolve p without a DOM sibling lookup.
+        const msgBtn = msgd
+          ? `<button type="button" class="bd-act bd-act-ghost" data-bday-msgdone="${esc(mk)}" data-bday-msgperson="${esc(e.personId)}" aria-pressed="true" aria-label="Messaged — tap to un-mark" title="Messaged — tap to un-mark">✓</button>`
+          : `<button type="button" class="bd-act bd-act-solid"${pd} data-bday-act="message" aria-label="Message" title="Message">✍️</button>${mk ? `
+            <button type="button" class="bd-act bd-act-ghost" data-bday-msgdone="${esc(mk)}" data-bday-msgperson="${esc(e.personId)}" aria-pressed="false" aria-label="Mark messaged" title="Mark messaged">☐</button>` : ""}`;
         return `<span class="${cls} tl-allday-chip bday-ribbon" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="Birthdays" title="${esc(bdTitle)}">
           <button type="button" class="bd-open"${pd} aria-label="Open ${esc(e.title)}">
             ${e.icon ? `<span class="tlac-ic">${e.icon}</span>` : `<span class="tlac-ic">🎂</span>`}
             <span class="bd-txt"><span class="tlac-ttl">${esc(e.title)}</span>${e.note ? `<span class="tlac-turns">${esc(e.note)}</span>` : ""}</span>
           </button>
           <div class="bd-acts">
-            <button type="button" class="bd-act bd-act-solid"${pd} data-bday-act="message">✍ Message</button>
-            <button type="button" class="bd-act bd-act-ghost"${pd} data-bday-act="gift">🎁 Gift idea</button>
+            ${msgBtn}
+            <button type="button" class="bd-act bd-act-ghost"${pd} data-bday-act="gift" aria-label="Gift idea" title="Gift idea">🎁</button>
           </div>
         </span>`;
       }
