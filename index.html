@@ -7833,6 +7833,26 @@
   }
   .rtn-repeat-back:hover, .rtn-repeat-back:focus-visible { color: var(--margin-rule); }
   .rtn-repeat-done { align-self: flex-start; }
+  /* 2026-08-24 (one repeat sheet): "Until" -- three stacked radio rows, same
+     field-family spacing as everything else in this picker. */
+  .rtn-repeat-until { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .rtn-repeat-until-opt {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink);
+    font-family: var(--font-body); cursor: pointer;
+  }
+  .rtn-repeat-until-opt input[type="date"], .rtn-repeat-until-opt input[type="number"] {
+    font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--field-bg);
+    border: none; border-radius: var(--field-radius-sm); padding: 6px 10px;
+  }
+  /* #addForm's own new sheet (search "one repeat sheet") replaces #fRptWeekInterval/
+     #fRptWeekAnchor/#fRptMonthlyDay/#fRptYearlyDate/#fRptIntervalN/#fRptIntervalUnit's
+     old visible fields with #fRptN/#fRptUnit -- these stay in the DOM (still real
+     state computeFRepeatFields() reads by id, same "hidden input behind a
+     front-end" shape #fDur already used) but are never shown directly any more.
+     #rtnAddForm's own identical-looking fields are untouched -- scoped to #addForm
+     only, same containment every other #addForm-only rule in this file already uses. */
+  #addForm #fRptWeekIntervalField, #addForm #fRptWeekAnchorField, #addForm #fRptMonthlyField,
+  #addForm #fRptYearlyField, #addForm #fRptIntervalField { display: none; }
   /* "+ Add a time" -- dashed, since a solid .add-btn pill (design44's "+ glyph =
      create a new thing") would overstate this: it's revealing an existing field,
      not creating a new routine. No existing dashed-button precedent in the app to
@@ -20789,21 +20809,60 @@
                 <div class="field full" id="fRepeatSummaryField">
                   <label>Repeats</label>
                   <button type="button" class="rtn-repeat-sum" id="fRepeatSummaryBtn" aria-expanded="false" aria-controls="fRepeatOptions">Doesn't repeat</button>
-                  <div class="track-picker" id="fRepeatOptions" role="group" aria-label="Repeats" style="flex-wrap:wrap" hidden>
-                    <button type="button" class="track-opt" data-rpt="none" aria-pressed="true">Doesn't repeat</button>
-                    <button type="button" class="track-opt" data-rpt="daily" aria-pressed="false">Every day</button>
-                    <button type="button" class="track-opt" data-rpt="weekdays" aria-pressed="false">Weekdays (Mon–Fri)</button>
-                    <button type="button" class="track-opt" data-rpt="eachweekday" id="fRptEachWeekdayBtn" aria-pressed="false">Every…</button>
-                    <button type="button" class="track-opt" data-rpt="every2days" aria-pressed="false">Every 2 days…</button>
-                    <button type="button" class="track-opt" data-rpt="weekly" aria-pressed="false">Weekly on…</button>
-                    <button type="button" class="track-opt" data-rpt="monthly" aria-pressed="false">Monthly…</button>
-                    <button type="button" class="track-opt" data-rpt="yearly" aria-pressed="false">Yearly…</button>
-                    <button type="button" class="track-opt" data-rpt="interval" aria-pressed="false">Custom…</button>
+                  <!-- 2026-08-24 ("one repeat sheet, and repeats that can finally STOP"):
+                       replaces the old 9 .track-opt pills + up to 6 conditional stacked
+                       fields with ONE sheet, reusing .rtn-repeat-picker/-opt/-step*/-back/
+                       -done verbatim from the Routines form's own two-step precedent
+                       (search rtnRepeatPicker) -- same component, new content. Maps onto
+                       the EXISTING fRepeatChoice vocabulary (search that name) rather than
+                       rewriting computeFRepeatFields(): #fRptWeekdayPicker is REUSED
+                       directly (moved here, same id, same click wiring, untouched);
+                       #fRptWeekInterval/#fRptWeekAnchor/#fRptIntervalN/#fRptIntervalUnit
+                       stay real inputs computeFRepeatFields() still reads by id, just
+                       driven by #fRptN/#fRptUnit below instead of shown directly (search
+                       "fRepeatApplyStep2" for the front-end-over-hidden-state mapping,
+                       same shape #fDur already used before this). #fRptMonthlyDay/
+                       #fRptYearlyDate are no longer driven by anything -- month/year
+                       repeats now always anchor to the event's own date via the
+                       existing "interval" path instead of a separate day-of-month/
+                       date-each-year pick, a deliberate simplification matching this
+                       sheet's shorter (1)-(4) shape. -->
+                  <div class="rtn-repeat-picker" id="fRepeatOptions" hidden>
+                    <div class="rtn-repeat-step1" id="fRepeatStep1">
+                      <button type="button" class="rtn-repeat-opt" data-rpt-quick="daily">Every day</button>
+                      <button type="button" class="rtn-repeat-opt" data-rpt-quick="weekdays">Weekdays (Mon–Fri)</button>
+                      <button type="button" class="rtn-repeat-opt" data-rpt-quick="none">Doesn't repeat</button>
+                      <button type="button" class="rtn-repeat-opt" data-rpt-custom-open>Custom…</button>
+                    </div>
+                    <div class="rtn-repeat-step2" id="fRepeatStep2" hidden>
+                      <button type="button" class="rtn-repeat-back" id="fRepeatBack">‹ Back</button>
+                      <div class="field full">
+                        <label for="fRptN">Repeat every</label>
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <input type="number" id="fRptN" min="1" value="1" style="width:60px">
+                          <select id="fRptUnit">
+                            <option value="day">day</option>
+                            <option value="week">week</option>
+                            <option value="month">month</option>
+                            <option value="year">year</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="field full" id="fRptWeekdayField" hidden>
+                        <label>Repeat on <span class="field-hint">tap one or more</span></label>
+                        <div class="track-picker" id="fRptWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
+                      </div>
+                      <div class="field full">
+                        <label>Until</label>
+                        <div class="rtn-repeat-until" id="fRptUntilGroup">
+                          <label class="rtn-repeat-until-opt"><input type="radio" name="fUntilMode" id="fUntilForever" value="forever" checked> Keeps going</label>
+                          <label class="rtn-repeat-until-opt"><input type="radio" name="fUntilMode" value="date"> Until <input type="date" id="fRptUntilDate" aria-label="Until date"></label>
+                          <label class="rtn-repeat-until-opt"><input type="radio" name="fUntilMode" value="count"> After <input type="number" id="fRptUntilCount" min="1" style="width:50px" aria-label="Number of times"> times</label>
+                        </div>
+                      </div>
+                      <button type="button" class="btn-save rtn-repeat-done" id="fRepeatDone">Done</button>
+                    </div>
                   </div>
-                </div>
-                <div class="field full" id="fRptWeekdayField" hidden>
-                  <label>Days <span class="field-hint">tap one or more</span></label>
-                  <div class="track-picker" id="fRptWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
                 </div>
                 <div class="field full" id="fRptWeekIntervalField" hidden>
                   <label for="fRptWeekInterval">Every <span class="field-hint">1 = every week</span></label>
@@ -52565,8 +52624,23 @@
       every2days: "Every 2 days", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly", interval: "Custom",
     };
     const summaryBtn = document.getElementById("fRepeatSummaryBtn");
-    if (summaryBtn) summaryBtn.textContent = LABELS[fRepeatChoice] || "Doesn't repeat";
-    document.querySelectorAll("#fRepeatOptions .track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.rpt === fRepeatChoice)));
+    // 2026-08-24 ("one repeat sheet"): the Until tail. "date" mode reuses
+    // rtnDateRangeSuffix() (search that name) as instructed -- "count" mode has
+    // no date yet (the Nth-occurrence walk only runs at save time, see
+    // fRepeatNthOccurrenceDate below), so it shows the raw typed number instead
+    // of pretending to already know the resolved date.
+    let untilTail = "";
+    if (fRepeatChoice !== "none") {
+      const untilMode = (document.querySelector('input[name="fUntilMode"]:checked') || {}).value;
+      if (untilMode === "date") {
+        const uv = (document.getElementById("fRptUntilDate") || {}).value;
+        if (uv) untilTail = rtnDateRangeSuffix("", uv);
+      } else if (untilMode === "count") {
+        const cv = parseInt((document.getElementById("fRptUntilCount") || {}).value, 10);
+        if (cv > 0) untilTail = ` · after ${cv} time${cv === 1 ? "" : "s"}`;
+      }
+    }
+    if (summaryBtn) summaryBtn.textContent = (LABELS[fRepeatChoice] || "Doesn't repeat") + untilTail;
     syncAddFormTitle();
     efpSyncAddForm();
   }
@@ -52614,16 +52688,98 @@
     box.hidden = !open;
     document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", String(open));
   });
-  document.getElementById("fRepeatOptions").addEventListener("click", e => {
-    const b = e.target.closest("[data-rpt]"); if (!b) return;
-    fRepeatChoice = b.dataset.rpt;
-    if (fRepeatChoice === "every2days") {
-      document.getElementById("fRptIntervalN").value = "2";
-      document.getElementById("fRptIntervalUnit").value = "days";
+  // 2026-08-24 ("one repeat sheet"): maps this sheet's own n/unit pair onto the
+  // EXISTING fRepeatChoice vocabulary + its backing fields, exactly the fields
+  // computeFRepeatFields() already reads (search that name) -- never rewritten,
+  // only written to from here instead of from the old 9 pills. Applied live on
+  // every change (not deferred to Done), same "each control commits immediately"
+  // shape the old pills already had -- Done just closes the sheet back down.
+  function fRepeatApplyStep2() {
+    const n = Math.max(1, parseInt(document.getElementById("fRptN").value, 10) || 1);
+    const unit = document.getElementById("fRptUnit").value;
+    if (unit === "day") {
+      if (n === 1) { fRepeatChoice = "daily"; }
+      else {
+        fRepeatChoice = "interval";
+        document.getElementById("fRptIntervalN").value = String(n);
+        document.getElementById("fRptIntervalUnit").value = "days";
+      }
+    } else if (unit === "week") {
+      fRepeatChoice = "weekly";
+      document.getElementById("fRptWeekInterval").value = String(n);
+      // "starting the week of" isn't a field in this sheet (brief's own (1)-(4)
+      // list doesn't include one) -- computeFRepeatFields()'s existing weekly
+      // branch still requires SOME anchor once n>1, so it's defaulted to the
+      // event's own date here rather than ever hitting that field's old
+      // focus()-and-block validation with no visible field left to fix it.
+      if (n > 1) {
+        const anchorInput = document.getElementById("fRptWeekAnchor");
+        if (!anchorInput.value) anchorInput.value = fDate.value || keyOf(state.anchor);
+      }
+    } else if (unit === "month") {
+      fRepeatChoice = "interval";
+      document.getElementById("fRptIntervalN").value = String(n);
+      document.getElementById("fRptIntervalUnit").value = "months";
+    } else if (unit === "year") {
+      fRepeatChoice = "interval";
+      document.getElementById("fRptIntervalN").value = String(n);
+      document.getElementById("fRptIntervalUnit").value = "years";
     }
-    document.getElementById("fRepeatOptions").hidden = true;
-    document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", "false");
     syncFRepeatChoice();
+  }
+  // reverse of the above -- reads whatever fRepeatChoice/backing fields already
+  // hold (set by a previous Custom session, or left at their defaults) into
+  // #fRptN/#fRptUnit whenever step 2 opens, so reopening never shows a stale n/unit
+  // that doesn't match what's actually about to be saved.
+  function populateFRepeatStep2() {
+    const nInput = document.getElementById("fRptN"), unitSel = document.getElementById("fRptUnit");
+    if (fRepeatChoice === "daily") { nInput.value = "1"; unitSel.value = "day"; }
+    else if (fRepeatChoice === "weekly") {
+      nInput.value = document.getElementById("fRptWeekInterval").value || "1";
+      unitSel.value = "week";
+    } else if (fRepeatChoice === "interval" || fRepeatChoice === "every2days") {
+      const u = document.getElementById("fRptIntervalUnit").value || "days";
+      nInput.value = document.getElementById("fRptIntervalN").value || "1";
+      unitSel.value = u === "days" ? "day" : u === "weeks" ? "week" : u === "months" ? "month" : "year";
+    } else { nInput.value = "1"; unitSel.value = "day"; }
+  }
+  document.getElementById("fRepeatOptions").addEventListener("click", e => {
+    const quick = e.target.closest("[data-rpt-quick]");
+    if (quick) {
+      fRepeatChoice = quick.dataset.rptQuick;
+      // a quick preset is meant to be a clean, simple pick -- reset any Until
+      // left over from an earlier Custom exploration in this same form-open
+      // session rather than silently carrying it forward onto an unrelated pick.
+      document.getElementById("fUntilForever").checked = true;
+      document.getElementById("fRptUntilDate").value = "";
+      document.getElementById("fRptUntilCount").value = "";
+      document.getElementById("fRepeatOptions").hidden = true;
+      document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", "false");
+      syncFRepeatChoice();
+      return;
+    }
+    if (e.target.closest("[data-rpt-custom-open]")) {
+      populateFRepeatStep2();
+      document.getElementById("fRepeatStep1").hidden = true;
+      document.getElementById("fRepeatStep2").hidden = false;
+      return;
+    }
+    if (e.target.closest("#fRepeatBack")) {
+      document.getElementById("fRepeatStep2").hidden = true;
+      document.getElementById("fRepeatStep1").hidden = false;
+      return;
+    }
+    if (e.target.closest("#fRepeatDone")) {
+      document.getElementById("fRepeatOptions").hidden = true;
+      document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", "false");
+      return;
+    }
+  });
+  document.getElementById("fRepeatOptions").addEventListener("input", e => {
+    if (e.target.id === "fRptN" || e.target.id === "fRptUnit") { fRepeatApplyStep2(); return; }
+    // Until controls don't change fRepeatChoice itself -- just re-render the
+    // summary line's tail (search "untilTail" above) so it stays live as she types.
+    if (e.target.name === "fUntilMode" || e.target.id === "fRptUntilDate" || e.target.id === "fRptUntilCount") syncFRepeatChoice();
   });
   document.getElementById("fRptWeekInterval").addEventListener("input", syncFRepeatChoice);
   document.getElementById("fRptWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
@@ -52719,6 +52875,14 @@
     formKind = "event";
     fRepeatChoice = "none"; fRptWeekdays = []; fFillCalOn = true;
     convertingTodoId = null;
+    // 2026-08-24 (one repeat sheet): form.reset() above already restores the
+    // Until radios/date/count to their HTML defaults (real form controls, no
+    // manual reset needed) -- this just puts the sheet itself back on step 1,
+    // closed, so a session that was left mid-Custom doesn't reopen there.
+    document.getElementById("fRepeatOptions").hidden = true;
+    document.getElementById("fRepeatStep1").hidden = false;
+    document.getElementById("fRepeatStep2").hidden = true;
+    document.getElementById("fRepeatSummaryBtn").setAttribute("aria-expanded", "false");
     syncFRepeatChoice(); syncKind();
     formWho = "me"; syncWho();
     fStart.disabled = false; fEnd.disabled = false; fDur.disabled = false;
@@ -56188,6 +56352,38 @@
   // #fChainBtn's "save & open the chain builder" shortcut can call it without one
   // depending on the other's local state. Returns null (already focused/alerted the
   // problem field) if the form isn't ready to save yet.
+  // 2026-08-24 ("repeats that can finally STOP", After-N-times): walks the
+  // ALREADY-BUILT task's own pattern forward day by day using routineOwnPatternOn()
+  // (search that name) -- the same chain-blind pattern test generatedFor() itself
+  // is built on -- rather than reimplementing daily/weekly/interval/etc matching a
+  // second time, which would drift from the real engine the moment either one
+  // changed. Capped at 2000 days (~5.5 years); returns null (never hangs, never
+  // guesses) if the pattern hasn't fired N times by then, e.g. a weekly pattern
+  // with no days ticked, or a suspiciously enormous N.
+  function fRepeatNthOccurrenceDate(task, startKey, n) {
+    const MAX_ITER = 2000;
+    let count = 0, d = parseKey(startKey);
+    for (let i = 0; i < MAX_ITER; i++) {
+      if (routineOwnPatternOn(task, d)) { count++; if (count === n) return keyOf(d); }
+      d = addDays(d, 1);
+    }
+    return null;
+  }
+  function fRepeatUntilToastDate(k) {
+    const d = parseKey(k);
+    return `${d.getDate()} ${MON_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  // small, local, and deliberately separate from showToast() a few thousand lines
+  // up (that one's scoped inside the notifications module's own closure and isn't
+  // reachable from here) -- reuses its .nt-toast visual language, not its code.
+  function showFRepeatUntilToast(text) {
+    document.querySelectorAll(".nt-toast").forEach(el => el.remove());
+    const el = document.createElement("div");
+    el.className = "nt-toast";
+    el.innerHTML = `<div class="nt-toast-title">Repeats</div><div class="nt-toast-body">${esc(text)}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.classList.add("bye"); setTimeout(() => el.remove(), 450); }, 6000);
+  }
   function buildRoutineFromCurrentForm() {
     const title = fTitle.value.trim();
     if (!title) { fTitle.focus(); return null; }
@@ -56220,11 +56416,36 @@
     if (start) task.start = start;
     if (!allDay && start && end) task.end = end;
     if (!computeFRepeatFields(task, dateVal)) return null;
+    // 2026-08-24 ("repeats that can finally STOP"): the ONE place both the Save
+    // button and #fChainBtn actually create a routine (see this function's own
+    // header comment) -- checked, not assumed, since #fChainBtn saves outside the
+    // submit event and a second copy of this would be exactly the kind of drift
+    // the brief warned against. "date" mode writes task.endDate straight from
+    // what she picked -- the occurrence engine already honours it (search
+    // routineOwnPatternOn), nothing else needed. "count" mode walks to the Nth
+    // occurrence via fRepeatNthOccurrenceDate() above and stores task.repeatCount
+    // alongside the resolved task.endDate purely so reopening the sheet can show
+    // "After 13 times" again instead of a bare date -- nothing else reads it.
+    const untilMode = (document.querySelector('input[name="fUntilMode"]:checked') || {}).value;
+    if (fRepeatChoice !== "none" && untilMode === "date") {
+      const uv = document.getElementById("fRptUntilDate").value;
+      if (uv) task.endDate = uv;
+    } else if (fRepeatChoice !== "none" && untilMode === "count") {
+      const n = parseInt(document.getElementById("fRptUntilCount").value, 10);
+      if (!n || n < 1) { document.getElementById("fRptUntilCount").focus(); return null; }
+      const resolved = fRepeatNthOccurrenceDate(task, dateVal, n);
+      if (!resolved) {
+        alert(`Couldn't find ${n} occurrences of this pattern within about 5 years — try a smaller number, or check the pattern actually fires (e.g. a weekly repeat needs at least one day ticked).`);
+        return null;
+      }
+      task.endDate = resolved; task.repeatCount = n;
+    }
     const phase = document.getElementById("fPhaseSel").value;
     if (phase !== "during") task.phase = phase;
     ROUTINE_TASKS.push(task);
     saveRoutines();
     if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
+    if (task.repeatCount) showFRepeatUntilToast(`${task.repeatCount} time${task.repeatCount === 1 ? "" : "s"} · last on ${fRepeatUntilToastDate(task.endDate)}`);
     return task;
   }
   document.getElementById("fChainBtn").addEventListener("click", () => {
