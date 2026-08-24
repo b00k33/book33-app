@@ -12006,16 +12006,25 @@
      hint" shape #trackSummaryBtn/.who-edit already use) instead of one text
      node, and a visibly distinct "on" (revealed) look instead of relying on
      text alone to carry the state. */
+  /* 2026-08-24 pt.2 (Linh: it "sits on top of my calendar and gets in the way").
+     position:fixed / the stacked `top` formula / z-index:190 / the right offset /
+     the drop shadow are all GONE -- this is a normal in-flow block directly above
+     the timeline now, so it pushes the calendar down instead of covering it. The
+     `top` maths in particular was deleted rather than re-tuned: it was written to
+     stack beneath the origin-filter row and its pill, both since removed, so the
+     number no longer described anything real.
+     Chose in-flow over the widget rail deliberately -- see the commit message: the
+     rail only exists at >=1200px AND 1-day-only, so it would have covered exactly
+     one case while mobile, tablet and desktop multi-day all still needed this
+     version anyway. One implementation, every width, rather than two idioms for one
+     control. renderModeHiddenPill() only renders it when it has something to say,
+     so on an ordinary day it takes no space at all. */
   .tl-mode-hidden-pill {
-    position: fixed; z-index: 190;
-    top: calc(max(14px, env(safe-area-inset-top)) + 34px + 8px);
-    right: max(14px, env(safe-area-inset-right));
-    padding: 6px 12px; border-radius: 999px; border: none;
-    font-size: 11px; font-weight: 700; cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    background: var(--margin-rule); color: var(--accent-on);
-    max-width: min(280px, calc(100vw - 28px));
     display: flex; align-items: center; gap: 8px;
+    box-sizing: border-box; width: 100%; margin: 0 0 8px;
+    padding: 6px 12px; border-radius: 999px; border: none;
+    font-size: 11px; font-weight: 700; text-align: left; cursor: pointer;
+    background: var(--margin-rule); color: var(--accent-on);
   }
   /* 2026-08-22 (Linh: her screenshot showed this pill floating over a Life Map cell)
      bug fix, belt-and-braces: the pill's own `hidden` attribute is driven purely by
@@ -12030,20 +12039,10 @@
      Day-view behaviour (click handler, text, two-way toggle) untouched -- this is
      pure visibility, layered on top of the existing hidden-attribute logic. */
   #wrap[data-view]:not([data-view="day"]) .tl-mode-hidden-pill { display: none !important; }
-  /* 2026-08-24 (originally: "filter row overlaps a label" -- bug report). Root cause:
-     the `top` formula above assumes .theme-toggle (34px tall, 14px from the top) is
-     the real floating icon it's stacking under -- true almost everywhere, but NOT on
-     the desktop Day view. [data-desk-day] .nav-tiers (search that selector) hides
-     .theme-toggle's whole container there, and #deskDayTopbar's own 🌙/⚙ buttons
-     (#ddtTheme/#ddtGear) take over as the real top-right icons instead -- a
-     normal-FLOW pair inside a 54px in-page bar, not fixed chrome. Re-anchored to that
-     real 55px bar (54px height + 1px border) with the same 8px gap. Scoped to
-     [data-desk-day] specifically (not narrower [data-desk-day1]) since
-     #deskDayTopbar/the .nav-tiers hide apply to BOTH desktop Day widths (1 day and
-     multi-day) identically -- confirmed live, same 54px height in the >=1280px grid
-     layout and the 1024-1279px flex fallback. */
-  [data-desk-day] .tl-mode-hidden-pill { top: calc(54px + 1px + 8px); }
-  .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* (the [data-desk-day] `top` override that used to sit here is gone with
+     position:fixed -- it re-anchored the floating pill to #deskDayTopbar's 55px bar,
+     which is meaningless for an in-flow block.) */
+  .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
   .tl-mode-hidden-pill .tlmp-hint {
     flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
     color: color-mix(in oklab, var(--accent-on) 72%, transparent);
@@ -12070,30 +12069,15 @@
     background: var(--margin-rule); color: var(--accent-on);
     font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
   }
-  /* 2026-08-22 (fix: filter chrome covering the date nav/search bar on mobile):
-     .tl-hidden-pill-row is pure markup scaffolding (see its own HTML comment) --
-     display:contents by default so it adds no box on desktop/tablet, leaving the
-     pill's own fixed/top/right rules completely untouched above 640px, exactly per
-     her STEP 4 ("desktop stays exactly as-is"). */
-  .tl-hidden-pill-row { display: contents; }
-  @media (max-width: 640px) {
-    /* Same in-flow shape as .todo-mode-hidden-pill just above (her own precedent for
-       "chrome that used to float, now sits in the page") -- position:static (just
-       clearing fixed's top/right) turns the pill back into a normal flex item of
-       #wrap, which already gives every direct child 16px of gap and (via .page's own
-       width:100% precedent) needs its own width since #wrap centers/shrink-wraps
-       children by default. 2026-08-24: the wrapper's flex-wrap row and the pill's
-       static-position rule were both written for TWO pills sharing/wrapping a line;
-       with the origin pill removed there is only ever one child, so the row is a
-       plain full-width block and the surviving pill fills it. */
-    .tl-hidden-pill-row {
-      display: flex; width: 100%; box-sizing: border-box;
-    }
-    .tl-mode-hidden-pill {
-      position: static; top: auto; right: auto;
-      flex: 1 1 auto; min-width: 0; max-width: 100%;
-    }
-  }
+  /* 2026-08-24 pt.2: .tl-hidden-pill-row was scaffolding for the fixed-position era --
+     display:contents above 640px (so the pill's own fixed/top/right rules applied
+     untouched) and a flex row below it (the one width where the pill was already
+     in-flow). With the pill in-flow at EVERY width and moved inside .day-main, the
+     whole per-breakpoint split is gone: the row is now a plain block wrapper that
+     behaves identically everywhere, which is the point -- one behaviour, not two.
+     Kept as a wrapper rather than deleted so the pill keeps a stable parent to be
+     hidden/shown inside without disturbing .day-main's own child spacing. */
+  .tl-hidden-pill-row { display: block; }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -15808,17 +15792,11 @@
       gap: 4px; background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px 0; overflow-y: auto; overflow-x: visible;
     }
   }
-  /* ...the one case that DOES still need clearing: while .tl-mode-hidden-pill is up
-     it floats across this rail's top-right corner (measured live: pill 63-89px).
-     body.mode-pill-on is set/cleared by renderModeHiddenPill() to mirror exactly
-     that -- see its comment for why this is toggled rather than permanently
-     reserved. Kept as-is post-2026-08-24: the icon rail's first icon sits exactly
-     where the old label did, so the same clearance is still needed. */
-  @media (min-width: 1200px) {
-    /* NB selector order: data-desk-day is stamped on <html>, not <body> (verified
-       live -- documentElement carries it), so the body class has to come SECOND. */
-    [data-desk-day] body.mode-pill-on #deskWidgetRail { padding-top: 41px; }
-  }
+  /* 2026-08-24 pt.2: the rail used to reserve 41px of top padding whenever
+     body.mode-pill-on was set, purely to get out of the way of .tl-mode-hidden-pill
+     floating across its top-right corner. That pill no longer floats (it's an in-flow
+     block above the timeline now), so both the class and this padding are gone --
+     the rail keeps its full column height back. */
   /* explicit base rule, not just relying on :empty -- content set by
      renderSunWeekAhead() only refreshes on a full renderDay() pass, not on
      every resize, so a card populated while desktop-Sunday would otherwise
@@ -17806,40 +17784,10 @@
        deliberately survive: they still stamp data-origin on every .tl-item, which is
        what draws the 4px left-edge origin rail (solid / dashed / dotted) on the blocks
        themselves. That rail is a separate, still-wanted feature. -->
-  <!-- 2026-08-22 (Linh: "filter chrome covers the date nav and search bar on
-       mobile" -- both pills were position:fixed, top-right-stacked over hardcoded
-       offsets sized for a fixed reserved top area that no longer exists once the
-       Day-view pull-handle drawer collapses to near-zero (see .day-top-drawer) --
-       confirmed live: the mode-hidden pill sat directly on top of #workModeBar's
-       "Switch to Work for today" link (elementFromPoint hit the pill, not the
-       button) even in the default collapsed state, and both pills sat on top of
-       the drawer's own date-nav row / quick-add bar once opened. This wrapper is
-       PURELY a layout hook for the ≤640px in-flow fix below (see .tl-hidden-
-       pill-row) -- display:contents on every wider width, so it adds no box and
-       changes nothing about how the pill positions itself via its own fixed/top/
-       right rules. The pill's id/hidden-attribute/click-handler are untouched.
-       2026-08-24: this held TWO pills until the origin filter was removed; the
-       Mode pill below is the only child now, and it absorbed the base styling
-       the removed pill's class used to supply. -->
-  <div class="tl-hidden-pill-row" id="tlHiddenPillRow">
-    <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached" (2026-08-20):
-         her spec's own non-negotiable rule, restated for THIS filter (§2: "this rule
-         applies to every filtered surface in the app, without exception") -- nothing
-         mode-filtering hides is ever silent. Same global-chrome placement as the origin
-         pill just above (a page-agnostic sibling, day-view-only via CSS) and the SAME
-         "tap to reveal everything" shape, but content-driven (names the top few hidden
-         items) rather than a static count, since her spec asks for both.
-         2026-08-22 ("make the hidden-by-Mode control obvious and reversible"): was a
-         single textContent node, hidden whenever nothing was filtered -- read as a
-         passing alert, not a setting she owned (she didn't know tapping it revealed
-         everything). Now always rendered whenever a real (non-Home) Mode is active,
-         in either state, and a real two-way toggle -- see renderModeHiddenPill()/
-         its click handler. aria-pressed reflects "revealed" (true) vs "filtered"
-         (false); two child spans (state text + a small fixed hint) instead of one,
-         same shape #trackSummaryBtn/.who-edit already use for "label + small
-         uppercase hint". -->
-    <button type="button" class="tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
-  </div>
+  <!-- 2026-08-24 pt.2: #tlHiddenPillRow used to live HERE, as a #wrap-level sibling of
+       every page (a hangover from when it was position:fixed chrome, which doesn't care
+       where it sits in the DOM). It is now in normal flow directly above the timeline,
+       inside .day-main -- search "tlHiddenPillRow" for its new home and the reasoning. -->
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
@@ -20307,6 +20255,41 @@
              Morning/Night don't need this: tapping Focus again in the ambient rail
              already covers "back in" for them. -->
         <button type="button" id="modeTakeoverReentryPill" class="mode-takeover-reentry-pill" hidden data-mt-reenter></button>
+        <!-- 2026-08-24 pt.2 (Linh: the gold "Showing everything · Filter ›" pill "sits on
+             top of my calendar and gets in the way"): moved here from #wrap level, where
+             it was position:fixed chrome floating over whatever the calendar had drawn in
+             the top-right. In flow directly above the timeline it pushes the calendar
+             down instead of covering it -- and since renderModeHiddenPill() now renders
+             nothing at all when the active Mode is hiding nothing, an ordinary day pays
+             no vertical space for it.
+             Placed immediately before #timelineScroll, which sits directly beside
+             #multiDayWrap (verified live: adjacent direct children of .day-main), so this
+             ONE position serves 1-day and 3/5/7-day alike. Living inside .day-main also
+             means it travels with placeDeskGrid()'s existing reparent into #deskColMain,
+             so it stays pinned to the calendar column on desktop with no extra JS.
+             Kept: the id, the hidden attribute, the click handler, the two child spans,
+             the two-way aria-pressed toggle -- this is a move plus a visibility rule, not
+             a rewrite of the control. -->
+        <div class="tl-hidden-pill-row" id="tlHiddenPillRow">
+          <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached"
+               (2026-08-20): her spec's own non-negotiable rule, restated for THIS filter
+               (§2: "this rule applies to every filtered surface in the app, without
+               exception") -- nothing mode-filtering hides is ever silent. Content-driven
+               (names the top few hidden items) rather than a static count, since her spec
+               asks for both.
+               2026-08-22 ("make the hidden-by-Mode control obvious and reversible"): was
+               a single textContent node that only ever appeared while something was
+               hidden, so it read as a passing alert rather than a setting she owned (she
+               didn't know tapping it revealed everything). Now a real two-way toggle --
+               aria-pressed reflects "revealed" (true) vs "filtered" (false); two child
+               spans (state text + a small fixed hint) instead of one, same shape
+               #trackSummaryBtn/.who-edit already use.
+               2026-08-24 pt.2 narrows that "always rendered" to "rendered whenever it has
+               something to say" -- the revealed state still always shows (it's the only
+               way back to filtering), but "Showing everything" with nothing hidden was
+               carrying no information while still taking space. -->
+          <button type="button" class="tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
+        </div>
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -41475,33 +41458,46 @@
   // needs it, see that function's own comment -- a real reason, not a default left
   // alone), but there is no longer a moment where the control just isn't there to
   // check; whatever the real state is, this says so the instant she looks.
-  // 2026-08-24: body.mode-pill-on mirrors this pill's own visibility, purely so the
-  // desktop widget rail can yield the top of its column while the pill is floating
-  // over it (see that class's CSS). The pill sits in the very top-right slot now --
-  // the origin filter that used to occupy it was removed the same day -- and measured
-  // live it spans screen-y 63-89px, straight across the rail's own "Today's widgets"
-  // label at 66-81.75px. That's the exact overlap bug the earlier chrome fix was
-  // about, so it can't just be re-accepted here. Reserving the space permanently was
-  // the other option and is worse: this pill shows for EVERY non-Home mode (not only
-  // when something is actually hidden -- see this function's own comment above), but
-  // Home is still a real and frequent state, and on Home the gap would be dead space
-  // for nothing. Toggling it is honest in both directions.
-  function setModePillFlag(on) { document.body.classList.toggle("mode-pill-on", !!on); }
+  // 2026-08-24 pt.2 (Linh: the gold pill "sits on top of my calendar and gets in the
+  // way"). body.mode-pill-on and setModePillFlag() are GONE with this change, not
+  // renamed: their whole job was making the desktop widget rail yield the top of its
+  // column while this pill floated across it. It doesn't float any more (see the CSS
+  // -- position:fixed/top/z-index all removed, it's an in-flow block directly above
+  // the timeline now), so there is nothing left to clear and the rail's matching
+  // padding-top rule went with them. Nothing else ever read that class.
   function renderModeHiddenPill(hidden, am) {
     const pill = document.getElementById("tlModeHiddenPill");
     const stateEl = document.getElementById("tlModeHiddenPillState");
     const hintEl = document.getElementById("tlModeHiddenPillHint");
     if (!pill || !stateEl || !hintEl) return;
-    if (am.id === "home") { pill.hidden = true; setModePillFlag(false); return; }
-    pill.hidden = false;
-    setModePillFlag(true);
+    if (am.id === "home") { pill.hidden = true; return; }
     pill.setAttribute("aria-pressed", String(!!state.modeRevealAll));
     if (state.modeRevealAll) {
+      // this state stays even though it carries no count -- it is the ONLY way back
+      // to filtering, and she needs to see she's in a temporarily-revealed state.
+      // (The 2026-08-22 "she didn't know this was a control" fix is what it protects;
+      // that problem was real, so the control must stay findable, just not floating.)
+      pill.hidden = false;
       stateEl.textContent = "Showing everything";
       hintEl.textContent = "Filter ›";
       return;
     }
     const widgetsHidden = document.body.classList.contains("mode-focus");
+    // 2026-08-24 pt.2 -- "don't show it when it has nothing to say". READ THIS BEFORE
+    // relying on it: as the code stands today this guard never actually fires, and
+    // that is worth knowing rather than discovering later. applyModeFocusClass() sets
+    // .mode-focus to `am.id !== "home" && !state.modeRevealAll`, and renderTimeline()
+    // calls it immediately before this function -- so in the only branch that reaches
+    // this line (non-Home, not revealed) widgetsHidden is ALWAYS true. A real Mode
+    // always hides the widgets; that IS something to say, so the pill is never
+    // actually information-free here.
+    // Kept deliberately anyway: it is the correct guard for the condition it names,
+    // it costs one comparison, and it starts doing real work the moment .mode-focus
+    // stops being unconditional for every non-Home Mode (per-Mode widget lists are
+    // exactly what CLAUDE.md's Modes law §3 has planned). What actually got the pill
+    // off her calendar is the in-flow move, not this.
+    if (!hidden.length && !widgetsHidden) { pill.hidden = true; return; }
+    pill.hidden = false;
     let detail = "";
     if (hidden.length) {
       const names = hidden.map(e => e.title).filter(Boolean);
