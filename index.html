@@ -2431,6 +2431,40 @@
   .sc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
   .sc-row.done { color: var(--ink-faint); text-decoration: line-through; }
   .sc-row .tick { flex: none; }
+  /* 2026-08-24 (move a pickup to another Mode): the row's label keeps its own tick
+     target; this wrapper only adds the move button beside it, deliberately OUTSIDE
+     the label (see sessionExtraRowHtml's own comment). */
+  .sc-row-wrap { display: flex; align-items: center; gap: 4px; }
+  .sc-row-wrap .sc-row { flex: 1; min-width: 0; }
+  .sc-move {
+    flex: none; position: relative; width: 28px; height: 28px; padding: 0;
+    border: none; background: none; color: var(--ink-faint); font-size: 14px;
+    cursor: pointer; border-radius: var(--radius-sm);
+  }
+  /* invisible pad to a real 44px target without growing the visible glyph -- the
+     same trick .day-nav-gear/#b33Live[data-mini] already use (design44 §7). */
+  .sc-move::after { content: ""; position: absolute; inset: -8px; }
+  .sc-move:hover { color: var(--margin-rule); background: var(--raised); }
+  /* the "Move it where?" picker -- a plain in-flow block under the row, not a
+     floating popover: the session card is already a narrow column and a popover
+     here would need viewport clamping for no benefit. */
+  .sc-move-pick { margin: 4px 0 8px; padding: 8px; border-radius: var(--radius-sm); background: var(--raised); }
+  .sc-move-pick-head { font-size: 11px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; }
+  /* the neutral "not a Mode at all" option -- full width, dashed, with a hairline
+     under it, so it reads as a different KIND of choice rather than one more Mode. */
+  .sc-move-plain {
+    display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 8px;
+    border: 1px dashed var(--note-line); border-radius: var(--radius-sm);
+    background: none; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer;
+    min-height: 32px;
+  }
+  .sc-move-plain:hover { border-color: var(--margin-rule); color: var(--margin-rule); }
+  .sc-move-sep { border-top: 1px solid var(--note-line); margin: 0 0 8px; }
+  .sc-move-cancel {
+    display: block; width: 100%; margin-top: 8px; border: none; background: none;
+    color: var(--ink-faint); font: inherit; font-size: 11px; cursor: pointer; min-height: 32px;
+  }
+  .sc-move-cancel:hover { color: var(--ink); }
   .sc-empty { font-size: 12px; font-style: italic; color: var(--ink-faint); }
   .sc-streak { font-size: 11px; color: var(--ink-faint); padding-top: 8px; border-top: 1px dashed var(--note-line); }
   /* §3.3 mid-session add. No .field-bare -- the plain input deliberately inherits the
@@ -6509,6 +6543,17 @@
   .pp-reach .em { font-size: 20px; }
   .pp-reach .tx { flex: 1; font-size: 13px; color: var(--ink-soft); } .pp-reach .tx b { color: var(--ink); }
   .pp-reach .go { border: 0; background: var(--margin-rule); color: var(--accent-on); font-weight: 600; font-size: 11px; border-radius: 999px; padding: 8px 12px; cursor: pointer; min-height: 32px; }
+  /* 2026-08-24 (Linh: "a way to tick off that I've already messaged them"): the
+     messaged state. Deliberately does NOT hide the banner -- her words: "it's still
+     useful to see it's her birthday today even after I've messaged her" -- it just
+     dims and swaps the Message button for a tickable "✓ Messaged" indicator. */
+  .pp-reach.done { background: color-mix(in oklab, var(--margin-rule) 6%, transparent); }
+  .pp-reach.done .tx { opacity: 0.7; }
+  .pp-reach .go.messaged {
+    background: transparent; color: var(--ink-faint);
+    border: 1px solid var(--note-line);
+  }
+  .pp-reach .go.messaged:hover { color: var(--ink); border-color: var(--margin-rule); }
   .pp-lab { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); font-weight: 700; margin: 16px 4px 8px; }
   .pp-drow { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
   .pp-drow + .pp-drow { border-top: 1px solid var(--note-line); }
@@ -38953,6 +38998,13 @@
     cands.sort((a, b) => a.days - b.days);
     return cands.length && cands[0].days <= 14 ? cands[0] : null;
   }
+  // 2026-08-24: the "I've messaged them for this" key -- occasion + the occurrence's
+  // real date. ppNext() above always resolves to the NEXT occurrence (rolling to
+  // next year once this year's has passed), so a birthday ticked today produces a
+  // key nothing will match again until the same date next year, at which point it's
+  // a different key and the banner starts unticked. No expiry job needed, same
+  // self-clearing trick the family-task occurrence ids elsewhere already rely on.
+  function ppReachKey(reach) { return `${reach.occasion}:${keyOf(reach.date)}`; }
   function ppRenderSheet() {
     const host = document.getElementById("ppSheet");
     const p = personById(ppOpenId);
@@ -38997,9 +39049,26 @@
         </div>
         <button type="button" class="pp-close" data-pp-close aria-label="Close">×</button>
       </div>
-      ${reach ? `<div class="pp-reach"><span class="em">${reach.icon}</span>
+      ${reach ? (() => {
+        // 2026-08-24 (Linh: "a way to tick off that I've already messaged them"):
+        // keyed by occasion + the OCCURRENCE's own date, so next year's birthday is
+        // a different key and starts unticked with no cleanup job -- the same
+        // self-expiring shape the family-task occurrence ids already use. Stored as
+        // a plain map on the person record (p.msgDone), exactly like
+        // PREGNANCIES[].done does for its own "mark this nudge celebrated" case --
+        // deliberately NOT tickTask()/isDone()/TICKS, which carry occurrence-id
+        // parsing, streaks and the reward layer that don't belong to "messaged
+        // someone for their birthday".
+        const mk = ppReachKey(reach);
+        const msgd = !!(p.msgDone || {})[mk];
+        return `<div class="pp-reach${msgd ? " done" : ""}"><span class="em">${reach.icon}</span>
         <div class="tx"><b>${esc(reach.label)} ${inDays(reach.days)}</b>${reach.sub ? ` · ${esc(reach.sub)} on ${reach.date.getDate()} ${MON_SHORT[reach.date.getMonth()]}` : ""}</div>
-        <button type="button" class="go" data-pp-msg="${reach.occasion}">✍ Message</button></div>` : ""}
+        ${msgd
+          ? `<button type="button" class="go messaged" data-pp-msgdone="${esc(mk)}" aria-pressed="true" title="Tap to un-mark">✓ Messaged</button>`
+          : `<button type="button" class="go" data-pp-msg="${reach.occasion}">✍ Message</button>
+             <button type="button" class="go messaged" data-pp-msgdone="${esc(mk)}" aria-pressed="false" title="I've already messaged them">☐ Mark messaged</button>`}
+        </div>`;
+      })() : ""}
       <div class="pp-lab">Significant dates</div>
       ${bdRow}${extraRows}
       <div class="pp-addrow"><input type="text" data-pp-newdate-label placeholder="e.g. Wedding anniversary" autocomplete="off"><input type="date" data-pp-newdate-date style="flex:none;width:130px"><button type="button" class="add-btn" data-pp-date-go>+ Add</button></div>
@@ -39082,6 +39151,19 @@
       if (!v) return;
       p[key] = p[key] || []; p[key].push(v);
       savePeople(); ppRenderSheet(); return;
+    }
+    // 2026-08-24: checked BEFORE [data-pp-msg] below -- both buttons live in the same
+    // banner and share the .go class, so an ambiguous match here would open the draft
+    // instead of toggling. Independent of the Message button on purpose (her words:
+    // "she might message someone by text or call outside the app and still want to
+    // tick it"), so this never opens the draft flow.
+    const msgDone = e.target.closest("[data-pp-msgdone]");
+    if (msgDone) {
+      const k = msgDone.dataset.ppMsgdone;
+      p.msgDone = p.msgDone || {};
+      if (p.msgDone[k]) delete p.msgDone[k]; else p.msgDone[k] = true;
+      savePeople(); ppRenderSheet();
+      return;
     }
     const msg = e.target.closest("[data-pp-msg]");
     if (msg) { ppShowDraft(p, msg.dataset.ppMsg); return; }
@@ -41717,12 +41799,43 @@
       <span>${esc(label)}</span>
     </label>`;
   }
+  // 2026-08-24 (Linh: she jotted "fix phone" during a Work block, but it isn't Work):
+  // the move control MUST sit outside the <label> -- a <label> forwards clicks to its
+  // own control, so a button nested inside this one would tick the item done instead
+  // of opening the picker. The row is a wrapper div now, with the label holding only
+  // the tick + text (its original job) and the button as a sibling.
   function sessionExtraRowHtml(ex) {
     const sd = isDone(ex.id);
-    return `<label class="sc-row${sd ? " done" : ""}">
-      <input type="checkbox" class="tick" data-session-extra-tick="${esc(ex.id)}" ${sd ? "checked" : ""} aria-label="Mark ${esc(ex.label)} done">
-      <span>${esc(ex.label)}</span>
-    </label>`;
+    return `<div class="sc-row-wrap">
+      <label class="sc-row${sd ? " done" : ""}">
+        <input type="checkbox" class="tick" data-session-extra-tick="${esc(ex.id)}" ${sd ? "checked" : ""} aria-label="Mark ${esc(ex.label)} done">
+        <span>${esc(ex.label)}</span>
+      </label>
+      <button type="button" class="sc-move" data-sc-extra-move="${esc(ex.id)}" aria-label="Move '${esc(ex.label)}' to another Mode" title="Move to another Mode">⤳</button>
+    </div>`;
+  }
+  // which pickup's "Move it where?" picker is open, or null
+  let scMoveOpenId = null;
+  // "Move it where?", not "which Mode?" -- the first option isn't a Mode at all.
+  // A pickup has no Mode of its own (its Mode is implied by the session it hangs
+  // off), so "move it elsewhere" has to mean turning it into something that CAN
+  // carry one: a to-do. TODOS take a `mode` field and mtBuildQueue() already
+  // collects them, so the thing she captured mid-Work gets picked up in the right
+  // context next time that Mode runs.
+  function scMovePickHtml(s) {
+    // "" is what the rest of the app reads as "no mode" -- same value
+    // renderFModePicker()'s own None button uses (data-mode=""), and modeOf()
+    // returns null for it (verified: `if (e.mode)` is falsy, no rtTaskId, -> null).
+    return `<div class="sc-move-pick">
+      <div class="sc-move-pick-head">Move it where?</div>
+      <button type="button" class="sc-move-plain" data-sc-move-to="">📋 Just my to-do list</button>
+      <div class="sc-move-sep"></div>
+      <div class="track-picker">
+        ${MODES.filter(m => m.id !== s.modeId).map(m =>
+          `<button type="button" class="track-opt" data-sc-move-to="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("")}
+      </div>
+      <button type="button" class="sc-move-cancel" data-sc-move-cancel>Cancel</button>
+    </div>`;
   }
   function sessionCountdownText(s) {
     const rem = sessionRemainingMs(s);
@@ -41771,7 +41884,7 @@
       ? item.steps.map((st, i) => sessionListRowHtml(`${s.eventId}::step::${i}`, s.eventId, item.steps.length, stepLabel(st))).join("")
       : "";
     const extraRows = s.extras.length
-      ? s.extras.map(sessionExtraRowHtml).join("")
+      ? s.extras.map(ex => sessionExtraRowHtml(ex) + (scMoveOpenId === ex.id ? scMovePickHtml(s) : "")).join("")
       : `<div class="sc-empty">Nothing picked up yet</div>`;
     const streak = sessionStreakLine();
     // §3.4 -- reachable ONLY once the countdown has actually run out (never from a
@@ -41852,6 +41965,18 @@
     // pass -- so a session that ends mid-takeover (the plan finishing, see
     // renderSessionCard()'s own endSession() branch) closes the overlay/rail
     // promptly instead of leaving it open until the next navigation.
+    // 2026-08-24 (Linh: "the takeover card flickers constantly"): both of these
+    // used to rewrite their hosts' innerHTML on every one of these ticks, so the
+    // visible card was destroyed and recreated once a second -- that WAS the
+    // flicker, and why its buttons felt unreliable (the element under her finger
+    // was replaced between frames). Both now compare the html they'd write against
+    // what they last wrote and skip identical assignments; see mtLastQueueHtml.
+    // Deliberately still called at 1Hz rather than only on a transition: the
+    // decision they act on (mtActiveTakeoverModeId -> activeMode) is wall-clock
+    // derived and scans today's items, so the takeover can OPEN on a time boundary
+    // as well as close -- detecting that transition costs the same scan these calls
+    // already do, leaving only a string concat to save. Not worth a second code
+    // path that could disagree with the real one.
     renderModeTakeover();
     renderModeAmbientRail();
     const s = currentSession();
@@ -48511,6 +48636,16 @@
   const MT_AUTO_MODES = ["study", "clean", "work"];
   const MT_MANUAL_MODES = ["morning", "night"];
   let mtQueue = [], mtQueuePos = 0, mtQueueForId = null;
+  // 2026-08-24 (flicker fix): renderModeTakeover()/renderModeAmbientRail() both run
+  // every second from sessionTick() (Modes law rule 4, "a session ending mid-
+  // takeover closes the overlay promptly") but were rewriting these hosts'
+  // innerHTML unconditionally every tick even when the content was byte-identical
+  // to what was already painted -- same class of bug updateSessionCountdownText()
+  // was written to avoid for #daySessionCard, just never applied here. Each cached
+  // string is compared before writing (see the three write sites below) and reset
+  // to null on the matching hide-transition so reopening always paints fresh rather
+  // than trusting a stale cache against DOM that's been sitting untouched.
+  let mtLastQueueHtml = null, mtLastToolkitHtml = null, marLastHtml = null;
   // guards state.modeFocusEngaged the same shape syncModeReveal() guards
   // modeRevealAll (line ~39349) -- resets the instant the active mode id itself
   // changes, so a Focus session left open into Morning never silently carries
@@ -48640,8 +48775,15 @@
       // never mid-queue, so a re-render from an unrelated tick never resets her
       // progress through it.
       if (mtQueueForId !== modeId) { mtQueue = mtBuildQueue(modeId); mtQueuePos = 0; mtQueueForId = modeId; }
+      // 2026-08-24 (flicker fix): mtQueueBodyHtml() still has to run every tick --
+      // its own safety branches (mtQueuePos++; return mtQueueBodyHtml();) advance
+      // the queue past items finished elsewhere, a real side effect this function
+      // must not skip -- only the DOM write below is conditional, never the call.
       const body = document.getElementById("modeTakeoverQueueBody");
-      if (body) body.innerHTML = `<div class="mt-queue-label">${am.emoji || ""} ${esc(am.name)}'s queue</div>` + mtQueueBodyHtml();
+      if (body) {
+        const queueHtml = `<div class="mt-queue-label">${am.emoji || ""} ${esc(am.name)}'s queue</div>` + mtQueueBodyHtml();
+        if (queueHtml !== mtLastQueueHtml) { body.innerHTML = queueHtml; mtLastQueueHtml = queueHtml; }
+      }
       // 2026-08-23 (retire the manual Work/Personal banner): the exact tile markup
       // renderWorkModeBar() used to build, now rendered here instead -- same
       // patCount lookup (a fresh clinic-day import wins, else fall back to
@@ -48649,12 +48791,13 @@
       // Day Board itself uses so the tile's own count never disagrees with it).
       const toolkit = document.getElementById("modeTakeoverToolkit");
       if (toolkit) {
+        let toolkitHtml;
         if (modeId === "work") {
           let patCount = 0;
           const wmClinicDay = loadClinicDay();
           if (wmClinicDay) patCount = wmClinicDay.appointments.length;
           else { try { patCount = clinicPatientsIn(dayEventsRawFor(TODAY)).length; } catch (e) {} }
-          toolkit.innerHTML = `<div class="wm-toolkit">
+          toolkitHtml = `<div class="wm-toolkit">
             <a class="wt-tile lcm" id="wmLcmTile" href="${esc(LCM_PHARMACY_URL)}" target="_blank" rel="noopener" title="Open LCM Pharmacy">
               <span class="wt-tile-icon">🌿</span>
               <span class="wt-tile-text"><span class="wt-tile-title">LCM Pharmacy</span><span class="wt-tile-sub">Open dispensary</span></span>
@@ -48669,11 +48812,15 @@
               <span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list and write it to book33-clinic-day.</span>
             </button>
           </div>`;
-        } else toolkit.innerHTML = "";
+        } else toolkitHtml = "";
+        if (toolkitHtml !== mtLastToolkitHtml) { toolkit.innerHTML = toolkitHtml; mtLastToolkitHtml = toolkitHtml; }
       }
       if (reentry) reentry.hidden = true;
     } else {
       overlay.hidden = true;
+      // reopening (this Mode, or a different one) must always paint fresh rather
+      // than trust a cache against a host that's been sitting untouched while hidden.
+      mtLastQueueHtml = null; mtLastToolkitHtml = null;
       // never strand the real session card mid-viewport-DOM -- if placeDeskGrid()
       // (which runs first every renderDay() pass) hasn't already reclaimed it this
       // render, send it home now.
@@ -48700,7 +48847,19 @@
     if (!host) return;
     const am = activeMode();
     mtSyncFocusEngageGuard(am);
-    if (!MT_MANUAL_MODES.includes(am.id) || state.modeFocusEngaged) { host.hidden = true; host.innerHTML = ""; return; }
+    if (!MT_MANUAL_MODES.includes(am.id) || state.modeFocusEngaged) {
+      host.hidden = true;
+      // reads the real DOM rather than the marLastHtml cache for this one check --
+      // only clears once per hide-transition (every subsequent tick this stays
+      // hidden already finds it empty and skips), same "skip the identical write"
+      // rule the visible branch below applies via its own cache.
+      if (host.innerHTML !== "") host.innerHTML = "";
+      // null, not "" -- reopening later must always paint fresh rather than trust
+      // a cache against a host that's been sitting untouched while hidden (same
+      // reasoning as renderModeTakeover()'s matching reset).
+      marLastHtml = null;
+      return;
+    }
     host.hidden = false;
     // "3 of 6" needs the DONE ones too, not just what's left -- same filter shape
     // as mtBuildQueue(), done items included, so this is its own small query
@@ -48719,12 +48878,13 @@
       else if (!markedCurrent) { cls = "mar-current"; markedCurrent = true; }
       return `<span class="mar-chip ${cls}">${x.done ? "✓ " : ""}${esc(x.title)}</span>`;
     }).join("") : `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>`;
-    host.innerHTML = `
+    const html = `
       <div class="mar-head">
         <span class="mar-title">${am.emoji || ""} ${esc(am.name)} · ${doneN} of ${total}</span>
         <button type="button" class="mar-focus-btn" data-mar-focus>Focus</button>
       </div>
       <div class="mar-strip">${stripHtml}</div>`;
+    if (html !== marLastHtml) { host.innerHTML = html; marLastHtml = html; }
   }
   document.addEventListener("click", e => {
     if (e.target.closest("[data-mt-back]")) {
@@ -49271,6 +49431,63 @@
   }, true);
   document.addEventListener("keydown", e => {
     if (e.key === "Enter" && e.target.matches && e.target.matches("[data-todoreview-title-edit]")) e.target.blur();
+  });
+  // 2026-08-24 (move a pickup to another Mode) -- the ⤳ button, the picker's own
+  // choices, and its cancel. All three live on one document delegate, same pattern
+  // as every other session-card control.
+  document.addEventListener("click", e => {
+    const moveBtn = e.target.closest("[data-sc-extra-move]");
+    if (moveBtn) {
+      const id = moveBtn.dataset.scExtraMove;
+      scMoveOpenId = scMoveOpenId === id ? null : id;   // second tap closes it
+      renderSessionCard();
+      return;
+    }
+    if (e.target.closest("[data-sc-move-cancel]")) { scMoveOpenId = null; renderSessionCard(); return; }
+    const dest = e.target.closest("[data-sc-move-to]");
+    if (dest) {
+      const s = currentSession();
+      const ex = s && s.extras.find(x => x.id === scMoveOpenId);
+      if (!s || !ex) { scMoveOpenId = null; renderSessionCard(); return; }
+      const modeId = dest.dataset.scMoveTo;   // "" for the neutral to-do-list option
+      const mode = modeId ? modeById(modeId) : null;
+      // pickups deliberately share the global DONE store (see addSessionExtra's own
+      // comment -- so the reward/XP layer applies to them), so an already-ticked
+      // pickup's completion lives under its id there, not on the record. Carry it
+      // across or the move silently un-completes it.
+      const wasDone = !!DONE[ex.id];
+      const idx = s.extras.indexOf(ex);
+      // same shape as the to-do form's own push, so the result is indistinguishable
+      // from any other to-do
+      const newTodo = { id: uid(), title: ex.label, track: "personal", category: "", mode: modeId, note: "", done: wasDone, createdAt: keyOf(TODAY) };
+      TODOS.push(newTodo);
+      saveTodos(TODOS);
+      s.extras.splice(idx, 1);
+      // nothing points at the removed pickup's id any more -- leaving it would strand
+      // a DONE entry for an item that no longer exists
+      if (wasDone) { delete DONE[ex.id]; saveDone(DONE); }
+      saveSessions();
+      scMoveOpenId = null;
+      renderSessionCard();
+      renderTodoPage();
+      renderDeskWidgetRail();
+      rewardToast(mode ? `Moved to ${mode.name}` : "Moved to your to-do list");
+      // picking the wrong Mode from a list is an easy slip and this destroys the
+      // pickup, so the move is undoable -- restores the extra at its original index
+      // (not appended), its DONE entry, and drops the to-do again.
+      showUndoSnackbar(mode ? `Moved to ${mode.name}` : "Moved to your to-do list", () => {
+        const cur = currentSession();
+        const i = TODOS.findIndex(t => t.id === newTodo.id);
+        if (i > -1) { TODOS.splice(i, 1); saveTodos(TODOS); }
+        if (cur) { cur.extras.splice(Math.min(idx, cur.extras.length), 0, ex); saveSessions(); }
+        if (wasDone) { DONE[ex.id] = true; saveDone(DONE); }
+        renderSessionCard(); renderTodoPage(); renderDeskWidgetRail();
+      });
+      return;
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && scMoveOpenId) { scMoveOpenId = null; renderSessionCard(); }
   });
   document.addEventListener("submit", e => {
     // §3.3 mid-session add -- Enter-to-submit, same shape as the To-do panel's own
