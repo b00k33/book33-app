@@ -8387,31 +8387,72 @@
      well" pass already established for this identical ask -- see that pass's
      own --field-ring comment further up (#rtnAddForm.rtn-inline-mode .field
      input) -- so this still reads correctly in light mode too. */
-  #addForm .when .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
-  #addForm .when .ef { display: flex; flex-direction: column; min-width: 0; }
-  /* flex-basis trimmed below the brief's literal 220/200: measured live,
-     #addForm's actual content width is ~429px (with the More-options scrollbar
-     present), and 220+200+10px gap = 430px -- 1px over, which wrapped every
-     time instead of sitting side by side as intended. 208/188 leaves real
-     headroom either way. */
-  #addForm #fDateField { flex: 1 1 208px; }
-  #addForm #fStartField { flex: 1 1 188px; }
-  /* Day sits alone on its row once Starts is hidden (Type = Routine) -- was a
-     grid-column:1/-1 override on the old raw grid item (see the superseded
-     :has() rule this replaces, a few hundred lines down near #fEndField). */
-  #addForm .when:has(#fStartField[hidden]) #fDateField { flex: 1 1 100%; }
-  /* 2026-08-22 (STEP 5, "Day and Starts share one row instead of two stacked
-     fields"): the 208/188px bases above were tuned for #addForm's ~429px DESKTOP
-     content width -- measured live, phone width only gives .when ~209px, so they
-     wrapped every time there, exactly the stacked pair she's asking to fix. Below
-     640px: equal 1fr-style split (basis 0, min-width 0) so the two inputs always
-     share one row regardless of available width, letting the browser compress each
-     native date/time control as needed rather than each claiming a fixed minimum;
-     the hint text on Day's label is dropped here too -- it was wrapping the label
-     to 2 lines in the narrower column, taller than the input below it needed. */
+  /* 2026-08-24 ("Day/Starts/Ends/How long become ONE line"): replaces the old
+     .when .row/.ef + #fDateField/#fStartField flex-basis tuning above -- see the
+     big HTML comment above #fWhenRow for why each slot layers a real, opacity:0
+     input (still the literal click/keydown target) over a decorative label pill.
+     The old :has(#fStartField[hidden]) rule isn't carried forward -- grepped for
+     every write to fStartField's .hidden and found none; #addForm is the event
+     form only (routines use #rtnAddForm entirely), so it looks like dead CSS left
+     over from before that split, not a live "Type=Routine" path in this form. */
+  #addForm .when-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #addForm .when-slot { position: relative; display: inline-flex; }
+  #addForm .when-native {
+    position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;
+    border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-appearance: none;
+  }
+  #addForm .when-label {
+    display: inline-flex; align-items: center; white-space: nowrap; min-height: 20px;
+    padding: 6px 10px; border-radius: var(--field-radius-sm); background: var(--field-bg);
+    font-size: 13px; color: var(--ink); pointer-events: none;
+  }
+  #addForm #fDateField .when-label { font-weight: 600; }
+  #addForm .when-slot:focus-within .when-label { box-shadow: 0 0 0 2px var(--gold); }
+  #addForm .when-sep { color: var(--ink-faint); font-size: 13px; }
+  #addForm .when-dur {
+    margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--gold); white-space: nowrap; padding: 6px 2px;
+  }
+  #addForm .when-slot.disabled .when-label, #addForm .when-slot:has(.when-native:disabled) .when-label {
+    opacity: 0.45;
+  }
+  #addForm .when-slot:has(.when-native:disabled) .when-native { cursor: default; }
+  /* the popover itself: one shared instance, repositioned per-open next to
+     whichever button (#fStart or #fEnd) triggered it -- same "append to body,
+     position via getBoundingClientRect, clamp to viewport" technique .cyc-popover
+     already uses elsewhere in this form family (search that class). */
+  #addForm .when-pop {
+    position: fixed; z-index: 60; width: 220px; max-height: 320px; overflow: hidden;
+    display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
+    border-radius: var(--field-radius); box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+    border: 1px solid var(--field-bg);
+  }
+  #addForm .when-pop-list { overflow-y: auto; padding: 4px; }
+  #addForm .when-pop-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--field-radius-sm);
+    font-size: 13px; color: var(--ink); background: none; border: 0; cursor: pointer;
+  }
+  #addForm .when-pop-row:hover, #addForm .when-pop-row:focus-visible, #addForm .when-pop-row[aria-selected="true"] {
+    background: var(--field-bg); outline: none;
+  }
+  #addForm .when-pop-row .when-pop-dur { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  #addForm .when-pop-row .when-pop-next { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+  #addForm .when-pop-custom {
+    flex: 0 0 auto; border-top: 1px solid var(--field-bg); padding: 10px; font-size: 12px;
+    color: var(--ink-soft); background: none; border-left: 0; border-right: 0; border-bottom: 0;
+    cursor: pointer; text-align: center;
+  }
+  #addForm .when-pop-custom:hover, #addForm .when-pop-custom:focus-visible { color: var(--ink); outline: none; }
+  /* the old H/M+chips picker is superseded by the End-popover's duration list --
+     the field stays IN the DOM (display:none, not deleted): #fDur/durHours/
+     durMinutes/durChips/durCustomChip are still the real state a list-pick writes
+     through (see syncDurBoxesFromFDur() calls in the JS below), same "hidden
+     input behind a front-end" shape #fDur already had before this change.
+     #rtnAddForm's own #rtnDurChips/#rtnEnd equivalent is untouched -- this
+     selector only reaches #addForm. */
+  #addForm #fDurPickerField { display: none; }
   @media (max-width: 640px) {
-    #addForm #fDateField, #addForm #fStartField { flex: 1 1 0; min-width: 0; }
-    #addForm #fDateField .field-hint { display: none; }
     /* Mode row was wrapping "None" + top-5 + "More ›" into 3-4 rows (measured
        234px at 375x700) -- by far the single biggest item in the form, more than
        every other field combined. Same fix as .presets-row: one horizontally-
@@ -20638,37 +20679,51 @@
                     <div class="track-picker" id="fModePicker" role="group" aria-label="Mode"></div>
                   </div>
                 </div>
-                <!-- 2026-08-10 (Linh, "Compact the When/How long block" brief): Day+Starts
-                     share their own flex row (.when .row/.ef) so they can wrap
-                     independently on narrow phones -- see the :has(#fStartField[hidden])
-                     rule below (Type=Routine hides Starts) for the "Day takes the full
-                     row" case, expressed as a flex-basis instead of a grid-column. -->
+                <!-- 2026-08-24 (Linh, "Day/Starts/Ends/How long become ONE line"): the old
+                     three-row Day+Starts / Ends stack collapses into one GCal-style When
+                     line -- Day / Start / dash / End as buttons, a duration read-out at the
+                     row's end. #fDate/#fStart/#fEnd are still the SAME real inputs every
+                     other function already reads/writes/disables (submit handlers,
+                     syncEndFromDur(), the All-day toggle, the legacy #fRepeatField
+                     hide-on-repeat path at syncRepeatFields() -- search that name) -- only
+                     their presentation changed, never their ids/values/.disabled state.
+                     Each real input sits opacity:0 but on top (position:absolute;inset:0)
+                     of a decorative label span showing the formatted value -- so it's
+                     still the literal element every pointerdown/click/keydown lands on,
+                     just invisible. This matters for #fDate specifically: b33mp (search
+                     that name) hijacks date inputs by checking e.target on real pointer
+                     events, not via .focus()/.showPicker() -- swapping in a proxy button
+                     would silently break the mobile date sheet (and pre-empt the
+                     desktop rollout planned for it). #fStart/#fEnd have no such hijack, so
+                     their own mousedown is preventDefault()'d (same technique b33mp uses
+                     on #fDate) to open the new When-popover instead of a native time
+                     picker; its "Type an exact time" row falls back to that same real
+                     input via .showPicker(). -->
                 <div class="efp-field-row">
                   <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
-                  <div class="when" style="flex:1;min-width:0">
-                    <div class="row">
-                      <div class="field ef" id="fDateField"><label for="fDate">Day <span class="field-hint">change to move it</span></label><input type="date" id="fDate" class="field-bare"></div>
-                      <div class="field ef" id="fStartField"><label for="fStart">Starts</label><input type="time" id="fStart" class="field-bare"></div>
+                  <div class="when" id="fWhenLine" style="flex:1;min-width:0">
+                    <div class="when-row" id="fWhenRow">
+                      <div class="when-slot" id="fDateField">
+                        <span class="when-label" id="fDateLabel" aria-hidden="true">Day</span>
+                        <input type="date" id="fDate" class="when-native" title="Day — change to move it" aria-label="Day — change to move it">
+                      </div>
+                      <div class="when-slot" id="fStartField">
+                        <span class="when-label" id="fStartLabel" aria-hidden="true">Start</span>
+                        <input type="time" id="fStart" class="when-native" aria-label="Starts" aria-haspopup="listbox">
+                      </div>
+                      <span class="when-sep" aria-hidden="true">–</span>
+                      <div class="when-slot" id="fEndField">
+                        <span class="when-label" id="fEndLabel" aria-hidden="true">End</span>
+                        <input type="time" id="fEnd" class="when-native" aria-label="Ends" aria-haspopup="listbox">
+                        <span class="field-hint when-nextday" id="fEndNextDay" hidden>→ next day</span>
+                      </div>
+                      <span class="when-dur" id="fWhenDur" aria-hidden="true"></span>
                     </div>
                   </div>
                 </div>
-                <!-- 2026-08-23 (field-order rework): "Ends" promoted out of the collapsed
-                     More options drawer into its own row here, right after Day/Starts and
-                     before How long -- it used to be a tap away, which is almost certainly
-                     why an overnight span (e.g. Sleep 10pm-6am) was hard to set. Doesn't
-                     change how #fEnd is read/saved/defaulted (syncEndFromDur()/
-                     buildRoutineFromCurrentForm()/the submit handler all untouched) -- layout
-                     and label only. #fEndNextDay is a live indicator, hidden by default,
-                     shown whenever Ends is numerically <= Starts (an overnight wrap) -- kept
-                     correct via efpSyncAddForm() (search that name), the form's existing
-                     single choke-point for "resync on open + on every live change". -->
-                <div class="efp-field-row">
-                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></svg></div>
-                  <div class="field" id="fEndField">
-                    <label for="fEnd">Ends <span class="field-hint">optional -- leave blank to use How long below; earlier than Starts means it ends the next day</span></label>
-                    <input type="time" id="fEnd" class="field-bare" style="max-width:140px">
-                    <span class="field-hint" id="fEndNextDay" hidden>→ next day</span>
-                  </div>
+                <div class="when-pop" id="fWhenPop" hidden role="listbox" aria-label="Pick a time">
+                  <div class="when-pop-list" id="fWhenPopList"></div>
+                  <button type="button" class="when-pop-custom" id="fWhenPopCustom">Type an exact time…</button>
                 </div>
                 <!-- 2026-08-09 (design44, "add a How long duration picker"): hours+minutes
                      boxes plus quick chips, a front-end over the existing #fDur/#fEst
@@ -52540,6 +52595,12 @@
     // (below) call this whole function so it stays live as she types either one.
     const fEndNextDay = document.getElementById("fEndNextDay");
     if (fEndNextDay) fEndNextDay.hidden = !(fStart.value && fEnd.value && toMin(fEnd.value) <= toMin(fStart.value));
+    // 2026-08-24 (When-line merge): renderWhenRow() (search that name, defined
+    // with the rest of the When-popover code further down) keeps the Day/Start/
+    // End button labels and the duration read-out in sync -- called from here so
+    // every existing efpSyncAddForm() call site (open-for-new, open-for-edit,
+    // task<->event switch, the fStart/fEnd input listeners) picks it up for free.
+    renderWhenRow();
   }
   document.getElementById("fRepeatSummaryBtn").addEventListener("click", () => {
     const box = document.getElementById("fRepeatOptions");
@@ -52581,6 +52642,11 @@
     syncFFillCalToggle();
   });
   document.getElementById("fDate").addEventListener("input", updateEachWeekdayLabel);
+  // 2026-08-24 (When-line merge): keeps the Day button's "Mon, 24 Aug" label
+  // live as she picks (native control or, at mobile widths, b33mp) -- Start/End
+  // already resync via efpSyncAddForm() on their own "input" events; fDate had
+  // no such call before this.
+  fDate.addEventListener("input", renderWhenRow);
   syncFFillCalToggle();
 
   // whose job is it — Mine / his / Both (two-person system). The picker UI is retired
@@ -55793,6 +55859,11 @@
     fStart.disabled = fEnd.disabled = fDur.disabled = fAllDay.checked;
     setDurDisabled(fAllDay.checked);
     if (fAllDay.checked) { fStart.value = ""; fEnd.value = ""; fDur.value = ""; syncDurBoxesFromFDur(); }
+    // 2026-08-24 (When-line merge): this handler predates efpSyncAddForm() being
+    // the row's resync choke-point -- without this call the Start/End buttons and
+    // the gold duration read-out kept showing whatever they had before All-day
+    // was ticked, even though the underlying values were just cleared above.
+    efpSyncAddForm();
   });
   // duration and end stay in lockstep: typing a duration rewrites Ends immediately
   // (also when Start moves), and editing Ends by hand clears the duration so it wins
@@ -55827,6 +55898,175 @@
     durHours.disabled = durMinutes.disabled = dis;
     durChips.querySelectorAll(".track-opt").forEach(b => b.disabled = dis);
   }
+  /* ---- 2026-08-24 (Linh, "Day/Starts/Ends/How long become ONE line") ----
+     Day/Start/End as one GCal-style row -- see the HTML comment above #fWhenRow
+     for the "real input, opacity:0, on top of a decorative label" shape and why
+     #fDate itself is left alone (b33mp's mobile date sheet needs the real
+     pointerdown target). #fStart/#fEnd get a small popover of 30-min-step times
+     instead, with a "type an exact time" fallback to the same real inputs. */
+  const fDateField = document.getElementById("fDateField");
+  const fDateLabel = document.getElementById("fDateLabel");
+  const fStartLabel = document.getElementById("fStartLabel");
+  const fEndLabel = document.getElementById("fEndLabel");
+  const fWhenDur = document.getElementById("fWhenDur");
+  const fWhenPop = document.getElementById("fWhenPop");
+  const fWhenPopList = document.getElementById("fWhenPopList");
+  const fWhenPopCustom = document.getElementById("fWhenPopCustom");
+  function fmtWhenDate(k) {
+    if (!k) return "Day";
+    return parseKey(k).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  }
+  // prefers #fDur (the End-popover and the How-long boxes both write it) but
+  // falls back to Start/End's own numeric gap for a manually-typed exact Ends
+  // that hasn't set a duration -- same "end <= start wraps to next day" rule
+  // efpSyncAddForm()'s #fEndNextDay indicator and itemEndMin() already use.
+  function currentWhenDurMin() {
+    const d = parseInt(fDur.value, 10);
+    if (d > 0) return d;
+    if (fStart.value && fEnd.value) {
+      let diff = toMin(fEnd.value) - toMin(fStart.value);
+      if (diff <= 0) diff += 1440;
+      return diff;
+    }
+    return 0;
+  }
+  function renderWhenRow() {
+    if (fDateLabel) fDateLabel.textContent = fmtWhenDate(fDate.value);
+    if (fStartLabel) fStartLabel.textContent = fStart.value ? fmtTime(fStart.value) : "Start";
+    if (fEndLabel) fEndLabel.textContent = fEnd.value ? fmtTime(fEnd.value) : "End";
+    if (fWhenDur) {
+      const mins = fAllDay.checked ? 0 : currentWhenDurMin();
+      fWhenDur.textContent = mins > 0 ? fmtPresetDur(mins) : "";
+    }
+  }
+  // half-hour rows for the popover -- "start" is a plain full-day list (no
+  // duration column); "end" starts 30min after Start and runs to 16h out, each
+  // row tagged with its computed length and (once it crosses midnight) "next day".
+  function fWhenPopRows(mode) {
+    const rows = [];
+    if (mode === "start") {
+      for (let m = 0; m < 1440; m += 30) rows.push({ value: minToTime(m), label: fmtTime(minToTime(m)), dur: "", nextDay: false });
+    } else {
+      const base = fStart.value ? toMin(fStart.value) : 0;
+      for (let off = 30; off <= 960; off += 30) {
+        const abs = base + off;
+        rows.push({ value: minToTime(abs % 1440), durMin: off, label: fmtTime(minToTime(abs % 1440)), dur: fmtPresetDur(off), nextDay: abs >= 1440 });
+      }
+    }
+    return rows;
+  }
+  let fWhenPopMode = null;
+  let fWhenPopTrigger = null;
+  function closeFWhenPop() {
+    if (!fWhenPop || fWhenPop.hidden) return;
+    fWhenPop.hidden = true;
+    fWhenPopMode = null;
+    if (fWhenPopTrigger) fWhenPopTrigger.setAttribute("aria-expanded", "false");
+    fWhenPopTrigger = null;
+  }
+  function openFWhenPop(mode, triggerInput) {
+    if (fStart.disabled || fEnd.disabled) return;   // All-day: nothing to pick
+    fWhenPopMode = mode;
+    fWhenPopTrigger = triggerInput;
+    triggerInput.setAttribute("aria-expanded", "true");
+    const current = mode === "start" ? fStart.value : fEnd.value;
+    fWhenPopList.innerHTML = fWhenPopRows(mode).map(r => `
+      <button type="button" class="when-pop-row" role="option" tabindex="-1"
+        data-when-val="${esc(r.value)}" data-when-durmin="${r.durMin || ""}" aria-selected="${r.value === current}">
+        <span>${esc(r.label)}${r.nextDay ? '<span class="when-pop-next">next day</span>' : ""}</span>
+        ${r.dur ? `<span class="when-pop-dur">${esc(r.dur)}</span>` : ""}
+      </button>`).join("");
+    fWhenPop.hidden = false;
+    const r = triggerInput.closest(".when-slot").getBoundingClientRect();
+    const popW = 220;
+    fWhenPop.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - popW - 8)))}px`;
+    const spaceBelow = window.innerHeight - r.bottom;
+    if (spaceBelow < 200 && r.top > spaceBelow) {
+      fWhenPop.style.top = "auto";
+      fWhenPop.style.bottom = `${Math.round(window.innerHeight - r.top + 6)}px`;
+    } else {
+      fWhenPop.style.bottom = "auto";
+      fWhenPop.style.top = `${Math.round(r.bottom + 6)}px`;
+    }
+    const rows = fWhenPopList.querySelectorAll(".when-pop-row");
+    let active = fWhenPopList.querySelector('[aria-selected="true"]') || rows[0];
+    rows.forEach(b => b.tabIndex = -1);
+    if (active) {
+      active.tabIndex = 0;
+      fWhenPopList.scrollTop = active.offsetTop - fWhenPopList.clientHeight / 2 + active.offsetHeight / 2;
+      active.focus();
+    }
+  }
+  function fWhenPopPick(value, durMin) {
+    if (fWhenPopMode === "start") {
+      fStart.value = value;
+      fStart.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (fWhenPopMode === "end") {
+      // explicitly bypasses #fEnd's own "input" listener (which clears #fDur --
+      // right for a manually-typed exact end, wrong here since this pick's
+      // duration IS known) and instead mirrors what that listener's sibling
+      // paths do: write both fields, then the same resync calls syncDurFromBoxes()
+      // itself already makes. durMin comes straight from the row that was tapped
+      // (fWhenPopRows already computed it as a plain offset) rather than being
+      // re-derived from the two clock times here, which would have to reinvent
+      // the same wrap-past-midnight math syncEndFromDur()'s comment already
+      // warns is easy to get subtly wrong.
+      fEnd.value = value;
+      fDur.value = durMin > 0 ? String(durMin) : "";
+      syncDurBoxesFromFDur();
+      efpSyncAddForm();
+    }
+    closeFWhenPop();
+    renderWhenRow();
+  }
+  fWhenPopList.addEventListener("click", e => {
+    const b = e.target.closest(".when-pop-row"); if (!b) return;
+    fWhenPopPick(b.dataset.whenVal, parseInt(b.dataset.whenDurmin, 10) || 0);
+  });
+  fWhenPopList.addEventListener("keydown", e => {
+    const rows = Array.from(fWhenPopList.querySelectorAll(".when-pop-row"));
+    const idx = rows.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (idx === -1) return;
+      const next = rows[Math.max(0, Math.min(rows.length - 1, idx + (e.key === "ArrowDown" ? 1 : -1)))];
+      rows.forEach(b => b.tabIndex = -1);
+      next.tabIndex = 0; next.focus();
+      next.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeFWhenPop();
+      if (fWhenPopTrigger) fWhenPopTrigger.focus();
+    }
+  });
+  fWhenPopCustom.addEventListener("click", () => {
+    const input = fWhenPopMode === "start" ? fStart : fEnd;
+    closeFWhenPop();
+    if (typeof input.showPicker === "function") { try { input.showPicker(); } catch (err) { input.focus(); } }
+    else input.focus();
+  });
+  // mousedown (not click) so this fires before the native time picker's own
+  // trigger -- exactly the technique b33mp already uses on #fDate (search
+  // "b33mpIsMobile" for the same preventDefault-on-mousedown comment).
+  [["fStart", fStart, "start"], ["fEnd", fEnd, "end"]].forEach(([, input, mode]) => {
+    input.addEventListener("mousedown", e => { if (!input.disabled) { e.preventDefault(); openFWhenPop(mode, input); } });
+    input.addEventListener("keydown", e => {
+      if (input.disabled) return;
+      if (e.key !== "Enter" && e.key !== " " && !(e.key === "ArrowDown" && e.altKey)) return;
+      e.preventDefault();
+      openFWhenPop(mode, input);
+    });
+  });
+  document.addEventListener("click", e => {
+    if (!fWhenPop || fWhenPop.hidden) return;
+    if (e.target.closest(".when-pop") || e.target === fStart || e.target === fEnd) return;
+    closeFWhenPop();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && fWhenPop && !fWhenPop.hidden && document.activeElement !== fStart && document.activeElement !== fEnd) {
+      closeFWhenPop();
+    }
+  }, true);
   // 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes used to
   // always render (~44px of their own row). #durBoxes now stays hidden unless the
   // real duration doesn't match one of the 5 quick chips -- a genuinely custom
