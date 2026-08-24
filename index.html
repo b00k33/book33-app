@@ -15628,10 +15628,14 @@
      (buildHoursHtml), so the attribute is the gate; no breakpoint needed here. */
   .hour-row[data-out-of-range="true"] .hour-label { display: none; }
 
-  /* ---- 5. Widget rail — 286px (1440+), 250px (1200–1439), removed <1200
-     (widgets fall back to a block below the grid, .wr-fallback). 2026-08-16
-     (desktop multi-day build): "same layout and design as 1" for 3/5/7 — the
-     widget rail is shared chrome now, not 1-day exclusive. ---- */
+  /* ---- 5. Widget rail — a fixed 56px icon strip at every desktop width
+     ≥1200px (removed entirely <1200px, widgets fall back to a block below the
+     grid, #wrFallback — untouched, still the pre-2026-08-24 always-expanded
+     card list). 2026-08-16 (desktop multi-day build): "same layout and design
+     as 1" for 3/5/7 — the widget rail is shared chrome now, not 1-day
+     exclusive. 2026-08-24 ("the widgets become an icon rail"): the old
+     286px/250px expanded card-list column is retired — see renderWrIconRail()/
+     renderWrPanel() and the .wr-ic-* / .wr-panel-* rules further down. ---- */
   #deskWidgetRail { display: none; }
   #wrFallback { display: none; }
   /* the new zones replace #deskGrid's old 3-column (290/flex/300) template
@@ -15641,69 +15645,40 @@
   [data-desk-day] #deskGrid { display: flex; align-items: stretch; grid-template-columns: none; gap: 0; margin: 0; }
   [data-desk-day] #deskColLeft, [data-desk-day] #deskColRight { display: none !important; }
   [data-desk-day] #deskColMain { flex: 1 1 auto; min-width: 0; gap: 0; }
+  /* 2026-08-24 ("the widgets become an icon rail"): a fixed 56px icon-only strip
+     at every desktop width -- the old 286px/250px card-list column (and Sunday's
+     460px 2-col widening, immediately below) is retired entirely along with it;
+     an icon rail doesn't need extra width on a day with more cards, only its
+     PANEL's content changes. #wrIconRail/.wr-ic-* below; #wrPanel is a separate
+     fixed overlay (not a child of this column), styled further down. */
   @media (min-width: 1200px) {
     [data-desk-day] #deskWidgetRail {
-      display: flex; flex-direction: column; width: 286px; flex: none; box-sizing: border-box;
-      background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px; overflow-y: auto;
+      display: flex; flex-direction: column; align-items: center; width: 56px; flex: none; box-sizing: border-box;
+      gap: 4px; background: var(--paper); border-left: 1px solid var(--note-line); padding: 12px 0; overflow-y: auto; overflow-x: visible;
     }
   }
-  /* The 46px top padding that sat here 2026-08-24 (bumped from 12px so the rail's
-     "Today's widgets" label cleared #tlOriginFilter, which floated fixed over this
-     rail's top-right corner) is REVERTED to a plain 12px the same day: that filter
-     row was removed entirely a few hours later, so the clearance is reserving space
-     for an element that no longer exists. Nothing always-on floats over this corner
-     any more. The one thing that still CAN is .tl-mode-hidden-pill, and only while a
-     Mode is actively hiding something -- the same "don't permanently reserve space
-     for a conditional pill" tradeoff that was already documented and accepted here,
-     now the only case left. */
-  /* ...and the one case that DOES still need clearing: while .tl-mode-hidden-pill is
-     up it floats across this rail's own "Today's widgets" label (measured live: pill
-     63-89px, label 66-81.75px). body.mode-pill-on is set/cleared by
-     renderModeHiddenPill() to mirror exactly that -- see its comment for why this is
-     toggled rather than permanently reserved. 34px = the pill's own bottom (89px)
-     minus the rail's box top (54px), plus a 6px gap, on the same 12px base padding. */
+  /* ...the one case that DOES still need clearing: while .tl-mode-hidden-pill is up
+     it floats across this rail's top-right corner (measured live: pill 63-89px).
+     body.mode-pill-on is set/cleared by renderModeHiddenPill() to mirror exactly
+     that -- see its comment for why this is toggled rather than permanently
+     reserved. Kept as-is post-2026-08-24: the icon rail's first icon sits exactly
+     where the old label did, so the same clearance is still needed. */
   @media (min-width: 1200px) {
     /* NB selector order: data-desk-day is stamped on <html>, not <body> (verified
        live -- documentElement carries it), so the body class has to come SECOND. */
     [data-desk-day] body.mode-pill-on #deskWidgetRail { padding-top: 41px; }
   }
-  @media (min-width: 1200px) and (max-width: 1439px) {
-    [data-desk-day] #deskWidgetRail { width: 250px; }
-  }
-  /* 2026-08-23 (Sunday plan-the-week, part D): wider, two-column rail -- Sunday
-     only, scoped to [data-sun-review] (see placeDeskGrid()) and nested inside
-     the SAME ≥1200px gate the width rules just above already use, since the
-     visual effect only makes sense at the same breakpoint #deskWidgetRail
-     itself only exists at. Widening the rail alone narrows #deskColMain (the
-     timeline) -- flex:1 1 auto already takes whatever's left, no separate rule
-     needed for that half. #wrCards's 2-col grid reuses the exact
-     display:grid; grid-template-columns:1fr 1fr; gap:8px idiom the existing
-     1024–1199px #wrFallback 2-up block just below already uses -- this isn't a
-     new layout idea for this rail, just a second place it applies. Whatever
-     cards are actually visible (normal ones + the four new Sunday ones) flow
-     into the grid in their existing Arrange order; drag-reorder's existing
-     Y-axis drop logic (see the dragover/drop delegates further down) still
-     inserts before/after the hovered card by DOM order either way, so it
-     continues to produce a valid reordering in two columns, just without an
-     X-aware "which half of this card" refinement -- verified live, not touched. */
-  @media (min-width: 1200px) {
-    [data-sun-review] #deskWidgetRail { width: 460px; }
-    /* minmax(0, 1fr), not bare 1fr -- a bare 1fr track's minimum is "auto" (its
-       widest child's min-content), so one long-text card (e.g. a patient name in
-       railPatients) silently drags its whole column wider than its neighbour,
-       an uneven split rather than the even two-up this is meant to be. minmax(0,..)
-       removes that floor; each card's own overflow/ellipsis rules (.wr-pat-name
-       etc., already min-width:0 internally) take it from there, verified live. */
-    [data-sun-review] #wrCards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-    [data-sun-review] #sunWeekAhead { display: block; margin: 0 0 16px; }
-  }
   /* explicit base rule, not just relying on :empty -- content set by
      renderSunWeekAhead() only refreshes on a full renderDay() pass, not on
      every resize, so a card populated while desktop-Sunday would otherwise
      still show its stale markup if the viewport later shrinks without a
-     re-render in between. Same "base display:none, unhidden only inside the
-     media query" shape #deskWidgetRail itself already uses just above. */
+     re-render in between. 2026-08-24: the [data-sun-review] override this used
+     to pair with is gone (that whole widening/2-col concept doesn't apply to an
+     icon rail) -- #sunWeekAhead's only possible visible location now is inside
+     the open panel, so #wrPanelBody is what unhides it; renderWrIconRail() also
+     only shows its icon at all on a Sunday, so the two conditions stay in step. */
   #sunWeekAhead { display: none; }
+  #wrPanelBody #sunWeekAhead { display: block; margin: 0; }
   .sun-week-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; }
   .sun-week-title { font-size: 15px; font-weight: 800; color: var(--ink); }
   .sun-week-range { font-size: 12px; color: var(--ink-soft); }
@@ -15754,28 +15729,20 @@
   .wr-head { display: flex; align-items: center; margin-bottom: 12px; }
   .wr-head-lbl { font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-faint); }
   .wr-arrange-btn { margin-left: auto; border: none; background: none; color: var(--gold-bright); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-  /* 2026-08-24 (Linh: "nothing above the calendar but the birthday"): #wrPinned holds
-     the three real elements moved down out of .day-main. They were laid out for a
-     full-width area and land in a ~286px (250px at 1200-1439) column, so each needs a
-     narrow-column pass -- all scoped to #wrPinned so the mobile/tablet layouts, where
-     these stay in .day-main, are untouched. Same 8px card rhythm #wrCards uses. */
-  #wrPinned > * { margin-bottom: 8px; }
-  #wrPinned > *:last-child { margin-bottom: 0; }
-  /* the Today/Fasting meters: two side-by-side progress bars measured at 111px each in
-     the rail (vs ~half a 900px column before) -- far too tight for a labelled bar, so
-     they stack instead. */
-  #wrPinned .dcx-meters { flex-direction: column; gap: 8px; padding: 0; border-bottom: none; }
-  #wrPinned .dcx-wrap { border: none; background: none; padding: 0; }
-  /* Plan-the-week's 7 day chips: a 7-across grid gives ~30px per chip here. Two rows of
-     four keeps every chip readable and still reads as one week block. */
-  #wrPinned .sun-week-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  /* Shopping (2026-08-24, "move to widget panel on RHS"): .shop-box's base rule is
-     `width: min(100%,380px); aspect-ratio: 1` -- a deliberate square for the wide
-     two-up layouts it used to sit in. .day-side already carried its own
-     `aspect-ratio:auto; width:100%` override for the same reason; #wrPinned needs the
-     equivalent or the card renders as a 380px square in a 286px column (measured).
-     Height follows the list's real length here instead. */
-  #wrPinned .shop-box { width: 100%; aspect-ratio: auto; }
+  /* 2026-08-24 ("the widgets become an icon rail"): #wrPinned is now the offstage
+     holding pen for the four real-element widgets (only display:none, see HTML
+     comment) -- whichever one is actually open lives in #wrPanelBody instead, so
+     that's the narrow-column pass's real target now. 250-286px before, 288px
+     content width in the panel (320px - 2×16px padding) now -- close enough that
+     the same numbers still read fine, verified live. */
+  #wrPanelBody .dcx-meters { flex-direction: column; gap: 8px; padding: 0; border-bottom: none; }
+  #wrPanelBody .dcx-wrap { border: none; background: none; padding: 0; }
+  #wrPanelBody .sun-week-chips { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Shopping: .shop-box's base rule is `width: min(100%,380px); aspect-ratio: 1` --
+     a deliberate square for the wide two-up layouts it used to sit in. Same
+     override the panel needs, or the card renders as a 380px square in a 288px
+     column. Height follows the list's real length here instead. */
+  #wrPanelBody .shop-box { width: 100%; aspect-ratio: auto; }
   .wr-card { position: relative; background: var(--raised); border-radius: var(--radius-md); padding: 12px 12px; margin-bottom: 8px; }
   .wr-grip { position: absolute; top: 9px; right: 9px; font-size: 11px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
   .wr-grip:active { cursor: grabbing; }
@@ -16043,6 +16010,67 @@
   .wr-dial-legend-name { flex: 1; min-width: 0; font-size: 11px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .wr-dial-legend-pct { flex: none; font-size: 11px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
   .wr-dial-legend-pct.dash { color: var(--ink-faint); font-weight: 600; }
+
+  /* 2026-08-24 ("the widgets become an icon rail"): #wrIconRail — one small
+     round button per widget (pinned + TILE_PREFS-managed, WR_PINNED_IDS then a
+     divider then WR_WIDGET_IDS in Arrange order), a hover/focus tooltip naming
+     it (reuses .num-hover-trigger/.wcard-hover-pop verbatim — same idiom every
+     other icon-with-a-name-on-hover in this file already uses), tap opens
+     #wrPanel with that ONE widget's full content. design44 spacing scale: 40px
+     button on a 56px rail (8px clearance each side), 4px gap between buttons. */
+  .wr-ic-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+  .wr-ic-btn {
+    position: relative; flex: none; width: 40px; height: 40px; border-radius: var(--radius-sm);
+    border: none; background: none; color: var(--ink-soft); font-size: 18px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .wr-ic-btn:hover, .wr-ic-btn:focus-visible, .wr-ic-btn.on { background: var(--raised); color: var(--margin-rule); }
+  .wr-ic-sep { flex: none; width: 28px; height: 1px; background: var(--note-line); margin: 6px 0; }
+  /* the tooltip opens LEFTWARD, not #wcard-hover-pop's usual below-left — this
+     rail sits flush against the viewport's right edge, so "below-left" would
+     routinely run off-screen on a narrow button; verified live. Compact single-
+     line label, not the full 230px info-card shape .wcard-hover-pop uses
+     elsewhere — this is just naming the icon, not showing content. */
+  .wr-ic-btn .wcard-hover-pop {
+    top: 50%; left: auto; right: calc(100% + 8px); transform: translateY(-50%);
+    width: auto; max-width: none; white-space: nowrap; padding: 6px 10px; font-size: 12px; font-weight: 700; color: var(--ink);
+  }
+  .wr-ic-arrange {
+    margin: 8px 0 0; flex: none; width: 32px; height: 32px; border-radius: 50%;
+    border: 1.5px dashed var(--note-line); background: none; color: var(--ink-faint);
+    font-size: 18px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .wr-ic-arrange:hover, .wr-ic-arrange[aria-expanded="true"] { border-color: var(--gold-bright); border-style: solid; color: var(--gold-bright); }
+  /* #wrPinned repurposed as the offstage holding pen for the four real-element
+     widgets when none of them is the open one — display:none is unconditional
+     now (was the always-visible pinned block; see the HTML comment). */
+  #wrPinned { display: none; }
+  /* #wrPanel — fixed overlay, floats to the LEFT of the (always 56px) icon rail
+     so both stay visible/clickable together; slides in via transform, not
+     layout, so it never reflows the timeline underneath it. Same idiom as
+     #dayRightDrawer (base rule off-screen, .open flips it, aria-hidden not
+     [hidden] carries the closed a11y state — a genuinely display:none panel
+     can't transition) rather than a new one-off. Deliberately does NOT close
+     on outside click (Linh's explicit rule) — only #wrPanelClose, re-clicking
+     the open icon, or Escape. */
+  .wr-panel {
+    position: fixed; top: 0; right: 56px; bottom: 0; width: 320px; max-width: calc(100vw - 56px);
+    background: var(--paper); border-left: 1px solid var(--note-line); box-shadow: -8px 0 24px rgba(0,0,0,.18);
+    z-index: 75; display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .18s ease;
+  }
+  .wr-panel.open { transform: translateX(0); }
+  .wr-panel-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border-bottom: 1px solid var(--note-line); }
+  .wr-panel-title { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); }
+  .wr-panel-close {
+    flex: none; width: 28px; height: 28px; border-radius: 999px; border: none; background: none;
+    color: var(--ink-faint); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .wr-panel-close:hover { background: var(--raised); color: var(--margin-rule); }
+  .wr-panel-body { flex: 1 1 auto; overflow-y: auto; padding: 16px; }
+  /* the grip only makes sense inside the old draggable card LIST — a panel shows
+     one widget at a time, nothing to reorder against, so it's just noise here. */
+  .wr-panel-body .wr-grip { display: none; }
 
   /* 2026-08-18 (Day-view top redesign, "keep its warm gold-tinted look"): the retired
      #tlAlldayRow .bday-ribbon banner's own background recipe, ported onto this card's
@@ -19537,27 +19565,34 @@
       <div id="deskColMain"></div>
       <div id="deskColRight"></div>
       <!-- 2026-08-15 (desktop DAY view build, §5): widget rail — 1-day only, ≥1200px.
-           Filled by renderDeskWidgetRail(); TILE_PREFS-driven order + visibility,
-           see that function's own comment. -->
+           2026-08-24 ("the widgets become an icon rail"): #wrIconRail replaces the
+           always-expanded card list -- one icon per widget (pinned + TILE_PREFS-
+           managed alike, see WR_PINNED_IDS/WR_WIDGET_IDS), tap opens #wrPanel
+           showing that ONE widget. #wrPinned survives as the offstage holding pen
+           for the four real-element widgets (#sunWeekAhead/#dayCtxWrap/
+           #modeAmbientRail/#shopSlot) when none of them is the open one -- see
+           renderWrPanel(). #wrCards is gone; #wrFallback (1024-1199px, a plain
+           always-expanded 2-up card block, out of scope for this brief) is
+           untouched and still built from the very same wrCardHtml() strings. -->
       <div id="deskWidgetRail">
-        <div class="wr-head">
-          <span class="wr-head-lbl">Today's widgets</span>
-          <button type="button" class="wr-arrange-btn" id="wrArrangeBtn">Arrange</button>
-        </div>
-        <!-- 2026-08-24 (Linh: "nothing above the calendar but the birthday"): the
-             pinned slot. #wrCards below has its innerHTML fully replaced on every
-             renderDeskWidgetRail(), so the real ELEMENTS moved down from .day-main
-             (#sunWeekAhead / #dayCtxWrap / #modeAmbientRail -- each has its own
-             renderer that does getElementById+innerHTML, so they can't be rebuilt as
-             wrCardHtml() strings without rewriting all three) live here instead,
-             where nothing rebuilds them. Reparented by placeDeskGrid() using the same
-             home-marker idiom #dayProgressHome/#fastStatusHome already use. -->
-        <div id="wrPinned"></div>
-        <div id="wrCards"></div>
+        <div class="wr-ic-rail" id="wrIconRail" aria-label="Today's widgets"></div>
+        <button type="button" class="wr-arrange-btn wr-ic-arrange" id="wrArrangeBtn" title="Arrange widgets" aria-label="Arrange widgets" aria-haspopup="true" aria-expanded="false">+</button>
+        <div id="wrPinned" hidden></div>
       </div>
     </div>
     <!-- 1024–1199px fallback: same cards, 2-up block under the grid (§6) -->
     <div id="wrFallback"></div>
+    <!-- 2026-08-24: the slide-out panel #wrIconRail opens into -- fixed overlay,
+         floats to the LEFT of the (fixed-width) icon rail, doesn't reflow the
+         timeline. Explicitly does NOT close on an outside click (Linh's rule) --
+         only #wrPanelClose, re-clicking the open icon, or Escape close it. -->
+    <div class="wr-panel" id="wrPanel" role="dialog" aria-label="Widget" aria-hidden="true">
+      <div class="wr-panel-head">
+        <span class="wr-panel-title" id="wrPanelTitle"></span>
+        <button type="button" class="wr-panel-close" id="wrPanelClose" aria-label="Close">✕</button>
+      </div>
+      <div class="wr-panel-body" id="wrPanelBody"></div>
+    </div>
     <div class="day-row2" id="dayRow2">
       <div id="tilesDate" class="tile-shelf">
         <div class="page-head">
@@ -44540,6 +44575,13 @@
           if (el && el.parentElement !== pinnedHost) pinnedHost.appendChild(el);
         });
       }
+      // 2026-08-24 ("the widgets become an icon rail"): renderWrPanel() runs LAST,
+      // after the block above -- at >=1200px it may pull ONE of these same four
+      // elements straight back out of #wrPinned into #wrPanelBody (whichever is
+      // currently open), which would otherwise be undone by the unconditional
+      // appendChild loop just above if the order were reversed. No-ops below
+      // 1200px (deskWidgetsActive() false), leaving the fallback block untouched.
+      renderWrPanel();
     } else {
       if (deskHead) {
         if (logo && logo.parentElement !== deskHead) deskHead.insertBefore(logo, deskHead.firstElementChild);
@@ -45228,6 +45270,25 @@
   // it is harmless (both rail surfaces iterate THIS list).
   const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunRoutines"];
   const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", biomechTip: "Biomechanics", sunWeekShape: "This week's shape", sunTodoByMode: "To-do, by Mode", sunRoutines: "Routines" };
+  // 2026-08-24 ("the widgets become an icon rail"): the four real-element
+  // widgets #wrPinned used to hold unconditionally (see placeDeskGrid()) are
+  // now icons too, fixed order, first in the rail — they're not TILE_PREFS-
+  // managed (no Arrange checkbox, never were), so they stay outside
+  // WR_WIDGET_IDS rather than getting new prefs invented for them.
+  const WR_PINNED_IDS = ["sunWeekAhead", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
+  const WR_PINNED_LABELS = { sunWeekAhead: "Plan the week ahead", dayCtxWrap: "Today & fasting", modeAmbientRail: "Mode", shopSlot: "Shopping" };
+  // one glyph per widget, pinned + TILE_PREFS-managed alike. biomechTip/
+  // streaksWidget/pileupBox/railPatients per Linh's own naming; the rest are a
+  // judgment call, grounded in the app's existing icon vocabulary where one
+  // already exists (🌸 is CYCLE_PHASE_INFO's own generic/fallback cycle icon —
+  // see renderDeskRail()'s cycCard; ↻ matches NAV_ITEMS' Routines icon exactly,
+  // since sunRoutines is that same destination's Sunday-review card).
+  const WR_ICONS = {
+    sunWeekAhead: "🧭", dayCtxWrap: "⏱", modeAmbientRail: "🎭", shopSlot: "🛒",
+    focusTile: "★", railCycle: "🌸", railPatients: "🩺", railTodo: "☑",
+    upkeepSuggest: "💡", upkeepDial: "🎯", pileupBox: "🧺", streaksWidget: "🔥",
+    boostWidget: "⚡", biomechTip: "🦴", sunWeekShape: "📊", sunTodoByMode: "🗂", sunRoutines: "↻",
+  };
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -45557,17 +45618,117 @@
   // Arrange visibility/order choices still apply on both surfaces), just
   // filtered per surface at the very end.
   function renderDeskWidgetRail() {
-    const deskMounts = ["wrCards", "wrFallback"].map(id => document.getElementById(id)).filter(Boolean);
+    // 2026-08-24: #wrCards is gone (icon rail + panel replaced it, see
+    // renderWrIconRail()/renderWrPanel() below) — #wrFallback (1024-1199px)
+    // keeps the old always-expanded card list verbatim, out of scope.
+    const fallbackMount = document.getElementById("wrFallback");
     const mobMount = document.getElementById("wrMobileCards");
-    if (!deskMounts.length && !mobMount) return;
+    if (!fallbackMount && !mobMount) return;
     const ordered = WR_WIDGET_IDS.slice()
       .sort((a, b) => ((TILE_PREFS[a] || {}).ord ?? 99) - ((TILE_PREFS[b] || {}).ord ?? 99))
       .filter(id => !(TILE_PREFS[id] || {}).hidden);
-    const deskHtml = ordered.filter(id => id !== "focusTile").map(wrCardHtml).join("");
-    deskMounts.forEach(el => { el.innerHTML = deskHtml; });
+    if (fallbackMount) fallbackMount.innerHTML = ordered.filter(id => id !== "focusTile").map(wrCardHtml).join("");
     if (mobMount) mobMount.innerHTML = ordered.map(wrCardHtml).join("");
+    renderWrIconRail(ordered.filter(id => id !== "focusTile"));
+    // every existing call site that re-renders this rail after a card-level
+    // mutation (a to-do tick, an accepted suggestion, a bio-tip rating, ...)
+    // must also refresh the open panel's content if that's the card showing —
+    // one call here covers all of them, rather than hunting down each site.
+    renderWrPanel();
     renderWrArrangePop();
   }
+  // Icon rail — WR_PINNED_IDS (fixed order, always shown) then a divider then
+  // the same TILE_PREFS-ordered/filtered id list #wrFallback's card list just
+  // used above (one data source, two displays, per Linh's own rule). A
+  // Sunday-only id (sunWeekShape/sunTodoByMode/sunRoutines) whose wrCardHtml()
+  // returns "" on today's viewed day simply gets no icon that day — same
+  // "empty string means don't render" contract wrCardHtml() already has, not a
+  // new rule. #sunWeekAhead is filtered the same way, by weekday, since it has
+  // no WR_WIDGET_IDS/wrCardHtml() entry to ask.
+  let wrOpenId = null;
+  function wrIconBtnHtml(id, label) {
+    const active = wrOpenId === id;
+    return `<button type="button" class="wr-ic-btn num-hover-trigger${active ? " on" : ""}" data-wr-open="${id}" aria-expanded="${active}" aria-label="${esc(label)}">
+      <span aria-hidden="true">${WR_ICONS[id] || "•"}</span>
+      <span class="wcard-hover-pop" role="tooltip">${esc(label)}</span>
+    </button>`;
+  }
+  function renderWrIconRail(cardOrdered) {
+    const rail = document.getElementById("wrIconRail");
+    if (!rail) return;
+    let html = "";
+    WR_PINNED_IDS.forEach(id => {
+      if (id === "sunWeekAhead" && dowIndex(state.anchor) !== 6) return;
+      html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
+    });
+    html += `<div class="wr-ic-sep" aria-hidden="true"></div>`;
+    cardOrdered.forEach(id => {
+      if (wrCardHtml(id) === "") return;
+      html += wrIconBtnHtml(id, WR_LABELS[id]);
+    });
+    rail.innerHTML = html;
+  }
+  // Panel — shows exactly ONE open widget's full content. Real-element ids
+  // (WR_PINNED_IDS) get their actual DOM node reparented in (same "the node
+  // moves, nothing rebuilds it" reasoning #wrPinned always used); string ids
+  // (WR_WIDGET_IDS) get a fresh wrCardHtml(id) string, same as the old card
+  // list always rendered. No-ops below 1200px — deskWidgetsActive() false means
+  // the four real elements are already correctly placed by placeDeskGrid()'s
+  // own #wrFallback/mobile branches, which this must never fight.
+  function renderWrPanel() {
+    const panel = document.getElementById("wrPanel");
+    const title = document.getElementById("wrPanelTitle");
+    const body = document.getElementById("wrPanelBody");
+    const offstage = document.getElementById("wrPinned");
+    if (!panel || !title || !body || !offstage) return;
+    if (!deskWidgetsActive()) { panel.classList.remove("open"); panel.setAttribute("aria-hidden", "true"); return; }
+    const pinnedEls = {};
+    WR_PINNED_IDS.forEach(id => { pinnedEls[id] = document.getElementById(id); });
+    // auto-close if the open id's content has gone empty for the CURRENTLY
+    // viewed day (a Sunday-only widget, left open while paging to another
+    // day) rather than showing a stale or blank panel.
+    if (wrOpenId === "sunWeekAhead" && dowIndex(state.anchor) !== 6) wrOpenId = null;
+    if (wrOpenId && !WR_PINNED_IDS.includes(wrOpenId) && wrCardHtml(wrOpenId) === "") wrOpenId = null;
+    if (!wrOpenId) {
+      panel.classList.remove("open");
+      panel.setAttribute("aria-hidden", "true");
+      Object.values(pinnedEls).forEach(el => { if (el && el.parentElement !== offstage) offstage.appendChild(el); });
+      return;
+    }
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    if (WR_PINNED_IDS.includes(wrOpenId)) {
+      title.textContent = WR_PINNED_LABELS[wrOpenId];
+      const el = pinnedEls[wrOpenId];
+      if (el && el.parentElement !== body) body.appendChild(el);
+      Object.entries(pinnedEls).forEach(([id, el]) => { if (id !== wrOpenId && el && el.parentElement !== offstage) offstage.appendChild(el); });
+    } else {
+      title.textContent = WR_LABELS[wrOpenId] || "";
+      Object.values(pinnedEls).forEach(el => { if (el && el.parentElement !== offstage) offstage.appendChild(el); });
+      body.innerHTML = wrCardHtml(wrOpenId) || "";
+    }
+  }
+  // renderDeskWidgetRail() itself calls renderWrPanel() (see its own comment),
+  // so a plain renderWrPanel() alone would be enough for open/close -- calling
+  // the outer function instead keeps the icon rail's own .on state in sync too
+  // (the just-opened/closed icon needs to repaint, not just the panel).
+  document.addEventListener("click", e => {
+    const openBtn = e.target.closest("[data-wr-open]");
+    if (openBtn) {
+      wrOpenId = wrOpenId === openBtn.dataset.wrOpen ? null : openBtn.dataset.wrOpen;
+      renderDeskWidgetRail();
+      return;
+    }
+    if (e.target.closest("#wrPanelClose")) {
+      wrOpenId = null;
+      renderDeskWidgetRail();
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !wrOpenId) return;
+    wrOpenId = null;
+    renderDeskWidgetRail();
+  });
   // Arrange popover — scoped to this rail, a visibility checkbox per widget
   // (§5's "Arrange adds/removes"). Not the general-purpose Arrange rewrite the
   // in-code "task #132" comment describes — only what this rail's own
