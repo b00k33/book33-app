@@ -14859,6 +14859,12 @@
   .vsw-menu button:hover { background: var(--desk-btn-bg); }
   .vsw-menu button[data-cur="true"] { color: var(--gold-bright); background: var(--desk-btn-bg); font-weight: 700; }
   .vsw-menu .k { font-size: 11px; color: var(--ink-faint); font-weight: 600; }
+  /* 2026-08-24 (top bar restructure, item 4): the "Day ▾" popover (#ddtDaysMenu)
+     reuses this SAME .vsw-menu shell for its 1/3/5/7 rows, but those are
+     .cal-days-btn, not [data-vsw-go] -- "selected" there is aria-pressed, painted by
+     the pre-existing renderCalDaysUI() (search it), not data-cur. Same gold-highlight
+     look as the rule just above, different attribute. */
+  .vsw-menu .cal-days-btn[aria-pressed="true"] { color: var(--gold-bright); background: var(--desk-btn-bg); font-weight: 700; }
 
   /* ============ ROUTINES SIDE EDITOR + desktop compactness (2026-08-06, Linh:
      "when I select a routine to edit, bring it to the side so I can edit directly
@@ -15684,8 +15690,15 @@
      chrome): --chrome-tint fill, no border-bottom -- the white calendar below is what
      draws this edge now, not a --note-line rule. Dark theme: --chrome-tint resolves
      to var(--paper) there, so dark keeps exactly the surface it had. */
+  /* 2026-08-24 (top bar restructure): was display:grid, 1fr auto 1fr -- true grid
+     centring existed to centre #ddhChips as its OWN column between two equal-width
+     side columns. That column is gone (chips moved inside .ddt-left, see its own
+     comment below); a plain flex row is simpler and correct at every width now, not
+     just the old <1280px fallback tier -- .ddt-left grows/shrinks to fill whatever
+     .ddt-right (fixed-width controls) doesn't need, same "one side flexes, one side
+     doesn't" idea the row's own children already use one level down. */
   [data-desk-day] #deskDayTopbar {
-    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 12px;
     height: 54px; padding: 0 16px;
     background: var(--chrome-tint); box-sizing: border-box;
   }
@@ -15695,8 +15708,12 @@
      its overflowing content past its own edge unless something clips it too. Needed
      once .ddt-allday (below) can hold real content; harmless before that since
      nothing in this row used to overflow it. */
-  .ddt-left { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; }
-  .ddt-right { display: flex; align-items: center; gap: 8px; min-width: 0; justify-content: flex-end; }
+  /* 2026-08-24 (top bar restructure): flex:1 1 auto added -- this is now the ONLY
+     child that grows, claiming every pixel .ddt-right's fixed-width controls don't
+     need, at every width (was a <1280px-only fallback; the grid-centring tier that
+     needed it is gone, see #deskDayTopbar's own comment above). */
+  .ddt-left { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; flex: 1 1 auto; }
+  .ddt-right { display: flex; align-items: center; gap: 8px; min-width: 0; flex: none; }
   /* the one column that's allowed to give way when space is short -- see
      renderDeskAllday() (JS) for what it holds and why. flex:1 1 auto (not the
      no-grow 0 0 auto every other .ddt-left child uses) is what makes THIS column
@@ -15706,22 +15723,6 @@
      #ddhChips off centre (measured without these three rules: 214px off-centre
      at 1920px -- see the STEP 1 finding this fix responds to). */
   .ddt-allday { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 6px; }
-  /* True centring costs symmetry: both side columns get the SAME width, so the narrow
-     desktop band pays for the right cluster being ~150px while the left needs ~410px.
-     Measured at 1024: the left column landed at 294px and squeezed #ddtDate down to 15px
-     — "S…", which is worse than no date at all. Below 1280 the bar therefore falls back
-     to a flex row: the left cluster takes its natural width and the chips centre inside
-     whatever is left. Near-centre and fully legible beats dead-centre and truncated
-     (design44 §8 — density is a wide-screen gain, not something to force narrow). */
-  @media (max-width: 1279px) {
-    [data-desk-day] #deskDayTopbar { display: flex; }
-    .ddt-left { flex: 0 0 auto; }
-    .ddh-chips { flex: 1 1 auto; }
-    .ddt-right { flex: 0 0 auto; }
-    /* 2026-08-24: the "chapters rail OPEN squeezes the chips" case this used to guard
-       against is gone — the rail is a permanent 52px strip now, never 238px, so the
-       chips always have the same ~750px+ to work with at this width. Rule retired. */
-  }
   /* the gear popover anchors off its button's parent, which is now this cluster rather
      than the whole bar — the bar's own 16px padding already provides that inset. */
   .ddt-right .ddt-gear-pop { right: 0; }
@@ -15731,23 +15732,27 @@
      already shipped on the desktop top bar. One declaration, two surfaces, no drift.
      `display` is deliberately not set here: each surface owns its own show/hide gate. */
   .ddt-word, .nav-drawer-word { flex: none; font-size: 13px; font-weight: 800; letter-spacing: 1.4px; color: var(--gold-bright); }
-  /* 2026-08-16: the WORD "Today" is the jump-to-today control now — the separate
-     right-hand .ddt-today-btn pill is gone (Linh's mockup). A real <button> so it keeps
-     focus and a hit area, painted as plain heading text so the bar still reads as a
-     title, gold on hover to advertise that it's live. */
+  /* 2026-08-24 (top bar restructure, item 1): was plain heading text (the WORD
+     "Today" itself read as the bar's title, gold on hover to advertise it was live) --
+     now an outlined pill moved before the arrows, so it reads as a distinct jump-to-
+     today CONTROL. #ddtDate takes over as the headline instead (its own comment
+     below) -- "two gold things at the same size were fighting each other." Same
+     outline-pill recipe as .vsw-btn (the Day▾ dropdown beside it, and the Day/Week/
+     Month switcher elsewhere) so every pill button in this bar reads as one family,
+     just smaller -- this sits among 24px arrows, not other 44px pills. */
   .ddt-title {
-    flex: none; border: none; background: none; padding: 0; font: inherit;
-    font-size: 20px; font-weight: 800; color: var(--ink); cursor: pointer; white-space: nowrap;
+    flex: none; border: 1px solid var(--desk-hair); background: var(--desk-btn-bg); border-radius: 999px;
+    padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 700; color: var(--ink-soft); cursor: pointer; white-space: nowrap;
   }
-  .ddt-title:hover { color: var(--gold-bright); }
-  /* 2026-08-17 (Linh's mockup, "date goes bolder AND gold"): was --ink-soft/600 --
-     the same muted weight as every other secondary label. Promoted to match .ddt-title's
-     own 800 weight and read in the gold token so it sits with the wordmark/Today as a
-     confident header line rather than a caption. */
-  /* 2026-08-24: flex:none, was 0 1 auto -- the date is never what gives way when the
-     row runs short on space now that .ddt-allday can hold real content beside it; see
-     .ddt-allday's own comment above for the shrink-rule trio this is one third of. */
-  .ddt-date { flex: none; min-width: 0; font-size: 11px; font-weight: 800; color: var(--gold-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ddt-title:hover { color: var(--gold-bright); border-color: var(--gold-bright); }
+  /* 2026-08-24 (top bar restructure, item 1): #ddtDate is the bar's headline now --
+     was 11px/800/gold, a caption-weight label promoted bold-and-gold in an earlier
+     pass. Gold is the wordmark's job; two gold things at the same size fight each
+     other. ~19px regular weight, neutral --ink -- the single biggest, most confident
+     element in the row, GCal's own date-headline treatment. flex:none unchanged --
+     still never what gives way when the row runs short (.ddt-allday absorbs that,
+     see its own comment above). */
+  .ddt-date { flex: none; min-width: 0; font-size: 19px; font-weight: 400; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): the header's own
      compact chip -- same .ad-chip.tl-item/.ad-chip-ic/.ad-chip-t component #dayAlldayRow
      already uses (renderDeskAllday(), JS), just re-sized for a 54px bar instead of
@@ -15780,26 +15785,32 @@
      identical scale, just stacked instead of inline. */
   .ddt-allday-pop { display: flex; flex-direction: column; gap: 6px; width: 220px; }
   .ddt-allday-pop .ad-chip.tl-item { max-width: 100%; }
-  /* 2026-08-17 (Linh's mockup, "‹ Today ›"): .ddt-nav now wraps prev/title/next (was
-     just the two arrows, right-aligned in .ddt-right -- see the markup comment above
-     #deskDayTopbar). Class/gap unchanged; only what it contains moved. */
-  .ddt-nav { flex: none; display: flex; align-items: center; gap: 4px; }
+  /* 2026-08-24 (top bar restructure): .ddt-nav now wraps Today/prev/next (was prev/
+     title/next -- Linh's mockup moves the Today pill BEFORE the arrows, which now
+     group together after it). gap bumped 4px -> 8px: the arrows used to sit flush
+     against plain heading text; #ddtTitle is a bordered pill now and needs a little
+     air beside it. */
+  .ddt-nav { flex: none; display: flex; align-items: center; gap: 8px; }
   /* Bare chevrons, not the old filled 32px button box (background: var(--raised) was
      always-on before) -- the round highlight now lives only on :hover/:active, fading
      in via the transition, so the box reads as empty until she's actually pointing at
-     it. 17px = ~0.85x .ddt-title's 20px, per her mockup's sizing note. */
+     it. */
   .ddt-arrow {
     flex: none; width: 24px; height: 24px; border-radius: 999px; border: none; background: transparent;
     color: var(--ink-faint); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: background-color .15s ease, color .15s ease;
   }
   .ddt-arrow:hover, .ddt-arrow:active { color: var(--gold-bright); background: var(--raised); }
-  .ddt-days { flex: none; display: flex; align-items: center; background: var(--field-bg); border-radius: 999px; padding: 4px; }
-  .ddt-day-btn {
-    min-width: 28px; height: 28px; padding: 0 8px; border: none; background: none; color: var(--ink-soft);
-    font: inherit; font-size: 11px; font-weight: 700; border-radius: 999px; cursor: pointer;
-  }
-  .ddt-day-btn.on { background: var(--margin-rule); color: var(--accent-on); }
+  /* 2026-08-24 (top bar restructure, item 4): the old inline 1/3/5/7 segmented
+     control (.ddt-days/.ddt-day-btn) is retired -- replaced by the "Day ▾" popover
+     pill in .ddt-right (markup + its own comment above #deskDayTopbar), which reuses
+     .vsw-btn/.vsw-menu (search closeVswMenus()) for its chrome instead of a bespoke
+     component. */
+  /* 2026-08-24: sized to match the other controls in this bar (.ddt-title/.ddt-gear
+     are both 32px-tall) -- .vsw-btn's own default (44px, tuned for #deskDateCard's
+     roomier row) would read oversized here. Same scoped-override idiom
+     #deskDateCard .vsw-btn already uses for its own context, just this bar's numbers. */
+  .ddt-right .vsw-btn { min-height: 32px; padding: 0 12px; font-size: 12px; }
   /* 2026-08-16 (Linh: "remove hide names, doesn't serve a purpose"): the
      .ddt-hide-names button + its pressed state are gone. It was built as part of
      the desktop widget-rail spec's privacy toggle; she never wanted it. The
@@ -15808,6 +15819,11 @@
     flex: none; width: 32px; height: 32px; border-radius: 999px; border: none; background: none;
     color: var(--gold-bright); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
+  /* 2026-08-24 (top bar restructure, item 5): drawn moon/gear (B33_ICONS) replace the
+     emoji -- .b33-ic's own default (26px, tuned for the 38px rail hit areas) is too
+     big for this bar's 32px buttons; sized down, same scoped-override idiom
+     .wr-ic-arrange .b33-ic uses for the same reason (search it). */
+  .ddt-gear .b33-ic { width: 18px; height: 18px; }
   .ddt-gear:hover { background: var(--raised); }
 
   /* ---- 3. Calendar sidebar — 214px, every desktop day count. Collapses to a
@@ -15923,16 +15939,44 @@
      are deleted rather than hidden (nothing else referenced them); the ddh-* names stay
      because the top bar IS the day header now, and renaming ~10 sites for cosmetics is
      churn with no payoff. Earlier note here said "the date printed TWICE" — that was
-     true of the two-row layout and no longer applies: it prints once, up top. ---- */
-  .ddh-chips { display: flex; align-items: center; gap: 8px; justify-content: center; min-width: 0; }
-  /* pill radius, not --radius-sm: at 54px these read as the same family as .ddt-day-btn
-     and the all-day pills beside them (design44 §6, one chip everywhere). */
+     true of the two-row layout and no longer applies: it prints once, up top. ----
+     2026-08-24 (top bar restructure): moved from a centred grid column into a plain
+     .ddt-left child (search #deskDayTopbar's own comment) -- justify-content:center
+     dropped along with that (nothing to centre inside any more; flex:none is enough,
+     .ddt-allday right after it is still the column that absorbs shrink pressure). */
+  .ddh-chips { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
+  /* pill radius, not --radius-sm: at 54px these read as the same family as the all-day
+     pills beside them (design44 §6, one chip everywhere). ONE shared shape for the
+     week-number/birthday/cycle trio (2026-08-24, "the main visual fix" -- they used to
+     be three unrelated components: a dark-brown stacked .ad-chip.tl-item, a plain-grey
+     pill, and nothing for the week at all). [data-chip] is the only thing that varies
+     per chip -- a soft ~15% wash of --chip-tint for the background (rule further down,
+     shared with the mobile .dcx-chip), quiet ungraded --raised/--ink-soft for the one
+     chip (week) that isn't making a colour claim. */
   .ddh-chip {
     display: inline-flex; align-items: center; gap: 4px; background: var(--raised); border-radius: 999px;
     padding: 4px 12px; font-size: 11px; font-weight: 600; color: var(--ink-soft); white-space: nowrap;
+    cursor: default;
   }
+  .ddh-chip[data-bday-person] { cursor: pointer; }
+  .ddh-chip[data-cd-log] { cursor: pointer; }
   .ddh-chip .glyph, .ddh-chip .moon { font-size: 13px; }
+  .ddh-chip-ic { font-size: 12px; line-height: 1; flex: none; }
+  /* "a long name truncates rather than pushing the bar around" (2026-08-24 brief) --
+     .ddh-chip itself isn't a flex context the label can shrink inside (its icon+label
+     children are both natural-width by default), so the bound lives on the chip
+     (max-width) and the label span truncates inside it -- same idea as
+     .ddt-allday .ad-chip.tl-item's own max-width a few hundred lines up, just for a
+     name instead of an event title. */
+  .ddh-chip-bday { max-width: 160px; }
+  .ddh-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ddh-chip-gold { color: var(--gold-bright); font-weight: 700; }
+  /* "a darker version of that hue for text" (2026-08-24 brief) -- the raw --flow-med
+     token is a saturated red, tuned for a small dot/bar accent, not body-weight chip
+     text; mixed toward --ink so it stays legible on the pale wash above rather than
+     shouting. .ddh-chip-gold (birthday, above) already IS that "darker gold" -- it's
+     the app's own existing text-gold token, no mixing needed there. */
+  .ddh-chip[data-chip="cycle"] { color: color-mix(in oklab, var(--flow-med) 65%, var(--ink) 35%); }
   .ddh-cycle-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
 
   /* ---- 4.2 Meters row — reuses .dcx-wrap/.dcx-meters/meterHtml() verbatim (the
@@ -16720,7 +16764,9 @@
     border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 4px 8px;
   }
   /* on/off pill for the full-width-calendar row (2026-08-16). Same pressed treatment as
-     .ddt-day-btn.on beside it in the top bar, so "selected" reads identically. */
+     .cal-days-btn[aria-pressed="true"] beside it in the top bar's own Day▾ popover
+     (2026-08-24: was .ddt-day-btn.on, retired with the old inline segmented control),
+     so "selected" reads identically. */
   .ddt-gear-toggle {
     flex: none; border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft);
     font: inherit; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 4px 12px; cursor: pointer;
@@ -20116,40 +20162,66 @@
          on this page at the desktop 1-day breakpoint (see [data-desk-day1] .nav-tiers
          {display:none} in CSS). Filled by renderDeskDayTopbar(). -->
     <!-- 2026-08-16 (Linh's approved top-row mockup): ONE row is the whole day header now.
-         LEFT   wordmark · 1/3/5/7 · ‹ Today › · the date.
-         CENTRE the context chips, lifted out of the retired #deskDayHeader row below.
-         RIGHT  day/night · settings. ⤢ full-width moved INTO the ⚙ popover so this
-                cluster stays the controls she asked for without stranding the
-                book33-prefs.dayMax pref with no way to switch it back off.
-         2026-08-17 (Linh's mockup, "arrows flank Today"): #ddtPrev/#ddtNext moved from
-         .ddt-right's own .ddt-nav into this one, either side of #ddtTitle — same ids,
-         same click handlers (attached once, by id, order-independent), only their DOM
-         position changed. .ddt-right is now just the two theme/settings buttons.
+         2026-08-24 (GCal-style top bar restructure): re-ordered per Linh's mockup --
+         LEFT  wordmark · Today (pill) · ‹ › · the date (now the headline) · Week NN ·
+               birthday chip · cycle chip -- all one left-aligned cluster, chips included
+               (was a separate centred #ddhChips column; #ddhChips is now just another
+               .ddt-left child, see .ddh-chips' own CSS comment for the layout change).
+         RIGHT Day▾ (replaces the old 1/3/5/7 segmented control) · day/night · settings.
+         #ddtTitle moved BEFORE the arrows (was between them) and is an outlined pill now,
+         not plain heading text -- #ddtDate takes over as the bar's biggest, boldest
+         element instead (see both elements' own CSS comments for why: two gold things
+         at the same size were fighting each other).
          2026-08-24 ("the ALL DAY band folds into the Today row"): #ddtAllday, filled by
          renderDeskAllday() (JS, called from renderDeskDayTopbar()), replaces #dayAlldayRow
          at this breakpoint only -- see its own build comment for the full brief. Static
          aria-label carries the "ALL DAY" meaning for a screen reader now that the visible
          gutter label is gone; the chips (or the count button, at the narrower tiers)
-         carry it visually instead. -->
+         carry it visually instead. Birthdays no longer render here (moved to #ddhChips,
+         see renderDeskAllday()'s own comment) -- this now only ever holds OTHER all-day
+         items (routines, closed days). -->
     <div id="deskDayTopbar">
       <span class="ddt-left">
         <span class="ddt-word">BOOK33</span>
-        <span class="ddt-days" id="ddtDays"></span>
         <span class="ddt-nav">
-          <button type="button" class="ddt-arrow" id="ddtPrev" aria-label="Previous day">‹</button>
           <button type="button" class="ddt-title" id="ddtTitle" title="Jump to today">Today</button>
+          <button type="button" class="ddt-arrow" id="ddtPrev" aria-label="Previous day">‹</button>
           <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
         </span>
         <span class="ddt-date" id="ddtDate"></span>
+        <span class="ddh-chips" id="ddhChips"></span>
         <span class="ddt-allday" id="ddtAllday" aria-label="All day"></span>
       </span>
-      <span class="ddh-chips" id="ddhChips"></span>
       <span class="ddt-right">
+        <!-- 2026-08-24: "Day ▾" -- replaces the old inline 1/3/5/7 segmented control
+             (.ddt-day-btn row) with a single popover pill, GCal's own view-switcher spot.
+             Reuses the app's EXISTING .vsw-btn/.vsw-menu/.k popover chrome (search
+             closeVswMenus()) for the shell -- this is a sibling popover, not that one
+             (Day/Week/Month is a different axis from 1/3/5/7-day count), so it gets its
+             own [data-cdp-toggle] open/close pair, but every row still carries the SAME
+             data-cal-days + .cal-days-btn the mobile sheet's picker already uses, so the
+             existing document-level [data-cal-days] delegate drives the actual change --
+             no second copy of that logic. #ddtDaysBtn's label is set live in
+             renderDeskDayTopbar() (search calDaysDropdownLabel); aria-pressed (and so
+             which row reads "selected") is painted by the existing renderCalDaysUI(),
+             which already queries EVERY .cal-days-btn in the document, these included. -->
+        <span class="view-switch cdp-switch" id="ddtDays">
+          <button type="button" class="vsw-btn" data-cdp-toggle aria-haspopup="true" aria-expanded="false" id="ddtDaysBtn">Day <span class="dv">▾</span></button>
+          <div class="vsw-menu" id="ddtDaysMenu" hidden>
+            <button type="button" class="cal-days-btn" data-cal-days="1" aria-label="1 day">Day <span class="k">1</span></button>
+            <button type="button" class="cal-days-btn" data-cal-days="3" aria-label="3 days">3 days <span class="k">3</span></button>
+            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="5 days">5 days <span class="k">5</span></button>
+            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="7 days">Week <span class="k">7</span></button>
+          </div>
+        </span>
         <!-- 2026-08-16: day/night had NO visible switch at this breakpoint — both existing
              controls sit in containers this layout hides ([data-desk-day1] .nav-tiers, which
              parents .theme-toggle, and #deskColLeft, which parents #deskToolMoon). This is a
              proxy for #themeToggle, not a second implementation: all theme logic stays in
-             B33Theme. Reuses .ddt-gear's box so it matches the ⚙ beside it, no new CSS. -->
+             B33Theme. Reuses .ddt-gear's box so it matches the ⚙ beside it, no new CSS.
+             2026-08-24: emoji swapped for the drawn B33_ICONS moon/gear (idempotent swap in
+             renderDeskDayTopbar(), same pattern as the widget-rail arrange button) -- aria-
+             label/title/behaviour all untouched, only what's inside the button changed. -->
         <button type="button" class="ddt-gear ddt-theme" id="ddtTheme"
                 aria-label="Day / night mode" title="Day / night">🌙</button>
         <button type="button" class="ddt-gear" id="ddtGear" aria-label="Settings" title="Settings">⚙</button>
@@ -46148,10 +46220,20 @@
      DAY TOP BAR — 54px, desktop 1-day only. Reuses the existing #prevDay/
      #nextDay/#todayPill click listeners (simulated clicks) rather than a
      second copy of the day-navigation logic. ============================================================ */
+  // "Day"/"3 days"/"5 days"/"Week" -- the new #ddtDaysBtn pill's own label, read live
+  // off calDaysActive() (never a static word) so it can never drift from the real
+  // PREFS.calDays state the [data-cal-days] delegate is driving.
+  function calDaysDropdownLabel(n) {
+    return n === 1 ? "Day" : n === 7 ? "Week" : `${n} days`;
+  }
   function renderDeskDayTopbar() {
     const d = state.anchor;
+    // 2026-08-24 (top bar restructure): #ddtTitle is a plain "Today" pill now, always --
+    // the old calDaysActive()===1 ? "Today" : "Calendar" swap is gone along with it,
+    // since the day-count no longer has anything to do with this control (that's
+    // #ddtDaysBtn's job below). Still the jump-to-today control, unchanged.
     const titleEl = document.getElementById("ddtTitle");
-    if (titleEl) titleEl.textContent = calDaysActive() === 1 ? "Today" : "Calendar";
+    if (titleEl) titleEl.textContent = "Today";
     const dateEl = document.getElementById("ddtDate");
     // 2026-08-16: this was hidden until the mockup brought it back beside "Today", and
     // the mockup reads "Friday, 14 August" — no year. Kept for any year that ISN'T the
@@ -46160,42 +46242,34 @@
       const yr = d.getFullYear() === TODAY.getFullYear() ? "" : ` ${d.getFullYear()}`;
       dateEl.textContent = `${WD_FULL[dowIndex(d)]}, ${d.getDate()} ${MONTHS[d.getMonth()]}${yr}`;
     }
-    const daysEl = document.getElementById("ddtDays");
-    // 2026-08-15: the source spec's segmented control reads "1 3 6 7" — a
-    // transcription slip against every other day-count control in this file
-    // (§1's own 1/3/5/7-day build, PREFS.calDays' real supported values); there
-    // is no 6-day view anywhere in this app, so this uses the real set instead
-    // of introducing one. Clicking a non-1 value here saves PREFS.calDays for
-    // when the separate multi-day-desktop build lands — calDaysActive() itself
-    // hardcodes 1 at every desktop width today (see its own comment), so no
-    // visible change yet; that's expected, not a bug.
-    if (daysEl) {
-      daysEl.innerHTML = [1, 3, 5, 7].map(n => `<button type="button" class="ddt-day-btn" data-ddt-days="${n}">${n}</button>`).join("");
-      daysEl.querySelectorAll("[data-ddt-days]").forEach(b => {
-        b.classList.toggle("on", calDaysActive() === parseInt(b.dataset.ddtDays, 10));
-      });
-    }
+    // 2026-08-24: the old inline .ddt-day-btn fill (1/3/5/7 segmented control) is gone,
+    // replaced by the static "Day ▾" popover markup above -- only its dynamic LABEL
+    // needs painting here now. Which row reads "selected" inside the popover is handled
+    // by the existing renderCalDaysUI() (called at the end of renderDay(), search it),
+    // which already syncs aria-pressed on every .cal-days-btn in the document -- these
+    // rows included, for free, same mechanism the mobile sheet's copy already rides.
+    const daysBtn = document.getElementById("ddtDaysBtn");
+    if (daysBtn) daysBtn.innerHTML = `${calDaysDropdownLabel(calDaysActive())} <span class="dv">▾</span>`;
+    // 2026-08-24: drawn moon/gear (B33_ICONS, search b33IconSvg) replace the emoji --
+    // idempotent swap (only runs once; a real render never rebuilds a static button's
+    // insides on every pass), same pattern renderWrIconRail() uses for the arrange "+".
+    const themeBtn = document.getElementById("ddtTheme");
+    if (themeBtn && !themeBtn.querySelector(".b33-ic")) themeBtn.innerHTML = b33IconSvg("moon");
+    const gearBtn = document.getElementById("ddtGear");
+    if (gearBtn && !gearBtn.querySelector(".b33-ic")) gearBtn.innerHTML = b33IconSvg("gear");
     // 2026-08-24 ("the ALL DAY band folds into the Today row"): after dateEl's own
     // text is set above, never before -- renderDeskAllday() measures dateEl's real
     // rendered width to decide its own tier (see its comment), so the date has to be
     // painted with its final text first.
     renderDeskAllday();
   }
-  // 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): a compact,
-  // desktop-day1-only presentation of an all-day item for the header. Can't just call
-  // alldayChipHtml(e, false) for a birthday -- that builds the full celebration ribbon
-  // (icon, name, "turns N", Message/Gift buttons; renderDayAlldayRow()'s own 2026-08-24
-  // comment explains why it exists), which doesn't fit a 54px bar. Non-birthday items
-  // DO reuse alldayChipHtml() as-is, unmodified -- "keep the chips as chips: same
-  // .ad-chip classes, same data-tl-detail, same --cat-c fill cascade" is most exactly
-  // true when it's literally the same function output, not a close copy.
-  function ddtAlldayChipHtml(e) {
-    if (e.category !== "Birthdays") return alldayChipHtml(e, false);
-    const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
-    const bdTitle = e.note ? `${e.title} — ${e.note}` : e.title;
-    const ic = e.icon ? `<span class="ad-chip-ic">${e.icon}</span>` : `<span class="ad-chip-ic">🎂</span>`;
-    return `<span class="ad-chip tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${ic}<span class="ad-chip-t">${esc(e.title)}</span></span>`;
-  }
+  // 2026-08-24 (top bar restructure): birthdays no longer pass through here -- they
+  // moved into the #ddhChips cluster (renderDeskDayHeader(), the "🎂 name · age" pill
+  // beside the cycle chip), which is why the birthday-specific branch this function
+  // used to need (the full "name turns N" sentence, icon stacked over the label -- it
+  // was a .tl-item, inheriting that class's timeline-block flex-direction:column,
+  // confirmed live) is gone: alldayChipHtml(e, false) unmodified is now correct for
+  // every item that reaches #ddtAllday, since none of them are ever a birthday.
   // Replaces #dayAlldayRow at this breakpoint -- see renderDayAlldayRow()'s own
   // deskDay1Active() guard for the other half of that trade. Self-computes via
   // alldayItemsFor(state.anchor) rather than reusing renderDay()'s own locals --
@@ -46209,8 +46283,8 @@
     const host = document.getElementById("ddtAllday");
     if (!host) return;
     if (calDaysActive() > 1) { host.innerHTML = ""; return; }   // #mdAlldayRow's own job, untouched
-    const { bdays, others } = alldayItemsFor(state.anchor);
-    const items = [...bdays, ...others];
+    const { others } = alldayItemsFor(state.anchor);
+    const items = others;
     if (!items.length) { host.innerHTML = ""; return; }
     // same seeding renderDayAlldayRow() does for the mobile/tablet row (fix E1) -- a
     // chip whose id never reaches TL_ITEMS_BY_ID opens nothing when tapped.
@@ -46219,12 +46293,12 @@
     // screen reader on its own -- aria-label states what it opens, per STEP 3.
     const moreBtn = (label, ariaLabel, list) => `<span class="num-hover-trigger ddt-allday-more">
         <button type="button" class="ddt-allday-more-btn" aria-label="${esc(ariaLabel)}">${label}</button>
-        <div class="wcard-hover-pop ddt-allday-pop">${list.map(ddtAlldayChipHtml).join("")}</div>
+        <div class="wcard-hover-pop ddt-allday-pop">${list.map(e => alldayChipHtml(e, false)).join("")}</div>
       </span>`;
     const rest = items.length - 1;
     // tier 1: one chip, plus a count for everything else (only when there IS anything
     // else -- a single item never needs a "+0 more").
-    host.innerHTML = ddtAlldayChipHtml(items[0])
+    host.innerHTML = alldayChipHtml(items[0], false)
       + (rest > 0 ? moreBtn(`+${rest} more`, `${rest} more all-day item${rest === 1 ? "" : "s"} — open the list`, items.slice(1)) : "");
     // measure, don't assume: the actual fit point depends on real content (title
     // length, date string length), not a fixed breakpoint -- paint tier 1, then check
@@ -46242,7 +46316,7 @@
       // tier 2: even one chip doesn't fit -- bare emoji + TOTAL count (nothing is
       // individually shown at this tier, so the count covers every item, not just the
       // hidden remainder), still a real button opening the full list.
-      const ic0 = items[0].icon || (items[0].category === "Birthdays" ? "🎂" : "📌");
+      const ic0 = items[0].icon || "📌";
       host.innerHTML = moreBtn(`${ic0} ${items.length}`, `${items.length} all-day items — open the list`, items);
       if (leftEl.scrollWidth > leftEl.clientWidth) {
         // tier 3: the date still doesn't fit even bare -- keep the date, drop the
@@ -46256,17 +46330,50 @@
   document.getElementById("ddtTitle")?.addEventListener("click", () => document.getElementById("todayPill")?.click());
   document.getElementById("ddtPrev")?.addEventListener("click", () => document.getElementById("prevDay")?.click());
   document.getElementById("ddtNext")?.addEventListener("click", () => document.getElementById("nextDay")?.click());
-  // 2026-08-16 (desktop multi-day build): was renderDeskDayTopbar() only, harmless
-  // while calDaysActive() hardcoded 1 at desktop (the picker's OWN label was the
-  // only thing that could ever change). Now that desktop honours the real count,
-  // a plain topbar repaint left data-desk-day1/#deskGrid/#multiDayWrap all on their
-  // stale 1-day layout — full renderDay(), the same call the mobile/inline
-  // [data-cal-days] delegate already makes, so this and that stay one mechanism.
-  document.getElementById("ddtDays")?.addEventListener("click", e => {
-    const btn = e.target.closest("[data-ddt-days]");
-    if (!btn) return;
-    const n = parseInt(btn.dataset.ddtDays, 10);
-    if (!n || PREFS.calDays === n) return;
+  // 2026-08-24 (top bar restructure): "Day ▾" popover open/close ONLY -- the actual
+  // day-count change is the pre-existing document-level [data-cal-days] delegate
+  // (search it, a few hundred lines up), which every .cal-days-btn in this file has
+  // always gone through (the mobile ⚙ sheet's copy, the old inline segmented control
+  // this one replaces) and already calls the full renderDay() the desktop grid needs
+  // (see that delegate's own comment) -- so this stays one mechanism, this block just
+  // owns showing/hiding the menu around it, same idiom as closeVswMenus() above.
+  function closeCdpMenu() {
+    const m = document.getElementById("ddtDaysMenu");
+    if (m) m.hidden = true;
+    document.getElementById("ddtDaysBtn")?.setAttribute("aria-expanded", "false");
+  }
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-cdp-toggle]")) {
+      e.stopPropagation();
+      const m = document.getElementById("ddtDaysMenu");
+      const wasClosed = m && m.hidden;
+      closeCdpMenu();
+      if (m && wasClosed) { m.hidden = false; document.getElementById("ddtDaysBtn")?.setAttribute("aria-expanded", "true"); }
+      return;
+    }
+    // a row tap closes the menu -- the [data-cal-days] delegate elsewhere makes the
+    // actual change and re-renders, but nothing else would ever hide this popover
+    // again since its markup is static now (not rebuilt fresh-and-hidden per render
+    // the way the old segmented control's innerHTML was).
+    if (e.target.closest("#ddtDaysMenu [data-cal-days]")) { closeCdpMenu(); return; }
+    if (!e.target.closest("#ddtDays")) closeCdpMenu();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeCdpMenu(); });
+  // 1 / 3 / 5 / 7 switch the day count from the keyboard, GCal parity with the D/W/M
+  // handler above -- checked first for an existing binding on these four keys (none
+  // found) before adding this. Day-view only (day-count is meaningless in Week/Month),
+  // same typing-field guard as D/W/M so it never hijacks a real digit being typed
+  // into a form. Inlines the exact same PREFS.calDays/savePrefs/renderDay() triple the
+  // [data-cal-days] delegate uses rather than simulating a click on a row that may not
+  // even be in the DOM/open right now.
+  document.addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || e.target.isContentEditable) return;
+    if (state.view !== "day") return;
+    if (!["1", "3", "5", "7"].includes(e.key)) return;
+    const n = parseInt(e.key, 10);
+    if (PREFS.calDays === n) return;
     PREFS.calDays = n;
     savePrefs();
     renderDay();
@@ -46359,14 +46466,19 @@
   });
 
   /* ============================================================
-     DAY HEADER — date + context chip strip (moon / sun sign / cycle), desktop
-     1-day only (§4.1). Deliberately its OWN reading rather than reusing
+     DAY HEADER — date + context chip strip (week number / birthday / cycle),
+     desktop 1-day only (§4.1). Deliberately its OWN reading rather than reusing
      dcxChipsHtml() — that mobile strip shows the day-RULER planet + birthdays,
      this spec explicitly wants the sun SIGN instead, styled as flat raised
      chips rather than pills — but every data read (moonIndex/astroFor/
      cycleQuickInfo/Book33CD.info) is the SAME shared function every other
      cosmic chip in this app already calls, and the moon/glyph markup reuses
      moonHtml()/glyphHtml() (§8 icon language) rather than hand-rolled CSS.
+     2026-08-24 (top bar restructure, "the main visual fix"): week-number and
+     birthday chips join the cycle chip here -- ONE shared pill system now
+     (.ddh-chip base, [data-chip] for the soft-tint wash, same as before), not
+     three visually unrelated components. See each chip's own comment below for
+     why it reads TODAY vs state.anchor -- that split is deliberate, not drift.
      ============================================================ */
   function renderDeskDayHeader() {
     const d = state.anchor;
@@ -46377,8 +46489,34 @@
     // 2026-08-23 (Numerology card rework): the planet/moon/sign pills that used to
     // live here moved into the Numerology card below the calendar (dayNumerologyChips()/
     // renderDeskRail()) -- same data calls, just read from there now, not rebuilt here.
-    // Only the cycle/CD chip stays in this strip.
     const chips = [];
+    // week-number, first in the cluster -- isoWeekNumber() (existing, already used by
+    // the Week page eyebrow and the month grid's week column) is reused verbatim so
+    // this chip can never disagree with either of those. No data-chip/--chip-tint --
+    // deliberately the plain .ddh-chip base (quiet grey), the one chip here that ISN'T
+    // making a colour claim.
+    chips.push(`<span class="ddh-chip">Week ${isoWeekNumber(d)}</span>`);
+    // birthday -- state.anchor, the day being VIEWED, same as #dayAlldayRow and the
+    // mobile dcxChipsHtml() birthday chip: a property of whichever day she's browsing,
+    // paging to a future day should show THAT day's birthday. This is the deliberate
+    // OPPOSITE of the cycle chip below (reads TODAY) -- "a live fact about today" vs
+    // "a property of the viewed day" are different kinds of fact on purpose; don't
+    // make the two consistent with each other. Compact "name · age" only (the full
+    // "X turns N" sentence stays on the #ddtAllday chip/widget-rail card below -- this
+    // is a summary, not a replacement, both showing is intentional). Tap reuses the
+    // EXISTING document-level [data-bday-person] delegate, same as every other
+    // birthday surface in this app -- no second handler.
+    const bdays = birthdaysOn(d);
+    if (bdays.length) {
+      const b0 = bdays[0];
+      const age = b0.year ? d.getFullYear() - b0.year : null;
+      const fullTitle = `${b0.name}${age !== null ? (b0.milestone ? ` — ${age} year${age === 1 ? "" : "s"}` : ` turns ${age}`) : "’s birthday"}`;
+      const label = bdays.length === 1
+        ? `${b0.name}${age !== null ? ` · ${age}` : ""}`
+        : `${b0.name} +${bdays.length - 1}`;
+      const pd = b0.id ? ` data-bday-person="${esc(b0.id)}"` : "";
+      chips.push(`<span class="ddh-chip ddh-chip-gold ddh-chip-bday" data-chip="bday" style="--chip-tint:var(--gold)"${pd} title="${esc(fullTitle)}"><span class="ddh-chip-ic" aria-hidden="true">🎂</span><span class="ddh-chip-label">${esc(label)}</span></span>`);
+    }
     // cycle is a live fact about today, not a property of whichever day she's
     // browsing — same TODAY-not-state.anchor rule #numGrpCd/dcxChipsHtml already
     // follow (see their own comments), so this reads TODAY too.
@@ -46555,6 +46693,23 @@
     sunRoutines: ["var(--ic-sky)", `<path fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" d="M18.6 14.6a7 7 0 1 1-.5-5.4"/><path fill="currentColor" d="M19.9 4.3l.5 5-4.8-1.4c-.7-.2-.9-1.1-.3-1.6l3-2.6c.55-.5 1.5-.14 1.6.6z"/>`],
     // ---- shared controls ----
     plus: ["var(--ink-soft)", `<path fill="currentColor" d="M12 4.9c.7 0 1.25.55 1.25 1.25v4.6h4.6a1.25 1.25 0 1 1 0 2.5h-4.6v4.6a1.25 1.25 0 1 1-2.5 0v-4.6h-4.6a1.25 1.25 0 1 1 0-2.5h4.6v-4.6c0-.7.55-1.25 1.25-1.25z"/>`],
+    // 2026-08-24 (top bar restructure, item 5): #ddtTheme/#ddtGear's drawn replacements
+    // for 🌙/⚙ -- both --ink-soft (the spec's own call: neither is a "real" calendar
+    // colour the way work/marriage/personal are, so no seed-hue alias needed the way
+    // Task 6's rail icons got one). Same optical weight as each other by construction:
+    // both single filled shapes on the same 24x24 grid, no stray detail weighing one
+    // down more than the other.
+    // moon: a closed crescent path (two overlapping arcs) -- already correct filled AS
+    // a crescent silhouette, no stroke needed; same shape MAND_ICONS.moon uses stroked
+    // elsewhere in this file, just rendered as a solid fill here to match this icon
+    // family's convention.
+    moon: ["var(--ink-soft)", `<path fill="currentColor" d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/>`],
+    // gear: a classic 8-tooth cog silhouette (rounded teeth, filled) with a punched
+    // centre hole -- .icx (search it) cuts through to --chrome-tint, the same interior-
+    // cutout convention every other B33_ICONS "ring/hole" shape already uses (habits,
+    // cbdWork, upkeepDial), so it self-inverts correctly in both themes with no
+    // separate dark-mode value needed.
+    gear: ["var(--ink-soft)", `<g fill="currentColor"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.6c.7 0 1.3.5 1.4 1.2l.25 1.65c.72.2 1.4.5 2 .9l1.55-.75c.65-.3 1.4-.1 1.8.5l1 1.7c.35.6.2 1.4-.35 1.85l-1.3 1.05c.05.35.08.7.08 1.05s-.03.7-.08 1.05l1.3 1.05c.55.45.7 1.25.35 1.85l-1 1.7c-.4.6-1.15.8-1.8.5l-1.55-.75c-.6.4-1.28.7-2 .9l-.25 1.65c-.1.7-.7 1.2-1.4 1.2h-2c-.7 0-1.3-.5-1.4-1.2l-.25-1.65c-.72-.2-1.4-.5-2-.9l-1.55.75c-.65.3-1.4.1-1.8-.5l-1-1.7c-.35-.6-.2-1.4.35-1.85l1.3-1.05c-.05-.35-.08-.7-.08-1.05s.03-.7.08-1.05l-1.3-1.05c-.55-.45-.7-1.25-.35-1.85l1-1.7c.4-.6 1.15-.8 1.8-.5l1.55.75c.6-.4 1.28-.7 2-.9l.25-1.65c.1-.7.7-1.2 1.4-1.2z"/></g><circle class="icx" cx="12" cy="12" r="1.9"/>`],
   };
   function b33IconSvg(key) {
     const def = B33_ICONS[key];
