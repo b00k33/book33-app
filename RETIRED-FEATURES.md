@@ -85,7 +85,56 @@ values stay in localStorage indefinitely, unread except for the colour fallback 
 so either field could be brought back with nothing lost. The forms still round-trip the
 values they load, precisely so editing an old item doesn't quietly erase them.
 
-## 5. Known dead code left in place (intentional)
+## 5. Chains — retired 2026-08-24
+
+The ⛓ chained-routine feature (Linh: "i dont use chains so remove the visibility of it
+from the pages and make the function stale").
+
+**Removed — every entry point and display surface:**
+- Nav-rail chapter entry (`{ id: "chains", ... }` under CH22/Plan)
+- The Chains card on the Routines page (`#rtnChainsHead` / `#rtnChains`, its mobile
+  collapse toggle, and the `renderChains()` call that filled it)
+- The `⛓` pill on a chained routine's List/Cards row
+- `#rtnChainField` ("Chain to another routine") in the routine editor
+- `#fPhaseField` ("Chain phase") and `#fChainField` ("Chain to another routine") in the
+  event/Repeats form
+- The `⋯` row menu's "🔗 Start a chain" item
+- The detail-sheet `⛓` relationship row (`chainRowHtml`) and its Before/Event/After
+  phase-bands block (`chainPhaseBandsHtml`)
+- The `renderPhaseFlowChips()` / `renderChainLayer()` calls in `renderDay()` (`#chainChips`
+  and `#chainLayer` now stay permanently empty, same "called nowhere" shape §5 below
+  already uses for `renderAlldayRow()`)
+
+`#chainsPage` and its page-router wiring are left in place — harmless, now genuinely
+unreachable (nothing left sets `state.view = "chains"`).
+
+**Kept, deliberately — this is a stale-function retirement, not a data removal:**
+- `t.anchorTo` / `t.anchorMode` / `t.deadline` / `t.deadlineLabel` / `t.chainName` /
+  `t.chainAutoCalendar` / `t.phase` on `ROUTINE_TASKS`/`RECURRING_EVENTS`/`EVENTS` —
+  untouched. One real routine (`pre-datenight`) already has a live `anchorTo` link.
+- Every resolver that reads them — `chainAnchorOf`, `chainGrantsOn`, `chainNodeOccursOn`,
+  `chainDeadlineStartMin`, `chainedStartMinOn`, etc. — **unchanged**.
+  `chainGrantsOn()` is called from inside `routineOccursOn()`/`recurringEventOccursOn()`,
+  the core "does this occur today" functions for every routine/event in the app — this is
+  NOT optional feature code, it's load-bearing for any existing anchorTo link and must
+  never be short-circuited.
+- ICS export's chain-aware handling — untouched, so an already-linked routine keeps
+  exporting correctly.
+- The `liveChainIds`/`fromChain`/`chainPin` tagging inside `renderDay()`'s dayEvents
+  pass — untouched. It also drives `renderTimeline()`'s 16px right-nudge on a chained
+  block, which is occurrence/positioning behaviour, not display chrome, so it stays.
+- `renderChains()`, `renderChainLayer()`, `renderPhaseFlowChips()`, `chainRowHtml`'s
+  builder logic, `chainPhaseBandsHtml()`, `loadChainIntoBuilder()`, `rtnActChain()`,
+  `saveChainNode()`, `chainableEvents`/`chainPool`/`chainNodeById` — all still defined,
+  called from nowhere. Same "stale, not deleted" treatment as the pre-existing Stage 1
+  `CHAINS`/`loadChains()`/`saveChains()` set (§5 below), which was already dead before
+  this pass and needed no changes.
+
+**Do not** wire any removed button back up, and do not touch the resolvers above —
+existing chain data must keep occurring/positioning/exporting correctly forever, even
+though nothing can create a NEW link through the UI any more.
+
+## 6. Known dead code left in place (intentional)
 
 Self-contained, unreachable, and harmless — left rather than torn out, and disclosed
 here so nobody "discovers" it and wires it back up:
