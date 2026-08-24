@@ -19518,10 +19518,9 @@
                that exact same existing flow: reuses rtnActChain() verbatim. Hidden for a
                not-yet-saved new routine (nothing to seed the builder with yet), same
                pattern as #rtnDeleteBtn. -->
-          <div class="field full" id="rtnChainField" hidden>
-            <label for="rtnChainBtn">Chain to another routine <span class="field-hint">optional</span></label>
-            <button type="button" class="rtn-repeat-sum" id="rtnChainBtn">Open the chain builder ›</button>
-          </div>
+          <!-- 2026-08-24: #rtnChainField ("Chain to another routine") retired -- see
+               RETIRED-FEATURES.md. rtnActChain() stays (dead code, called from nowhere
+               now) so any pre-existing anchorTo data is untouched. -->
           <div class="field full" id="rtnAlsoRunsField">
             <label>Also runs on <span class="field-hint">extra one-off dates</span></label>
             <div id="rtnExtraList" class="rtn-date-list"></div>
@@ -19563,11 +19562,11 @@
       </div>
     </form>
 
-    <!-- ⛓ Chains (2026-08-05, Linh: "make a chain page with routines? it needs to
-         exist somewhere"): the one home for time-linked routines — every chain listed
-         visually, plus the builder that creates/edits them. Rendered by renderChains(). -->
-    <div class="section-head" id="rtnChainsHead" style="margin-top:24px"><h2>Chains</h2><span class="rule"></span><button type="button" class="add-btn" id="rtnChainAddBtn">🔗 Make a chain</button></div>
-    <div id="rtnChains"></div>
+    <!-- 2026-08-24: the ⛓ Chains card retired -- see RETIRED-FEATURES.md. renderChains()
+         still exists (called nowhere now, deliberately stale -- see its own comment) so
+         any pre-existing anchorTo data keeps rendering correctly if this is ever
+         reconnected; #rtnChainsHead/#rtnChains removed rather than hidden since nothing
+         re-shows them. -->
 
     <!-- 2026-08-07 (routines page layout brief): "Routine Library" is now the ONE
          shared header+toolbar for both lenses on ROUTINE_TASKS — List (the editable
@@ -21538,23 +21537,11 @@
                  field, same meaning as the Routines table's own quick rtnPhase cell --
                  works immediately, no save needed first. Both shown only once Repeats
                  is set (see syncFRepeatChoice) -- a one-off event has no chain to join. -->
-            <div class="field full" id="fPhaseField" hidden>
-              <label for="fPhaseSel">Chain phase <span class="field-hint">optional</span></label>
-              <select id="fPhaseSel" class="field-bare">
-                <option value="during">Not part of a chain</option>
-                <option value="before">Before</option>
-                <option value="after">After</option>
-                <option value="both">Both (bookends the anchor)</option>
-              </select>
-            </div>
-            <!-- rtnActChain needs a real saved id to seed the builder (same constraint
-                 the Routines editor's own #rtnChainBtn has) -- this saves the routine
-                 with whatever's filled in so far, then jumps straight into the chain
-                 builder for it, one tap instead of save-then-go-find-it. -->
-            <div class="field full" id="fChainField" hidden>
-              <label for="fChainBtn">Chain to another routine <span class="field-hint">optional</span></label>
-              <button type="button" class="rtn-repeat-sum" id="fChainBtn">Save &amp; open the chain builder ›</button>
-            </div>
+            <!-- 2026-08-24: #fPhaseField ("Chain phase") and #fChainField ("Chain to
+                 another routine") retired -- see RETIRED-FEATURES.md. t.phase is still
+                 written nowhere new but the Board view (already unreachable/dormant,
+                 see its own comment) still reads any pre-existing value; rtnActChain()
+                 stays for the same reason #rtnChainField's comment gives. -->
           </div>
         </form>
 
@@ -28671,8 +28658,9 @@
         // three bare calendar views above (no group) or the settings-ish trio below.
         { id: "events", label: "Events", group: "Plan" },
         { id: "routines", label: "Routines", group: "Plan" },
-        // 2026-08-06 (Linh: "make me a chain building page"): whole-sequence chain builder
-        { id: "chains", label: "Chains", group: "Plan" },
+        // 2026-08-24: "Chains" nav entry retired -- see RETIRED-FEATURES.md. #chainsPage
+        // and its router wiring stay (harmless, now genuinely unreachable -- no entry
+        // point anywhere still sets state.view="chains"); do not re-add this row.
         // 2026-08-17 (Event/Repeats collapse, Linh: "tasks become an off-calendar
         // to-do list"): its own page, next to Routines -- the two are now the
         // planner's "what am I tracking" pair (repeating things vs a plain list).
@@ -31068,20 +31056,14 @@
       : originKind === "routine" ? (chainT && chainT.title ? `Repeats — from your ${esc(chainT.title)} routine` : "Repeats — from a routine")
       : (chainT && chainT.title ? `Repeats — from your ${esc(chainT.title)} series` : "Repeats — a recurring event");
     const originRowHtml = `<div class="tl-detail-row tl-detail-row-origin">${glyphHtml("🧭", "tl-detail-em")}<span>${originLineHtml}</span></div>`;
+    // 2026-08-24: the ⛓ relationship row retired -- see RETIRED-FEATURES.md. chainT
+    // itself stays computed (originLineHtml just above reads it for an unrelated,
+    // still-live purpose: naming which routine/series an occurrence came from) --
+    // only the chain-specific row this used to build is gone. A pre-existing
+    // anchorTo link still occurs/positions correctly (chainAnchorOf/chainGrantsOn
+    // untouched); this item's detail sheet just no longer explains or offers to
+    // change it.
     let chainRowHtml = "";
-    if (chainT) {
-      const chainA = chainT.anchorTo ? chainAnchorOf(chainT) : null;
-      if (chainA) {
-        const after = chainT.anchorMode !== "before";
-        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain">${glyphHtml("⛓", "tl-detail-em")}<span>${after ? "Starts the moment" : "Finishes right as"} <b>${esc(chainA.title)}</b> ${after ? "ends" : "starts"}
-          <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
-      } else if (chainT.deadline) {
-        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain">${glyphHtml("⛓", "tl-detail-em")}<span>Must be done by <b>${fmtTime(chainT.deadline)}</b>${chainT.deadlineLabel ? ` (${esc(chainT.deadlineLabel)})` : ""}
-          <span class="tl-detail-sub"><button type="button" class="tab-link" data-chain-open="${chainT.id}">Change</button> · <button type="button" class="tab-link" data-tl-unchain="${chainT.id}">Unchain</button></span></span></div>`;
-      } else {
-        chainRowHtml = `<div class="tl-detail-row tl-detail-row-chain">${glyphHtml("⛓", "tl-detail-em")}<span><button type="button" class="tab-link" data-chain-open="${chainT.id}" style="margin-left:0">Chain it — glue this to another routine, event, or a deadline →</button></span></div>`;
-      }
-    }
     // 2026-08-11 (Linh, screenshot of the Lunch popup: "i want to record straight to
     // the nutrition page to record what i eat"): title-matched, not a stored flag --
     // works immediately for her existing Breakfast/Lunch/Dinner/Snack routines with no
@@ -31105,7 +31087,10 @@
       : `<div class="tl-detail-row tl-detail-row-nutrition"><span class="tl-detail-em">🥗</span><span><button type="button" class="tab-link" data-log-meal="${e.id}" style="margin-left:0">Log what I ate →</button></span></div>`;
     // 2026-08-06 (Linh's "routine phases" mockup): the full Before/Event/After banded
     // list for this item's whole chain, under the single-line relationship row above.
-    const phaseBandsHtml = chainT ? chainPhaseBandsHtml(chainT, state.anchor) : "";
+    // 2026-08-24: the Before/Event/After phase-bands block retired along with the
+    // relationship row just above -- see RETIRED-FEATURES.md. chainPhaseBandsHtml()
+    // itself stays defined, deliberately unused.
+    const phaseBandsHtml = "";
     const remT = tlRemindTargetOf(e);
     const remV = remT ? remT.obj.remind : undefined;
     const remMode = remV == null ? "default" : remV === -1 ? "off" : "custom";
@@ -34909,16 +34894,15 @@
     // and every absolute element in #dayTimelineWrap is positioned against that wrap's own
     // origin, so nothing about the layout depends on which side of renderTimeline this sits.
     renderDayAlldayRow(alldayBdays, allDay);
-    // chains (Stage 1 chip + Stage 2 spine/nodes/deadline overlay) — after
-    // renderTimeline so compact-hour heights are settled and topForMin() is final.
-    // 2026-08-06 (Linh's "routine phases" mockup): renderChainChips's own book33-chains
-    // chip data is always empty now (real chains live as anchorTo pairs, not
-    // book33-chains steps) so it never actually painted anything into #chainChips —
-    // renderPhaseFlowChips takes over that slot with the live flow-chip summary.
-    // renderChainLayer already reads liveChainIds for the same reason.
-    renderPhaseFlowChips(liveChainIds, d);
+    // 2026-08-24: the renderPhaseFlowChips()/renderChainLayer() calls that used to sit
+    // here are retired -- see RETIRED-FEATURES.md. Both functions stay defined (dead
+    // code, deliberately) but are called from nowhere now. liveChainIds/deadlineMarks
+    // above are UNTOUCHED -- that computation also tags fromChain/chainPin on the real
+    // dayEvents objects, which renderTimeline() (already ran, a few lines up) reads to
+    // nudge an existing chained block 16px right; that's occurrence-pipeline behaviour
+    // for any pre-existing anchorTo data, not display chrome, and stays exactly as it
+    // was so nothing about how an already-linked routine renders or positions changes.
     renderOcPrompts();   // after renderTimeline — reads the TL_ITEMS_BY_ID it just filled
-    renderChainLayer(liveChainIds, deadlineMarks);
     renderFastEverywhere();
     renderBodyWidget();
     syncSessionAutoStart();   // before renderSessionCard so a fresh render (load/date-nav) doesn't wait for the 1s tick
@@ -40288,7 +40272,9 @@
   let rtnCardOpenId = null;
   function renderRoutines() {
     renderRtnArchive();
-    renderChains();
+    // 2026-08-24: renderChains() call retired -- see RETIRED-FEATURES.md. The
+    // function itself stays (dead code, deliberately) so any pre-existing anchorTo
+    // data renders correctly if this is ever reconnected.
     // 2026-08-16 (Linh, mockup "Routines — mobile, dark"): "list" now renders the
     // Cards view into #rtnGrid (see renderRtnGridCards) instead of showing
     // #rtnManage's older day-dots/grouped-panel view -- #rtnManage keeps being
@@ -40390,7 +40376,7 @@
         ${tileHtml}
         <div class="rtn-mid">
           <div class="rtn-title">${esc(displayTitle)}</div>
-          <div class="rtn-meta">${metaHtml}${t.anchorTo && chainAnchorOf(t) ? `<span class="rtn-chain-pill" title="Chained — see the Chains card above">⛓</span>` : ""}</div>
+          <div class="rtn-meta">${metaHtml}</div>
         </div>
         <button type="button" class="rtn-cal-toggle" data-rtn-cal="${t.id}" aria-pressed="${calOn}" aria-label="${calOn ? "On the calendar" : "Off the calendar"} — ${esc(t.title)}" title="${calOn ? "On the calendar — click to hide" : "Off the calendar — click to show"}"></button>
       </div>`;
@@ -41128,7 +41114,6 @@
     el.className = "rtg-more-menu";
     el.innerHTML = `
       <button type="button" class="rtg-more-item" data-act="cal"><span aria-hidden="true">📅</span>Add one-off</button>
-      <button type="button" class="rtg-more-item" data-act="chain"><span aria-hidden="true">🔗</span>Start a chain</button>
       <button type="button" class="rtg-more-item" data-act="edit"><span aria-hidden="true">✎</span>Edit</button>
       <button type="button" class="rtg-more-item rtg-more-item--del" data-act="del"><span aria-hidden="true">🗑</span>Delete</button>`;
     document.body.appendChild(el);
@@ -41143,7 +41128,6 @@
       if (!actBtn) return;
       closeRtnMoreMenu();
       if (actBtn.dataset.act === "cal") rtnActCal(id);
-      else if (actBtn.dataset.act === "chain") rtnActChain(id);
       else if (actBtn.dataset.act === "edit") rtnActEdit(id);
       else if (actBtn.dataset.act === "del") rtnActDelete(id);
     });
@@ -41487,19 +41471,8 @@
     renderRtnGrid();
   });
 
-  // 2026-08-16 (Routines · mobile): on a phone the Chains section collapses to its
-  // one quiet heading line — tapping the heading expands/collapses the full section,
-  // and "Make a chain" force-expands so the builder it opens is actually visible.
-  // Presentation only; the chains logic itself is untouched. Desktop ignores all of
-  // this (the .chains-open class only matters inside the ≤640px media block).
-  document.getElementById("rtnChainsHead").addEventListener("click", e => {
-    if (e.target.closest("#rtnChainAddBtn")) return;
-    if (window.innerWidth > 640) return;
-    document.getElementById("routinesPage").classList.toggle("chains-open");
-  });
-  document.getElementById("rtnChainAddBtn").addEventListener("click", () => {
-    document.getElementById("routinesPage").classList.add("chains-open");
-  });
+  // 2026-08-24: the mobile "Chains section collapses" wiring retired along with
+  // #rtnChainsHead/#rtnChainAddBtn -- see RETIRED-FEATURES.md.
   document.getElementById("rtnViewPicker").addEventListener("click", e => {
     const b = e.target.closest("[data-rtnview]");
     if (!b) return;
@@ -49696,14 +49669,9 @@
     rtnTimeOpen = false; syncRtnTimeOpen();
   });
 
-  // 2026-08-17 (Linh, "simplify" brief -- "Chain to another routine"): no in-form
-  // chain control existed before this; reuses rtnActChain() verbatim (the same
-  // function the row's own ⋯ menu already calls) rather than building a second way
-  // to set the same anchor fields. Only shown once the routine has a real id (see
-  // openRtnForm/closeRtnForm's rtnChainField.hidden toggle, same pattern as Delete).
-  document.getElementById("rtnChainBtn").addEventListener("click", () => {
-    if (rtnEditId) rtnActChain(rtnEditId);
-  });
+  // 2026-08-24: #rtnChainBtn's listener retired along with the field it sat in --
+  // see RETIRED-FEATURES.md. rtnActChain() itself stays (still reachable from the
+  // row's ⋯ menu).
   // 2026-08-06 (Linh: "bring it to the side so I can edit directly without changing
   // pages or have a popup"): >=1024px the routine form docks into the #rtnSide rail
   // (fixed, aligned to the content column, internally scrolling); below that it stays
@@ -51123,7 +51091,6 @@
     // permanent main-surface field).
     document.getElementById("rtnFreqGroup").hidden = true;
     document.getElementById("rtnDeleteBtn").hidden = true;
-    document.getElementById("rtnChainField").hidden = true;
     setRtnMoreOptionsOpen(false);
     setRtnRepeatPickerOpen(false);
     rtnTimeOpen = false; syncRtnTimeOpen();
@@ -51187,9 +51154,6 @@
     if (!rtnInlineId) rtnAddRow.hidden = true;   // inline mode leaves the top "+ Add routine" banner alone
     rtnForm.hidden = false;
     document.getElementById("rtnDeleteBtn").hidden = !task;
-    // 2026-08-17 (Linh, "simplify" brief -- "Chain to another routine"): only makes
-    // sense once the routine has a real id to seed the Chains builder with.
-    document.getElementById("rtnChainField").hidden = !task;
     document.getElementById("rtnAnchorDate").value = keyOf(TODAY);
     document.getElementById("rtnIntervalUnit").value = "days";
     clearRtnSubRows();
@@ -53650,8 +53614,6 @@
       document.getElementById("fRptIntervalField").hidden = false;
     }
     document.getElementById("fFillCalField").hidden = fRepeatChoice === "none";
-    document.getElementById("fPhaseField").hidden = fRepeatChoice === "none";
-    document.getElementById("fChainField").hidden = fRepeatChoice === "none";
     const LABELS = {
       none: "Doesn't repeat", daily: "Every day", weekdays: "Weekdays (Mon–Fri)",
       eachweekday: (document.getElementById("fRptEachWeekdayBtn") || {}).textContent || "Every…",
@@ -57475,7 +57437,13 @@
       }
       task.endDate = resolved; task.repeatCount = n;
     }
-    const phase = document.getElementById("fPhaseSel").value;
+    // 2026-08-24: #fPhaseSel retired along with #fPhaseField -- see RETIRED-FEATURES.md.
+    // Optional-chained rather than deleted outright: this is the ONE shared place both
+    // the Save button and (formerly) #fChainBtn build a routine, so a null guard here
+    // is cheaper and safer than hunting every call path. task.phase is simply never
+    // set via this form any more; any pre-existing value on an already-saved routine
+    // is untouched.
+    const phase = document.getElementById("fPhaseSel")?.value || "during";
     if (phase !== "during") task.phase = phase;
     ROUTINE_TASKS.push(task);
     saveRoutines();
@@ -57483,12 +57451,8 @@
     if (task.repeatCount) showFRepeatUntilToast(`${task.repeatCount} time${task.repeatCount === 1 ? "" : "s"} · last on ${fRepeatUntilToastDate(task.endDate)}`);
     return task;
   }
-  document.getElementById("fChainBtn").addEventListener("click", () => {
-    const task = buildRoutineFromCurrentForm();
-    if (!task) return;
-    closeForm();
-    rtnActChain(task.id);   // seeds the chain builder with this routine and navigates there
-  });
+  // 2026-08-24: #fChainBtn's listener retired along with the field it sat in -- see
+  // RETIRED-FEATURES.md.
   form.addEventListener("submit", e => {
     e.preventDefault();
     const title = fTitle.value.trim();
