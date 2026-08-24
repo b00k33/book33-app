@@ -15605,8 +15605,23 @@
     height: 54px; padding: 0 16px;
     background: var(--paper); border-bottom: 1px solid var(--note-line); box-sizing: border-box;
   }
-  .ddt-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  /* 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): overflow:hidden
+     added alongside the existing min-width:0 -- min-width:0 alone lets this column
+     SHRINK below its content's natural width, but a shrunk flex item still paints
+     its overflowing content past its own edge unless something clips it too. Needed
+     once .ddt-allday (below) can hold real content; harmless before that since
+     nothing in this row used to overflow it. */
+  .ddt-left { display: flex; align-items: center; gap: 12px; min-width: 0; overflow: hidden; }
   .ddt-right { display: flex; align-items: center; gap: 8px; min-width: 0; justify-content: flex-end; }
+  /* the one column that's allowed to give way when space is short -- see
+     renderDeskAllday() (JS) for what it holds and why. flex:1 1 auto (not the
+     no-grow 0 0 auto every other .ddt-left child uses) is what makes THIS column
+     absorb the row's free space and shrink pressure instead of the date or the
+     wordmark; min-width:0 lets it actually shrink past its content's natural
+     width; overflow:hidden clips whatever doesn't fit rather than pushing
+     #ddhChips off centre (measured without these three rules: 214px off-centre
+     at 1920px -- see the STEP 1 finding this fix responds to). */
+  .ddt-allday { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 6px; }
   /* True centring costs symmetry: both side columns get the SAME width, so the narrow
      desktop band pays for the right cluster being ~150px while the left needs ~410px.
      Measured at 1024: the left column landed at 294px and squeezed #ddtDate down to 15px
@@ -15645,7 +15660,42 @@
      the same muted weight as every other secondary label. Promoted to match .ddt-title's
      own 800 weight and read in the gold token so it sits with the wordmark/Today as a
      confident header line rather than a caption. */
-  .ddt-date { flex: 0 1 auto; min-width: 0; font-size: 11px; font-weight: 800; color: var(--gold-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 2026-08-24: flex:none, was 0 1 auto -- the date is never what gives way when the
+     row runs short on space now that .ddt-allday can hold real content beside it; see
+     .ddt-allday's own comment above for the shrink-rule trio this is one third of. */
+  .ddt-date { flex: none; min-width: 0; font-size: 11px; font-weight: 800; color: var(--gold-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): the header's own
+     compact chip -- same .ad-chip.tl-item/.ad-chip-ic/.ad-chip-t component #dayAlldayRow
+     already uses (renderDeskAllday(), JS), just re-sized for a 54px bar instead of
+     #dayAlldayRow's own 44px tap-target rows. max-width is load-bearing even though
+     .ddt-allday itself also shrinks (above): at <1280px .ddt-left stops shrinking
+     (its own comment, a few lines up) precisely so #ddtDate never truncates there, which
+     means nothing forces THIS chip to shrink either unless it has its own bound --
+     without it, a long title would render at full natural width and reopen the exact
+     ".ddt-left too wide → date squeezed" failure that breakpoint was already fixed for
+     once. min-height:0 overrides the shared rule's 44px tap-target floor -- correct for
+     a mouse-driven desktop header row, not a mobile list. */
+  .ddt-allday .ad-chip.tl-item { min-height: 0; max-width: 160px; padding: 3px 8px; border-radius: 6px; }
+  /* the "+N more" / bare-count control -- a real <button>, not a span, so it's reachable
+     by keyboard and reads correctly to a screen reader on its own (aria-label set in JS
+     per STEP 3's "say what it opens, not just the number"). Sized to match the chip
+     beside it rather than any existing button component -- nothing else in the app is
+     "a short text pill inside a 54px bar." */
+  .ddt-allday-more-btn {
+    flex: none; border: none; background: var(--raised); color: var(--ink-soft);
+    font: inherit; font-size: 11px; font-weight: 700; white-space: nowrap;
+    padding: 3px 8px; border-radius: 6px; cursor: pointer;
+  }
+  .ddt-allday-more-btn:hover, .ddt-allday-more-btn:focus-visible { color: var(--gold-bright); }
+  /* the popover's own content -- .wcard-hover-pop (search it) already supplies the
+     floating card chrome (position, background, border, shadow, viewport clamping);
+     this just lays out the chip list inside it the same vertical stack #dayAlldayRow's
+     old .ad-col wore before this fold, a deliberate callback to that shape rather than
+     a new one. Chips inside reuse the SAME .ddt-allday .ad-chip.tl-item sizing above (one
+     selector, not a duplicate ruleset) since they're the identical component at the
+     identical scale, just stacked instead of inline. */
+  .ddt-allday-pop { display: flex; flex-direction: column; gap: 6px; width: 220px; }
+  .ddt-allday-pop .ad-chip.tl-item { max-width: 100%; }
   /* 2026-08-17 (Linh's mockup, "‹ Today ›"): .ddt-nav now wraps prev/title/next (was
      just the two arrows, right-aligned in .ddt-right -- see the markup comment above
      #deskDayTopbar). Class/gap unchanged; only what it contains moved. */
@@ -15845,6 +15895,21 @@
      column's narrower width. No JS change needed. */
   [data-desk-day] .ad-row { display: flex !important; }
   [data-desk-day1] #dayAlldayRow .ad-gutter { width: 46px; font-size: 11px; }
+  /* 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): desktop single-day
+     now gets its all-day content from #ddtAllday in the top bar instead (search
+     renderDeskAllday()) -- #dayAlldayRow itself must disappear here. Targets the ID,
+     not .ad-row, and needs its own !important to beat the rule directly above: that
+     rule forces .ad-row visible at EVERY desktop day count, #dayAlldayRow AND
+     #mdAlldayRow alike (same shared class, per alldayRowMount()) -- #mdAlldayRow (the
+     3/5/7-day version, one column per visible day) is untouched by this fold and
+     must stay exactly as visible as it is today. The ID selector's specificity beats
+     the class-only rule above regardless of source order, so this is safe to place
+     either side of it -- kept adjacent since it's the same row being described.
+     JS-side removal (renderDayAlldayRow()'s own deskDay1Active() guard) still does the
+     real cleanup on every full render; this is the CSS backstop for the gap between a
+     live window resize (renderDeskDayTopbar() is resize-bound, this function's own
+     renderDay()-only call site is not -- see its comment) and the next full render. */
+  [data-desk-day1] #dayAlldayRow { display: none !important; }
 
   /* ---- 4.4 The grid — one column, --hour-h 60px, fasting tints the whole
      column (data-desk-fasting, see renderDayFastTint()'s desktop half — a
@@ -19910,7 +19975,13 @@
          2026-08-17 (Linh's mockup, "arrows flank Today"): #ddtPrev/#ddtNext moved from
          .ddt-right's own .ddt-nav into this one, either side of #ddtTitle — same ids,
          same click handlers (attached once, by id, order-independent), only their DOM
-         position changed. .ddt-right is now just the two theme/settings buttons. -->
+         position changed. .ddt-right is now just the two theme/settings buttons.
+         2026-08-24 ("the ALL DAY band folds into the Today row"): #ddtAllday, filled by
+         renderDeskAllday() (JS, called from renderDeskDayTopbar()), replaces #dayAlldayRow
+         at this breakpoint only -- see its own build comment for the full brief. Static
+         aria-label carries the "ALL DAY" meaning for a screen reader now that the visible
+         gutter label is gone; the chips (or the count button, at the narrower tiers)
+         carry it visually instead. -->
     <div id="deskDayTopbar">
       <span class="ddt-left">
         <span class="ddt-word">BOOK33</span>
@@ -19921,6 +19992,7 @@
           <button type="button" class="ddt-arrow" id="ddtNext" aria-label="Next day">›</button>
         </span>
         <span class="ddt-date" id="ddtDate"></span>
+        <span class="ddt-allday" id="ddtAllday" aria-label="All day"></span>
       </span>
       <span class="ddh-chips" id="ddhChips"></span>
       <span class="ddt-right">
@@ -33781,10 +33853,40 @@
   // moved down to sit just after it — see renderDay(). #dayFastHead, the insertion
   // anchor, is static markup, so the row lands in the same place either way.)
   // Same isGhostItem guard as every other seeding site, for the same reason.
+  // set by the deskDay1Active() removal branch below, cleared on every real (re)build --
+  // read only by placeDeskGrid()'s "off" branch, see its 2026-08-24 comment.
+  let dayAlldayRemovedForDesk = false;
   function renderDayAlldayRow(bdays, others) {
     // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     if (calDaysActive() > 1) { document.getElementById("dayAlldayRow")?.remove(); return; }
-    const others2 = others.concat(closedDaysOn(state.anchor));
+    // 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): desktop single-day
+    // now gets its all-day content from #ddtAllday/renderDeskAllday() (JS, in the
+    // desktop top-bar section) instead of this row -- mobile/tablet keep this row
+    // exactly as before (deskDay1Active() is false there), and desktop 3/5/7-day is
+    // already excluded by the calDaysActive() guard just above, untouched either way.
+    // deskDay1Active() is the same width+day-count test #deskDayTopbar's own
+    // [data-desk-day1] attribute is driven by, so this can never disagree with which
+    // surface is actually visible. The CSS half of this guard ([data-desk-day1]
+    // #dayAlldayRow, search it) backstops the live-resize gap this JS-only removal
+    // can't cover on its own -- see that rule's own comment. The flag is what
+    // placeDeskGrid()'s "off" branch checks to know a desktop pass removed the row
+    // (as opposed to the row being absent because the day simply has no all-day
+    // items) -- see its own comment for why it can't just test for the element.
+    if (deskDay1Active()) { document.getElementById("dayAlldayRow")?.remove(); dayAlldayRemovedForDesk = true; return; }
+    dayAlldayRemovedForDesk = false;
+    // argless call = the live-resize rebuild path (placeDeskGrid()'s "off" branch --
+    // crossing below 1024px runs only that placer, never renderDay(), so a row this
+    // function removed at desktop would otherwise stay missing until the next full
+    // render). Self-computes via alldayItemsFor(), whose `others` ALREADY includes
+    // closedDaysOn() (see its comment) -- so this path must skip the .concat below,
+    // or every closed-day chip would render twice.
+    let others2;
+    if (bdays === undefined) {
+      const it = alldayItemsFor(state.anchor);
+      bdays = it.bdays; others2 = it.others;
+    } else {
+      others2 = others.concat(closedDaysOn(state.anchor));
+    }
     [...bdays, ...others2].forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
     alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), bdays.length + others2.length, () =>
       `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${alldayStackHtml(bdays, others2)}</div></div>`);
@@ -45455,6 +45557,17 @@
       if (shopSlotHome && shopSlotEl && (shopSlotEl.parentElement === pinnedSlot || shopSlotEl.parentElement === wrFallbackEl)) shopSlotHome.after(shopSlotEl);
       if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
       if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
+      // 2026-08-24 ("the ALL DAY band folds into the Today row"): a live resize that
+      // crosses below 1024px runs only this placer, never renderDay() -- so the
+      // #dayAlldayRow that renderDayAlldayRow()'s own deskDay1Active() guard removed
+      // at desktop would stay missing here until the next full render. The argless
+      // call is that function's own self-computing rebuild path (see its comment).
+      // Gated on the explicit removed-flag, NOT on the element being absent -- a day
+      // with zero all-day items also has no element, and testing for that would
+      // re-run alldayItemsFor()'s full day-assembly scan on every resize tick of a
+      // window drag for nothing. The flag is only ever true when a desktop pass
+      // actually removed a row this width now needs back.
+      if (state.view === "day" && dayAlldayRemovedForDesk) renderDayAlldayRow();
     }
   }
   window.addEventListener("resize", placeDeskGrid);
@@ -45904,6 +46017,81 @@
       daysEl.querySelectorAll("[data-ddt-days]").forEach(b => {
         b.classList.toggle("on", calDaysActive() === parseInt(b.dataset.ddtDays, 10));
       });
+    }
+    // 2026-08-24 ("the ALL DAY band folds into the Today row"): after dateEl's own
+    // text is set above, never before -- renderDeskAllday() measures dateEl's real
+    // rendered width to decide its own tier (see its comment), so the date has to be
+    // painted with its final text first.
+    renderDeskAllday();
+  }
+  // 2026-08-24 (Linh, "the ALL DAY band folds into the Today row"): a compact,
+  // desktop-day1-only presentation of an all-day item for the header. Can't just call
+  // alldayChipHtml(e, false) for a birthday -- that builds the full celebration ribbon
+  // (icon, name, "turns N", Message/Gift buttons; renderDayAlldayRow()'s own 2026-08-24
+  // comment explains why it exists), which doesn't fit a 54px bar. Non-birthday items
+  // DO reuse alldayChipHtml() as-is, unmodified -- "keep the chips as chips: same
+  // .ad-chip classes, same data-tl-detail, same --cat-c fill cascade" is most exactly
+  // true when it's literally the same function output, not a close copy.
+  function ddtAlldayChipHtml(e) {
+    if (e.category !== "Birthdays") return alldayChipHtml(e, false);
+    const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
+    const bdTitle = e.note ? `${e.title} — ${e.note}` : e.title;
+    const ic = e.icon ? `<span class="ad-chip-ic">${e.icon}</span>` : `<span class="ad-chip-ic">🎂</span>`;
+    return `<span class="ad-chip tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${ic}<span class="ad-chip-t">${esc(e.title)}</span></span>`;
+  }
+  // Replaces #dayAlldayRow at this breakpoint -- see renderDayAlldayRow()'s own
+  // deskDay1Active() guard for the other half of that trade. Self-computes via
+  // alldayItemsFor(state.anchor) rather than reusing renderDay()'s own locals --
+  // renderDeskDayTopbar() (this function's only caller) is ALSO resize-live (bound via
+  // placeDeskGrid(), on the window resize listener) with no accompanying renderDay()
+  // call, so it needs its own data on every call rather than a value handed down from
+  // a renderDay() pass that may be stale or may never have run at this width.
+  // alldayItemsFor()'s own `others` already folds in closedDaysOn(), unlike renderDay()'s
+  // raw locals (which need their own explicit .concat) -- see alldayItemsFor()'s comment.
+  function renderDeskAllday() {
+    const host = document.getElementById("ddtAllday");
+    if (!host) return;
+    if (calDaysActive() > 1) { host.innerHTML = ""; return; }   // #mdAlldayRow's own job, untouched
+    const { bdays, others } = alldayItemsFor(state.anchor);
+    const items = [...bdays, ...others];
+    if (!items.length) { host.innerHTML = ""; return; }
+    // same seeding renderDayAlldayRow() does for the mobile/tablet row (fix E1) -- a
+    // chip whose id never reaches TL_ITEMS_BY_ID opens nothing when tapped.
+    items.forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; });
+    // a real <button> (not a span), reachable by keyboard and self-describing to a
+    // screen reader on its own -- aria-label states what it opens, per STEP 3.
+    const moreBtn = (label, ariaLabel, list) => `<span class="num-hover-trigger ddt-allday-more">
+        <button type="button" class="ddt-allday-more-btn" aria-label="${esc(ariaLabel)}">${label}</button>
+        <div class="wcard-hover-pop ddt-allday-pop">${list.map(ddtAlldayChipHtml).join("")}</div>
+      </span>`;
+    const rest = items.length - 1;
+    // tier 1: one chip, plus a count for everything else (only when there IS anything
+    // else -- a single item never needs a "+0 more").
+    host.innerHTML = ddtAlldayChipHtml(items[0])
+      + (rest > 0 ? moreBtn(`+${rest} more`, `${rest} more all-day item${rest === 1 ? "" : "s"} — open the list`, items.slice(1)) : "");
+    // measure, don't assume: the actual fit point depends on real content (title
+    // length, date string length), not a fixed breakpoint -- paint tier 1, then check
+    // the real DOM. #ddtDate must never truncate at any width (STEP 4/5).
+    // NOT dateEl.scrollWidth > dateEl.clientWidth -- tried that first, and it can never
+    // fire: #ddtDate is flex:none precisely so it never shrinks below its own content
+    // (that's the whole point of the shrink-rule trio above), so those two numbers are
+    // always equal even when the date is being genuinely clipped by .ddt-left's own
+    // overflow:hidden (confirmed live by force-starving the row: scrollWidth===
+    // clientWidth on #ddtDate itself, 105===105, while its real getBoundingClientRect()
+    // right edge sat 300px past .ddt-left's visible edge). .ddt-left is the element that
+    // actually overflows when its children don't fit -- that's the one to check.
+    const leftEl = document.querySelector(".ddt-left");
+    if (leftEl && leftEl.scrollWidth > leftEl.clientWidth) {
+      // tier 2: even one chip doesn't fit -- bare emoji + TOTAL count (nothing is
+      // individually shown at this tier, so the count covers every item, not just the
+      // hidden remainder), still a real button opening the full list.
+      const ic0 = items[0].icon || (items[0].category === "Birthdays" ? "🎂" : "📌");
+      host.innerHTML = moreBtn(`${ic0} ${items.length}`, `${items.length} all-day items — open the list`, items);
+      if (leftEl.scrollWidth > leftEl.clientWidth) {
+        // tier 3: the date still doesn't fit even bare -- keep the date, drop the
+        // all-day content entirely, not the other way round (her explicit instruction).
+        host.innerHTML = "";
+      }
     }
   }
   // 2026-08-16: the title IS the Today control (the separate #ddtTodayBtn pill is gone).
