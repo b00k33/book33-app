@@ -46,13 +46,18 @@ palette map further down. Gold for numbers/accents; colour = category.
 Calendar: one fixed SCALE (--hour-h) — blocks are always sized to real duration and
 snapped to hour lines off that one scale, overlaps split into side-by-side columns, and
 everything aligns to a shared grid/column edge. Row HEIGHT itself is not uniform, by
-design, on two layered rules (2026-08-18 supersedes the old "every hour same height, no
-auto-fit rows" wording, which predates both): an empty hour compacts down to fit no
-content (`computeCompactHours`/`compactH()`, 2026-08-04) while a busy hour stays full
-height, and on top of that, five fixed clock times get their own floor regardless of
-content — Best/2nd Best/💰 Money hours (`POWER_HOURS`) floor at 80px, Worst/2nd Worst
-floor at 28px, both via `hourRowH()`. Both are floors, never caps — a real event's block
-height still comes only from its own duration and is never constrained by its row.
+design (2026-08-24/25, "three preset heights" — supersedes the older two-layered-floor
+wording, which predates both): `hourRowH()` picks a row's height by TYPE, in priority
+order — outside the "Hours shown" range → 0; a power hour (Best/2nd Best/💰 Money,
+`POWER_HOURS`) → its own preset, busy or empty; a bad hour (Worst/2nd Worst) → its own
+preset, busy or empty; an empty ordinary hour → `compactH()`'s 22px shrink; a busy
+ordinary hour → `--hour-h`. THE THREE KNOBS (`POWER_HOUR_TYPE_H` in JS, `--hour-h` in
+CSS — comments on both name the other): power 139px, bad 56px, ordinary 96px desktop /
+94 light / 74 phone+tablet. These are HEIGHTS now, not floors — no `Math.max` against
+`--hour-h` — so a busy bad hour is genuinely shorter than a busy ordinary one. A real
+event's block height still comes only from its own duration (`topForMin()` diffs over
+these same rows) and is never constrained by its row, floored at 26px desktop / 14px
+elsewhere so a very short block stays legible.
 
 ### 6. Consistency
 One component identical everywhere (button, chip, card, dropdown, toggle). Reuse existing
@@ -284,9 +289,11 @@ a card needs more than one independent breakdown rather than a single whole-card
   THIRD line under title+time, right-aligned, flex-basis:100% forcing the wrap — only
   present when a real rating exists (`rateHtml` generation itself is untouched, device-
   agnostic). This reopens a smaller version of the old gap, scoped to rated blocks only:
-  a block just above the 28px tight cutoff (roughly 28–35px, a ~35–46min session at
-  `--hour-h: 46px`) may not have room for all 3 lines and can clip a couple px off the
-  bottom of the star row — `.tl-rate` is kept deliberately compact (9px, line-height:1,
+  a block just above the 28px tight cutoff (roughly 28–35px — originally a ~35–46min
+  session at `--hour-h: 46px`; at the current 74px mobile row that same 28–35px band is
+  now only a ~25–31min session, a narrower and less commonly scheduled range) may not
+  have room for all 3 lines and can clip a couple px off the bottom of the star row —
+  `.tl-rate` is kept deliberately compact (9px, line-height:1,
   zero row-gap) to push that floor as low as practical without touching block sizing
   (out of scope per her "leave block sizing alone" instruction). Raising the tight
   threshold, or giving rated blocks their own taller floor, would close it fully if she
