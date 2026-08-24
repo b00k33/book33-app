@@ -2485,13 +2485,18 @@
   /* Modes stage 4 (2026-08-21, "a mode session takes over the page for real
      hyperfocus"): toggled by renderSessionCard() only while .mode-focus AND a
      real session is active (see that function's own comment) -- an active mode
-     with no session, or a session with mode-focus off, gets none of this. Kept
-     as an in-place treatment rather than reparenting the card into the widget
-     rail's old spot -- confirmed with Linh that the two aren't actually
-     neighbors at any width (session card already lives in the desktop
-     sidebar's #dsbSessionSlot, nowhere near #wrCards), so "centred" here means
-     centred within whatever container the card already sits in, not moved
-     into the rail's own DOM slot. */
+     with no session, or a session with mode-focus off, gets none of this.
+     2026-08-24 update: the premise this comment used to give -- that the session
+     card and the widget rail "aren't neighbors at any width" -- is no longer
+     true. #daySessionCard now IS a rail widget (WR_PINNED_IDS, first in the
+     list); it lives in #wrPanelBody at >=1200px, same as every other pinned
+     widget's open content (see placeDeskGrid()'s own comment for the exact
+     width split). This class is untouched by that move -- hero stays an
+     in-place treatment, just now potentially inside the panel's 288px content
+     column rather than the sidebar's ~190px one (re-measured live, .sc-rings
+     still centres correctly at both sizes) -- "centred" still means centred
+     within whatever container the card currently sits in, never a reparent
+     into the rail's own DOM slot for this specific styling. */
   .session-card.session-hero {
     padding: 20px 16px; border-radius: var(--radius-md); background: var(--raised);
     border-top: none; margin-top: 16px;
@@ -15649,6 +15654,17 @@
      HEALTH.weights) are untouched for reuse elsewhere. Mobile/tablet and
      #todayBodyCard (Today page) are a separate mount, out of scope, unaffected. */
   [data-desk-day] #dsbBodySlot, [data-desk-day] #dayBodyCard { display: none; }
+  /* 2026-08-24 (Linh, screenshot: "move to widget panel on RHS"): #daySessionCard
+     leaves #dsbSessionSlot at >=1200px, where it now lives in the rail/panel
+     instead (WR_PINNED_IDS, placeDeskGrid()'s own comment explains the width
+     split). Scoped to 1200px specifically, NOT the same [data-desk-day] (>=1024px)
+     #dsbBodySlot uses just above -- #dsbSessionSlot stays exactly as it is today
+     for 1024-1199px, where there is no rail to move it into (deskWidgetsActive()
+     false), so it's left empty-and-hidden only where it's genuinely unused.
+     Same "hide the slot so its neighbours sit flush" reasoning as #dsbBodySlot. */
+  @media (min-width: 1200px) {
+    [data-desk-day] #dsbSessionSlot { display: none; }
+  }
   .dsb-group { padding: 12px 0; border-top: 1px solid var(--note-line); }
   .dsb-group:first-child { padding-top: 0; border-top: none; }
   .dsb-group-head { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; }
@@ -16015,6 +16031,13 @@
      override the panel needs, or the card renders as a 380px square in a 288px
      column. Height follows the list's real length here instead. */
   #wrPanelBody .shop-box { width: 100%; aspect-ratio: auto; }
+  /* Session: .session-card's base margin-top/border-top/padding-top was a divider
+     line for sitting BELOW something else in the sidebar column -- redundant (a
+     second hairline) directly under the panel's own header, which already has its
+     own border-bottom (.wr-panel-head). Everything else (.sc-rings/.sc-end-choices/
+     .sc-row-wrap/.sc-extra-input) is already fluid width, verified live to fit the
+     288px content column without further overrides. */
+  #wrPanelBody #daySessionCard { margin-top: 0; padding-top: 0; border-top: none; }
   .wr-card { position: relative; background: var(--raised); border-radius: var(--radius-md); padding: 12px 12px; margin-bottom: 8px; }
   .wr-grip { position: absolute; top: 9px; right: 9px; font-size: 11px; color: var(--ink-faint); cursor: grab; letter-spacing: -1px; }
   .wr-grip:active { cursor: grabbing; }
@@ -16297,6 +16320,27 @@
     cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
   .wr-ic-btn:hover, .wr-ic-btn:focus-visible, .wr-ic-btn.on { background: var(--raised); color: var(--margin-rule); }
+  /* 2026-08-24 ("don't bury a live session behind an icon"): the session icon's own
+     status dot, top-right corner -- Linh's approved mockup. Default colour rides
+     var(--margin-rule) with no per-component code: applyModeAccent() already keeps
+     that token pinned to the active Mode's accent for as long as a session runs
+     (search that name), so a Work session's dot is Work green for free. [data-timesup]
+     (computed fresh in wrIconBtnHtml every time the rail rebuilds -- see
+     sessionTick()'s own comment for why that only happens on a real transition,
+     never every tick) swaps it to the fixed gold urgent colour and brightens the
+     glyph beside it, since
+     Time's-up is a fixed "needs attention now" state, not a per-Mode one. The 2px
+     --paper ring keeps it legible against the icon glyph underneath at every Mode
+     accent/theme pairing, same purpose a focus ring serves. No pulse -- one static
+     dot color-shift already reads as "changed," and book33-support-rules' 2-tier
+     urgency rule (search that name) doesn't ask for animation on top of it; skips
+     prefers-reduced-motion entirely since there's no motion to guard. */
+  .wr-ic-btn .wr-ic-dot {
+    position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--margin-rule); box-shadow: 0 0 0 2px var(--paper);
+  }
+  .wr-ic-btn .wr-ic-dot[data-timesup="true"] { background: var(--gold-bright); }
+  .wr-ic-btn:has(.wr-ic-dot[data-timesup="true"]) { color: var(--gold-bright); }
   .wr-ic-sep { flex: none; width: 28px; height: 1px; background: var(--note-line); margin: 6px 0; }
   /* the tooltip opens LEFTWARD, not #wcard-hover-pop's usual below-left — this
      rail sits flush against the viewport's right edge, so "below-left" would
@@ -19882,10 +19926,17 @@
              styling and renderer all come along unchanged). No group-head wrapper,
              same reason as #dsbNumSlot: the widget carries its own gold title. -->
         <div id="dsbBodySlot"></div>
-        <!-- Modes stage 3 (2026-08-20): desktop home for #daySessionCard, same
-             real-element reparent shape as #dsbBodySlot/#dsbNumSlot just above --
-             right after Weight, so the live/time-sensitive session sits with the
-             other quick-glance widgets, not buried below. -->
+        <!-- Modes stage 3 (2026-08-20): was the desktop home for #daySessionCard at
+             every desktop width, same real-element reparent shape as
+             #dsbBodySlot/#dsbNumSlot above. 2026-08-24 ("move to widget panel on
+             RHS"): >=1200px, #daySessionCard now reparents into the widget rail/panel
+             instead (WR_PINNED_IDS, first in the list -- see placeDeskGrid()'s own
+             comment for the exact width split and renderModeTakeover()'s for how a
+             Mode takeover still wins the card's parent over both this slot and the
+             rail). This slot stays live ONLY for 1024-1199px, where there is no rail
+             (deskWidgetsActive() false) -- CSS hides it outright at >=1200px (search
+             "#dsbSessionSlot" in the CSS) so its neighbours sit flush with no gap
+             once it's genuinely never used there. -->
         <div id="dsbSessionSlot"></div>
         <!-- 2026-08-23: "Parts of life" (the per-track show/hide checklist) removed
              outright -- was here, between Session and the closing of this sidebar
@@ -19899,9 +19950,10 @@
            always-expanded card list -- one icon per widget (pinned + TILE_PREFS-
            managed alike, see WR_PINNED_IDS/WR_WIDGET_IDS), tap opens #wrPanel
            showing that ONE widget. #wrPinned survives as the offstage holding pen
-           for the four real-element widgets (#sunWeekAhead/#dayCtxWrap/
-           #modeAmbientRail/#shopSlot) when none of them is the open one -- see
-           renderWrPanel(). #wrCards is gone; #wrFallback (1024-1199px, a plain
+           for the real-element widgets (#daySessionCard/#sunWeekAhead/#dayCtxWrap/
+           #modeAmbientRail/#shopSlot -- #daySessionCard joined 2026-08-24, see
+           WR_PINNED_IDS) when none of them is the open one -- see renderWrPanel().
+           #wrCards is gone; #wrFallback (1024-1199px, a plain
            always-expanded 2-up card block, out of scope for this brief) is
            untouched and still built from the very same wrCardHtml() strings. -->
       <div id="deskWidgetRail">
@@ -34408,6 +34460,22 @@
     renderBodyWidget();
     syncSessionAutoStart();   // before renderSessionCard so a fresh render (load/date-nav) doesn't wait for the 1s tick
     renderSessionCard();
+    // 2026-08-24 ("don't bury a live session behind an icon"): covers the case
+    // sessionTick()'s own transition check can't -- a session that's ALREADY at
+    // Time's up the moment this render runs (a fresh page load/reload, or
+    // navigating back to today) never fires a "just transitioned" tick, because
+    // renderSessionCard() just above already painted the correct end-choices state
+    // on this very first render; sessionTick()'s showingEndChoices comparison would
+    // find nothing to react to. Same scAutoOpenedForId guard either way (see its
+    // own comment near sessionTick), so this is a safe no-op on every OTHER render
+    // once a session's already been auto-opened once.
+    {
+      const scNow = currentSession();
+      if (scNow && sessionRemainingMs(scNow) === 0 && scAutoOpenedForId !== scNow.id) {
+        scAutoOpenedForId = scNow.id;
+        if (deskWidgetsActive()) wrOpenId = "daySessionCard";
+      }
+    }
     renderDayHealth();
     renderDayProgress();
     renderDayFitLink();
@@ -42262,6 +42330,15 @@
     root.setProperty("--accent-on", light ? "#FFFFFF" : accentOnFor(am.accent));
   }
   applyModeAccent(true);
+  // 2026-08-24 ("don't bury a live session behind an icon"): the widget panel
+  // auto-opens the FIRST time a session reaches Time's up, then leaves it alone --
+  // closing it by hand must not have it pop back open a second later. Tracked by
+  // the session's OWN id (not a plain boolean), so a later session in the same
+  // day gets its own fresh auto-open rather than "already showed the panel once
+  // today" silently carrying over from a completely different session. No explicit
+  // reset needed on a new session starting -- a new session has a new id, so the
+  // comparison below (scAutoOpenedForId !== s.id) is naturally true again.
+  let scAutoOpenedForId = null;
   let sessionTickTimer = null;
   function sessionTick() {
     applyModeAccent();
@@ -42287,14 +42364,31 @@
     renderModeAmbientRail();
     const s = currentSession();
     const host = document.getElementById("daySessionCard");
-    if (!s) { if (host && !host.hidden) renderSessionCard(); return; }
+    // 2026-08-24: a session ending is also a rail-icon transition now (no session
+    // -> no icon, same contract sunWeekAhead's own weekday check uses) -- gated the
+    // same way renderSessionCard() itself is here, so this is a one-off on the
+    // actual end, never a per-tick rebuild.
+    if (!s) { if (host && !host.hidden) { renderSessionCard(); renderDeskWidgetRail(); } return; }
     // a state TRANSITION (countdown just hit 0, or a session just appeared/ended)
     // needs the full rebuild so the ending-actions row can appear; every other
     // second only the digits actually changed, so only they get touched (see
     // updateSessionCountdownText's own comment for why that split matters here).
     const showingEndChoices = !!host && !!host.querySelector(".sc-end-choices");
-    if (sessionRemainingMs(s) === 0 !== showingEndChoices) renderSessionCard();
-    else updateSessionCountdownText(s);
+    if (sessionRemainingMs(s) === 0 !== showingEndChoices) {
+      renderSessionCard();
+      // 2026-08-24: same transition, not a separate check -- the rail icon's dot
+      // (wrIconBtnHtml's own data-timesup, computed fresh on every rail rebuild)
+      // needs to flip in step with the card, and this is also the ONE moment the
+      // panel is allowed to auto-open itself (see scAutoOpenedForId's own comment
+      // just above sessionTick -- once per session, never on a tick where nothing
+      // changed). Firing every second here would be exactly the flicker 8ba8645
+      // fixed; this block only runs on the actual transition.
+      if (sessionRemainingMs(s) === 0 && scAutoOpenedForId !== s.id) {
+        scAutoOpenedForId = s.id;
+        if (deskWidgetsActive()) wrOpenId = "daySessionCard";
+      }
+      renderDeskWidgetRail();
+    } else updateSessionCountdownText(s);
   }
   sessionTickTimer = setInterval(sessionTick, 1000);
 
@@ -45129,8 +45223,21 @@
       // NOT reparented into dsbBodySlot here any more — it stays at its mobile
       // home marker (bodyCardHome, in the "off" branch below), invisible on
       // desktop via [data-desk-day] #dsbBodySlot's own display:none (CSS).
-      if (sessionCard && dsbSessionSlot && sessionCard.parentElement !== dsbSessionSlot) dsbSessionSlot.appendChild(sessionCard);
-      else if (sessionCard && !dsbSessionSlot && sessionCard.parentElement !== colL) colL.appendChild(sessionCard);
+      // 2026-08-24 ("move to widget panel on RHS"): >=1200px, #daySessionCard is
+      // now handled by the pinned-widget loop below instead (joins shopSlot/etc in
+      // WR_PINNED_IDS) -- this bespoke dsbSessionSlot placement stays live ONLY
+      // for 1024-1199px, where there is no rail (deskWidgetsActive() false),
+      // exactly today's behaviour, untouched. Skipped entirely, either way, while
+      // a Mode takeover is showing the card (mtActiveTakeoverModeId() truthy):
+      // that slot always wins this render pass regardless (renderModeTakeover()
+      // runs right after placeDeskGrid(), see renderDay()'s own call order), so
+      // claiming it here first is pointless work that would just be undone a
+      // moment later -- and would strand the card mid-viewport for the instant
+      // between the two calls.
+      if (!mtActiveTakeoverModeId() && !deskWidgetsActive()) {
+        if (sessionCard && dsbSessionSlot && sessionCard.parentElement !== dsbSessionSlot) dsbSessionSlot.appendChild(sessionCard);
+        else if (sessionCard && !dsbSessionSlot && sessionCard.parentElement !== colL) colL.appendChild(sessionCard);
+      }
       if (rCyc && rCyc.parentElement !== colL) colL.appendChild(rCyc);
       // 2026-08-16: rNum (Numerology) now goes to the sidebar's own slot instead of
       // colL — see this function's own header comment. colL still parents it
@@ -45169,7 +45276,15 @@
       // appending before it would destroy these three at the 1024-1199px width.
       // #wrPinned is never rebuilt, so the order is only load-bearing for the fallback.
       if (pinnedHost) {
-        [sunWeek, ctxWrap, ambRail, shopSlotEl].forEach(el => {
+        // 2026-08-24: #daySessionCard joins this loop ONLY at >=1200px (pinnedHost
+        // is #wrPinned there, never #wrFallback -- see the dsbSessionSlot branch
+        // above for why 1024-1199px stays on its own bespoke path) and NEVER while
+        // a Mode takeover currently owns it (same reasoning as that branch: it
+        // would just be reclaimed a moment later by renderModeTakeover(), called
+        // right after placeDeskGrid() returns).
+        const pinnedNodes = [sunWeek, ctxWrap, ambRail, shopSlotEl];
+        if (deskWidgetsActive() && !mtActiveTakeoverModeId()) pinnedNodes.unshift(sessionCard);
+        pinnedNodes.forEach(el => {
           if (el && el.parentElement !== pinnedHost) pinnedHost.appendChild(el);
         });
       }
@@ -45919,8 +46034,14 @@
   // now icons too, fixed order, first in the rail — they're not TILE_PREFS-
   // managed (no Arrange checkbox, never were), so they stay outside
   // WR_WIDGET_IDS rather than getting new prefs invented for them.
-  const WR_PINNED_IDS = ["sunWeekAhead", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
-  const WR_PINNED_LABELS = { sunWeekAhead: "Plan the week ahead", dayCtxWrap: "Today & fasting", modeAmbientRail: "Mode", shopSlot: "Shopping" };
+  // 2026-08-24 (Linh, screenshot of the session card: "move to widget panel on RHS"):
+  // #daySessionCard joins the pinned set, FIRST -- while a session is running it's the
+  // most time-critical thing in the rail. Same "real element, reparented in, nothing
+  // rebuilt" shape as #shopSlot just below; see placeDeskGrid()'s own comment for why
+  // its reparent stays width-gated to >=1200px specifically (1024-1199px keeps today's
+  // #dsbSessionSlot behaviour, unlike shopSlot which already spanned both bands).
+  const WR_PINNED_IDS = ["daySessionCard", "sunWeekAhead", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
+  const WR_PINNED_LABELS = { daySessionCard: "Session", sunWeekAhead: "Plan the week ahead", dayCtxWrap: "Today & fasting", modeAmbientRail: "Mode", shopSlot: "Shopping" };
   // one glyph per widget, pinned + TILE_PREFS-managed alike. biomechTip/
   // streaksWidget/pileupBox/railPatients per Linh's own naming; the rest are a
   // judgment call, grounded in the app's existing icon vocabulary where one
@@ -45928,7 +46049,7 @@
   // see renderDeskRail()'s cycCard; ↻ matches NAV_ITEMS' Routines icon exactly,
   // since sunRoutines is that same destination's Sunday-review card).
   const WR_ICONS = {
-    sunWeekAhead: "🧭", dayCtxWrap: "⏱", modeAmbientRail: "🎭", shopSlot: "🛒",
+    daySessionCard: "⏳", sunWeekAhead: "🧭", dayCtxWrap: "⏱", modeAmbientRail: "🎭", shopSlot: "🛒",
     focusTile: "★", railCycle: "🌸", railPatients: "🩺", railTodo: "☑",
     upkeepSuggest: "💡", upkeepDial: "🎯", pileupBox: "🧺", streaksWidget: "🔥",
     boostWidget: "⚡", biomechTip: "🦴", sunWeekShape: "📊", sunTodoByMode: "🗂", sunRoutines: "↻",
@@ -46301,10 +46422,26 @@
   // new rule. #sunWeekAhead is filtered the same way, by weekday, since it has
   // no WR_WIDGET_IDS/wrCardHtml() entry to ask.
   let wrOpenId = null;
+  // 2026-08-24 ("don't bury a live session behind an icon"): #daySessionCard's own
+  // icon carries a small status dot, top-right -- Linh's approved mockup. Colour
+  // itself is free: default (no [data-timesup]) rides plain CSS var(--margin-rule),
+  // the SAME root token applyModeAccent() already re-sets to the active Mode's
+  // accent every tick (search that name) -- a Work session's dot is Work green with
+  // zero per-component colour code, exactly like every other --margin-rule consumer.
+  // [data-timesup="true"] switches it (and the glyph) to the fixed gold urgent
+  // colour instead. Computed fresh here at build time (this only runs on a full
+  // rail render); updateSessionIconDot() is the surgical per-tick touch that keeps
+  // it correct between full renders (see its own comment, and sessionTick()'s).
   function wrIconBtnHtml(id, label) {
     const active = wrOpenId === id;
+    let dot = "";
+    if (id === "daySessionCard") {
+      const s = currentSession();
+      const timesUp = !!s && sessionRemainingMs(s) === 0;
+      dot = `<span class="wr-ic-dot"${timesUp ? ' data-timesup="true"' : ""} aria-hidden="true"></span>`;
+    }
     return `<button type="button" class="wr-ic-btn num-hover-trigger${active ? " on" : ""}" data-wr-open="${id}" aria-expanded="${active}" aria-label="${esc(label)}">
-      <span aria-hidden="true">${WR_ICONS[id] || "•"}</span>
+      <span aria-hidden="true">${WR_ICONS[id] || "•"}</span>${dot}
       <span class="wcard-hover-pop" role="tooltip">${esc(label)}</span>
     </button>`;
   }
@@ -46314,6 +46451,14 @@
     let html = "";
     WR_PINNED_IDS.forEach(id => {
       if (id === "sunWeekAhead" && dowIndex(state.anchor) !== 6) return;
+      // same "no icon when there's nothing to show" contract as sunWeekAhead just
+      // above -- #daySessionCard carries its own hidden attribute (renderSessionCard()
+      // sets it whenever there's no live session), read directly rather than adding a
+      // second "is there a session" query.
+      if (id === "daySessionCard") {
+        const scEl = document.getElementById("daySessionCard");
+        if (!scEl || scEl.hidden) return;
+      }
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
     html += `<div class="wr-ic-sep" aria-hidden="true"></div>`;
@@ -46397,6 +46542,33 @@
     }
     const pinnedEls = {};
     WR_PINNED_IDS.forEach(id => { pinnedEls[id] = document.getElementById(id); });
+    // 2026-08-24 ("move to widget panel on RHS"): while a Mode takeover currently
+    // owns #daySessionCard (mtActiveTakeoverModeId() truthy), this function must
+    // not touch it at all -- not claim it into #wrPanelBody, not park it offstage
+    // in #wrPinned. Deleting it from pinnedEls here (rather than adding an if-guard
+    // to every loop below) means every generic Object.values/entries pass over
+    // pinnedEls just naturally skips it, the same way a widget with no live DOM
+    // node already does. renderModeTakeover() (called right after placeDeskGrid()
+    // in renderDay(), and every second from sessionTick()) is the one place that
+    // reparents it back once the takeover closes -- see its own comment.
+    if (mtActiveTakeoverModeId()) {
+      delete pinnedEls.daySessionCard;
+      // wrOpenId is deliberately left alone here (not forced closed) -- once the
+      // takeover ends, the else-branch below resumes showing it open exactly as
+      // it was, same as any other render that happens to run while it's hidden
+      // behind something else. Checking session-hidden state below the takeover
+      // check would delete-then-misread pinnedEls.daySessionCard as "gone" purely
+      // because THIS function isn't managing it right now, not because the
+      // session actually ended -- reading the live DOM node directly (not
+      // pinnedEls) side-steps that.
+    } else if (wrOpenId === "daySessionCard") {
+      // same reasoning as the sunWeekAhead check just below: a session that ended
+      // while its panel was open shouldn't leave a blank/stale card open.
+      // renderSessionCard() is the one place that sets .hidden, same contract
+      // sunWeekAhead's own dowIndex check reads here.
+      const scEl = document.getElementById("daySessionCard");
+      if (!scEl || scEl.hidden) wrOpenId = null;
+    }
     // auto-close if the open id's content has gone empty for the CURRENTLY
     // viewed day (a Sunday-only widget, left open while paging to another
     // day) rather than showing a stale or blank panel.
@@ -49228,6 +49400,19 @@
       // render, send it home now.
       if (sessionCard && sessionCard.parentElement === slot) {
         (home || document.querySelector(".wrap") || document.body).appendChild(sessionCard);
+        // 2026-08-24 ("move to widget panel on RHS"): >=1200px, "home" isn't its
+        // real resting place any more -- the rail/panel is. This block only runs on
+        // the exact open->closed TRANSITION (parentElement===slot is false on every
+        // later tick once it's moved), so calling the full renderDeskWidgetRail()
+        // here is a one-off, not a per-tick cost -- the 1Hz flicker sessionTick()'s
+        // own comment warns about would need this to fire every second, which it
+        // doesn't. renderWrPanel() (called inside) picks the card straight back up
+        // from wherever it just landed and moves it into #wrPanelBody (if its icon
+        // was left open) or #wrPinned -- safe to call unconditionally, it already
+        // no-ops below 1200px on its own. Below 1200px "home" IS correct (matches
+        // 1024-1199px's own dsbSessionSlot path via the next placeDeskGrid()/resize,
+        // same as today), so nothing further to do there.
+        renderDeskWidgetRail();
       }
       // the missing "back in" control, Study/Cleaning only (rule 4/7's "equally
       // visible way back in" test) -- Morning/Night's own Focus button already
@@ -51941,9 +52126,16 @@
     // §3.4 the three ending actions -- only ever rendered once the countdown has
     // actually hit 0 (see renderSessionCard's timeUp branch), so no extra guard
     // needed here beyond currentSession() existing at all.
-    if (e.target.closest("[data-sc-extend]")) { extendSession(15); renderSessionCard(); return; }
+    // 2026-08-24: +15/Move to next both flip Time's-up state immediately (extend
+    // un-sets it, move-next ends the session outright) without waiting for
+    // sessionTick()'s own 1Hz transition check -- renderDeskWidgetRail() here keeps
+    // the rail icon's dot colour (+ its very presence, for move-next) in step
+    // rather than going stale until whatever render happens to run next.
+    // bookAnotherSession() doesn't need its own copy: reRenderCurrent() already
+    // runs a full renderDay(), which rebuilds the rail as part of its normal path.
+    if (e.target.closest("[data-sc-extend]")) { extendSession(15); renderSessionCard(); renderDeskWidgetRail(); return; }
     if (e.target.closest("[data-sc-book-another]")) { bookAnotherSession(); reRenderCurrent(); return; }
-    if (e.target.closest("[data-sc-move-next]")) { moveToNextSession(); renderSessionCard(); return; }
+    if (e.target.closest("[data-sc-move-next]")) { moveToNextSession(); renderSessionCard(); renderDeskWidgetRail(); return; }
     // 2026-08-19 (upkeep day-suggestions): ✓ is the ONLY thing that ever schedules —
     // rebuilds the suggestion list fresh (cheap, deterministic, same inputs it was
     // rendered from) to recover the full object from the row's id rather than
