@@ -16491,6 +16491,19 @@
      the mockup: Numerology + Cycle sit 2-up (both are a single big number + a line),
      while Patients / Piling up / Streaks are lists and take the full width. ---- */
   #wrMobile { display: none; }
+  /* 2026-08-24 (icon-per-widget mobile/tablet drawer): #wrMobile's own visibility used
+     to be gated ENTIRELY by the ≤640px media query below, on the assumption that the
+     only place it's ever shown is the ≤640px inline shelf. That stopped being true the
+     day #dayRightDrawer started reparenting #wrMobile in at every width below 1024px
+     (mobileDayDrawersActive() covers the 641–1023px tablet band too, single-day view) —
+     confirmed live: at 768px the drawer correctly held #wrMobile, but it computed
+     display:none, an invisible drawer body with nothing wrong in the JS. This override
+     is unscoped by width on purpose: #dayRightDrawer only ever exists/matters below
+     1024px in the first place (mobileDayDrawersActive()'s own condition), so nothing
+     needs a matching @media guard here — being inside the drawer at all is already the
+     correct signal. margin:0, not the inline shelf's 24px top margin — the drawer body
+     (.day-right-drawer-body) already supplies its own 16px padding. */
+  #dayRightDrawer #wrMobile { display: block; margin: 0; }
   @media (max-width: 640px) {
     #wrMobile { display: block; margin: 24px 0 0; }
     /* 1-day only, matching desktop's own rail (gated on deskDay1Active()) and the §2
@@ -16501,18 +16514,6 @@
     #wrap[data-cal-multi="true"] #wrMobile { display: none; }
     #wrMobile .wr-head { margin-bottom: 8px; }
     #wrMobileCards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
-    /* 2026-08-18 pt.6 (Linh: "improve the slide outs panels"): inside the drawer the
-       two-column grid gives each card ~170px even at the new 380px width — not enough
-       for a to-do line like "Organise taxes in a free block during the week". One column
-       instead, and the drawer scrolls; a widget you can read beats two you can't.
-       min-width:0 on the items is the actual overflow fix: grid items default to
-       min-width:auto and refuse to shrink below their content, which is why the To-do
-       card was spilling past the drawer edge rather than wrapping inside it.
-       Scoped to #dayRightDrawer — #wrMobile in its normal in-page position keeps the
-       two-up layout exactly as it is. */
-    #dayRightDrawer #wrMobileCards { grid-template-columns: 1fr; }
-    #dayRightDrawer #wrMobileCards > * { min-width: 0; }
-    #dayRightDrawer .wr-card { min-width: 0; }
     #wrMobileCards > .wr-card { margin-bottom: 0; }
     #wrMobileCards > [data-wr-id="railPatients"],
     #wrMobileCards > [data-wr-id="pileupBox"],
@@ -16537,6 +16538,47 @@
        360px screen (its desktop right:12px assumes a 286px rail, not a full-width row). */
     #wrMobile .wr-arrange-pop { top: 24px; right: 0; width: 220px; max-width: calc(100vw - 32px); }
   }
+  /* 2026-08-24 (icon-per-widget mobile/tablet drawer, same "icon per widget, tap to
+     open one at a time" idiom the desktop rail prompt added, reusing its WR_ICONS/
+     WR_LABELS glyphs verbatim -- see renderWrMobileDrawerSelect()): once #wrMobile is
+     inside #dayRightDrawer, #wrMobileCards holds exactly two children now -- the icon
+     row (.wr-ic-rail, REUSED directly from the desktop rail, not a parallel class --
+     only its flex-direction flips here, everything else about button size/hover/.on
+     state is identical) and whichever ONE widget is open (.wr-mobile-ic-open) or the
+     empty "tap a widget" state. Neither is a grid item any more, so the OLD
+     `#dayRightDrawer #wrMobileCards { grid-template-columns: 1fr }` override (which
+     used to force the multi-card LIST to one column inside the drawer) is retired
+     outright along with the grid itself -- not folded in, since there's no card list
+     left here to force into a column; a plain flex column stacks the two children.
+     Unscoped by width, same reasoning as #dayRightDrawer #wrMobile just above: being
+     inside the drawer is already the correct signal, covering the 641-1023px tablet
+     band this @media(max-width:640px) block never did. */
+  /* align-items:stretch needed explicitly -- the base ≤640px rule's own
+     align-items:start (written for its 2-up GRID) isn't touched by this override
+     (only display/flex-direction/gap are set here) and survives the cascade, which
+     left both children shrink-wrapped to their own content width instead of the
+     full drawer width -- found live: .wr-mobile-ic-open measured 105px wide inside
+     a 313px container. */
+  #dayRightDrawer #wrMobileCards { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  #dayRightDrawer #wrMobileCards > * { min-width: 0; }
+  #dayRightDrawer .wr-card { min-width: 0; }
+  /* .wr-ic-rail's own base rule (search it -- built for the desktop icon rail) is a
+     vertical column; here it needs to read left-to-right across the drawer's own
+     width instead, wrapping onto a second line if the widget count needs it. Button
+     sizing/hover/.on state all come from .wr-ic-btn unmodified. */
+  /* width:auto (rather than just leaving the base rule's width:100%) was the first
+     attempt here and was wrong -- combined with flex-wrap:wrap it let the row size
+     to its unwrapped max-content width instead of the drawer's actual width, running
+     the row's own bounding box straight off a 375px viewport (found live: right edge
+     at x:704 against a 375px window). width:100% is exactly what a horizontal row
+     needs anyway -- the SAME value the base rule already sets for the vertical
+     column, so this override only ever needed flex-direction/flex-wrap, not width. */
+  #dayRightDrawer .wr-ic-rail { flex-direction: row; flex-wrap: wrap; }
+  /* same "the grip only makes sense inside a draggable LIST" reasoning as
+     .wr-panel-body .wr-grip on the desktop side -- one widget shown at a time, tapped
+     open from the icon row above it, nothing here to drag-reorder against. */
+  .wr-mobile-ic-open .wr-grip { display: none; }
+  .wr-mobile-ic-empty { padding: 24px 0; text-align: center; font-size: 13px; font-style: italic; color: var(--ink-faint); }
 
   /* ---- 2026-08-16 (mobile Day tightening, item 5): SPACING RHYTHM — "tight within a
      group, generous between groups". The page was uniformly loose (4/16/16/8/24 down
@@ -34221,7 +34263,20 @@
     // block needs its own once-per-render call. Width-gated rather than unconditional
     // so desktop's render path is byte-for-byte what it was (placeDeskGrid still owns
     // it there, and a second call would rebuild an open Arrange popover mid-tap).
-    if (mobileDayMq.matches) renderDeskWidgetRail();
+    // 2026-08-24 (icon-per-widget mobile/tablet drawer) WIDENED from mobileDayMq
+    // (<=640px) to !deskGridMq.matches (<1024px): #wrMobile has lived inside
+    // #dayRightDrawer across the WHOLE 641-1023px tablet band too since the
+    // 2026-08-18 pt.8 drawer build, but this call site was never updated to match --
+    // invisible on HEAD because drawer-mode and the inline shelf rendered byte-
+    // identical html there, so a missed refresh never showed. Now that they render
+    // DIFFERENT markup (icon row vs. full card list), the same gap left the icon-
+    // select markup stranded after switching from 1-day to 3/5/7-day at tablet width
+    // -- found live, not guessed: switching #wrMobile from the drawer to
+    // #wrMobileHome left #wrMobileCards showing the icon rail + whichever card was
+    // last open, since nothing had told it to re-render as the plain list. Matches
+    // mobileDayDrawersActive()'s own breakpoint, the one that actually decides
+    // whether #wrMobile lives in the drawer at all -- same guard, not a wider one.
+    if (!deskGridMq.matches) renderDeskWidgetRail();
     // 2026-08-24 (GCal-shaped mobile top bar, STEP 3): the pending-to-do banner --
     // cheap and width-independent (CSS hides it ≥641px), same "just call it every
     // render" reasoning as renderDayCtx() above rather than threading a mobile check
@@ -45962,7 +46017,18 @@
       .sort((a, b) => ((TILE_PREFS[a] || {}).ord ?? 99) - ((TILE_PREFS[b] || {}).ord ?? 99))
       .filter(id => !(TILE_PREFS[id] || {}).hidden);
     if (fallbackMount) fallbackMount.innerHTML = ordered.filter(id => id !== "focusTile").map(wrCardHtml).join("");
-    if (mobMount) mobMount.innerHTML = ordered.map(wrCardHtml).join("");
+    // 2026-08-24 (icon-per-widget mobile/tablet drawer): #wrMobileCards' content now
+    // branches on WHERE #wrMobile currently lives, same "one shared data source, two
+    // displays" shape #wrFallback/#wrIconRail already split just above -- inside
+    // #dayRightDrawer (mobileDayDrawersActive(), phone AND the 641-1023px tablet band,
+    // single-day view only) it gets the new icon-row + one-open-widget markup; at its
+    // normal in-page home (#wrMobileHome, multi-day mobile -- 3/5/7 days, where the
+    // shelf stays visible below the calendar, never tucked in a drawer) it keeps
+    // today's full stacked/2-up card list exactly as it always has.
+    if (mobMount) {
+      if (mobileDayDrawersActive()) renderWrMobileDrawerSelect(mobMount, ordered);
+      else mobMount.innerHTML = ordered.map(wrCardHtml).join("");
+    }
     renderWrIconRail(ordered.filter(id => id !== "focusTile"));
     // every existing call site that re-renders this rail after a card-level
     // mutation (a to-do tick, an accepted suggestion, a bio-tip rating, ...)
@@ -46001,6 +46067,52 @@
       html += wrIconBtnHtml(id, WR_LABELS[id]);
     });
     rail.innerHTML = html;
+  }
+  // Mobile/tablet drawer — the SAME "icon per widget, tap to open one at a time" idiom
+  // as the desktop rail above, reusing its WR_ICONS/WR_LABELS glyphs verbatim (one
+  // vocabulary for what a widget is called/looks like, not a second one), just in
+  // #wrMobileCards instead of a separate fixed rail+panel: the drawer itself already
+  // IS the panel here, so there's nothing to dock a second overlay against.
+  // Deliberately its own state (wrMobileOpenId), not wrOpenId — that variable is
+  // desktop's, gated on deskWidgetsActive() (>=1200px) and left open across
+  // navigations/resizes on purpose (renderWrPanel()'s whole "no-op below 1200px, the
+  // four real elements are already correctly placed" contract depends on it NOT being
+  // cleared just because the width changed). This surface needs the opposite:
+  // "nothing selected by default when the drawer first opens" is a hard requirement
+  // (her own words), so it resets to null on every render pass found with the drawer
+  // closed (see the guard below) rather than surviving between opens.
+  // Icons carry a real aria-label for screen readers instead of a hover tooltip --
+  // there's no hover on a touchscreen, and once a widget IS open its own .wr-label
+  // heading (every wrCardHtml() branch has one) names it again on-screen, so a second,
+  // always-visible caption under each icon would just repeat that a beat sooner at the
+  // cost of a taller, busier row -- the one thing this feature exists to avoid re-
+  // creating (her own "not re-creating the scroll-past-everything problem").
+  let wrMobileOpenId = null;
+  function wrMobileIconBtnHtml(id, label) {
+    const active = wrMobileOpenId === id;
+    return `<button type="button" class="wr-ic-btn${active ? " on" : ""}" data-wrm-open="${id}" aria-expanded="${active}" aria-label="${esc(label)}">
+      <span aria-hidden="true">${WR_ICONS[id] || "•"}</span>
+    </button>`;
+  }
+  function renderWrMobileDrawerSelect(mount, cardOrdered) {
+    // every open starts blank: any render pass that finds the drawer closed resets
+    // the selection, so the NEXT open (this session or a future one) never shows a
+    // widget pre-expanded. mobileDayDrawersActive() gates whether #wrMobile even
+    // LIVES here at all (checked by the caller); this checks whether it's actually
+    // swiped into view right now -- #wrMobile stays reparented into the drawer's DOM
+    // for the whole single-day mobile/tablet session, open or shut, so renders happen
+    // continuously while shut too (a to-do tick elsewhere, a resize) and each one is a
+    // fresh chance to clear a stale selection before she ever sees it.
+    if (!dayRightDrawerIsOpen()) wrMobileOpenId = null;
+    const htmlById = {};
+    cardOrdered.forEach(id => { htmlById[id] = wrCardHtml(id); });
+    // same auto-close reasoning as renderWrPanel()'s own guard just below -- content
+    // that's gone empty (Sunday-only, or hidden via Arrange since it was opened)
+    // shouldn't leave a blank card sitting open.
+    if (wrMobileOpenId && !htmlById[wrMobileOpenId]) wrMobileOpenId = null;
+    const railHtml = cardOrdered.filter(id => htmlById[id]).map(id => wrMobileIconBtnHtml(id, WR_LABELS[id])).join("");
+    const openHtml = wrMobileOpenId ? htmlById[wrMobileOpenId] : `<div class="wr-mobile-ic-empty">Tap a widget to open it</div>`;
+    mount.innerHTML = `<div class="wr-ic-rail">${railHtml}</div><div class="wr-mobile-ic-open">${openHtml}</div>`;
   }
   // Panel — shows exactly ONE open widget's full content. Real-element ids
   // (WR_PINNED_IDS) get their actual DOM node reparented in (same "the node
@@ -46053,16 +46165,41 @@
       renderDeskWidgetRail();
       return;
     }
+    // mobile/tablet drawer's own icon row -- a separate attribute (not [data-wr-open])
+    // and a separate state var (wrMobileOpenId, not wrOpenId) on purpose, see
+    // wrMobileOpenId's own comment for why the two surfaces can't share one.
+    const mobOpenBtn = e.target.closest("[data-wrm-open]");
+    if (mobOpenBtn) {
+      wrMobileOpenId = wrMobileOpenId === mobOpenBtn.dataset.wrmOpen ? null : mobOpenBtn.dataset.wrmOpen;
+      renderDeskWidgetRail();
+      return;
+    }
     if (e.target.closest("#wrPanelClose")) {
       wrOpenId = null;
       renderDeskWidgetRail();
     }
   });
   document.addEventListener("keydown", e => {
-    if (e.key !== "Escape" || !wrOpenId) return;
-    wrOpenId = null;
+    if (e.key !== "Escape" || (!wrOpenId && !wrMobileOpenId)) return;
+    wrOpenId = null; wrMobileOpenId = null;
     renderDeskWidgetRail();
   });
+  // renderWrMobileDrawerSelect()'s own "resets to null when a render finds the drawer
+  // closed" guard only fires on the NEXT render pass -- and openDayRightDrawer()/
+  // closeDayRightDrawer() (left untouched, per her explicit instruction) never call
+  // one. A close, then a reopen with nothing else happening in between -- completely
+  // normal usage -- would skip that guard entirely and reopen showing whatever was
+  // left selected. This observer catches the real open transition directly off the
+  // drawer's own class attribute instead, independent of what else is or isn't
+  // rendering around it, without adding a single line to either open/close function.
+  let wrDrawerWasOpen = false;
+  new MutationObserver(() => {
+    const drawer = document.getElementById("dayRightDrawer");
+    if (!drawer) return;
+    const isOpen = drawer.classList.contains("open");
+    if (isOpen && !wrDrawerWasOpen) { wrMobileOpenId = null; renderDeskWidgetRail(); }
+    wrDrawerWasOpen = isOpen;
+  }).observe(document.getElementById("dayRightDrawer"), { attributes: true, attributeFilter: ["class"] });
   // Arrange popover — scoped to this rail, a visibility checkbox per widget
   // (§5's "Arrange adds/removes"). Not the general-purpose Arrange rewrite the
   // in-code "task #132" comment describes — only what this rail's own
