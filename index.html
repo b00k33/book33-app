@@ -16370,9 +16370,11 @@
      layout, so it never reflows the timeline underneath it. Same idiom as
      #dayRightDrawer (base rule off-screen, .open flips it, aria-hidden not
      [hidden] carries the closed a11y state — a genuinely display:none panel
-     can't transition) rather than a new one-off. Deliberately does NOT close
-     on outside click (Linh's explicit rule) — only #wrPanelClose, re-clicking
-     the open icon, or Escape. */
+     can't transition) rather than a new one-off. 2026-08-25: now closes on
+     outside click too (a document-level listener, search "close the widget
+     panel when I click outside it") — SUPERSEDES the earlier rule that it
+     deliberately did not. #wrPanelClose, re-clicking the open icon, and Escape
+     all still close it; outside click is a fourth way, not a replacement. */
   .wr-panel {
     /* border-left retired 2026-08-24 (de-border pass): the panel is white/paper and
        the rail beside it is tinted, so the edge already reads; the drop shadow (kept
@@ -19566,8 +19568,11 @@
     <div id="wrFallback"></div>
     <!-- 2026-08-24: the slide-out panel #wrIconRail opens into -- fixed overlay,
          floats to the LEFT of the (fixed-width) icon rail, doesn't reflow the
-         timeline. Explicitly does NOT close on an outside click (Linh's rule) --
-         only #wrPanelClose, re-clicking the open icon, or Escape close it. -->
+         timeline. 2026-08-25: now closes on an outside click too (SUPERSEDES the
+         earlier rule that it deliberately did not -- see the document-level
+         listener near renderDeskWidgetRail, "close the widget panel when I click
+         outside it"). #wrPanelClose, re-clicking the open icon, and Escape all
+         still close it; outside click is a fourth way, not a replacement. -->
     <div class="wr-panel" id="wrPanel" role="dialog" aria-label="Widget" aria-hidden="true">
       <div class="wr-panel-head">
         <span class="wr-panel-title" id="wrPanelTitle"></span>
@@ -45707,6 +45712,70 @@
       wrOpenId = null;
       renderDeskWidgetRail();
     }
+  });
+  // 2026-08-25 ("close the widget panel when I click outside it"): reverses her
+  // earlier explicit rule (SUPERSEDED — .wr-panel's own CSS comment and this panel's
+  // own HTML comment are both updated the same way, not left contradicting this). A
+  // FOURTH way out, alongside #wrPanelClose/re-clicking the open icon/Escape — none
+  // of those three are touched.
+  //
+  // Own listener (same idiom as #wrArrangeBtn's own outside-click close a few dozen
+  // lines down — "if (open && !closest(content) && !closest(controls)) close()"),
+  // registered directly AFTER the [data-wr-open]/[data-wrm-open]/#wrPanelClose
+  // listener above rather than folded into it — same document, same bubble phase, so
+  // plain source-order registration decides who runs first; no capture phase needed.
+  // That ordering is what makes re-clicking the open icon still just toggle-close
+  // correctly: that click is handled by the listener above FIRST (wrOpenId already
+  // flipped, often to null) before this one ever runs, so the `if (!wrOpenId) return`
+  // guard below correctly no-ops on that exact click instead of double-closing it.
+  //
+  // stopPropagation() is NOT the fix, though it looks like it should be. Caught live,
+  // not assumed: the listener above calls renderDeskWidgetRail() -> renderWrIconRail()
+  // -> rail.innerHTML = html, which REBUILDS every icon button synchronously, so the
+  // button actually clicked is detached from the document before this listener ever
+  // runs. e.target.closest(...) on a detached node always comes back empty, so the
+  // first version of this fix misread every rail-icon click (opening AND switching)
+  // as "outside" and instantly re-closed the panel it had just opened. The same trap
+  // applies to anything INSIDE the panel that re-renders its own content on click
+  // (e.g. a to-do checkbox reassigning #wrPanelBody.innerHTML) — not just rail icons.
+  // e.composedPath() is the actual fix: it's captured once at dispatch, before any
+  // listener runs, so it still lists the click's real ancestor chain (button ->
+  // #wrIconRail -> #deskWidgetRail -> ... -> document) even once the button itself
+  // has been replaced — only the leaf gets swapped, the ancestor containers never are.
+  // Checked below via composedPath() instead of e.target.closest() for exactly that
+  // reason.
+  //
+  // Checked what the panel's own content can open before writing this (her explicit
+  // ask, not assumed): every WR_WIDGET_IDS card (Numerology/Cycle/Patients/To-do/
+  // Suggestions/Upkeep/Piling up/Streaks/Boost/Biomechanics/the three Sunday cards)
+  // and every WR_PINNED_IDS real element (Session — including its own "move this
+  // extra to another day" sub-panel — Plan the week ahead, Today & fasting, Mode,
+  // Shopping) all re-render back into #wrPanelBody itself; none opens a popover/
+  // sheet/menu that portals outside #wrPanel, so the composedPath() check for
+  // "#wrPanel" alone already covers every one of them. The one place that looked
+  // like a candidate — a
+  // date input feeding the global month-picker (#b33mpOverlay) — turned out to
+  // belong to a DIFFERENT #pileupBox element (the Today page's own pile-up card);
+  // the widget rail's own "Piling up" card (wrCardHtml's pileupBox branch) has no
+  // such field. #b33mpOverlay/#editPanelOverlay/#tlDetailOverlay are still excluded
+  // below anyway, as cheap forward-compatible insurance against a future widget
+  // opening one of those while this panel is open — not because a live trigger
+  // exists today.
+  //
+  // #deskWidgetRail (not just #wrIconRail) is the real exclusion boundary — found
+  // live, not assumed: #wrArrangeBtn's own popover (.wr-arrange-pop, "Arrange
+  // widgets") renders as a sibling of #wrIconRail inside #deskWidgetRail, not inside
+  // the rail itself (confirmed via DOM inspection: wrArrangePop.parentElement is
+  // #deskWidgetRail). Excluding only #wrIconRail would have closed this panel out
+  // from under her the moment she tapped a checkbox in that popover — the exact
+  // "annoying" failure mode the brief warned this fix could fall into.
+  document.addEventListener("click", e => {
+    if (!wrOpenId) return;
+    const path = e.composedPath();
+    const passesThrough = sel => path.some(el => el.nodeType === 1 && el.matches && el.matches(sel));
+    if (passesThrough("#wrPanel, #deskWidgetRail, #b33mpOverlay, #editPanelOverlay, #tlDetailOverlay")) return;
+    wrOpenId = null;
+    renderDeskWidgetRail();
   });
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape" || (!wrOpenId && !wrMobileOpenId)) return;
