@@ -7839,23 +7839,55 @@
   .track-opt[data-track="marriage"] { color: var(--marriage-ink); }
   .track-opt[data-track="personal"] { color: var(--ink); }
   .track-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px currentColor; font-weight: 600; }
-  /* to-do editor's Mode row (stage 5) -- "None" + up to 6 live modes is more options
-     than the fixed 4-option track picker this component was built for, so it wraps
-     instead of squeezing every button into one row. No ::before dot: each button's
-     own emoji already marks it, a second currentColor dot next to an emoji would
-     read as a duplicate marker -- same reasoning #navModePicker's own ::before
-     suppression above already established for the same "emoji, not a colour dot"
-     shape of option. */
-  #todoModePicker.track-picker { flex-wrap: wrap; }
-  #todoModePicker .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
-  #todoModePicker .track-opt::before { display: none; }
-  /* modes stage 10: #fModePicker (event/routine-template form) and #rtnModePicker
-     (routine editor) are the same "None" + live-modes row, same reasoning as
-     #todoModePicker just above -- identical treatment, own selectors since each
-     lives in its own form. */
-  #fModePicker.track-picker, #rtnModePicker.track-picker { flex-wrap: wrap; }
-  #fModePicker .track-opt, #rtnModePicker .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
-  #fModePicker .track-opt::before, #rtnModePicker .track-opt::before { display: none; }
+  /* 2026-08-26 ("Mode chips should tessellate" + "Mode colour should be prominent")
+     SUPERSEDES the two blocks this replaces (their own "wraps instead of squeezing",
+     "identical treatment, own selectors since each lives in its own form", and "No
+     ::before dot... a second currentColor dot next to an emoji would read as a
+     duplicate marker" reasoning): flex-wrap's variable-width pills landed as a ragged
+     3/3/1 with "More ›" stranded alone on its own row (measured live, 7 chips) --
+     a grid of equal columns tessellates instead, at any picker width. The ::before
+     dot returns, repurposed: colour is how every OTHER surface in this app identifies
+     a Mode, but only the SELECTED chip carried any (six of seven told her nothing) --
+     now every chip gets a small solid dot of its own Mode's accent, so the emoji
+     concern the old comment raised no longer applies (the dot is a colour marker,
+     the emoji is content she chose -- two different jobs, not a duplicate).
+     #rtnModePicker is DEAD -- the standalone Routines editor it belonged to was
+     retired 2026-08-25 ("Retiring Routines", search that name); routines edit
+     through #fModePicker now, so it never needed its own selector in practice and
+     doesn't get one here.
+     --mode-accent is set inline per chip (renderFModePicker()/renderTodoModePicker())
+     from each Mode's own m.accent -- "None" gets --ink-faint, the same neutral this
+     app already uses for "no Mode" elsewhere (Life Map's mode-less cell fill, search
+     "never gold -- gold already means 'selected'"), so it reads as the ABSENCE of a
+     Mode rather than a different one. Unselected chips get a soft ~15% wash of that
+     colour into the field surface, with the same colour mixed 65/35 toward --ink for
+     the label text (same two-formula shape #dayAlldayRow's cycle chip already uses
+     for its own "soft-tint bg + darker-tone text" pairing, reused rather than a third
+     invention) -- soft fill, not an outline (compared both live, chose fill: it reads
+     more solid and matches how the calendar's own event blocks look). The SELECTED
+     state is untouched (#addForm #fModePicker .track-opt[aria-pressed="true"], a few
+     lines up) -- var(--ef-tint) already IS the selected Mode's own accent
+     (applyEfTint(..., formSelectedMode, ...) in renderFModePicker()), so selected
+     already reads as the same Mode's colour, just fully saturated instead of washed. */
+  #fModePicker.track-picker, #todoModePicker.track-picker {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px;
+  }
+  #fModePicker .track-opt, #todoModePicker .track-opt {
+    border-radius: 12px; padding: 6px 12px; border-color: transparent;
+    background: color-mix(in oklab, var(--mode-accent, var(--ink-faint)) 15%, var(--field-bg));
+    color: color-mix(in oklab, var(--mode-accent, var(--ink-faint)) 65%, var(--ink) 35%);
+  }
+  #fModePicker .track-opt::before, #todoModePicker .track-opt::before {
+    background: var(--mode-accent, var(--ink-faint));
+  }
+  /* "More ›" isn't a Mode -- STEP 2's own "reads as a row action rather than an
+     orphaned chip" -- so it opts OUT of the dot/wash treatment above (it has no
+     --mode-accent set, and would otherwise inherit the "None" neutral by the same
+     fallback) and spans the full row instead of taking one column. */
+  #fModePicker #fModeMoreBtn {
+    grid-column: 1 / -1; background: var(--field-bg); color: var(--ink); border-color: var(--note-line);
+  }
+  #fModePicker #fModeMoreBtn::before { display: none; }
   /* 2026-08-15 fix (B2): Settings → Navigation, §5's own Drawer/Tabs switch. §0 forbids
      outlined controls outright ("No outlined pills, fields or buttons anywhere in this
      build") and the selected state here was drawing a 1.5px inset ring INSIDE the shared
@@ -8310,8 +8342,24 @@
        cramming. Confirmed live: without it pickerWidth measured 505px on a
        375px viewport; with it the picker (and everything around it) sits
        correctly inside 375px and only the picker's own content scrolls. */
-    #addForm #fModePicker.track-picker { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 2px 4px 2px 0; min-width: 0; }
+    /* 2026-08-26 ("Mode chips should tessellate"): the grid replaces flex-wrap ABOVE
+       this breakpoint (search "grid-template-columns: repeat(auto-fill"), but this
+       phone-width fix stays -- it was built to solve the exact problem a narrow grid
+       would reintroduce (measured 234px of multi-row wrap at 375x700, "by far the
+       single biggest item in the form"); a 104px-minmax grid at 375px fits only ~3
+       columns, which still multi-row-wraps 7-8 chips. display:flex overrides the
+       grid explicitly -- flex-wrap/overflow-x have no grid equivalent, so without
+       this the properties below would apply to a grid container and do nothing. */
+    #addForm #fModePicker.track-picker { display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 2px 4px 2px 0; min-width: 0; }
     #addForm #fModePicker .track-opt { min-height: 44px; }
+    /* #todoModePicker shares the identical space problem (also "None" + up to 7
+       Modes, same component -- see the base rule's own "should not drift apart")
+       even though it never had its own phone-width fix before now; same treatment,
+       not a new one. Lives in a different form (#todoAddForm, not #addForm) with no
+       #addForm-specific min-width chain to repeat -- verified live, nothing else
+       needed here. */
+    #todoModePicker.track-picker { display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 2px 4px 2px 0; min-width: 0; }
+    #todoModePicker .track-opt { min-height: 44px; }
     /* the nowrap+scroll fix above still wasn't enough on its own -- traced the whole
        chain live (#fModePicker up through #addForm) and the actual culprit is
        .efp-layout: #addForm is display:grid (properly 375px, constrained), and
@@ -8385,8 +8433,20 @@
   /* 2026-08-23 ("I didn't know where my presets were"): one quiet line, roughly one
      preset-card row's worth of vertical space (padding tuned by eye against the real
      card height) so the row doesn't visibly jump in height the moment a first real
-     preset gets saved and this hint is replaced. */
-  .presets-empty-hint { color: var(--ink-faint); font-size: 12px; padding: 10px 2px; }
+     preset gets saved and this hint is replaced.
+     2026-08-26 SAME COMPLAINT AGAIN ("I can't find the preset chip"): investigated --
+     renderPresetsRow() already keeps this row mounted and un-hidden at zero presets
+     (confirmed live), and every current way of opening the form (openForm/
+     openFormForEdit/openEventFormForRoutine) resets presetEditingId before render, so
+     the ☆-showing-as-✎ report didn't reproduce through any path traced or tested here
+     (including a full presetsPage edit → cancel → reopen cycle). The likely explanation
+     is a stale cached copy predating the 2026-08-23 fix above -- Book33's known
+     service-worker caching gap (see the project's own "always bump CACHE_VERSION"
+     note). What's genuinely fixed here instead is her second, independent point: at
+     --ink-faint/12px/no icon this line was easy to miss even once it DOES render --
+     ink-soft/13px/600-weight for real contrast, and a leading ☆ so the hint visually
+     points at the actual button beside Title rather than only describing it in words. */
+  .presets-empty-hint { color: var(--ink-soft); font-size: 13px; font-weight: 600; padding: 10px 2px; }
   .preset-card {
     position: relative; flex: 0 0 auto; max-width: 168px; min-width: 96px;
     display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
@@ -20768,7 +20828,7 @@
                      nothing to auto-fill. -->
                 <div class="field full" id="fFillCalField" hidden>
                   <label for="fFillCalToggle">Fill my calendar automatically<span class="field-hint" id="fFillCalHint"> — on</span></label>
-                  <button type="button" class="rtg-auto-switch" id="fFillCalToggle" role="switch" aria-checked="true" aria-label="Fill my calendar automatically on this schedule"></button>
+                  <button type="button" class="rtg-auto-switch on" id="fFillCalToggle" role="switch" aria-checked="true" aria-label="Fill my calendar automatically on this schedule"></button>
                 </div>
                 <!-- legacy weekly-layers recurring-EVENT system (2026-08-04, "add that to
                      routines and events"): SUPERSEDED for new items by the Repeats control
@@ -40966,8 +41026,10 @@
   function renderTodoModePicker() {
     const host = document.getElementById("todoModePicker");
     if (!host) return;
-    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true">None</button>` +
-      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+    // --mode-accent: same treatment as #fModePicker's own modeBtn (search "Mode
+    // colour should be prominent") -- same component, same colour source.
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true" style="--mode-accent:var(--ink-faint)">None</button>` +
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
   }
   renderTodoModePicker();
   document.getElementById("todoModePicker").addEventListener("click", e => {
@@ -50847,8 +50909,10 @@
     MODES.forEach(m => { if (topSet.size < FMODE_TOP_N) topSet.add(m.id); });
     const showAll = fModePickerExpanded || (pressedId && !topSet.has(pressedId));
     const shown = showAll ? MODES : MODES.filter(m => topSet.has(m.id));
-    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}">${m.emoji || ""} ${esc(m.name)}</button>`;
-    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}">None</button>` +
+    // --mode-accent feeds the CSS soft-wash/dot treatment (search "Mode colour should
+    // be prominent") -- read straight off m.accent, no hardcoded palette.
+    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${m.emoji || ""} ${esc(m.name)}</button>`;
+    host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}" style="--mode-accent:var(--ink-faint)">None</button>` +
       shown.map(modeBtn).join("") +
       (showAll || shown.length >= MODES.length ? "" : `<button type="button" class="track-opt" id="fModeMoreBtn">More ›</button>`);
     // single choke-point: every one of the 5 places formSelectedMode changes calls
@@ -51283,7 +51347,13 @@
   function syncFFillCalToggle() {
     const btn = document.getElementById("fFillCalToggle");
     const hint = document.getElementById("fFillCalHint");
-    if (btn) btn.setAttribute("aria-checked", String(fFillCalOn));
+    // 2026-08-26 (bug fix): the "on" class was missing here -- .rtg-auto-switch's
+    // visual state (background colour, knob position) is driven by that class, not
+    // aria-checked, so the switch updated its accessible state on every tap but never
+    // visibly moved. Matches its siblings' own classList.toggle("on", …) pattern (the
+    // routine-editor copies of this switch, since retired -- see the 2026-08-25
+    // "Retiring Routines" comments a few thousand lines down -- did this correctly).
+    if (btn) { btn.setAttribute("aria-checked", String(fFillCalOn)); btn.classList.toggle("on", fFillCalOn); }
     if (hint) hint.textContent = fFillCalOn ? " — on" : " — off";
   }
   document.getElementById("fFillCalToggle").addEventListener("click", () => {
@@ -51449,7 +51519,7 @@
     if (!host) return;
     if (!SAVED_EVENTS.length) {
       host.hidden = false;
-      host.innerHTML = `<span class="presets-empty-hint">Tap ☆ next to Title to save your first preset</span>`;
+      host.innerHTML = `<span class="presets-empty-hint">☆ Tap the star next to Title to save your first preset</span>`;
     } else {
       host.hidden = false;
       // 2026-08-24: the sub-line span only renders when presetSubline() actually
