@@ -2780,26 +2780,17 @@
     border-radius: var(--radius-md) var(--radius-md) 0 0; box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
     display: flex; flex-direction: column; overflow: hidden;
   }
-  /* Routine popup -> right-docked side panel (Linh, "the box gets cut off, make it side
-     display" round). :has() targets the overlay whenever ITS sheet carries the new
-     modifier — one flag on the sheet (set in openTlDetail) is enough, no second class
-     needed on the overlay itself. Full height + its own scroll (inherited from
-     #tlDetailBody's existing overflow, untouched) is the actual fix for "cut off" — a
-     bottom sheet capped at 74-82vh vs. a full-height dock. Scoped to routines only. */
-  .tl-detail-overlay:has(.tl-detail-sheet.tl-routine-panel) {
-    align-items: stretch; justify-content: flex-end;
-    /* cancels the desktop @media (min-width:641px) rule's own padding-top:12vh just
-       below -- that spacing is for the OLD dropdown-style sheet (starts partway down,
-       capped height); a full-height dock has no "start partway down" to space for, and
-       without this override the panel's own explicit 100vh overflowed the viewport by
-       exactly that padding amount (verified live: 96px overflow at 800px height). */
-    padding-top: 0;
-  }
-  .tl-detail-sheet.tl-routine-panel {
-    width: min(420px, 92vw); height: 100vh; max-height: 100vh;
-    border-radius: 0; border: none; border-left: 1px solid var(--margin-rule);
-    box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
-  }
+  /* 2026-08-25 ("one system for every slide-in sheet" -- Commit 1, "bottom sheet for
+     everything"): the right-docked side panel a repeating occurrence used to get
+     (.tl-routine-panel, toggled in openTlDetail off e.rtTaskId) is retired -- her own
+     words: "a large part of why the sheets don't feel like one system" was exactly
+     this, a repeating item opening differently from a one-off for no reason tied to
+     screen width. Every occurrence now opens the same bottom sheet regardless of
+     whether it repeats. Removed along with it: the :has() rule that stretched the
+     overlay to full-height for a docked panel, and .tl-detail-sheet.tl-routine-panel
+     itself. Nothing else depended on either -- grepped before deleting; the sheet's
+     own #tlDetailBody overflow-y:auto already handles a tall repeating occurrence's
+     content within the normal 74-82vh cap, same as any other item. */
   @media (min-width: 641px) {
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
     .tl-detail-sheet { border-radius: var(--radius-md); max-height: 74vh; }
@@ -2845,14 +2836,15 @@
      not a Routines-page redirect" round) =================
      One right-docked (desktop) / full-screen (mobile) recipe, reused by #addForm
      (event/task editor, restyled below) and #rtnAddForm's new calendar-triggered dock
-     (#editPanelOverlay/#editPanelSheet, see openRtnFormFromCalendar). Same visual
-     language as .tl-routine-panel (the routine POPUP's own side panel, shipped
-     separately just above) but its own class rather than reusing that one directly --
-     .tl-routine-panel is coupled to #tlDetailOverlay's own render lifecycle
-     (renderTlDetailBody/refreshOpenTlDetail can re-render it mid-interaction), and
-     mounting a live editable form inside that same re-rendering sheet risks a re-render
-     silently wiping out in-progress field values. A fully separate, static overlay
-     avoids that coupling entirely.
+     (#editPanelOverlay/#editPanelSheet, see openRtnFormFromCalendar). Deliberately its
+     own class rather than reusing #tlDetailOverlay's own sheet chrome: that overlay is
+     coupled to its own render lifecycle (renderTlDetailBody/refreshOpenTlDetail can
+     re-render it mid-interaction), and mounting a live editable form inside that same
+     re-rendering sheet risks a re-render silently wiping out in-progress field values.
+     A fully separate, static overlay avoids that coupling entirely. (2026-08-25: the
+     routine popup's own former side-panel presentation, .tl-routine-panel, that this
+     comment used to compare against is retired -- see "one system for every slide-in
+     sheet" Commit 1, near .tl-detail-sheet's own rules above.)
      1024px matches rtnSideMq, the existing breakpoint the routine editor's OWN
      desktop side-rail already uses -- same threshold, not a new one; also where the
      widgets rail itself starts showing (wrFallback), matching "overlaying the widgets
@@ -3187,6 +3179,18 @@
     background: transparent; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer;
   }
   .tl-detail-close:hover { background: var(--note-bg); }
+  /* 2026-08-25 (Commit 1): display:contents is the base/desktop rule on purpose --
+     the @media (max-width:640px) override further down (search ".tl-detail-head-row {
+     display: flex") turns it into a real row on mobile. MUST stay before that mobile
+     rule in source order -- a media-scoped rule and an unconditional rule at equal
+     specificity resolve ties by source order once the media condition is also true,
+     so this unconditional rule has to come first or it would win on mobile too. A
+     no-op wrapper on desktop means .tl-detail-head's own pre-existing
+     `justify-content: space-between` still lands directly on .tl-detail-close as
+     before (its only VISIBLE child there, #tlDetailHero and #tlDetailHeadDone both
+     stay in the central ≥641px hide-list) -- desktop's layout is byte-for-byte
+     unchanged by this wrapper existing. */
+  .tl-detail-head-row { display: contents; }
   /* 2026-08-15 (§6 mobile redesign, item detail sheet restyle): #tlDetailHeadActions
      is now Zone 3, the manage block — SAME id/element (its own click listener,
      defined near tryTlDelete, is bound by id and keeps working wherever this div
@@ -3264,23 +3268,47 @@
     .tl-detail-head {
       position: relative; flex-direction: column; align-items: stretch; justify-content: flex-start;
       background: var(--cat-c, var(--raised)); border-radius: var(--radius-md) var(--radius-md) 0 0;
-      padding: 12px 24px 16px; gap: 4px; overflow: hidden;
+      padding: 12px 16px 16px; gap: 8px; overflow: hidden;
     }
-    .tl-detail-head .tl-detail-close { position: absolute; top: 8px; right: 8px; background: rgba(18, 16, 12, 0.14); color: var(--blk-txt); }
-    .tl-detail-head .tl-detail-close:hover { background: rgba(18, 16, 12, 0.22); }
-    /* 2026-08-15 fix (A2): the ✕ pad measured 34x34 — under CLAUDE.md's binding 44px
-       minimum, and it is the ONLY visible dismiss control on the sheet (swipe-down and
-       backdrop-tap are both invisible affordances). Phone-scoped so desktop keeps the
-       denser 34px circle its own ≥641px layout was tuned around — the same split the
-       .view-tabs/.track-opt 44px bumps a few thousand lines down already use. Covers
+    /* 2026-08-25 (Commit 1, STEP 3): the row that carries all three header parts --
+       ✕ · title-with-subtitle · Done. display:contents is this element's base/desktop
+       rule (see just below the fold) so it's a no-op wrapper there, keeping
+       .tl-detail-head's own existing desktop flex behaviour completely untouched;
+       here, under the mobile breakpoint, it becomes a real flex row. */
+    .tl-detail-head-row { display: flex; align-items: center; gap: 12px; }
+    /* 2026-08-15 fix (A2), carried forward: 44px is CLAUDE.md's binding minimum tap
+       target, and ✕ is the only visible dismiss control on the sheet (swipe-down and
+       backdrop-tap are both invisible affordances). No longer position:absolute --
+       it's a normal flex child of .tl-detail-head-row now, not overlapping content
+       that needs its own padding-right reservation any more. Phone-scoped so desktop
+       keeps the denser 34px circle its own ≥641px layout was tuned around -- covers
        #tlDetailClose (same element, id-addressed elsewhere) and .oc-head's reuse. */
-    .tl-detail-close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+    .tl-detail-head .tl-detail-close {
+      position: static; flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px;
+      background: rgba(18, 16, 12, 0.14); color: var(--blk-txt);
+    }
+    .tl-detail-head .tl-detail-close:hover { background: rgba(18, 16, 12, 0.22); }
   }
   .tl-detail-drag { width: 36px; height: 4px; border-radius: 999px; background: rgba(18, 16, 12, 0.28); margin: 0 auto 8px; flex: none; }
-  .tl-detail-hero { display: flex; flex-direction: column; gap: 4px; padding-right: 44px; }
-  .tl-detail-crumb { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--blk-txt); opacity: 0.62; }
-  .tl-detail-hero-title { font-size: 20px; font-weight: 700; color: var(--blk-txt); line-height: var(--lh-tight); }
-  .tl-detail-when { font-size: 13px; font-weight: 500; color: var(--blk-txt); opacity: 0.85; }
+  .tl-detail-hero { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  /* min-width:0 is required for text-overflow:ellipsis to work on a flex child --
+     without it a flex item's default min-width:auto lets it grow past its container
+     instead of truncating. "The title truncates with an ellipsis" (STEP 3). */
+  .tl-detail-hero-title {
+    font-size: 20px; font-weight: 700; color: var(--blk-txt); line-height: var(--lh-tight);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* 2026-08-25 (Commit 1): replaces .tl-detail-crumb (category/kind) + .tl-detail-when
+     (date/time/duration) -- the hero is now title + ONE subtitle line answering her own
+     "what's the difference between the sheet and the form" question (STEP 3's own
+     wording: "<date> · this day"), not a 3-line info stack. The category/time detail
+     those two used to carry moved down into #tlDetailBody's own rows (search "Commit 1,
+     header restyle" near the time row) so nothing is lost, just relocated out of the
+     header. "Never wraps to two lines" (STEP 3) -- same nowrap+ellipsis as the title. */
+  .tl-detail-hero-sub {
+    font-size: 13px; font-weight: 500; color: var(--blk-txt); opacity: 0.85;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   /* the old always-on rows this new header supersedes for mobile only — see the
      big comment above .tl-detail-head's own mobile block. No unscoped base rule on
      purpose: desktop must keep .tl-detail-row's own display:flex (or .tl-detail-
@@ -3324,6 +3352,18 @@
     color: var(--margin-rule); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .tl-detail-done-btn.done { background: var(--margin-rule); color: var(--accent-on); }
+  /* 2026-08-25 (Commit 1, STEP 3, "Mark done moves into the header, opposite the ✕, as
+     a compact ✓ Done"): sizing modifier on top of .tl-detail-done-btn's own base look
+     just above (border/fill-by-done-state, same tokens) -- reuses that component
+     rather than a parallel one, just auto-width/compact instead of the full-width
+     block it used to be inside .tl-detail-action-pair. Placed AFTER .tl-detail-done-
+     btn/.done in source on purpose -- both classes land on the same button at equal
+     (0,1,0) specificity, so whichever rule is later wins any shared property (padding/
+     margin/width/min-height); earlier would have let the base full-width rule win
+     instead of this compact override. */
+  .tl-detail-head-done {
+    flex: none; width: auto; margin: 0; min-height: 44px; padding: 8px 14px; gap: 6px; font-size: 13px;
+  }
   /* 2026-08-15 (§6 mobile redesign, Pass B — primary action pair): Done/Attended
      stays the exact same .tl-detail-done-btn (data-tick-ev unchanged) now sized
      flex:1 inside a row instead of full-width, solid-filled with --fit-workout —
@@ -17735,18 +17775,28 @@
   <div class="tl-detail-overlay" id="tlDetailOverlay" hidden>
     <div class="tl-detail-sheet" id="tlDetailSheet">
       <!-- 2026-08-15 (§6 mobile redesign, item detail sheet restyle): Zone 1. The
-           drag handle + ✕ are static (never re-rendered, so their own bindings below
-           are rock solid); #tlDetailHero is the only piece renderTlDetailBody()
-           writes into per open/refresh (breadcrumb, title, when-line — see that
-           function). data-track/data-category go on THIS div (not #tlDetailHero)
-           since it's what actually paints the --cat-c background. Mobile only —
-           desktop hides .tl-detail-drag/.tl-detail-hero wholesale (central ≥641px
-           list near .tl-desk-actions) and keeps showing its existing plain title
-           from inside #tlDetailBody instead, completely untouched. -->
+           drag handle + ✕ + Done are static (never re-rendered, so their own bindings
+           below are rock solid); #tlDetailHero is the only piece renderTlDetailBody()
+           writes into per open/refresh. data-track/data-category go on THIS div (not
+           #tlDetailHero) since it's what actually paints the --cat-c background.
+           Mobile only — desktop hides .tl-detail-drag/.tl-detail-hero/.tl-detail-
+           done-btn wholesale (central ≥641px list near .tl-desk-actions) and keeps
+           showing its existing plain title/Done from inside #tlDetailBody instead,
+           completely untouched.
+           2026-08-25 ("one system for every slide-in sheet" -- Commit 1, STEP 3):
+           three parts now, in a row below the drag handle -- ✕ · title-with-a-
+           subtitle (#tlDetailHero, now just those two lines, filled by
+           renderTlDetailBody) · one action. #tlDetailHeadDone reuses .tl-detail-
+           done-btn's own base look (border/fill by done-state, same token as always)
+           with a compact size modifier -- see that class's own CSS -- rather than a
+           parallel button component. -->
       <div class="tl-detail-head" id="tlDetailHead">
         <div class="tl-detail-drag" aria-hidden="true"></div>
-        <button type="button" class="tl-detail-close" id="tlDetailClose" aria-label="Close">×</button>
-        <div class="tl-detail-hero" id="tlDetailHero"></div>
+        <div class="tl-detail-head-row">
+          <button type="button" class="tl-detail-close" id="tlDetailClose" aria-label="Close">×</button>
+          <div class="tl-detail-hero" id="tlDetailHero"></div>
+          <button type="button" class="tl-detail-done-btn tl-detail-head-done" id="tlDetailHeadDone" aria-label="Mark done"></button>
+        </div>
       </div>
       <!-- 2026-08-23 ("merge truly back-to-back same-named blocks"): only ever
            filled/shown when the open item is part of a merge run
@@ -30044,14 +30094,12 @@
     //                          is, out of this pass's scope.
     const doneWord = kind === "event" ? "Attended" : "Done";
     const notDoneWord = kind === "event" ? "Mark attended" : "Mark done";
-    // 2026-08-15 fix (B3): the ✓ span is only emitted when there IS a ✓. It used to be
-    // rendered empty in the not-done state, and an empty flex child plus the button's
-    // own 12px gap left ~122px of dead space with the label shoved off-centre next to a
-    // perfectly centred sibling. (justify-content: center on the pair's own rule is the
-    // other half of this fix.)
-    const primaryActionBtnHtml = `<button type="button" class="tl-detail-done-btn${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>
-        ${done ? `<span>✓</span>` : ""}${done ? doneWord : notDoneWord}
-      </button>`;
+    // 2026-08-25 (Commit 1, STEP 3, "Mark done moves into the header, opposite the ✕
+    // ... Remove it from the button row below"): primaryActionBtnHtml/.tl-detail-
+    // done-btn is gone from here -- #tlDetailHeadDone (set further down this same
+    // function, near #tlDetailHero's own fill) is the one Done control now, same
+    // data-tick-ev/doneWord/notDoneWord this used to build into a full button.
+    // doneWord/notDoneWord themselves stay -- still read there.
     let secondaryActionBtnHtml = "";
     if (kind === "routine" || kind === "task") {
       if (isRtnOcc) secondaryActionBtnHtml = `<button type="button" class="tl-detail-skip-btn" data-ovr-skip>Skip today</button>`;
@@ -30068,13 +30116,15 @@
       // listener (data-tl-didnt-go), same close+re-render shape as data-ovr-skip.
       secondaryActionBtnHtml = `<button type="button" class="tl-detail-skip-btn" data-tl-didnt-go="${e.id}">Didn't go</button>`;
     }
-    // 2026-08-15: the wrapper is ALWAYS emitted, even with no secondary button — flex:1
-    // on a lone child simply fills the row, so a solo Done still renders full-width and
-    // identically styled. Required, not cosmetic: the mobile ordering rule now targets
-    // .tl-detail-action-pair (order: 20), so an unwrapped button would fall back to
-    // order 0 and jump to the top of the sheet. Kept unconditional so that can't drift
-    // again the next time a branch decides not to render the secondary action.
-    const actionPairHtml = `<div class="tl-detail-action-pair">${primaryActionBtnHtml}${secondaryActionBtnHtml}</div>`;
+    // 2026-08-25 (Commit 1): now conditional on secondaryActionBtnHtml alone, since
+    // Done (the other former occupant) no longer renders here at all -- an item with
+    // neither (hair wash, family admin, supplements, chain steps, per the enumeration
+    // above) would otherwise leave a bare empty div with its own 4px/8px margin sitting
+    // in the row order for nothing. Omitting it outright when both are absent is safe
+    // for the .tl-detail-action-pair order:20 rule the old comment warned about: that
+    // rule only reorders an ELEMENT that exists, and an omitted template literal
+    // contributes no element to reorder in the first place.
+    const actionPairHtml = secondaryActionBtnHtml ? `<div class="tl-detail-action-pair">${secondaryActionBtnHtml}</div>` : "";
     // 2026-08-04 (Linh: "the actions -- Edit, Reschedule, Book another, Delete", per
     // her own mockup): Edit/Delete are the header's own icon pair for every item type
     // (see renderTlDetailHeadActions -- routine/fitcal's pencil now toggles the same
@@ -30223,11 +30273,14 @@
     // like it does when she's dragging the block itself.
     const heroDateD = e.date ? parseKey(e.date) : null;
     const heroDateLbl = heroDateD ? `${WD_FULL[dowIndex(heroDateD)]} ${heroDateD.getDate()} ${MON_SHORT[heroDateD.getMonth()]}` : "";
-    const heroDur = detailEnd != null ? fmtDurShort(Math.max(0, detailEnd - toMin(e.start))) : "";
-    const heroWhenHtml = [heroDateLbl, timeLabel, heroDur].filter(Boolean).map(esc).join(" · ");
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title tl-detail-mobile-hide"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
-      <div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🕐", "tl-detail-em")}<span>${timeLabel}${freqLabelShort ? `<span class="tl-detail-sub">${esc(freqLabelShort)}</span>` : ""}</span></div>
+      <!-- 2026-08-25 (Commit 1, header restyle): was .tl-detail-mobile-hide (Zone 1's
+           old hero carried date+time+duration itself, so this was hidden ≤640px to
+           avoid a duplicate). The new hero is just title+subtitle now -- this is the
+           only place time/duration shows on mobile any more, so it stays visible at
+           every width, same row desktop has always used. -->
+      <div class="tl-detail-row">${glyphHtml("🕐", "tl-detail-em")}<span>${timeLabel}${freqLabelShort ? `<span class="tl-detail-sub">${esc(freqLabelShort)}</span>` : ""}</span></div>
       ${path.length ? `<div class="tl-detail-row tl-detail-row-where">${glyphHtml("📍", "tl-detail-em")}<span>${path.map(esc).join(" › ")}</span></div>` : ""}
       <!-- 2026-08-24: this row used to lead with trackLabel(e.track) ("Personal" etc.,
            a Part-of-life tag, retired -- see the retired-features doc), with e.category
@@ -30235,7 +30288,10 @@
            always has a value, so it always rendered). Now it's e.category alone,
            gated on e.category actually being set, so a plain event with no category
            shows no empty tag row at all. -->
-      ${e.category ? `<div class="tl-detail-row tl-detail-mobile-hide">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(e.category)}</span></div>` : ""}
+      <!-- 2026-08-25 (Commit 1): was .tl-detail-mobile-hide, same reasoning as the time
+           row just above -- the old hero's crumb line carried category on mobile;
+           the new title+subtitle hero doesn't, so this stays visible everywhere now. -->
+      ${e.category ? `<div class="tl-detail-row">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(e.category)}</span></div>` : ""}
       ${repeatsRowHtml}
       ${originRowHtml}
       ${nextAfterHtml}
@@ -30265,11 +30321,31 @@
     // 2026-08-24: was `🏷 ${trackLabel(e.track)}${category ? " › "+category : ""} ·
     // ${kind}`, gated on e.track (always set, so always rendered). trackLabel() is
     // retired (see the retired-features doc) -- category leads now, only when set.
+    // 2026-08-25 ("one system for every slide-in sheet" -- Commit 1, STEP 3): the header
+    // is now exactly three parts -- ✕ · title-with-a-subtitle · one action -- answering
+    // her own question ("what's the difference between the sheet and the form?") IN the
+    // product: this sheet is always about ONE occurrence, so its subtitle always names
+    // the date it's pinned to. Supersedes the old 3-line crumb/title/when-line stack;
+    // the category/kind crumb and the time/duration detail it used to carry move down
+    // into #tlDetailBody's own rows below (still real information, just not header
+    // chrome) rather than being dropped.
     document.getElementById("tlDetailHero").innerHTML = `
-      <div class="tl-detail-crumb">${e.category ? `🏷 ${esc(e.category)} · ` : ""}${kind === "routine" ? "↻ routine" : esc(kind)}</div>
       <div class="tl-detail-hero-title">${esc(e.title)}</div>
-      <div class="tl-detail-when">${heroWhenHtml}</div>
+      <div class="tl-detail-hero-sub">${esc(heroDateLbl)} · this day</div>
     `;
+    // "Mark done moves into the header, opposite the ✕" -- same data-tick-ev delegate,
+    // same doneWord/notDoneWord computed above for the (now-removed) primary row
+    // button, just written onto the static header button's own dataset/text instead of
+    // rebuilt via innerHTML every render (mirrors how #tlDetailHead's own dataset.track/
+    // mode/category are set directly, just below).
+    const headDoneBtn = document.getElementById("tlDetailHeadDone");
+    headDoneBtn.dataset.tickEv = e.id;
+    headDoneBtn.dataset.on = String(done);
+    if (e.fitLink) { headDoneBtn.dataset.fitLink = e.fitLink; headDoneBtn.dataset.fitDate = e.date; }
+    else { delete headDoneBtn.dataset.fitLink; delete headDoneBtn.dataset.fitDate; }
+    headDoneBtn.classList.toggle("done", done);
+    headDoneBtn.setAttribute("aria-label", done ? doneWord : notDoneWord);
+    headDoneBtn.innerHTML = done ? `<span>✓</span> Done` : `Done`;
   }
   // 2026-08-04 (desktop styling spec, points 3–4): on wide screens the sheet anchors
   // directly beneath the tapped block, GCal-style, and the block itself gets a gold
@@ -30280,14 +30356,10 @@
     document.querySelectorAll(".tl-item.tl-selected").forEach(el => el.classList.remove("tl-selected"));
     sheet.style.position = ""; sheet.style.left = ""; sheet.style.top = "";
     sheet.style.width = ""; sheet.style.margin = "";
-    // 2026-08-18 (side-panel round): the routine panel is CSS-docked (full-height,
-    // right-edge, via .tl-routine-panel + the overlay's own :has() rule) -- this
-    // function's own inline position/left/top/width (an anchored-flyout-near-the-click
-    // system, for every OTHER popup type) would win over that CSS by sitting directly
-    // on the element's style attribute, so it's skipped here. Cleared above either way,
-    // same as always, so switching from a routine back to a plain item on the same
-    // click cycle never leaves a stale inline position behind.
-    if (sheet.classList.contains("tl-routine-panel")) return;
+    // 2026-08-25 ("one system for every slide-in sheet" -- Commit 1): the routine-panel
+    // early-return that used to live here is gone along with .tl-routine-panel itself
+    // (search that class name for the removal note) -- every occurrence, repeating or
+    // not, now goes through the same anchored-flyout positioning below.
     if (!anchorEl || window.innerWidth <= 640) return;
     anchorEl.classList.add("tl-selected");
     const r = anchorEl.getBoundingClientRect();
@@ -30310,11 +30382,11 @@
     tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
     document.getElementById("tlDetailOverlay").hidden = false;
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
-    // Routines get the right-docked side panel (Linh, "make it side display" round) —
-    // scoped to e.rtTaskId, the same flag renderTlDetailHeadActions already branches on
-    // for "this is a routine occurrence". A plain event/task/recurring-event/fitness
-    // session keeps the existing bottom sheet untouched.
-    document.getElementById("tlDetailSheet").classList.toggle("tl-routine-panel", !!e.rtTaskId);
+    // 2026-08-25 (Commit 1, "bottom sheet for everything"): used to toggle
+    // .tl-routine-panel here off e.rtTaskId, docking a repeating occurrence as a
+    // right-edge side panel instead of the plain bottom sheet every other item got --
+    // retired per her own decision (see that class's CSS removal note). Every
+    // occurrence now opens the identical sheet.
     renderTlMergeList(id);
     renderTlDetailHeadActions(e);
     renderTlDetailBody(e);
