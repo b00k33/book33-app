@@ -10476,6 +10476,25 @@
   }
   .md-item-time { font-size: 11px; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* 2026-08-25 ("show event name and time in 5/7-day view") STEP 3 middle tier
+     (18-33px): one row, time then name, never wrapped. Vertical padding only
+     drops from .md-item's 4px to 2px (her approved mockup's own value) -- that's
+     what buys an 18px block room for a real 11px text line without clipping;
+     horizontal padding is untouched at 4px so it still lines up with the
+     two-line tier above it. */
+  .md-line.tl-item {
+    position: absolute; left: 1px; right: 1px; border-radius: var(--radius-sm);
+    padding: 2px 4px; overflow: hidden; display: flex; flex-direction: row; align-items: center; gap: 4px; cursor: pointer;
+    background: var(--cat-c); color: var(--cat-t);
+  }
+  .md-line.tl-item[data-origin] { padding-left: 8px; } /* same reason as .md-item.tl-item[data-origin] just above -- text starts flush against the origin rail otherwise */
+  .md-line.tl-item.done { opacity: 0.55; }
+  .md-line-time { flex: none; font-size: 11px; opacity: 0.85; line-height: var(--lh-tight); }
+  .md-line-title {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11px; font-weight: 600; line-height: var(--lh-tight);
+  }
+
   /* 2026-08-15 fix (A1, severe): in compact mode (5/7 days) tapping a bar is the ONLY
      way to open an item, and the bars measured 38.6 x 8-13px — a third of CLAUDE.md's
      binding 44px minimum, i.e. the feature was unusable on a phone.
@@ -33314,11 +33333,40 @@
       <span class="md-item-time">${timeTxt}</span>
     </div>`;
   }
-  // compact-mode bar (5/7 days): pure colour, no text at all (§1) — tap wires to the
-  // exact same openTlDetail(id, anchorEl) a normal block tap already calls, via the
-  // SAME document-level [data-tl-detail] delegate every other timeline item already
+  // 2026-08-25 ("show event name and time in 5/7-day view"), STEP 3 middle tier
+  // (18-33px, her own "most of her week" band once mdColumnHtml()'s labelable
+  // floor is 26px): one line, TIME FIRST then name, ellipsised -- never the
+  // two-line mdItemHtml() layout, which doesn't fit this height. No .tl-life-dot
+  // (mdItemHtml()'s own colour dot) -- there isn't room for it once the time
+  // column is real text rather than a coloured strip, and the brief's own
+  // approved example ("9:30am  Manage fridge") doesn't carry one either.
+  // aria-label carried explicitly even though the visible text already states
+  // the same thing (unlike mdBarHtml(), which truly has no visible text) --
+  // matches her "aria-label stays on every variant" instruction literally.
+  function mdLineHtml(p) {
+    const { e, top, h, col, cols } = p;
+    const colStyle = cols > 1
+      ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
+      : "";
+    const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
+    const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
+    const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
+    return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+      aria-label="${label}" style="top:${top}px;height:${h}px;${colStyle}">
+      <span class="md-line-time">${timeTxt}</span><span class="md-line-title">${esc(e.title)}</span>${mergeBadge}
+    </div>`;
+  }
+  // bar: pure colour, no text at all — tap wires to the exact same
+  // openTlDetail(id, anchorEl) a normal block tap already calls, via the SAME
+  // document-level [data-tl-detail] delegate every other timeline item already
   // uses (see the click listener near line ~32200) — nothing new to wire beyond
   // carrying the attribute. aria-label stands in for the missing visible text.
+  // 2026-08-25 ("show event name and time in 5/7-day view"): no longer only a
+  // "5/7 days" thing (§1's old day-count rule) — mdColumnHtml() now falls
+  // through to this for any column too narrow to label at all (labelable=false,
+  // decided by measured column width, not day count — see renderMultiDayGrid()),
+  // AND for any individual block under 18px even in an otherwise labelled
+  // column, where there's genuinely no room for text either way.
   function mdBarHtml(p) {
     const { e, top, h, col, cols } = p;
     const colStyle = cols > 1
@@ -33330,7 +33378,7 @@
     return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
       aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
-  function mdColumnHtml(d, items, compact) {
+  function mdColumnHtml(d, items, labelable) {
     let placed = [];
     items.forEach(e => {
       const s = toMin(e.start);
@@ -33346,12 +33394,36 @@
     // stacked blocks the instant she switched to 3/5/7-day view. Same shared rule now,
     // before top/h/clusterOverlaps run, same as renderTimeline().
     placed = mergeAdjacentTlItems(placed);
+    // 2026-08-25 ("show event name and time in 5/7-day view"): floor values (8/26)
+    // themselves are untouched, deliberately (her own "leave the height floor alone
+    // unless the labelled tiers demand otherwise... raising it moves blocks off their
+    // true times") -- only WHICH gate picks between them changed, from day-count
+    // (compact = days>=5) to measured-width (labelable, from renderMultiDayGrid()),
+    // same as everywhere else in this function. A labelable column keeps the SAME
+    // 26px floor "comfortable" (1/3-day) columns have always used, which is also
+    // exactly why the STEP-3 middle tier (18-33px) is where "most of her week" lands
+    // once this floor kicks in on 5/7-day desktop columns for the first time --
+    // that's the floor doing its normal job, not a new rule invented for the tiers.
     placed.forEach(p => {
       p.top = topForMin(p.cs);
-      p.h = Math.max(topForMin(p.ce) - p.top - 3, compact ? 8 : 26);
+      p.h = Math.max(topForMin(p.ce) - p.top - 3, labelable ? 26 : 8);
     });
     clusterOverlaps(placed);
-    const html = placed.map(p => compact ? mdBarHtml(p) : mdItemHtml(p)).join("");
+    // STEP 3 tier pick: a non-labelable column (too narrow, ever) always falls
+    // through to the bare bar -- "exactly as now" per her own STEP 2 instruction.
+    // A labelable column picks per BLOCK by its own height: mdItemHtml()'s existing
+    // two-line layout at >=34px, unmodified, or the new one-line mdLineHtml() at
+    // 18-33px. The <18px bare-bar fallback below is honest rather than dead code --
+    // it matches her own tier table -- but with the 26px floor just above, p.h can
+    // never actually be under 26 while labelable is true, so it never fires today.
+    // Left in rather than dropped: it's the correct behaviour if that floor value
+    // ever changes, and costs nothing to keep.
+    const html = placed.map(p => {
+      if (!labelable) return mdBarHtml(p);
+      if (p.h >= 34) return mdItemHtml(p);
+      if (p.h >= 18) return mdLineHtml(p);
+      return mdBarHtml(p);
+    }).join("");
     // 2026-08-15 (§3 build): fastedHoursOn(d) again, this column's own date -- the CSS
     // half (.md-col[data-fasting]) is what actually paints the wash; this just carries
     // the flag alongside the existing data-day-key attribute.
@@ -33648,14 +33720,39 @@
     dayList.forEach(({ items }) => items.forEach(e => { if (!isGhostItem(e) || !TL_ITEMS_BY_ID[e.id]) TL_ITEMS_BY_ID[e.id] = e; }));
 
     mdRendering = true;
-    const compact = days >= 5;   // §1: 1/3 = comfortable, 5/7 = compact — automatic from day count, never a separate setting
-    document.getElementById("mdGrid").classList.toggle("md-compact", compact);
+    // 2026-08-25 ("show event name and time in 5/7-day view"): §1's old rule
+    // (days>=5 = "compact", automatic from day count, never a separate setting)
+    // decided by day count, not by the space that actually exists — a 7-day
+    // column measures 100-152px wide on desktop (plenty for a label) and blanked
+    // every block anyway. Replaced with the real measured width: #mdCols is a
+    // persistent container that exists before this render touches its children,
+    // so its own current width is available before mdColumnHtml() runs below —
+    // no two-pass render/flash needed. Computed rather than measured per column
+    // (there's only one shared value to find, not one per column — "measure it
+    // once per render, not per block"): .md-cols has a flat 4px gap and each
+    // .md-col is a plain flex:1 child, so colWidth = (mdColsWidth - (days-1)*4) /
+    // days divides the container's width exactly, not approximately. Verified
+    // live against a real .md-col's own getBoundingClientRect() at 1440px and
+    // 390px, both 7 days: within ~1px of the arithmetic (border-left rounding on
+    // non-first columns), nowhere near the 90px decision boundary either width.
+    const mdColsWidth = document.getElementById("mdCols").getBoundingClientRect().width;
+    const colWidth = (mdColsWidth - (days - 1) * 4) / days;
+    const labelable = colWidth >= 90;   // STEP 2: >=90px shows a label (STEP 3 picks which tier); narrower stays the bare bar, exactly as before
+    // .md-compact carries no CSS at all (grepped -- genuinely dead, not just
+    // unused right now) -- kept toggling it here only so nothing that might
+    // read it later silently goes stale; disclosed rather than fixed quietly.
+    document.getElementById("mdGrid").classList.toggle("md-compact", !labelable);
     document.getElementById("mdHours").innerHTML = buildHoursHtml();
     document.getElementById("mdColHeads").innerHTML = dayList.map(({ d }) => mdColHeadHtml(d)).join("");
-    document.getElementById("mdCols").innerHTML = dayList.map(({ d, items }) => mdColumnHtml(d, items, compact)).join("");
+    document.getElementById("mdCols").innerHTML = dayList.map(({ d, items }) => mdColumnHtml(d, items, labelable)).join("");
     const legendHost = document.getElementById("mdLegend");
-    legendHost.hidden = !compact;
-    legendHost.innerHTML = compact ? mdLegendHtml() : "";
+    // STEP 4: same show/hide condition as before (now fed by labelable rather
+    // than the old day-count compact) -- "keep it for now," not "decide its
+    // condition anew." Visible effect worth flagging: the legend now disappears
+    // on desktop 5/7-day (labelable there for the first time), where it used to
+    // show — see the fix report for how it reads under a labelled grid.
+    legendHost.hidden = labelable;
+    legendHost.innerHTML = labelable ? "" : mdLegendHtml();
     // 2026-08-15 (§4 all-day row build): one call per visible window, same pattern as
     // the legend just above — see its own comment for the full brief.
     renderMdAlldayRow(dayList);
