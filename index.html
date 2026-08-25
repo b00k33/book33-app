@@ -10686,6 +10686,16 @@
     padding: 7px 14px; font-size: 12.5px; border-radius: 8px;
   }
   #dayAlldayRow .ad-chip[data-category="Birthdays"] .ad-chip-ic { font-size: 14px; margin-right: 6px; }
+  /* 2026-08-25 (STEP 3, mobile-nothing-above-calendar): this chip carries .ad-chip,
+     not .dcx-chip/.ddh-chip, so the shared [data-chip] soft-tint-wash rule (line
+     ~10755) doesn't reach it by selector — copying its formula here (same --chip-tint
+     the chip already sets inline) instead of widening that rule's selector, so the
+     dcx/ddh chip families stay untouched. Text colour matches .ddh-chip[data-chip=
+     "cycle"] (line ~15687) exactly — same chip, third place it now appears. */
+  #dayAlldayRow .ad-chip[data-chip="cycle"] {
+    background: color-mix(in oklab, var(--chip-tint), transparent 85%);
+    color: color-mix(in oklab, var(--flow-med) 65%, var(--ink) 35%);
+  }
 
   /* mobile-only scope for this whole section, per the build brief — desktop keeps
      its existing single-day Today-page layout untouched. */
@@ -20030,11 +20040,23 @@
              (renderDayHeaderRow(), called from renderDayCtx()). Hidden outright on
              desktop-day1 (#deskDayTopbar already shows the date there); at tablet
              widths it renders unstyled-plain until @media(max-width:640px) applies the
-             phone-sized circle treatment. #dayCtxChips (cycle + birthday chips, its own
-             dcxChipsHtml()/renderDayCtx() completely untouched) moves in here too, to
-             the right of the date -- this is what "removes the separate chip strip
-             row" (her wording) means: the row disappears because its one child now
-             lives here, not because the chips or their data changed. -->
+             phone-sized circle treatment. #dayCtxChips moves in here too, to the
+             right of the date -- this is what "removes the separate chip strip row"
+             (her wording) means: the row disappears because its one child now lives
+             here, not because the chip content changed.
+             2026-08-25 ("nothing above the calendar" follow-up): #dayCtxChips/
+             dcxChipsHtml() now builds birthday only -- the cycle chip that used to
+             sit beside it moved out to #dayAlldayRow (see dcxChipsHtml()'s own
+             comment), so it's no longer true that this row's content is untouched by
+             that change, only that the ROW itself (this element) isn't.
+             2026-08-25 ("Mobile Day: nothing above the calendar"): the mobile widget
+             drawer is this element's SECOND possible home now, alongside this static
+             spot -- placeDayDrawers() moves it in and out (STEP-5-style marker
+             pattern, same as every other reparented element in that function); this
+             is where it returns to at desktop width (though desktop hides it outright
+             via CSS either way, see [data-desk-day1] #dayHeaderRow) and while not in
+             single-day mobile/tablet view. -->
+        <div id="dayHeaderRowHome" hidden></div>
         <div class="day-header-row" id="dayHeaderRow">
           <div class="dhr-date" id="dhrDate">
             <span class="dhr-weekday" id="dhrWeekday"></span>
@@ -33529,6 +33551,31 @@
     }
     return `<span class="${cls}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
   }
+  // 2026-08-25 ("Mobile Day: nothing above the calendar" follow-up, STEP 3): the
+  // cycle chip that used to sit in #dayCtxChips (dcxChipsHtml(), now birthday-only --
+  // see its own comment) moves here instead, as a normal all-day chip. Not built from
+  // a real calendar item (no e.track/e.category/e.id), so it isn't alldayChipHtml() --
+  // it's its own small builder, carrying .ad-chip.tl-item for the same sizing every
+  // other chip in this row gets, plus the SAME data-chip="cycle"/--chip-tint idiom
+  // dcxChipsHtml() (mobile chip strip) and renderDeskDayHeader()'s .ddh-chip (desktop
+  // header) already use for this exact concept -- .ddh-cycle-dot is reused verbatim
+  // for the same reason (one dot component, not a third copy). #dayAlldayRow .ad-chip
+  // [data-chip="cycle"] (CSS) extends the shared [data-chip] soft-tint-wash rule to
+  // this row, and matches .ddh-chip[data-chip="cycle"]'s own text colour so the same
+  // "cycle chip" reads identically wherever it appears. TODAY, not state.anchor --
+  // same "a live fact about her body right now, not a property of whichever date is
+  // on screen" rule cycleQuickInfo's other two callers already follow. Empty string
+  // (no chip, not an empty one) on a day with no cycle data ever logged, same
+  // no-empty-placeholder contract every other chip/row in this build follows.
+  function cycleAlldayChipHtml() {
+    const q = cycleQuickInfo(TODAY);
+    if (!q) return "";
+    const cdi = Book33CD.info(TODAY);
+    const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
+    return `<span class="ad-chip tl-item" role="button" tabindex="0" data-cd-log title="Log this day" data-chip="cycle" style="--chip-tint:var(--flow-med)">
+      <span class="ddh-cycle-dot ad-chip-ic" aria-hidden="true" style="background:var(${cdi ? cdi.dotVar : "--flow-med"})"></span><span class="ad-chip-t">CD ${q.cd}${phaseLbl ? ` · ${esc(phaseLbl)}` : ""}</span>
+    </span>`;
+  }
   // one visible day's worth of stacked chips, no continuation (that concept only
   // exists across MULTIPLE simultaneously-visible columns — see mdAlldayColsHtml()).
   // Used for the single-day row's one-and-only column, and for the tail end of each
@@ -33618,8 +33665,15 @@
     // elsewhere may still need it). Non-birthday all-day items (others2) are untouched
     // on every width, per the brief's own LEAVE ALONE.
     const bdaysForRow = mobileDay1Active() ? [] : bdays;
-    alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), bdaysForRow.length + others2.length, () =>
-      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${alldayStackHtml(bdaysForRow, others2)}</div></div>`);
+    // 2026-08-25 (STEP 3): the cycle chip joins this row's own count so a day with
+    // ONLY cycle data (no birthday, no other all-day item) still shows the row instead
+    // of being removed by alldayRowMount()'s own "no content, no row" guard -- same
+    // no-empty-placeholder contract, just counted as 1 rather than 0 either way. First
+    // in the row (cycle is a standing daily fact, ahead of the day's own items), same
+    // reasoning dayRow2 goes first in the top drawer for.
+    const cycleChip = cycleAlldayChipHtml();
+    alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), (cycleChip ? 1 : 0) + bdaysForRow.length + others2.length, () =>
+      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${cycleChip}${alldayStackHtml(bdaysForRow, others2)}</div></div>`);
   }
   // multi-day all-day row — one column per visible day, aligned under mdColHeadHtml()'s
   // own headers via the identical 30px gutter + 4px gaps (.md-hours/.md-col-heads,
@@ -33835,61 +33889,27 @@
       ${chev ? `<span class="dcx-meter-chev" aria-hidden="true">${chev}</span>` : ""}
     </div>`;
   }
-  // moon/day-ruler read state.anchor -- the day being VIEWED, same as renderDay()'s
-  // own header (moonBadge/weekday planet) and the desktop #deskGlance chips this
-  // strip mirrors on mobile -- so browsing to a future day to plan around shows THAT
-  // day's astro context, not always today's. Cycle is the one deliberate exception:
-  // cycleQuickInfo(TODAY), not state.anchor -- same "always today's real cycle day
-  // regardless of which day she's browsing" rule #numGrpCd already follows (see its
-  // own comment, a few hundred lines up), because a cycle day is a live fact about
-  // her body right now, not a property of whichever date happens to be on screen.
-  // Birthday reads state.anchor too, matching birthdaysOn(d)/birthdaysCardPopoverHtml(d)
-  // and #deskGlance -- planning a future day should show THAT day's birthday, not
-  // silently only ever today's. Nothing here is a new calculation: moonIndex/
-  // planetOf/cycleQuickInfo/birthdaysOn are the exact same functions renderDay()/
-  // renderDeskGlance()/renderDeskRail() already call. Cycle and birthday omit their
-  // chip entirely when there's nothing real to show (no cycle data ever logged; no
-  // birthday on the viewed day) -- moon and day-ruler always have a value, so
-  // they're never omitted.
-  // 2026-08-15 (§8): `ic` is now finished HTML rather than a bare glyph, so each chip
-  // can choose its own calmest form -- a DRAWN moon (moonHtml), a text-presentation
-  // chrome symbol (glyphHtml), or an untouched colour emoji. Only two chips change:
-  //  · moon -- was MOON_EM, a fixed picture that ignored the palette. Now drawn.
-  //  · day-ruler -- planetOf().icon is an app-hardcoded astronomical symbol (☉ ☽ ♂ ☿
-  //    ♃ ♀ ♄); several of those default to colour-emoji presentation, so it goes
-  //    through glyphHtml.
-  // The cycle chip is deliberately LEFT alone: q.info.icon is CYCLE_PHASE_INFO's own
-  // per-phase mark, and four distinct phase icons carry information a single quiet
-  // symbol would flatten. 🎂 is left as one of §8's four sanctioned colour emoji.
+  // this comment predates the 2026-08-23 Numerology-card rework (moon/day-ruler moved
+  // out of this strip) and the 2026-08-25 move of the cycle chip to #dayAlldayRow
+  // (see dcxChipsHtml()'s own comment, just below) -- birthday is what's left of the
+  // "read state.anchor, the day being VIEWED" rule this paragraph originally
+  // described for the whole strip; still true for it, and still omitted entirely when
+  // the viewed day has none (no new calculation: birthdaysOn(d) is the exact same
+  // function renderDay()/renderDeskGlance()/renderDeskRail() already call).
+  // 2026-08-25 ("Mobile Day: nothing above the calendar" follow-up): the cycle chip
+  // that used to live here (q.info.icon, CYCLE_PHASE_INFO's own per-phase mark) moved
+  // to a normal all-day chip in #dayAlldayRow instead -- cycleAlldayChipHtml(), a few
+  // hundred lines up, is its own home now, not rebuilt through this function. Dropped
+  // from here entirely rather than shown in both places. 🎂 is left as one of §8's
+  // four sanctioned colour emoji -- birthday is the only chip this strip still builds.
   function dcxChipsHtml() {
     const d = state.anchor;
     const chips = [];
-    // 2026-08-23 (Numerology card rework): planet/moon/sign chips moved into the
-    // "Today's widgets" Numerology card (wrCardHtml("focusTile")) -- same
-    // dayNumerologyChips(d)/astroFor(d)/planetOf(d) reads, just displayed there
-    // now, alongside PM/PY. Only cycle and birthday stay in this strip.
-    const q = cycleQuickInfo(TODAY);
-    // 2026-08-16 (item 1): two changes, both so this ONE chip can replace the retired
-    // 5am grid marker (renderSleepBand) outright.
-    //  · the phase word is merged in — "CD 10 · Luteal", the same label/casing
-    //    #ddhChips and the Cycle widget card already build from q.phase.
-    //  · data-cd-log/role/tabindex/title are the marker's own attributes, moved here
-    //    verbatim, so "tapping it opens CH5" is preserved by the same global click
-    //    delegate that served the marker (and #numGrpCd, and the week/month CD cells).
-    if (q) {
-      const phaseLbl = q.phase ? `${q.phase[0].toUpperCase()}${q.phase.slice(1)}` : "";
-      chips.push({
-        ic: `<span class="dcx-chip-ic" aria-hidden="true">${(q.info && q.info.icon) || "🌸"}</span>`,
-        val: `CD ${q.cd}${phaseLbl ? ` · ${phaseLbl}` : ""}`,
-        tap: true,
-        chip: "cycle", tint: "--flow-med",
-      });
-    }
     const bdays = birthdaysOn(d);
     // 2026-08-25 (mobile GCal rebuild, §1): bday:true only adds the popover trigger --
     // birthdaysOn(d) itself is untouched, still the exact same read/count/"+N" collapse.
     if (bdays.length) chips.push({ ic: `<span class="dcx-chip-ic" aria-hidden="true">🎂</span>`, val: bdays.length === 1 ? bdays[0].name : `${bdays[0].name} +${bdays.length - 1}`, bday: true });
-    return chips.map(c => `<span class="dcx-chip${c.pop ? " num-hover-trigger" : ""}"${c.chip ? ` data-chip="${c.chip}" style="--chip-tint:var(${c.tint})"` : ""}${c.tap ? ` role="button" tabindex="0" data-cd-log title="Log this day"` : ""}${c.bday ? ` role="button" tabindex="0" data-bday-chip title="Birthday — tap for actions"` : ""}${c.pop ? ` tabindex="0"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span>${c.pop || ""}</span>`).join("");
+    return chips.map(c => `<span class="dcx-chip"${c.bday ? ` role="button" tabindex="0" data-bday-chip title="Birthday — tap for actions"` : ""}>${c.ic}<span class="dcx-chip-val">${esc(c.val)}</span></span>`).join("");
   }
   // fills the chip strip + the progress row (both cheap, non-ticking -- called once
   // per renderDay()). The fasting row is deliberately a separate function/container
@@ -44280,14 +44300,27 @@
       if (progHome && prog && progHome.nextElementSibling !== prog) progHome.after(prog);
       if (addRowHome && addRowEl && addRowHome.nextElementSibling !== addRowEl) addRowHome.after(addRowEl);
       if (fastHome && fastEl && fastHome.nextElementSibling !== fastEl) fastHome.after(fastEl);
-      if (bodyCardHome && bodyCard && bodyCardHome.nextElementSibling !== bodyCard) bodyCardHome.after(bodyCard);
-      if (sessionCardHome && sessionCard && sessionCardHome.nextElementSibling !== sessionCard) sessionCardHome.after(sessionCard);
+      // 2026-08-25 ("nothing above the calendar" mobile follow-up): !inDayDrawers()
+      // guards added to these two -- same reason, same fix shape as dayStepRow/
+      // miniCalWrap's own guards a few lines up. placeDayDrawers() (below) now ALSO
+      // reparents #dayBodyCard/#daySessionCard, into the mobile widget drawer -- and
+      // runs AFTER this function in renderDay()'s own call order (see that function's
+      // 2026-08-18 comment). Without this guard, every mobile render while the drawer
+      // legitimately holds these would: yank them out here, unconditionally, back to
+      // their .day-main home marker, then placeDayDrawers() would append them again a
+      // moment later -- not a visible bug (placeDayDrawers always runs last and wins),
+      // but real churn, and worse, an ORDER bug: repeatedly re-appending only these
+      // two (not #dayHeaderRow, which this function never touches) shuffles them past
+      // whatever else already sits in the drawer on every single render.
+      if (bodyCardHome && bodyCard && bodyCardHome.nextElementSibling !== bodyCard && !inDayDrawers(bodyCard)) bodyCardHome.after(bodyCard);
+      if (sessionCardHome && sessionCard && sessionCardHome.nextElementSibling !== sessionCard && !inDayDrawers(sessionCard)) sessionCardHome.after(sessionCard);
       // 2026-08-24: return the three pinned cards to .day-main below the desktop
       // breakpoint -- there is no widget rail (and no #wrFallback content) there, so
       // above-the-calendar is where they belong on mobile/tablet. Linh's rule was about
       // the desktop right-hand panel; mobile is deliberately untouched.
       if (sunWeekHome && sunWeek && sunWeekHome.nextElementSibling !== sunWeek) sunWeekHome.after(sunWeek);
-      if (ctxWrapHome && ctxWrap && ctxWrapHome.nextElementSibling !== ctxWrap) ctxWrapHome.after(ctxWrap);
+      // 2026-08-25: same !inDayDrawers() guard as bodyCard/sessionCard just above, same reason.
+      if (ctxWrapHome && ctxWrap && ctxWrapHome.nextElementSibling !== ctxWrap && !inDayDrawers(ctxWrap)) ctxWrapHome.after(ctxWrap);
       if (ambRailHome && ambRail && ambRailHome.nextElementSibling !== ambRail) ambRailHome.after(ambRail);
       // Shopping: pull it out of EITHER rail host (#wrPinned >=1200px, #wrFallback
       // 1024-1199px) back beside its marker -- then stop. Deliberately conditional,
@@ -44388,6 +44421,34 @@
     const dayRow2Home = document.getElementById("dayRow2Home");
     const wrMobile = document.getElementById("wrMobile");
     const wrMobileHome = document.getElementById("wrMobileHome");
+    // 2026-08-25 ("Mobile Day: nothing above the calendar" follow-up to her earlier
+    // desktop rule, book33-nothing-above-calendar-instruction.md): the four real
+    // elements that still sat between the top of the page and #timelineScroll on
+    // mobile/tablet -- measured live at 412x915 before this change, #timelineScroll
+    // started at y=372 (this session's own demo data; her own phone measured y=434
+    // with a live session + logged weight, both of which add more height here than
+    // this build's empty demo state does) -- 40.7% of the viewport gone before the
+    // grid. Same home-marker pattern as every other element in this function.
+    // #dayHeaderRowHome is new (nothing else ever reparented #dayHeaderRow before
+    // this); #dayBodyCardHome/#daySessionCardHome/#dayCtxWrapHome already existed,
+    // built for placeDeskGrid()'s DESKTOP reparent (into #deskColLeft/#dsbSessionSlot/
+    // #wrPinned) -- this is their first mobile use.
+    const dayHeaderRow = document.getElementById("dayHeaderRow");
+    const dayHeaderRowHome = document.getElementById("dayHeaderRowHome");
+    const bodyCard = document.getElementById("dayBodyCard");
+    const bodyCardHome = document.getElementById("dayBodyCardHome");
+    // #daySessionCard is ALSO claimed by renderModeTakeover() (called between
+    // placeDeskGrid() and this function in renderDay()'s own sequence, see its own
+    // comment: "so this always wins #daySessionCard's parent for this render pass")
+    // whenever a Mode takeover is showing it in the full-screen overlay. Every guard
+    // below that touches sessionCard checks !mtActiveTakeoverModeId() first, mirroring
+    // the EXACT same guard placeDeskGrid()'s own desktop pinned-widget loop already
+    // uses for this same hazard -- without it, opening this drawer during a live
+    // takeover would empty the overlay's own session slot out from under her.
+    const sessionCard = document.getElementById("daySessionCard");
+    const sessionCardHome = document.getElementById("daySessionCardHome");
+    const ctxWrap = document.getElementById("dayCtxWrap");
+    const ctxWrapHome = document.getElementById("dayCtxWrapHome");
     const rightBody = document.getElementById("dayRightDrawerBody");
     if (active) {
       // #deskSidebar moves as ONE unit (not picked apart into its mini-cal/numerology/
@@ -44406,6 +44467,18 @@
       if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
       if (numGroupStrip && topBody && numGroupStrip.parentElement !== topBody) topBody.appendChild(numGroupStrip);
       if (qa && topBody && qa.parentElement !== topBody) topBody.appendChild(qa);
+      // dayHeaderRow/bodyCard/sessionCard/ctxWrap, in that order (her own table's
+      // order), ahead of #wrMobile -- each keeps its own existing renderer untouched;
+      // nothing here is rebuilt as a wrCardHtml() string, so this doesn't wire them
+      // into the icon-per-widget selection #wrMobile itself uses for WR_WIDGET_IDS --
+      // they're just always-visible siblings of it inside the same drawer body,
+      // reachable the instant the drawer opens (STEP 2's own "do not invent a second
+      // placement system" -- extending that selection machinery to cover them too
+      // would have been exactly that).
+      if (dayHeaderRow && rightBody && dayHeaderRow.parentElement !== rightBody) rightBody.appendChild(dayHeaderRow);
+      if (bodyCard && rightBody && bodyCard.parentElement !== rightBody) rightBody.appendChild(bodyCard);
+      if (!mtActiveTakeoverModeId() && sessionCard && rightBody && sessionCard.parentElement !== rightBody) rightBody.appendChild(sessionCard);
+      if (ctxWrap && rightBody && ctxWrap.parentElement !== rightBody) rightBody.appendChild(ctxWrap);
       if (wrMobile && rightBody && wrMobile.parentElement !== rightBody) rightBody.appendChild(wrMobile);
       // both confirmed viewport-agnostic (just fill whatever element currently holds
       // their target ids) -- normally called from placeDeskGrid()'s desktop branch /
@@ -44438,6 +44511,30 @@
       // back to its own real home in one step (2026-08-24: no #navDateSlot
       // intermediate stop any more, see this function's own note on dayRow2 above).
       if (dayRow2Home && dayRow2 && dayRow2Home.nextElementSibling !== dayRow2) dayRow2Home.after(dayRow2);
+      // 2026-08-25 FIX (found live, same bug class as dayStepRow's own 2026-08-18 FIX
+      // above -- a resize crossing 1024px stranded these two): dayHeaderRow/bodyCard
+      // are UNLIKE ctxWrap/sessionCard just below -- placeDeskGrid()'s "on" branch never
+      // claims them (bodyCard "no longer reparented into the desktop sidebar at all",
+      // dayHeaderRow has no desktop destination at all, both just sit hidden via CSS
+      // wherever they are) -- so this drawer is their ONLY way home, at ANY width, not
+      // just below 1024px. The original !deskGridMq.matches guard (copied from
+      // dayStepRow/qa without checking whether the same reasoning actually applied)
+      // left them orphaned in the drawer forever once a resize crossed to desktop --
+      // confirmed live: dispatched resize at 1280px, both stayed put while ctxWrap/
+      // sessionCard (below) correctly returned home via placeDeskGrid()'s own claim.
+      if (dayHeaderRowHome && dayHeaderRow && dayHeaderRowHome.nextElementSibling !== dayHeaderRow) dayHeaderRowHome.after(dayHeaderRow);
+      if (bodyCardHome && bodyCard && bodyCardHome.nextElementSibling !== bodyCard) bodyCardHome.after(bodyCard);
+      // ctxWrap/sessionCard DO keep the !deskGridMq.matches guard -- placeDeskGrid()'s
+      // "on" branch (desktop) actively claims both into the pinned widget rail/panel,
+      // running BEFORE this function each render (see that function's own 2026-08-18
+      // call-order comment) -- without the guard this would immediately undo that claim
+      // on every desktop render/resize, pulling them back out of the rail into their
+      // hidden .day-main home markers. sessionCard also keeps the SAME
+      // !mtActiveTakeoverModeId() guard as its own move into the drawer above, for the
+      // identical reason -- a takeover overlay showing it must not have it pulled back
+      // out from under it by a resize.
+      if (!deskGridMq.matches && !mtActiveTakeoverModeId() && sessionCardHome && sessionCard && sessionCardHome.nextElementSibling !== sessionCard) sessionCardHome.after(sessionCard);
+      if (!deskGridMq.matches && ctxWrapHome && ctxWrap && ctxWrapHome.nextElementSibling !== ctxWrap) ctxWrapHome.after(ctxWrap);
       if (wrMobileHome && wrMobile && wrMobileHome.nextElementSibling !== wrMobile) wrMobileHome.after(wrMobile);
       // leaving drawer mode (resize past 1024px, or navigating off the Day page)
       // while #dayTopDrawer/#dayRightDrawer was open would otherwise strand it
