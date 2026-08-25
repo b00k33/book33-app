@@ -3439,6 +3439,27 @@
   .tl-detail-note-text { white-space: pre-wrap; }
   /* 2026-08-15 fix (B5): 12px -> 11px, the declared label/caption step. */
   .tl-detail-row .tl-detail-sub { display: block; font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+  /* 2026-08-25 (Commit 4, "repeat layers, and Start/End on one row"): one heading, one
+     row per real schedule layer -- her own approved mockup shape (Weekly / change ›,
+     then Main + each Also on its own row). .tl-detail-repeat-wrap is just a flex:1
+     min-width:0 wrapper so this card can sit beside the row's own 20px icon column
+     the same way every other .tl-detail-row's content does. */
+  .tl-detail-repeat-wrap { flex: 1; min-width: 0; }
+  .tl-repeat-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-weight: 700; }
+  .tl-repeat-change {
+    flex: none; border: none; background: transparent; padding: 0; margin: 0; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-soft);
+  }
+  .tl-repeat-change:hover { color: var(--ink); text-decoration: underline; }
+  .tl-repeat-layer {
+    display: flex; align-items: baseline; gap: 10px; padding: 4px 0 0; font-size: 12px; color: var(--ink-soft);
+  }
+  /* fixed-width tag column so "Main"/"Also" line up down the stack, same fixed-slot
+     idiom the sheet's own icon column (.tl-detail-em, 20px) already uses. */
+  .tl-repeat-layer-tag { flex: none; width: 34px; font-weight: 700; color: var(--ink-faint); }
+  .tl-repeat-layer-days { flex: 1; min-width: 0; }
+  .tl-repeat-layer-time { flex: none; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .tl-repeat-layer-empty { color: var(--ink-faint); font-style: italic; }
   .tl-detail-done-btn {
     /* 2026-08-15: 2px -> 4px (CLAUDE.md spacing scale is 4/8/12/16/24/32, no 2px) —
        fixed on sight while already touching this rule for the pair below; purely a
@@ -11706,6 +11727,11 @@
   }
   .fit-field-missing input { border-color: var(--warn); }
   .fit-field-missing .fit-field-lbl { color: var(--warn); }
+  /* 2026-08-25 (Commit 4, "Start and End share a row"): a real 50/50 grid instead of
+     .fit-session-fields' flex:1;min-width:90px (which left the two fields uneven --
+     flex:1 only splits space AFTER min-width is satisfied). margin-top:8px matches
+     .fit-session-fields' own gap so the two rows read as one field group, not two. */
+  .tl-detail-when-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
   #hairOverrideSelect {
     width: 100%; font-family: var(--font-body); font-size: 13px; color: var(--ink); background: var(--field-bg);
     border: 1px solid var(--note-line); border-radius: 3px; padding: 8px 8px;
@@ -29912,11 +29938,57 @@
     // The row itself is desktop-hidden when there is no short label at all, so a freq
     // with no ROUTINE_FREQ_LABEL entry (interval, count, numMoney) still renders no row
     // on desktop, just as HEAD did, while mobile gets its real "every 2 days" sentence.
-    const repeatsRowHtml = (freqLabelShort || freqLabelRow)
-      ? `<div class="tl-detail-row tl-detail-row-repeats${freqLabelShort ? "" : " tl-detail-freq-rich"}">${glyphHtml("↻", "tl-detail-em")}<span>${
-          freqLabelShort ? `<span class="tl-detail-mobile-hide">${esc(freqLabelShort)}</span>` : ""
-        }${freqLabelRow ? `<span class="tl-detail-freq-rich">${esc(freqLabelRow)}</span>` : ""}</span></div>`
-      : "";
+    // 2026-08-25 (Commit 4, "repeat layers, and Start/End on one row"): the mobile-only
+    // half of this row (.tl-detail-freq-rich) is rebuilt -- her Decision #3, "the three
+    // 'Repeats weekly' rows are three real schedule layers, not a duplication bug": one
+    // heading, one row per layer, naming its own days/times. schedulesOf(t) (search that
+    // name) is the real field -- t.schedules, an array of {weekdays, start, end,
+    // weekInterval, weekAnchor} once she's used "+ Add another schedule"; with no extra
+    // schedules it's synthesised from the task's own top-level weekdays/start (still
+    // "layer 0", just not a real array yet). Layer 0 is always "Main", every layer after
+    // is "Also" -- matches her mockup's own labels exactly. Desktop's freqLabelShort
+    // half above is completely untouched (still whatever it has always been).
+    const repeatChangeAttr = isRtnOcc && rtnT ? `data-rt-open="${esc(rtnT.id)}"` : `data-edit="${esc(e.id)}"`;
+    const repeatChangeHtml = `<button type="button" class="tl-repeat-change" ${repeatChangeAttr}>change ›</button>`;
+    let repeatBodyHtml;
+    if (isRtnOcc && rtnT && rtnT.freq === "weekly") {
+      const layers = schedulesOf(rtnT).filter(l => l.weekdays && l.weekdays.length);
+      const layerRows = layers.length ? layers.map((l, i) => {
+        const days = l.weekdays.slice().sort((a, b) => a - b).map(d => WD_FULL[d].slice(0, 3)).join(", ");
+        // a layer's own end, falling back to the routine's shared durationMin, same
+        // derivation schedulesOf()'s own callers (moveHtml, editFieldsHtml) already use
+        // for this exact field -- "say so rather than print a placeholder" when there's
+        // truly no time stored at all, per her own instruction.
+        let time = "No time set";
+        if (l.start) {
+          const end = l.end || (rtnT.durationMin ? minToTime(Math.min(timeToMin(l.start) + rtnT.durationMin, 1439)) : "");
+          time = end ? `${fmtTime(l.start)}–${fmtTime(end)}` : fmtTime(l.start);
+        }
+        return `<div class="tl-repeat-layer"><span class="tl-repeat-layer-tag">${i === 0 ? "Main" : "Also"}</span><span class="tl-repeat-layer-days">${esc(days)}</span><span class="tl-repeat-layer-time">${esc(time)}</span></div>`;
+      }).join("") : `<div class="tl-repeat-layer tl-repeat-layer-empty">No days set</div>`;
+      repeatBodyHtml = `<div class="tl-repeat-head"><span>Weekly</span>${repeatChangeHtml}</div>${layerRows}`;
+    } else if (isRtnOcc && rtnT) {
+      // every other routine frequency (daily/monthly/yearly/interval/once/...) has no
+      // multi-layer concept -- schedulesOf() only ever returns layers for "weekly" --
+      // so this keeps the existing single-sentence routineFreqLabel(), just now paired
+      // with the same "change ›" every other case gets, for one consistent shape.
+      repeatBodyHtml = `<div class="tl-repeat-head"><span>${esc(routineFreqLabel(rtnT))}</span>${repeatChangeHtml}</div>`;
+    } else if (freqLabelRow) {
+      // recurring EVENTS (e.fromRecurringEvent) have no multi-layer schedule concept
+      // either -- schedulesOf() operates on ROUTINE_TASKS only -- so this is byte-for-
+      // byte the OLD single-line label, unchanged. No "change ›": no verified in-place
+      // destination for that separate system, out of this commit's scope, not silently
+      // guessed at.
+      repeatBodyHtml = `<span>${esc(freqLabelRow)}</span>`;
+    } else {
+      // NEW: a plain non-repeating event previously rendered no Repeats row at all.
+      // "change ›" opens this event's own edit form, where a repeat can be picked --
+      // the exact promotion path "Make this repeat" (an earlier commit) already built.
+      repeatBodyHtml = `<div class="tl-repeat-head"><span>Doesn't repeat</span>${repeatChangeHtml}</div>`;
+    }
+    const repeatsRowHtml = `<div class="tl-detail-row tl-detail-row-repeats${freqLabelShort ? "" : " tl-detail-freq-rich"}">${glyphHtml("↻", "tl-detail-em")}<span class="tl-detail-repeat-wrap">${
+        freqLabelShort ? `<span class="tl-detail-mobile-hide">${esc(freqLabelShort)}</span>` : ""
+      }<span class="tl-detail-freq-rich">${repeatBodyHtml}</span></span></div>`;
     // 2026-08-19 (product catalog + research notes): a step carrying a linked product
     // and/or note shows both automatically here, no extra tap -- productId/noteId are
     // only ever set on hair-wash steps today (see generatedFor's hair branch), but this
@@ -30022,6 +30094,15 @@
             <span class="fit-field-lbl">Title</span>
             <input type="text" id="ovrTitle" value="${esc(fldTitle)}" autocomplete="off">
           </label>
+        </div>
+        <!-- 2026-08-25 (Commit 4, "Start and End share a row"): pulled out of
+             .fit-session-fields' own flex-wrap (which Title also lives in, forced to
+             flex:1 1 100% so it always wraps to its own row above) into a dedicated
+             even 50/50 grid, matching the form's own When line's spatial weight -- was
+             .fit-field's plain flex:1;min-width:90px, which left the two fields
+             uneven at narrow widths since flex:1 only splits space AFTER min-width is
+             satisfied. Measured live at 320/372px, see the commit's own report. -->
+        <div class="tl-detail-when-row">
           <label class="fit-field">
             <span class="fit-field-lbl">Start time</span>
             <input type="time" id="ovrStart" value="${esc(fldStart)}">
