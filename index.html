@@ -10430,7 +10430,7 @@
   /* the gutter-side hairline (.hour-row::after) has nothing to draw into here —
      .md-hours has no reserved gutter for it to borrow — so it's dropped for this rail. */
   .md-hours .hour-row::after { content: none; }
-  .md-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
+  .md-cols { display: flex; flex: 1; gap: 4px; min-width: 0; cursor: copy; }
   /* 2026-08-15 fix (B4): the column rule was --note-line (color-mix --ink 26% in Night),
      ~2.6x §0's own --line weight — seven of them side by side turned the grid into a row
      of outlined boxes, which is precisely what "group by tone and spacing, never by
@@ -20252,6 +20252,13 @@
             <div class="md-grid" id="mdGrid">
               <div class="hours md-hours" id="mdHours"></div>
               <div class="md-cols" id="mdCols"></div>
+              <!-- 2026-08-26 ("add events from the grid", COMMIT 1): multi-day twin of
+                   #hoverAddLine -- same .hover-add-line class (identical dashed-rule +
+                   "+ 10:30am" pill styling), but its own element since it's repositioned
+                   to whichever COLUMN is hovered (left/width), not the whole row like
+                   single-day's version. #mdGrid is its positioning parent (position:
+                   relative, see its own CSS) -- see #mdCols' mousemove listener. -->
+              <div class="hover-add-line" id="mdHoverAddLine" hidden><span class="hv-lbl"></span></div>
             </div>
           </div>
           <div class="md-legend" id="mdLegend" hidden></div>
@@ -23126,14 +23133,29 @@
   // bottom edge sat 22.5px past the true 16:45 line). minForTop() below, this
   // function's own inverse, already walked hour-by-hour at each hour's own rate --
   // this now matches it, so a click and the block it draws always agree.
-  function topForMin(mins) {
+  // 2026-08-26 ("add events from the 3/5/7-day grid") optional second param: every
+  // existing call site omits it and gets layerTopOffset() exactly as before (grepped —
+  // none currently pass one). The multi-day click/hover/tap handlers below are the
+  // first callers to pass one explicitly (always 0) — layerTopOffset()'s own
+  // mdRendering branch already returns 0 there, but mdRendering is only ever true
+  // WHILE renderMultiDayGrid() is actively laying out columns, never at click/hover
+  // time, so calling these unchanged from a click handler would silently reuse
+  // #dayTimelineWrap's single-day padding-top instead. Fixed with an explicit offset
+  // rather than by toggling mdRendering around the call: mdRendering is read in
+  // exactly one place (layerTopOffset(), grepped), so both are equivalent in effect,
+  // but a temporarily-flipped global surviving past an exception (nothing here wraps
+  // it in try/finally) would silently corrupt every OTHER layerTopOffset() reader —
+  // the now-line, fasting line, chain layer, hour-expand math — until the next render
+  // reset it. An explicit parameter can't leak past its own call.
+  function topForMin(mins, offset) {
+    const off = offset === undefined ? layerTopOffset() : offset;
     const hour = Math.floor(mins / 60), frac = mins - hour * 60;
-    return layerTopOffset() + (hour - START_HOUR) * HOUR_H() + bonusBeforeHour(hour) + frac / 60 * hourRowH(hour);
+    return off + (hour - START_HOUR) * HOUR_H() + bonusBeforeHour(hour) + frac / 60 * hourRowH(hour);
   }
   // inverse of topForMin — walks the same row boundaries so a click/drag at pixel `y`
   // maps back to the right minute even inside/after a compact hour
-  function minForTop(y) {
-    let mins = START_MIN, pxSoFar = layerTopOffset();
+  function minForTop(y, offset) {
+    let mins = START_MIN, pxSoFar = offset === undefined ? layerTopOffset() : offset;
     for (let h = START_HOUR; h < END_HOUR; h++) {
       const rowH = hourRowH(h);
       if (y < pxSoFar + rowH || h === END_HOUR - 1) {
@@ -51544,6 +51566,17 @@
     fDate.value = dateKey;
     updateEachWeekdayLabel();
   }
+  // 2026-08-26 ("add events from the 3/5/7-day grid"): the multi-day click-to-add
+  // needs BOTH a date (which column) and a time (where in it) prefilled at once --
+  // openForm() alone always dates to state.anchor (today), openFormForDate() above
+  // always leaves the time blank. Rather than a third, independent opener, this is
+  // just those same two pieces combined: openForm()'s own prefStart/prefLoc prefill,
+  // then the exact fDate-override openFormForDate() already does.
+  function openFormForDateTime(dateKey, prefStart, prefLoc) {
+    openForm(prefStart, prefLoc);
+    fDate.value = dateKey;
+    updateEachWeekdayLabel();
+  }
   function openFormForEdit(ev) {
     armBackGuard();
     addRow.hidden = true; form.hidden = false;
@@ -54017,6 +54050,63 @@
     hoverLine.querySelector(".hv-lbl").textContent = `+ ${fmtTime(minToTime(minutes))}${loc.length ? ` · ${loc.join(" › ")}` : ""}`;
   });
   document.getElementById("eventsLayer").addEventListener("mouseleave", () => { hoverLine.hidden = true; });
+  // 2026-08-26 ("add events from the 3/5/7-day grid, timed and all-day", COMMIT 1):
+  // the multi-day twin of the two #eventsLayer listeners just above. Listens on
+  // #mdCols itself, not .md-col — .md-col is deliberately pointer-events:none (see
+  // its own CSS comment: the .md-bar 44px hit pads paint BELOW the column at
+  // negative z-index, so a hittable column swallowed every tap outside a bar's own
+  // 8px) — so e.target for empty space is #mdCols itself, and mdColAtX() resolves
+  // which column a click actually landed over by comparing clientX against each
+  // .md-col's own rect. Do not flip .md-col's pointer-events to make this easier;
+  // that regresses the exact bug the CSS comment documents.
+  function mdColAtX(clientX) {
+    const cols = document.querySelectorAll("#mdCols > .md-col");
+    for (const col of cols) {
+      const r = col.getBoundingClientRect();
+      if (clientX >= r.left && clientX < r.right) return col;
+    }
+    return null;
+  }
+  const mdCols = document.getElementById("mdCols");
+  mdCols.addEventListener("click", e => {
+    if (e.target.closest(".tl-item")) return;   // a real block handles its own click via [data-tl-detail]
+    if (lastPointerType !== "mouse") return;
+    const col = mdColAtX(e.clientX);
+    if (!col) return;
+    const rect = col.getBoundingClientRect();
+    // offset 0, not layerTopOffset() -- see topForMin()/minForTop()'s own 2026-08-26
+    // comment: a .md-col is an unpadded flex sibling under #mdGrid (padding-top: 0),
+    // so its own getBoundingClientRect().top already sits exactly where the render
+    // pass placed row 0, with nothing left to compensate for.
+    let minutes = Math.round(minForTop(e.clientY - rect.top, 0) / 15) * 15;
+    minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
+    openFormForDateTime(col.dataset.dayKey, minToTime(minutes), locForMinute(minutes));
+  });
+  // hover ghost — the multi-day twin of #hoverAddLine, same class (so it's visually
+  // identical: dashed rule + "+ 10:30am" pill) but its own element, positioned to the
+  // HOVERED column's own left edge/width each move rather than spanning the whole
+  // row the way single-day's version does (there every column-width would differ).
+  // #mdHoverAddLine lives inside #mdGrid (position:relative, see its own CSS), so its
+  // left/top are set relative to that, not to the viewport.
+  const mdHoverLine = document.getElementById("mdHoverAddLine");
+  const mdGridEl = document.getElementById("mdGrid");
+  mdCols.addEventListener("mousemove", e => {
+    if (document.body.classList.contains("dragging-block")) { mdHoverLine.hidden = true; return; }
+    if (e.target.closest(".tl-item")) { mdHoverLine.hidden = true; return; }
+    const col = mdColAtX(e.clientX);
+    if (!col) { mdHoverLine.hidden = true; return; }
+    const colRect = col.getBoundingClientRect(), gridRect = mdGridEl.getBoundingClientRect();
+    let minutes = Math.round(minForTop(e.clientY - colRect.top, 0) / 15) * 15;
+    minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
+    mdHoverLine.hidden = false;
+    mdHoverLine.style.left = `${colRect.left - gridRect.left}px`;
+    mdHoverLine.style.width = `${colRect.width}px`;
+    mdHoverLine.style.right = "auto";
+    mdHoverLine.style.top = `${topForMin(minutes, 0)}px`;
+    const loc = locForMinute(minutes);
+    mdHoverLine.querySelector(".hv-lbl").textContent = `+ ${fmtTime(minToTime(minutes))}${loc.length ? ` · ${loc.join(" › ")}` : ""}`;
+  });
+  mdCols.addEventListener("mouseleave", () => { mdHoverLine.hidden = true; });
   /* ---- right-click any of your own events to edit its details in place ---- */
   document.getElementById("dayPage").addEventListener("contextmenu", e => {
     // 2026-08-06 (Linh: "when i press and hold hair wash this happens" [edit form]):
@@ -54079,9 +54169,34 @@
   let suppressNextItemClick = false;
   (function () {
     const TAP_MOVE_PX = 10, TAP_MAX_MS = 500, DTAP_MAX_MS = 400, DTAP_MOVE_PX = 30;
-    const scrollerEl = document.getElementById("timelineScroll");
+    // 2026-08-26 ("add events from the grid", COMMIT 1): was a single hardcoded
+    // #timelineScroll -- correct while only #hours/#eventsLayer (both inside it) ever
+    // called bind(). #mdCols joining below lives inside the SEPARATE #mdTimelineScroll
+    // instead; keeping one shared scrollerEl would have checked the wrong element's
+    // scrollTop for a multi-day tap, so a real swipe-scroll of the multi-day grid would
+    // never register as "scrolled" here and could wrongly open the add form -- exactly
+    // the bug this whole double-tap system exists to prevent. Resolved per-element at
+    // pointerdown time instead, and carried on `down` itself so pointerup checks the
+    // SAME scroller it captured from, even if a resize/render swapped grids mid-gesture.
+    function scrollerFor(el) {
+      return el.id === "mdCols" ? document.getElementById("mdTimelineScroll") : document.getElementById("timelineScroll");
+    }
     let down = null, lastTap = null;
-    function openAt(clientY) {
+    // 2026-08-26: openAt() now takes the element the gesture was bound to, so it can
+    // tell a single-day tap (#hours/#eventsLayer, always today via openForm()) from a
+    // multi-day one (#mdCols, needs mdColAtX() to resolve which day column plus an
+    // explicit 0 offset — see mdCols' own click listener above for why). Mirrors that
+    // listener's own maths exactly rather than a third copy of it.
+    function openAt(el, clientX, clientY) {
+      if (el.id === "mdCols") {
+        const col = mdColAtX(clientX);
+        if (!col) return;
+        const rect = col.getBoundingClientRect();
+        let minutes = Math.round(minForTop(clientY - rect.top, 0) / 15) * 15;
+        minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
+        openFormForDateTime(col.dataset.dayKey, minToTime(minutes), locForMinute(minutes));
+        return;
+      }
       const rect = document.getElementById("eventsLayer").getBoundingClientRect();
       let minutes = Math.round(minForTop(clientY - rect.top) / 15) * 15;
       minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
@@ -54092,20 +54207,21 @@
         lastPointerType = e.pointerType;
         if (e.pointerType === "mouse") return;
         if (e.target.closest(".tl-item")) { down = null; return; }
-        down = { x: e.clientX, y: e.clientY, t: Date.now(), scrollTop: scrollerEl ? scrollerEl.scrollTop : 0 };
+        const scroller = scrollerFor(el);
+        down = { x: e.clientX, y: e.clientY, t: Date.now(), scroller, scrollTop: scroller ? scroller.scrollTop : 0 };
       });
       el.addEventListener("pointerup", e => {
         if (e.pointerType === "mouse" || !down) return;
         const d = down; down = null;
         const moved = Math.abs(e.clientX - d.x) > TAP_MOVE_PX || Math.abs(e.clientY - d.y) > TAP_MOVE_PX;
-        const scrolled = scrollerEl && scrollerEl.scrollTop !== d.scrollTop;
+        const scrolled = d.scroller && d.scroller.scrollTop !== d.scrollTop;
         const tooSlow = Date.now() - d.t > TAP_MAX_MS;
         if (moved || scrolled || tooSlow) { lastTap = null; return; }
         const now = Date.now();
         if (lastTap && now - lastTap.t <= DTAP_MAX_MS
             && Math.abs(e.clientX - lastTap.x) <= DTAP_MOVE_PX && Math.abs(e.clientY - lastTap.y) <= DTAP_MOVE_PX) {
           lastTap = null;
-          openAt(e.clientY);
+          openAt(el, e.clientX, e.clientY);
         } else {
           lastTap = { x: e.clientX, y: e.clientY, t: now };
         }
@@ -54113,6 +54229,7 @@
     }
     bind(document.getElementById("hours"));
     bind(document.getElementById("eventsLayer"));
+    bind(document.getElementById("mdCols"));
   })();
   // mouse half of the #hours side (the hour-LABEL gutter #eventsLayer doesn't cover) —
   // same lastPointerType gate as #eventsLayer's own click listener above.
