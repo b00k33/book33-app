@@ -3234,6 +3234,33 @@
   .tl-detail-manage-row .tl-detail-em { flex: none; width: 20px; text-align: center; color: var(--ink-faint); }
   .tl-detail-manage-danger { color: var(--danger); }
   .tl-detail-manage-danger .tl-detail-em { color: var(--danger); }
+  /* 2026-08-25 (Commit 2, "one system for every slide-in sheet"): the wrapping stack of
+     full-bleed .tl-detail-manage-row buttons is now a 4-column equal-cell grid for the
+     four actions every item type shares -- Edit event / Reschedule / Duplicate / Delete
+     (renderTlDetailHeadActions). Stacked icon-over-label, not side-by-side -- that's the
+     only way "Reschedule"/"Duplicate" fit inside a ~68px-wide cell at a 320px sheet
+     width without wrapping or clipping (measured live, see the commit's own report, not
+     eyeballed). flex:1 1 0 on each cell keeps them equal-width whether there are 2, 3 or
+     4 (Reschedule/Duplicate only render when tlItemCanMove(e)). Extra per-item-type
+     actions that don't fit this shape -- "Start <Mode> now", hairwash's "Not this one" --
+     stay .tl-detail-manage-row full-width rows underneath, unchanged from before. */
+  .tl-detail-action-grid { display: flex; border-top: 1px solid color-mix(in oklab, var(--ink) 10%, transparent); flex: none; }
+  .tl-detail-action-cell {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 9px 4px; min-height: 52px; box-sizing: border-box; border: none;
+    border-right: 1px solid color-mix(in oklab, var(--ink) 6%, transparent);
+    background: var(--raised); color: var(--ink); font: inherit; cursor: pointer;
+  }
+  .tl-detail-action-cell:last-child { border-right: none; }
+  .tl-detail-action-cell:hover { background: color-mix(in oklab, var(--raised) 50%, var(--note-bg)); }
+  .tl-detail-action-cell .tl-detail-em { font-size: 16px; }
+  .tl-detail-action-cell span { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  /* higher-specificity (two classes) on purpose -- ties with the bare .tl-detail-manage-
+     danger rule above at equal specificity otherwise resolve by source order, and this
+     rule needs to win regardless of where either happens to sit (see Commit 1's own
+     cascade-order writeup, same class of bug). */
+  .tl-detail-action-cell.tl-detail-manage-danger { color: var(--danger); }
+  .tl-detail-action-cell.tl-detail-manage-danger .tl-detail-em { color: var(--danger); }
   .tl-detail-body { padding: 4px 24px 24px; overflow-y: auto; }
   /* 2026-08-23 ("merge truly back-to-back same-named blocks"): sits between the
      head and the body, same shell on mobile and desktop (unlike .tl-detail-hero,
@@ -29620,42 +29647,20 @@
     btn.textContent = tlMoveConfirmText(dEl ? dEl.value : "", tEl ? tEl.value : "", tlDetailPanel === "copy", !!dEl);
   }
   function renderTlDetailHeadActions(e) {
-    // 2026-08-15 (§6 Zone 3 review): `gold` is the fifth argument, for the ONE primary
-    // action per §0 ("One primary action per surface, gold") — "＋ Add to another day",
-    // exactly as the spec's Zone 3 list marks it. Everything else stays quiet.
-    const row = (attrs, label, icon, danger, gold) =>
-      // 2026-08-15 (§8): the button face goes through glyphHtml -- ＋/🕑/✎/🗑 are
-      // app chrome, not her data, and 🕑/🗑 both default to colour-emoji presentation.
-      // Each already sits beside a real word ("Move this day", "Delete"), which is
-      // §8's other rule.
-      `<button type="button" class="tl-detail-manage-row${danger ? " tl-detail-manage-danger" : ""}${gold ? " tl-detail-manage-gold" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}">${glyphHtml(icon, "tl-detail-em")}<span>${label}</span></button>`;
-    const actions = [];
-    // 2026-08-15 (§6 mobile redesign, Pass B, Zone 3): "+ Add to another day" and
-    // "Move this day" relocated here alongside Edit/Delete — the actual date/time
-    // panel (moveHtml) stays exactly where it already lived, in the body
-    // (renderTlDetailBody) — both rows just toggle the SAME tlDetailPanel state
-    // that panel already reads, the same dual-binding pattern data-tl-toggle-edit
-    // already uses across both #tlDetailBody's and this element's own click
-    // listener (see that listener, below). "Add to another day" opens the exact
-    // same panel — its own "Duplicate here"/"Book another like it" button
-    // (data-tl-duplicate) already IS "copy this item to a new date/time", so this
-    // needed no new mechanism, just a second doorway into the one that already
-    // exists (confirmed against duplicateItem, ~line 18412).
-    // 2026-08-15 (§6 review): the two rows carried the SAME bare data-tl-toggle-move and
-    // opened the SAME panel, which then made her choose Reschedule-or-Duplicate all over
-    // again at the bottom — copying was literally indistinguishable from moving, and
-    // whichever row she tapped the panel said "New date & time". Each row now declares
-    // its own intent, the panel renders for that intent, and its single gold confirm
-    // does what the tapped row promised. "＋ Add to another day" is the gold one --
-    // UNLESS this item's own "Start <Mode> now" is showing (below), which outranks
-    // it: §0 allows exactly one gold primary per surface, and starting the mode
-    // she's looking at is the more decisive action of the two.
-    const startNowMode = modeOf(e);
-    const showStartNow = !!startNowMode && e.date === keyOf(TODAY) && !currentSession();
-    if (tlItemCanMove(e)) {
-      actions.push(row(`data-tl-toggle-move="copy"`, "Add to another day", "＋", false, !showStartNow));
-      actions.push(row(`data-tl-toggle-move="move"`, "Move this day", "🕑"));
-    }
+    // 2026-08-25 (Commit 2, "one system for every slide-in sheet"): the wrapping stack
+    // of full-bleed rows is now a 4-column equal-cell grid -- Edit event / Reschedule /
+    // Duplicate / Delete, same four actions on every item type, reached differently per
+    // type (see each cell below; CSS is .tl-detail-action-grid/.tl-detail-action-cell).
+    // "Start <Mode> now" and hairwash's "Not this one" don't fit that shape (neither is
+    // one of the four) and stay their own full-width .tl-detail-manage-row underneath,
+    // unchanged from before this commit.
+    const cell = (attrs, label, icon, danger) =>
+      // 2026-08-15 (§8): the button face goes through glyphHtml -- app chrome, not her
+      // data, and always sits beside a real word, which is §8's other rule.
+      `<button type="button" class="tl-detail-action-cell${danger ? " tl-detail-manage-danger" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}">${glyphHtml(icon, "tl-detail-em")}<span>${label}</span></button>`;
+    const row = (attrs, label, icon, gold) =>
+      `<button type="button" class="tl-detail-manage-row${gold ? " tl-detail-manage-gold" : ""}" ${attrs} aria-label="${label} ${esc(e.title)}">${glyphHtml(icon, "tl-detail-em")}<span>${label}</span></button>`;
+    const extraRows = [];
     // stage 10, "Start now": the modes spec's one manual override for entering a mode
     // outside the normal auto-start-on-covering-block path (syncSessionAutoStart).
     // Scoped to TODAY's real occurrence only -- a session is inherently "right now,
@@ -29664,50 +29669,63 @@
     // a live one is the mode-swap prompt's job, a later stage this build doesn't
     // guess at. startSession()'s own currentSession() guard makes this belt-and-
     // braces, not the only thing stopping a double-start.
+    const startNowMode = modeOf(e);
+    const showStartNow = !!startNowMode && e.date === keyOf(TODAY) && !currentSession();
     if (showStartNow) {
       const m = modeById(startNowMode);
-      actions.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, m.emoji || "▶", false, true));
+      extraRows.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, m.emoji || "▶", true));
     }
-    if (!e.generated) {
-      actions.push(row(`data-edit="${e.id}"`, "Edit", "✎"));
-      actions.push(row(`data-del="${e.id}"`, "Delete", "🗑", true));
-    } else if (e.fromRecurringEvent && e.recurId) {
-      // recurring event occurrence: Edit edits the whole series (the template — same
-      // all-occurrences semantics as editing a routine), Delete opens the 3-way scope
-      // chooser (this event / this and following / all events) instead of confirm().
-      actions.push(row(`data-edit="${e.recurId}"`, "Edit series", "✎"));
-      actions.push(row(`data-ev-occ-del="${e.id}" title="Delete — choose how much of the series"`, "Delete", "🗑", true));
-    } else if (e.rtTaskId === HAIR_ROUTINE_ID) {
-      // hair-wash gets one extra action the generic routine branch below doesn't
-      // offer: swapping today's wash TYPE without touching due-ness/id/move at all
-      // (that's the rotation's whole "only ever a display concern" contract — see
-      // hairSkipWash). Deliberately not worded "Skip" (reads like delete/dismiss).
-      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
+    if (e.rtTaskId === HAIR_ROUTINE_ID) {
+      // hair-wash gets one extra action the generic routine branch below doesn't offer:
+      // swapping today's wash TYPE without touching due-ness/id/move at all (that's the
+      // rotation's whole "only ever a display concern" contract — see hairSkipWash).
+      // Deliberately not worded "Skip" (reads like delete/dismiss).
       const nextId = HAIRD.rotation.length > 1 ? HAIRD.rotation[(HAIRD.pos + 1) % HAIRD.rotation.length] : null;
       const nextW = nextId ? hairWashById(nextId) : null;
-      if (nextW) actions.push(row(`data-hair-not-this="${e.id}"`, `Not this one — next up: ${nextW.name}`, "↻"));
-      actions.push(row(`data-rt-occ-del="${e.id}" title="Delete just this occurrence"`, "Delete", "🗑", true));
-    } else if (e.rtTaskId) {
-      // 2026-08-04 (Linh, popup declutter mockup: pencil stays in the header): this
-      // pencil used to jump straight to the routine TEMPLATE editor -- SUPERSEDED, it
-      // now toggles the SAME in-sheet fields panel the body's Edit reveals (data-tl-
-      // toggle-edit, handled in both the head-actions AND body click listeners), so
-      // tapping it reveals note-for-today/session fields in place instead of leaving
-      // the sheet. Deep template editing (recurrence, steps) is still reachable via a
-      // secondary link INSIDE that revealed panel (see renderTlDetailBody). data-rt-
-      // occ-del is unchanged: writes a ROUTINE_SKIPS entry for this occId alone (see
-      // its own comment near ROUTINE_TIME_OVR), every other occurrence keeps repeating.
-      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
-      actions.push(row(`data-rt-occ-del="${e.id}" title="Delete just this occurrence"`, "Delete", "🗑", true));
-    } else if (e.id.indexOf("fitcal-") === 0) {
-      // 2026-08-04: same toggle as the routine branch above -- reveals the inline
-      // Time/Duration/Location/Notes fields (fitSessionHtml) in place instead of
-      // navigating to the Habits page's fitness editor for the exact same fields.
-      const sessId = e.id.slice(7);
-      actions.push(row(`data-tl-toggle-edit`, "Edit", "✎"));
-      actions.push(row(`data-fitcal-del="${sessId}"`, "Delete", "🗑", true));
+      if (nextW) extraRows.push(row(`data-hair-not-this="${e.id}"`, `Not this one — next up: ${nextW.name}`, "↻"));
     }
-    document.getElementById("tlDetailHeadActions").innerHTML = actions.join("");
+    const cells = [];
+    if (!e.generated) {
+      cells.push(cell(`data-edit="${e.id}"`, "Edit event", "✎"));
+    } else if (e.fromRecurringEvent && e.recurId) {
+      // recurring event occurrence: named "Edit series", not "Edit event", on purpose --
+      // unlike every other branch here this genuinely edits every occurrence at once
+      // (the template), and that's worth a different word, not just a different
+      // destination — Delete gets its own 3-way scope chooser for the same reason.
+      cells.push(cell(`data-edit="${e.recurId}"`, "Edit series", "✎"));
+    } else if (e.rtTaskId) {
+      // 2026-08-25 (Commit 2): was data-tl-toggle-edit, which only toggled an in-sheet
+      // fields panel — SUPERSEDED, the today-only fields (scope toggle, Title/Start/
+      // End, Save/Skip) that panel used to gate now render unconditionally in the body
+      // (see renderTlDetailBody's routineTodayFieldsHtml), so there's nothing left for
+      // a toggle to reveal. This now opens the real routine editor directly instead —
+      // same destination the deleted green "Edit routine settings..." link used to be
+      // the only way to reach.
+      cells.push(cell(`data-rt-open="${e.rtTaskId}"`, "Edit event", "✎"));
+    } else if (e.id.indexOf("fitcal-") === 0) {
+      // fitcal has no separate "form" to send this to -- its Time/Duration/Location
+      // fields ARE the sheet (see renderTlDetailBody's fitEditFieldsHtml) -- so, unlike
+      // the routine branch above, this keeps toggling them open in place.
+      cells.push(cell(`data-tl-toggle-edit`, "Edit event", "✎"));
+    }
+    if (tlItemCanMove(e)) {
+      cells.push(cell(`data-tl-toggle-move="move"`, "Reschedule", "◷"));
+      cells.push(cell(`data-tl-toggle-move="copy"`, "Duplicate", "⧉"));
+    }
+    if (!e.generated) {
+      cells.push(cell(`data-del="${e.id}"`, "Delete", "🗑", true));
+    } else if (e.fromRecurringEvent && e.recurId) {
+      cells.push(cell(`data-ev-occ-del="${e.id}" title="Delete — choose how much of the series"`, "Delete", "🗑", true));
+    } else if (e.rtTaskId) {
+      // covers hairwash too (rtTaskId===HAIR_ROUTINE_ID) — writes a ROUTINE_SKIPS entry
+      // for this occId alone (see its own comment near ROUTINE_TIME_OVR), every other
+      // occurrence keeps repeating.
+      cells.push(cell(`data-rt-occ-del="${e.id}" title="Delete just this occurrence"`, "Delete", "🗑", true));
+    } else if (e.id.indexOf("fitcal-") === 0) {
+      cells.push(cell(`data-fitcal-del="${e.id.slice(7)}"`, "Delete", "🗑", true));
+    }
+    const gridHtml = cells.length ? `<div class="tl-detail-action-grid">${cells.join("")}</div>` : "";
+    document.getElementById("tlDetailHeadActions").innerHTML = gridHtml + extraRows.join("");
   }
   // 2026-08-06 (Linh's "routine phases" mockup): Before/Event/After banded view of `t`'s
   // whole chain, for the detail sheet. `t` can be the root itself or any linked item —
@@ -29849,13 +29867,11 @@
     const fitResolved = resolveFitSessionFor(e);
     const fs = fitResolved && fitResolved.sess;
     // 2026-08-04 (Linh: "move ALL the editable fields -- Time, Duration, Location,
-    // Notes, note for today -- BEHIND the Edit pencil, hidden until I tap Edit"):
-    // consolidates what used to be two always-visible blocks (extraHtml's note
-    // textarea, fitSessionHtml's field/notes rows) into ONE collapsed panel, toggled
-    // by the single "Edit" action in the flat row below (data-tl-toggle-edit). The
+    // Notes, note for today -- BEHIND the Edit pencil, hidden until I tap Edit"): the
     // star rating stays OUT of this panel, in the default view, per her explicit
-    // "keep the star rating" -- only the text-entry fields move.
-    const hasEditFields = hasRtnExtras || !!fitResolved;
+    // "keep the star rating" -- only the text-entry fields move. 2026-08-25 (Commit 2):
+    // a routine occurrence's fields are no longer behind a toggle at all (see
+    // routineTodayFieldsHtml below) -- only fitcal's still are (fitEditFieldsHtml).
     // 2026-08-04 ("edit this day vs the routine", Stage 1): a routine occurrence's edit
     // panel leads with a SCOPE toggle — "This day only" (default) writes t.overrides
     // [patternDate] via the Save button; "The routine" edits the template itself after
@@ -29942,10 +29958,23 @@
           ${dayScope ? `<button type="button" class="tl-move-btn" data-ovr-skip>Skip this day</button>` : ""}
           ${occOvr ? `<button type="button" class="tab-link ovr-revert" data-ovr-revert>Revert to the routine</button>` : ""}
         </div>` : "";
-    const editFieldsHtml = hasEditFields ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields"${tlDetailPanel === "edit" ? "" : " hidden"}>
+    // 2026-08-25 (Commit 2, "one system for every slide-in sheet"): SUPERSEDES the old
+    // single editFieldsHtml, which wrapped BOTH a routine occurrence's today-only fields
+    // AND a fitcal session's fields in the same tlDetailPanel==="edit" toggle. Zone 3's
+    // Edit cell now opens the real routine editor directly for a routine occurrence (see
+    // renderTlDetailHeadActions, data-rt-open) — so its scope toggle/Title/Start/End/
+    // Save-Skip fields have nothing left to be revealed BY, and are unconditionally
+    // visible instead (her own words: "already in the sheet, and stay there"). The old
+    // green "Edit routine settings (time, repeat, steps) →" link is deleted — Zone 3's
+    // Edit cell IS that link now, just moved up into the action row. fitcal keeps the
+    // toggle: there's no separate form for it to navigate to (Time/Duration/Location
+    // ARE the sheet), so its own Edit cell still toggles this panel open/closed.
+    const routineTodayFieldsHtml = hasRtnExtras ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields">
         ${scopeHtml}
-        ${hasRtnExtras ? `<textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>` : ""}
-        ${fitResolved ? `<div class="fit-session-fields">
+        <textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>
+      </div>` : "";
+    const fitEditFieldsHtml = fitResolved ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailFitEditFields"${tlDetailPanel === "edit" ? "" : " hidden"}>
+        <div class="fit-session-fields">
           <label class="fit-field${fs.time ? "" : " fit-field-missing"}">
             <span class="fit-field-lbl">Time</span>
             <input type="time" data-tl-fit-field="${fs.id}:time" value="${fs.time || ""}">
@@ -29962,9 +29991,9 @@
         <div class="fit-notes-row">
           <textarea class="fit-notes" data-tl-fit-notes="${fs.id}" placeholder="Notes on the session — how it felt, what you did…" rows="2">${esc(fs.notes || "")}</textarea>
           <button type="button" class="dh-confirm" data-tl-fit-notes-confirm="${fs.id}" aria-label="Save notes">✓</button>
-        </div>` : ""}
-        ${hasRtnExtras && e.rtTaskId ? `<button type="button" class="tab-link" data-rt-open="${e.rtTaskId}" style="margin-left:0">Edit routine settings (time, repeat, steps) →</button>` : ""}
+        </div>
       </div>` : "";
+    const editFieldsHtml = routineTodayFieldsHtml + fitEditFieldsHtml;
     // 2026-08-05 (Part D, "selecting a block gives options to reschedule it to another
     // day/time, and duplicate it to another day/time"): only for items rescheduleItem/
     // duplicateItem actually know how to move — a handwritten event, a routine
@@ -30156,8 +30185,18 @@
     // ≥641px and hides this row ≤640px). Same data-* attributes as the existing
     // controls, so every delegated listener works unchanged. The Reschedule/Book pair
     // disappears while the move panel is open, same mutual exclusion as actionsHtml.
+    // 2026-08-25 (Commit 2 functional carve-out): a routine occurrence used to reach the
+    // real routine editor here via the SAME data-tl-toggle-edit that revealed the in-
+    // sheet fields panel with its green "Edit routine settings..." link inside -- that
+    // link is deleted now (see renderTlDetailBody), so leaving this as a toggle would
+    // have stranded desktop with no way to reach the routine editor at all. data-rt-open
+    // is caught by #tlDetailBody's own click listener (deskActionsHtml renders inside
+    // #tlDetailBody, not Zone 3), which already closes the sheet before the document-
+    // level delegate opens the editor -- no new wiring needed here. fitcal is unchanged:
+    // still no separate form to send it to.
     const deskEditAttr = !e.generated ? `data-edit="${e.id}"`
-      : (e.rtTaskId || e.id.indexOf("fitcal-") === 0) ? "data-tl-toggle-edit" : "";
+      : e.rtTaskId ? `data-rt-open="${e.rtTaskId}"`
+      : e.id.indexOf("fitcal-") === 0 ? "data-tl-toggle-edit" : "";
     // 2026-08-08 (Linh, "Delete" action, design44): shared by the desktop row AND
     // (2026-08-15: RETIRED — mobile Delete now lives in Zone 3, see
     // renderTlDetailHeadActions/.tl-detail-manage; this const is desktop-only now)
@@ -31002,8 +31041,10 @@
       return;
     }
     // 2026-08-04 (Linh, popup declutter): the flat "Edit" action reveals the collapsed
-    // fields panel in place — see renderTlDetailBody's editFieldsHtml/tlDetailPanel.
-    // both toggles below hit the exact same detach bug the star fix above documents —
+    // fields panel in place — see renderTlDetailBody's fitEditFieldsHtml/tlDetailPanel.
+    // 2026-08-25 (Commit 2): only fitcal reaches this any more (a routine occurrence's
+    // Edit cell now carries data-rt-open instead, caught below, near data-jump-view).
+    // Both toggles below hit the exact same detach bug the star fix above documents —
     // refreshOpenTlDetail() replaces #tlDetailBody's innerHTML synchronously, mid-click,
     // orphaning the clicked button before the event finishes bubbling to the overlay's
     // outside-click listener. Same stopPropagation() fix.
@@ -31232,14 +31273,22 @@
   // needs no equivalent here: it stays on the Day page, and refreshOpenTlDetail() (run
   // at the end of every renderDay()) already auto-closes once the item is gone.
   document.getElementById("tlDetailHeadActions").addEventListener("click", e => {
-    // 2026-08-04 (Linh, popup mockup: pencil stays in the header for every item type):
-    // routine/fitcal items' pencil now toggles the same in-sheet fields panel the body's
-    // click listener does (see renderTlDetailBody/editFieldsHtml) -- same detach-on-
-    // rerender bug the star fix documents, same stopPropagation() fix, since this
-    // listener's target can get orphaned by refreshOpenTlDetail() mid-click same as
-    // any button inside #tlDetailBody would.
+    // 2026-08-04 (Linh, popup mockup: pencil stays in the header for every item type).
+    // 2026-08-25 (Commit 2): only fitcal still uses this toggle -- a routine occurrence's
+    // Edit cell now carries data-rt-open instead (see renderTlDetailHeadActions), caught
+    // below. fitcal's own in-sheet fields panel (renderTlDetailBody/fitEditFieldsHtml)
+    // still toggles here -- same detach-on-rerender bug the star fix documents, same
+    // stopPropagation() fix, since this listener's target can get orphaned by
+    // refreshOpenTlDetail() mid-click same as any button inside #tlDetailBody would.
     const editToggle = e.target.closest("[data-tl-toggle-edit]");
     if (editToggle) { e.stopPropagation(); tlDetailPanel = tlDetailPanel === "edit" ? null : "edit"; refreshOpenTlDetail(); return; }
+    // 2026-08-25 (Commit 2): a routine occurrence's Edit cell opens the real routine
+    // editor now (data-rt-open) instead of toggling a panel here -- close this sheet
+    // first, same courtesy data-edit already gets below, so it isn't left floating over
+    // the editor. Same "close here, the document-level delegate does the actual open
+    // once it bubbles up" split #tlDetailBody's own listener already uses for this
+    // exact attribute (search "the routine-template deep-edit link").
+    if (e.target.closest("[data-rt-open]")) { closeTlDetail(); return; }
     // 2026-08-15 (§6 mobile redesign, Pass B): Zone 3's "Add to another day"/"Move
     // this day" rows (renderTlDetailHeadActions) toggle the SAME tlDetailPanel
     // state as the body's own data-tl-toggle-move pills — dual-bound across both
