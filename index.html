@@ -10554,10 +10554,16 @@
      theme-flipping --cat-t on a saturated flat fill" approach .tl-block's own mobile
      override already uses (color:#0c2417, search "dark ink on track colour" a few
      hundred lines up) — this is that same convention, not a second one.
-     Neither row reserves empty space: both are created/inserted/removed OUTRIGHT by
-     alldayRowMount() (JS, near dayItemsFor()) — there is no static placeholder <div>
-     for either in the markup at all, so "no content" really is "not in the DOM", not
-     just display:none. ============================================================ */
+     2026-08-26 SUPERSEDED ("add events from the 3/5/7-day grid, timed and all-day",
+     COMMIT 2 — "a permanent ALL DAY strip you can click"): used to read "Neither row
+     reserves empty space: both are created/inserted/removed OUTRIGHT by
+     alldayRowMount()... there is no static placeholder <div> for either in the markup
+     at all, so 'no content' really is 'not in the DOM', not just display:none." Linh
+     asked for somewhere to click on an ordinary empty week, which means the row has
+     to exist THEN too — alldayRowMount() (JS) no longer ever removes it (see its own
+     updated comment); an empty day now reads as a slim, still-present, still-tappable
+     cell instead (.ad-col:empty, below) rather than the row leaving the DOM.
+     ============================================================ */
   /* 2026-08-15 fix (B4): --note-line -> the spec's own --line weight (.10), ink-derived
      so it still re-resolves per theme. At 26% this hairline read as the bottom edge of a
      box drawn around the all-day strip rather than a quiet separation of two groups. */
@@ -10592,7 +10598,39 @@
   #dayAlldayRow .ad-gutter { width: var(--gutter); padding-top: 0; }
   #mdAlldayRow .ad-gutter { width: 30px; }
   .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
-  .ad-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  /* position:relative/z-index:0 (2026-08-26): a stacking context for .ad-col:empty's
+     own 44px tap pad below, same reason .md-col needs it for .md-bar's pad (search
+     that rule's own comment) — without a context here, a negative z-index on the pad
+     would escape to some broader ancestor's stacking order instead of staying local. */
+  .ad-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; position: relative; z-index: 0; }
+  /* 2026-08-26 ("a permanent ALL DAY strip you can click", COMMIT 2): an empty day's
+     cell has 0 real content height — the row's own ~26px comes entirely from
+     .ad-gutter's "ALL DAY" label (see #dayAlldayRow/#mdAlldayRow .ad-gutter above).
+     CLAUDE.md's binding 44px touch-target minimum still applies to it (it's a real
+     "add an all-day event" target, wired by the document click delegate — search
+     openAllDayFormForDate), so the pad is padded out to 44px WITHOUT padding the
+     row itself, via the exact same technique .md-bar::after uses for the identical
+     reason (44px pad, box shorter than that): position:absolute + a taller invisible
+     box centred over the real one. z-index:-1 keeps it under any real chip content a
+     PARTIALLY-empty cell might still have elsewhere in view (:empty only matches a
+     cell with nothing in it at all), mirroring why .md-bar's own pad sits under the
+     bar rather than over it. */
+  .ad-col:empty::after {
+    content: ""; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%); z-index: -1;
+  }
+  /* the "+" affordance STEP 3 asks for — mouse/trackpad only ((hover:hover) also
+     excludes touch, matching "Nothing on touch — hover states don't exist there"
+     more precisely than a pointerType check would). Reuses the SAME pad box (only
+     `content`/z-index/layout change on :hover) so the glyph lands centred on the
+     row's own true middle rather than a second, separately-positioned element. */
+  @media (hover: hover) and (pointer: fine) {
+    .ad-col:empty { cursor: pointer; }
+    .ad-col:empty:hover::after {
+      content: "+"; z-index: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: var(--ink-faint); opacity: 0.6;
+    }
+  }
   /* 2026-08-15 fix (G1): §3 asks for ONE continuous tinted band down a fasting day —
      header AND grid, top to bottom. §4 then landed this row BETWEEN those two elements
      and left it untinted, so at 3/5/7 days the band read as two disconnected pieces with
@@ -33605,20 +33643,22 @@
   function alldayStackHtml(bdays, others) {
     return [...bdays, ...others].map(e => alldayChipHtml(e, false)).join("");
   }
-  // shared attach/detach for both all-day rows — creates the row fresh and inserts it
-  // right before `beforeEl` when there's content, removes it OUTRIGHT (a real
-  // .remove(), not display:none/hidden) when there isn't, per spec: "the whole row +
-  // its divider is removed from the DOM entirely... never reserve empty vertical
-  // space". The divider is a border-bottom ON this same element (see .ad-row CSS), so
-  // removing the row removes the divider in the same operation — nothing to keep in
-  // sync separately. `id` must be unique per row (the two callers use "dayAlldayRow"/
-  // "mdAlldayRow") so each finds only its own element next render; `beforeEl` must be
-  // a STATIC, always-present element (#dayFastHead/#mdTimelineScroll both qualify) so
-  // there's always a stable anchor to insert against regardless of whether this row
-  // currently exists.
-  function alldayRowMount(id, beforeEl, count, buildHtml) {
+  // shared attach for both all-day rows — creates the row once and inserts it right
+  // before `beforeEl`. `id` must be unique per row (the two callers use
+  // "dayAlldayRow"/"mdAlldayRow") so each finds only its own element next render;
+  // `beforeEl` must be a STATIC, always-present element (#dayFastHead/
+  // #mdTimelineScroll both qualify) so there's always a stable anchor to insert
+  // against on the one-time first call.
+  // 2026-08-26 SUPERSEDED ("add events... a permanent ALL DAY strip you can click"):
+  // used to take a `count` and remove the row outright the moment it hit zero, per
+  // the ALL-DAY ROW CSS block's own "no content really is not in the DOM" rule (see
+  // its own updated comment). Linh asked for somewhere to click on an empty week,
+  // which means the row has to exist THEN too — so this no longer ever removes it;
+  // count is gone from the signature (it had no other caller). Both call sites
+  // updated to match. The row's own :empty CSS (search .ad-col:empty) is what now
+  // keeps an empty day visually slim without the row leaving the DOM.
+  function alldayRowMount(id, beforeEl, buildHtml) {
     let el = document.getElementById(id);
-    if (!count) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement("div"); el.id = id; el.className = "ad-row"; }
     el.innerHTML = buildHtml();
     if (!el.isConnected && beforeEl && beforeEl.parentElement) beforeEl.parentElement.insertBefore(el, beforeEl);
@@ -33687,15 +33727,17 @@
     // elsewhere may still need it). Non-birthday all-day items (others2) are untouched
     // on every width, per the brief's own LEAVE ALONE.
     const bdaysForRow = mobileDay1Active() ? [] : bdays;
-    // 2026-08-25 (STEP 3): the cycle chip joins this row's own count so a day with
-    // ONLY cycle data (no birthday, no other all-day item) still shows the row instead
-    // of being removed by alldayRowMount()'s own "no content, no row" guard -- same
-    // no-empty-placeholder contract, just counted as 1 rather than 0 either way. First
-    // in the row (cycle is a standing daily fact, ahead of the day's own items), same
-    // reasoning dayRow2 goes first in the top drawer for.
+    // 2026-08-25 (STEP 3): the cycle chip renders first (a standing daily fact, ahead
+    // of the day's own items), same reasoning dayRow2 goes first in the top drawer for.
+    // 2026-08-26: no longer feeds a count -- alldayRowMount() keeps this row mounted
+    // regardless (see its own comment); an empty cell reads as slim-but-present via
+    // .ad-col:empty CSS instead of the row leaving the DOM.
     const cycleChip = cycleAlldayChipHtml();
-    alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), (cycleChip ? 1 : 0) + bdaysForRow.length + others2.length, () =>
-      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col">${cycleChip}${alldayStackHtml(bdaysForRow, others2)}</div></div>`);
+    // data-day-key mirrors mdAlldayColsHtml()'s own per-column attribute -- both rows'
+    // .ad-col cells now carry it uniformly, so the shared click-to-add-all-day-event
+    // delegate (search "openAllDayFormForDate") needs no single/multi-day branch.
+    alldayRowMount("dayAlldayRow", document.getElementById("dayFastHead"), () =>
+      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols"><div class="ad-col" data-day-key="${esc(keyOf(state.anchor))}">${cycleChip}${alldayStackHtml(bdaysForRow, others2)}</div></div>`);
   }
   // multi-day all-day row — one column per visible day, aligned under mdColHeadHtml()'s
   // own headers via the identical 30px gutter + 4px gaps (.md-hours/.md-col-heads,
@@ -33742,16 +33784,16 @@
   // mdColHeadHtml()/mdColumnHtml() just above it. dayList is the SAME array
   // renderMultiDayGrid() already built — reads only .d (all-day items are a separate
   // read from the timed `items` already on that object; see alldayItemsFor()).
-  // Removed from the DOM entirely (see alldayRowMount()) the moment NO visible day
-  // has any all-day item at all.
+  // 2026-08-26: stays mounted even when every visible day is empty (see
+  // alldayRowMount()'s own comment) -- Linh asked for somewhere to click on an
+  // ordinary week, so a day-count is no longer this row's cue to leave the DOM.
   function renderMdAlldayRow(dayList) {
     // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     const perDay = dayList.map(({ d }) => {
       const a = alldayItemsFor(d);
       return { d, dk: keyOf(d), bdays: a.bdays, others: a.others };
     });
-    const count = perDay.reduce((n, p) => n + p.bdays.length + p.others.length, 0);
-    alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), count, () =>
+    alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), () =>
       `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${mdAlldayColsHtml(perDay)}</div>`);
   }
 
@@ -51577,6 +51619,16 @@
     fDate.value = dateKey;
     updateEachWeekdayLabel();
   }
+  // 2026-08-26 ("a permanent ALL DAY strip you can click"): built the same way --
+  // openFormForDateTime() for the date, then ticks fAllDay and DISPATCHES a real
+  // "change" event on it rather than hand-copying the disable/clear sequence its own
+  // listener already runs (search fAllDay.addEventListener("change" -- this reuses
+  // that exact logic instead of a second copy that could drift from it later.
+  function openAllDayFormForDate(dateKey) {
+    openFormForDateTime(dateKey);
+    fAllDay.checked = true;
+    fAllDay.dispatchEvent(new Event("change"));
+  }
   function openFormForEdit(ev) {
     armBackGuard();
     addRow.hidden = true; form.hidden = false;
@@ -54107,6 +54159,23 @@
     mdHoverLine.querySelector(".hv-lbl").textContent = `+ ${fmtTime(minToTime(minutes))}${loc.length ? ` · ${loc.join(" › ")}` : ""}`;
   });
   mdCols.addEventListener("mouseleave", () => { mdHoverLine.hidden = true; });
+  // 2026-08-26 ("a permanent ALL DAY strip you can click"): one delegate covers both
+  // rows -- #dayAlldayRow's single .ad-col and #mdAlldayRow's per-day ones now carry
+  // the SAME data-day-key attribute (see renderDayAlldayRow()/mdAlldayColsHtml()), so
+  // there's no single/multi-day branch here, unlike the timed-grid listeners above.
+  // Document-level, not bound to #dayAlldayRow/#mdAlldayRow directly: alldayRowMount()
+  // creates those elements lazily on first render (there's no static placeholder in
+  // the markup), so a listener attached at boot to a specific element wouldn't exist
+  // yet to bind to. No scroll-vs-tap ambiguity to guard against the way the timed
+  // grid needs (lastPointerType/double-tap) -- neither row lives inside a scrollable
+  // container (both are static siblings of #timelineScroll/#mdTimelineScroll, not
+  // descendants), so a plain click is correct and sufficient for mouse AND touch.
+  document.addEventListener("click", e => {
+    if (e.target.closest(".ad-chip")) return;   // an existing chip keeps its own click behaviour
+    const col = e.target.closest("#dayAlldayRow .ad-col, #mdAlldayRow .ad-col");
+    if (!col) return;
+    openAllDayFormForDate(col.dataset.dayKey);
+  });
   /* ---- right-click any of your own events to edit its details in place ---- */
   document.getElementById("dayPage").addEventListener("contextmenu", e => {
     // 2026-08-06 (Linh: "when i press and hold hair wash this happens" [edit form]):
