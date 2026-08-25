@@ -8082,14 +8082,22 @@
     border: none; border-radius: var(--field-radius-sm); padding: 6px 10px;
   }
   /* #addForm's own new sheet (search "one repeat sheet") replaces #fRptWeekInterval/
-     #fRptWeekAnchor/#fRptMonthlyDay/#fRptYearlyDate/#fRptIntervalN/#fRptIntervalUnit's
-     old visible fields with #fRptN/#fRptUnit -- these stay in the DOM (still real
-     state computeFRepeatFields() reads by id, same "hidden input behind a
-     front-end" shape #fDur already used) but are never shown directly any more.
+     #fRptIntervalN/#fRptIntervalUnit's old visible fields with #fRptN/#fRptUnit --
+     these two stay in the DOM (still real state computeFRepeatFields() reads by id,
+     same "hidden input behind a front-end" shape #fDur already used) but are never
+     shown directly any more -- #fRptN/#fRptUnit already fully covers "every N
+     days/weeks/months/years", nothing else to confirm.
+     2026-08-25 (Retiring Routines, Commit 1 — closing the gap the Routine editor's
+     own #rtnWeekAnchorDate/#rtnMonthlyDay/#rtnYearlyDate could set that this form
+     couldn't): #fRptWeekAnchorField/#fRptMonthlyField/#fRptYearlyField UN-hidden --
+     syncFRepeatChoice() already shows/hides each correctly (search that name), the
+     first two were just never reachable because nothing set fRepeatChoice to
+     "monthly"/"yearly" (fRepeatApplyStep2() now does, for n=1 month/year -- see its
+     own comment) and the week-anchor had no visible field to see the auto-filled
+     default in, let alone change it.
      #rtnAddForm's own identical-looking fields are untouched -- scoped to #addForm
      only, same containment every other #addForm-only rule in this file already uses. */
-  #addForm #fRptWeekIntervalField, #addForm #fRptWeekAnchorField, #addForm #fRptMonthlyField,
-  #addForm #fRptYearlyField, #addForm #fRptIntervalField { display: none; }
+  #addForm #fRptWeekIntervalField, #addForm #fRptIntervalField { display: none; }
   /* "+ Add a time" -- dashed, since a solid .add-btn pill (design44's "+ glyph =
      create a new thing") would overstate this: it's revealing an existing field,
      not creating a new routine. No existing dashed-button precedent in the app to
@@ -21505,6 +21513,15 @@
                         <label>Repeat on <span class="field-hint">tap one or more</span></label>
                         <div class="track-picker" id="fRptWeekdayPicker" role="group" aria-label="Days of week" style="flex-wrap:wrap"></div>
                       </div>
+                      <!-- 2026-08-25 (Retiring Routines, Commit 1): the Routine editor's own
+                           #rtnStartDate had no equivalent here -- t.startDate IS a real,
+                           respected field (search "t.startDate" in the occurrence engine),
+                           this form just never exposed it. Optional, blank = starts
+                           immediately (today), same convention #rtnStartDate uses. -->
+                      <div class="field full" id="fRptStartDateField">
+                        <label for="fRptStartDate">Starts <span class="field-hint">optional — blank starts today</span></label>
+                        <input type="date" id="fRptStartDate">
+                      </div>
                       <div class="field full">
                         <label>Until</label>
                         <div class="rtn-repeat-until" id="fRptUntilGroup">
@@ -21670,6 +21687,41 @@
             <div class="field full" id="fNoteField">
               <label for="fNote">Notes <span class="field-hint">optional</span></label>
               <textarea id="fNote" class="field-bare" rows="3" placeholder="Add notes or a description…"></textarea>
+            </div>
+            <!-- 2026-08-25 (Retiring Routines, Commit 1): the Routine editor's own
+                 #rtnSubList, ported rather than duplicated -- addRtnSubRow/readRtnSubs/
+                 rtnMakeGroupSection etc. all take an explicit root now (search
+                 "root = rtnSubList") and are called here with fSubList instead, so
+                 both forms share the exact same list/group/reorder logic and the exact
+                 same readRtnSubs() the record gets built from. Only shown once a repeat
+                 pattern is chosen (see syncFRepeatChoice) -- a one-off event has no
+                 "back-to-back on the calendar" to speak of. Simpler than the Routine
+                 editor's own Set-total/From-steps toggle on purpose: steps' own minutes
+                 always decide the block length here (task.durationMode stays unset,
+                 the same default an untouched routine editor already uses) -- if she
+                 wants the override reachable here too later, that's a small separate add. -->
+            <div class="field full" id="fSubTasksField" hidden>
+              <label>Sub-tasks <span class="field-hint">optional, back-to-back on the calendar</span></label>
+              <div id="fSubList" class="rtn-sub-list"></div>
+              <div class="rtn-sub-actions">
+                <button type="button" class="add-btn rtn-sub-add" id="fSubAdd">+ Add sub-task</button>
+                <button type="button" class="add-btn rtn-sub-addgroup" id="fSubAddGroup">+ Add group</button>
+              </div>
+              <div id="fSubTotal" class="rtn-sub-total" hidden></div>
+            </div>
+            <!-- 2026-08-25 (Retiring Routines, Commit 1): the Routine editor's own
+                 "additional schedule" (#rtnSchedExtraField) -- a second/third weekly
+                 day/time layer, task.schedules. NOT the same field as the pre-existing
+                 #fSchedExtraField just below in this file: that one is the legacy
+                 RECURRING_EVENTS-only layer editor (editingRecurTemplateId-gated,
+                 "never shown for a fresh add" -- confirmed live, its own click/input
+                 delegates never touch ROUTINE_TASKS at all), a different system wearing
+                 the same CSS classes. This one writes task.schedules the same way
+                 #rtnAddForm's own submit handler does -- see buildRoutineFromCurrentForm. -->
+            <div class="field full" id="fRptSchedExtraField" hidden>
+              <label>Additional schedule <span class="field-hint">optional — a second day/time pattern</span></label>
+              <div id="fRptSchedExtraList" class="rtn-sched-extra-list"></div>
+              <button type="button" class="add-btn" id="fRptSchedAddBtn">+ Add another schedule</button>
             </div>
             <!-- 2026-08-17 (Linh, "can't be edited to be after or before"): a routine
                  created through the Repeats picker had no way to join a chain -- the
@@ -49354,6 +49406,10 @@
   }
   // ---- timed sub-task rows (each becomes a back-to-back mini-block on the Day timeline) ----
   const rtnSubList = document.getElementById("rtnSubList");
+  // 2026-08-25 (Retiring Routines, Commit 1): #addForm's own copy of the same list --
+  // see fSubTasksField's own HTML comment for why every function above takes an
+  // explicit root instead of this being a duplicated set of functions.
+  const fSubList = document.getElementById("fSubList");
   const toMinLocal = s => { const p = String(s).split(":"); return (+p[0] || 0) * 60 + (+p[1] || 0); };
   // 2026-08-08 (Start+End brief): the one place duration gets computed from a
   // start/end pair -- shared by the live readout below and the submit handler's
@@ -49428,8 +49484,15 @@
   // `group` is only added to a sub-task when non-blank, so an ungrouped routine's
   // subtasks keep the exact old {text,min} shape -- every existing .reduce(...) over
   // readRtnSubs() (updateRtnSubTotal, Fit-to-steps) is unaffected by the extra key.
-  function readRtnSubs() {
-    return [...rtnSubList.querySelectorAll(".rtn-sub-group")].flatMap(sec => {
+  // 2026-08-25 (Retiring Routines, Commit 1): every function below this point down
+  // to clearRtnSubRows() now takes an explicit trailing `root` (default rtnSubList,
+  // so every existing zero/short-arg call site inside #rtnAddForm's own code is
+  // untouched and behaves exactly as before) -- #addForm's own sub-tasks list
+  // (fSubList) calls the SAME functions with its own root instead of a duplicated
+  // copy, so both forms share one read path into the record (readRtnSubs is what
+  // buildRoutineFromCurrentForm() and #rtnAddForm's submit handler both call).
+  function readRtnSubs(root = rtnSubList) {
+    return [...root.querySelectorAll(".rtn-sub-group")].flatMap(sec => {
       const label = sec.classList.contains("rtn-sub-group-ungrouped") ? "" : sec.querySelector(".rtn-sub-group-name").value.trim();
       return [...sec.querySelectorAll(".rtn-sub-row")].map(r => ({
         text: r.querySelector(".rtn-sub-text").value.trim(),
@@ -49438,13 +49501,13 @@
       }));
     }).filter(s => s.text);
   }
-  function rtnSubGroupSections() { return [...rtnSubList.querySelectorAll(".rtn-sub-group:not(.rtn-sub-group-ungrouped)")]; }
+  function rtnSubGroupSections(root = rtnSubList) { return [...root.querySelectorAll(".rtn-sub-group:not(.rtn-sub-group-ungrouped)")]; }
   // headless (no visible header/name/subtotal chrome) the moment there are zero
   // explicit groups -- keeps an ungrouped routine's editor pixel-identical to the
   // pre-grouping flat list, since that's still the overwhelming common case.
-  function rtnRefreshGroupless() {
-    const ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
-    if (ug) ug.classList.toggle("rtn-sub-group-headless", rtnSubGroupSections().length === 0);
+  function rtnRefreshGroupless(root = rtnSubList) {
+    const ug = root.querySelector(".rtn-sub-group-ungrouped");
+    if (ug) ug.classList.toggle("rtn-sub-group-headless", rtnSubGroupSections(root).length === 0);
   }
   function rtnSetGroupCollapsed(sec, collapsed) {
     sec.querySelector(".rtn-sub-group-grid").classList.toggle("rtn-sub-group-collapsed", collapsed);
@@ -49453,14 +49516,14 @@
   }
   // recomputed after anything that can change membership or minutes (add/remove/
   // drag/type) -- cheap enough to just re-sum every section rather than track deltas.
-  function rtnRefreshGroupTotals() {
-    rtnSubList.querySelectorAll(".rtn-sub-group").forEach(sec => {
+  function rtnRefreshGroupTotals(root = rtnSubList) {
+    root.querySelectorAll(".rtn-sub-group").forEach(sec => {
       const tot = [...sec.querySelectorAll(".rtn-sub-row .rtn-sub-min")].reduce((a, i) => a + Math.max(0, parseInt(i.value, 10) || 0), 0);
       const totalEl = sec.querySelector(".rtn-sub-group-total");
       if (totalEl) totalEl.textContent = sec.querySelector(".rtn-sub-row") ? `${tot} min` : "";
     });
   }
-  function rtnMakeGroupSection(label, isUngrouped, icon, collapsed) {
+  function rtnMakeGroupSection(label, isUngrouped, icon, collapsed, root = rtnSubList) {
     const sec = document.createElement("div");
     sec.className = "rtn-sub-group" + (isUngrouped ? " rtn-sub-group-ungrouped rtn-sub-group-headless" : "");
     sec.innerHTML = isUngrouped
@@ -49476,28 +49539,28 @@
          <div class="rtn-sub-group-grid"><button type="button" class="rtn-sub-add-ingroup">+ Add</button></div>`;
     if (isUngrouped) {
       sec.querySelector(".rtn-sub-group-name").tabIndex = -1;
-      rtnSubList.appendChild(sec);
+      root.appendChild(sec);
     } else {
       sec.querySelector(".rtn-sub-group-name").value = label;
       sec.querySelector(".rtn-sub-group-icon").value = icon || "";
       if (collapsed) rtnSetGroupCollapsed(sec, true);
-      const ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
-      rtnSubList.insertBefore(sec, ug || null);
-      rtnRefreshGroupless();
+      const ug = root.querySelector(".rtn-sub-group-ungrouped");
+      root.insertBefore(sec, ug || null);
+      rtnRefreshGroupless(root);
     }
     return sec;
   }
   // finds the group section by its CURRENT typed name (creating it if this is the
   // first row that names it, e.g. loading a saved subtask whose group never got an
   // explicit groupOrder entry) -- "" always resolves to the one Ungrouped bucket.
-  function rtnGroupGridFor(label) {
+  function rtnGroupGridFor(label, root = rtnSubList) {
     if (!label) {
-      let ug = rtnSubList.querySelector(".rtn-sub-group-ungrouped");
-      if (!ug) ug = rtnMakeGroupSection("", true);
+      let ug = root.querySelector(".rtn-sub-group-ungrouped");
+      if (!ug) ug = rtnMakeGroupSection("", true, undefined, undefined, root);
       return ug.querySelector(".rtn-sub-group-grid");
     }
-    const existing = rtnSubGroupSections().find(s => s.querySelector(".rtn-sub-group-name").value.trim() === label);
-    return (existing || rtnMakeGroupSection(label, false)).querySelector(".rtn-sub-group-grid");
+    const existing = rtnSubGroupSections(root).find(s => s.querySelector(".rtn-sub-group-name").value.trim() === label);
+    return (existing || rtnMakeGroupSection(label, false, undefined, undefined, root)).querySelector(".rtn-sub-group-grid");
   }
   // 2026-08-10 (How-long duration-source toggle): jumps to the real editable sub-tasks
   // list -- still just #rtnSubTasksField inside More options, never duplicated -- from
@@ -49600,7 +49663,28 @@
     }
     el.textContent = txt;
   }
-  function addRtnSubRow(text = "", min = "", group = "") {
+  // 2026-08-25 (Retiring Routines, Commit 1): #addForm's own, simpler total-minutes
+  // readout for fSubList -- no Set-total/From-steps toggle (see fSubTasksField's own
+  // comment for why), just "Total N min" off the SAME readRtnSubs() reader, same
+  // "+Nd" overnight-spill handling as updateRtnSubTotal() above, keyed off fStart
+  // instead of rtnStart.
+  function updateFSubTotal() {
+    rtnRefreshGroupTotals(fSubList);
+    const subs = readRtnSubs(fSubList);
+    const el = document.getElementById("fSubTotal");
+    if (!subs.length) { el.hidden = true; el.textContent = ""; return; }
+    el.hidden = false;
+    const tot = subs.reduce((a, s) => a + s.min, 0);
+    if (!tot) { el.textContent = "Add minutes to see the finish time"; return; }
+    let txt = `Total ${tot} min`;
+    const startV = fStart.value;
+    if (startV) {
+      const s = toMinLocal(startV), rawEnd = s + tot, spill = Math.floor(rawEnd / 1440);
+      txt += ` · ${fmtTime(minToTime(s))}–${fmtTime(minToTime(rawEnd))}${spill ? ` +${spill}d` : ""}`;
+    }
+    el.textContent = txt;
+  }
+  function addRtnSubRow(text = "", min = "", group = "", root = rtnSubList) {
     const row = document.createElement("div");
     row.className = "rtn-sub-row";
     row.innerHTML = `<span class="rtn-sub-grip" aria-hidden="true">⋮⋮</span>
@@ -49610,20 +49694,27 @@
       <button type="button" class="rtn-sub-del" aria-label="Remove sub-task">×</button>`;
     row.querySelector(".rtn-sub-text").value = text;
     row.querySelector(".rtn-sub-min").value = min;
-    const grid = rtnGroupGridFor((group || "").trim());
+    const grid = rtnGroupGridFor((group || "").trim(), root);
     const addTile = grid.querySelector(".rtn-sub-add-ingroup");
     if (addTile) grid.insertBefore(row, addTile); else grid.appendChild(row);
-    updateRtnSubTotal();
+    subUpdateTotal(root);
     return row;
   }
   // always leaves the (headless) Ungrouped bucket behind so addRtnSubRow/
   // rtnGroupGridFor always have somewhere to land -- same "never truly empty" shape
   // openRtnForm's population loop and a fresh Add-routine form both rely on.
-  function clearRtnSubRows() {
-    rtnSubList.innerHTML = "";
-    rtnMakeGroupSection("", true);
-    updateRtnSubTotal();
+  function clearRtnSubRows(root = rtnSubList) {
+    root.innerHTML = "";
+    rtnMakeGroupSection("", true, undefined, undefined, root);
+    subUpdateTotal(root);
   }
+  // 2026-08-25 (Retiring Routines, Commit 1): the two sub-task lists' own "how long"
+  // chrome differs enough (rtn's Set-total/From-steps toggle vs #addForm's simpler
+  // always-from-steps total, see fSubTasksField's own comment) that they need
+  // different update functions -- this just picks the right one by root so every
+  // shared function above (addRtnSubRow, clearRtnSubRows, the delegates below)
+  // can call one name without caring which form it's in.
+  function subUpdateTotal(root) { if (root === rtnSubList) updateRtnSubTotal(); else updateFSubTotal(); }
   document.getElementById("rtnSubAdd").addEventListener("click", () => addRtnSubRow());
   document.getElementById("rtnSubAddGroup").addEventListener("click", () => {
     const sec = rtnMakeGroupSection(`Group ${rtnSubGroupSections().length + 1}`, false);
@@ -49631,11 +49722,22 @@
     const nameInput = sec.querySelector(".rtn-sub-group-name");
     nameInput.focus(); nameInput.select();
   });
-  rtnSubList.addEventListener("click", e => {
+  document.getElementById("fSubAdd").addEventListener("click", () => addRtnSubRow("", "", "", fSubList));
+  document.getElementById("fSubAddGroup").addEventListener("click", () => {
+    const sec = rtnMakeGroupSection(`Group ${rtnSubGroupSections(fSubList).length + 1}`, false, undefined, undefined, fSubList);
+    subUpdateTotal(fSubList);
+    const nameInput = sec.querySelector(".rtn-sub-group-name");
+    nameInput.focus(); nameInput.select();
+  });
+  // 2026-08-25 (Retiring Routines, Commit 1): generic version of the click/input/
+  // drag delegates just below -- takes the root list explicitly rather than closing
+  // over rtnSubList, so #rtnSubList and #fSubList can each bind it to themselves
+  // without duplicating the branching logic.
+  function subListClick(root, e) {
     const del = e.target.closest(".rtn-sub-del");
-    if (del) { del.closest(".rtn-sub-row").remove(); updateRtnSubTotal(); return; }
+    if (del) { del.closest(".rtn-sub-row").remove(); subUpdateTotal(root); return; }
     const addIn = e.target.closest(".rtn-sub-add-ingroup");
-    if (addIn) { addRtnSubRow("", "", addIn.closest(".rtn-sub-group").querySelector(".rtn-sub-group-name").value.trim()); return; }
+    if (addIn) { addRtnSubRow("", "", addIn.closest(".rtn-sub-group").querySelector(".rtn-sub-group-name").value.trim(), root); return; }
     const toggle = e.target.closest(".rtn-sub-group-toggle");
     if (toggle) {
       const sec = toggle.closest(".rtn-sub-group");
@@ -49647,18 +49749,23 @@
       // demotes the group's rows to Ungrouped rather than deleting the sub-tasks
       // themselves -- removing a group heading shouldn't silently discard her steps.
       const sec = gdel.closest(".rtn-sub-group");
-      const ugGrid = rtnGroupGridFor("");
+      const ugGrid = rtnGroupGridFor("", root);
       sec.querySelectorAll(".rtn-sub-row").forEach(r => ugGrid.appendChild(r));
       sec.remove();
-      rtnRefreshGroupless(); updateRtnSubTotal();
+      rtnRefreshGroupless(root); subUpdateTotal(root);
       return;
     }
-  });
-  rtnSubList.addEventListener("input", updateRtnSubTotal);
+  }
+  rtnSubList.addEventListener("click", e => subListClick(rtnSubList, e));
+  rtnSubList.addEventListener("input", () => subUpdateTotal(rtnSubList));
+  document.getElementById("fSubList").addEventListener("click", e => subListClick(fSubList, e));
+  document.getElementById("fSubList").addEventListener("input", () => subUpdateTotal(fSubList));
   // ---- drag-to-reorder, grip-only, pointer events (see .rtn-sub-grip CSS comment
-  // for why not native HTML5 draggable -- this is a touch-first app) ----
+  // for why not native HTML5 draggable -- this is a touch-first app). One shared
+  // rtnDrag/rtnDragEnd -- only one row can ever be mid-drag at a time regardless of
+  // which form it's in, so there's nothing to duplicate per-list here. ----
   let rtnDrag = null;
-  rtnSubList.addEventListener("pointerdown", e => {
+  function subPointerDown(root, e) {
     const grip = e.target.closest(".rtn-sub-grip");
     if (!grip) return;
     const row = grip.closest(".rtn-sub-row");
@@ -49672,9 +49779,9 @@
     ghost.style.top = rect.top + "px";
     document.body.appendChild(ghost);
     row.classList.add("rtn-sub-row-dragging");
-    rtnDrag = { row, ghost, pointerId: e.pointerId, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
-  });
-  rtnSubList.addEventListener("pointermove", e => {
+    rtnDrag = { root, row, ghost, pointerId: e.pointerId, offX: e.clientX - rect.left, offY: e.clientY - rect.top };
+  }
+  function subPointerMove(e) {
     if (!rtnDrag || e.pointerId !== rtnDrag.pointerId) return;
     rtnDrag.ghost.style.left = (e.clientX - rtnDrag.offX) + "px";
     rtnDrag.ghost.style.top = (e.clientY - rtnDrag.offY) + "px";
@@ -49687,16 +49794,23 @@
       const overGrid = overEl && overEl.closest(".rtn-sub-group-grid");
       if (overGrid && !overGrid.contains(rtnDrag.row)) overGrid.insertBefore(rtnDrag.row, overGrid.querySelector(".rtn-sub-add-ingroup") || null);
     }
-  });
+  }
   function rtnDragEnd(e) {
     if (!rtnDrag || (e && e.pointerId !== rtnDrag.pointerId)) return;
     rtnDrag.row.classList.remove("rtn-sub-row-dragging");
     rtnDrag.ghost.remove();
+    const root = rtnDrag.root;
     rtnDrag = null;
-    updateRtnSubTotal();
+    subUpdateTotal(root);
   }
+  rtnSubList.addEventListener("pointerdown", e => subPointerDown(rtnSubList, e));
+  rtnSubList.addEventListener("pointermove", subPointerMove);
   rtnSubList.addEventListener("pointerup", rtnDragEnd);
   rtnSubList.addEventListener("pointercancel", rtnDragEnd);
+  document.getElementById("fSubList").addEventListener("pointerdown", e => subPointerDown(fSubList, e));
+  document.getElementById("fSubList").addEventListener("pointermove", subPointerMove);
+  document.getElementById("fSubList").addEventListener("pointerup", rtnDragEnd);
+  document.getElementById("fSubList").addEventListener("pointercancel", rtnDragEnd);
   // duration and End stay in lockstep, same rule the event form's own picker
   // follows: moving Start re-applies a picked duration to End; typing an exact
   // End by hand clears the picker so it stops claiming to be authoritative.
@@ -51514,7 +51628,28 @@
     if (/[a-zA-Z0-9]/.test(cluster)) return { icon: "", rest: title };
     return { icon: cluster, rest: title.slice(cluster.length).replace(/^\s+/, "") };
   }
+  // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): "editing a repeating item opens
+  // the Event form" -- every one of this file's edit-an-existing-routine call sites
+  // (rtnActEdit, openRtnFormInline, openRtnFormFromCalendar, the Table view's own
+  // direct openRtnForm(t, field) calls, etc.) already funnels through THIS function
+  // when `task` is non-null, so redirecting here covers all of them in one place
+  // rather than repointing each caller. Two exceptions stay on #rtnAddForm on
+  // purpose, both disclosed, both because the Event form genuinely cannot express
+  // them yet (not because #rtnAddForm is being kept "just in case"):
+  //   - task.freq === "sinceLastDone" -- no UI reachable from #addForm's sheet sets
+  //     this freq (only "Since it was last done…" in #rtnAddForm's own step1 does),
+  //     and there's no safe substitute mapping -- silently reinterpreting it as
+  //     "interval" on save would corrupt the pattern the moment she touched Save.
+  //   - the fixed Hair routine (HAIR_ROUTINE_ID) -- its washes/rotation editor has
+  //     no equivalent anywhere in #addForm; redirecting would silently strip the
+  //     only UI that can edit it.
+  // Both are real, current gaps -- reported, not hidden -- and #rtnAddForm's own
+  // save path is untouched, so nothing about editing either of these regresses.
   function openRtnForm(task, focusField) {
+    if (task && task.freq !== "sinceLastDone" && task.id !== HAIR_ROUTINE_ID) {
+      openEventFormForRoutine(task, focusField);
+      return;
+    }
     armBackGuard();
     // 2026-08-11 ("edit routine from hair page, it glitches"): a DIRECT open (Hair
     // page, calendar block, fitness link) can land while a DIFFERENT routine is still
@@ -51740,9 +51875,15 @@
   // -- the form's own "Days of week"/"Repeat every" fields above are always layer 1;
   // this list holds layer 2+, each with its own days + time + optional every-N-weeks.
   let rtnExtraSchedules = [];
-  function renderRtnSchedExtra() {
-    const box = document.getElementById("rtnSchedExtraList");
-    box.innerHTML = rtnExtraSchedules.map((l, i) => `
+  // 2026-08-25 (Retiring Routines, Commit 1): generalized to take an explicit
+  // (boxId, arr) pair -- #addForm's own "additional schedule" (fRptExtraSchedules/
+  // #fRptSchedExtraList, see fRptSchedExtraField's own HTML comment) renders through
+  // this SAME function instead of a duplicated copy. renderRtnSchedExtra() below is
+  // now a one-line wrapper so #rtnAddForm's own call site (openRtnForm, unchanged)
+  // doesn't need to know any of this happened.
+  function renderSchedExtra(boxId, arr) {
+    const box = document.getElementById(boxId);
+    box.innerHTML = arr.map((l, i) => `
       <div class="rtn-sched-extra-row" data-idx="${i}">
         <div class="track-picker rtn-sched-extra-days" role="group" aria-label="Days of week for this schedule">
           ${WD_FULL.map((wd, d) => `<button type="button" class="track-opt" data-weekday="${d}" aria-pressed="${l.weekdays.includes(d)}" aria-label="${wd}">${wd[0]}</button>`).join("")}
@@ -51759,38 +51900,55 @@
         <input type="date" class="rtn-sched-extra-anchor" ${(l.weekInterval || 1) > 1 ? "" : "hidden"} value="${esc(l.weekAnchor || "")}" aria-label="Starting the week of">
       </div>`).join("");
   }
-  document.getElementById("rtnSchedAddBtn").addEventListener("click", () => {
-    rtnExtraSchedules.push({ weekdays: [], start: "", end: "", weekInterval: 1, weekAnchor: "" });
-    renderRtnSchedExtra();
-  });
-  document.getElementById("rtnSchedExtraList").addEventListener("click", e => {
-    const wd = e.target.closest("[data-weekday]");
-    if (wd) {
-      const row = wd.closest(".rtn-sched-extra-row"), idx = +row.dataset.idx, d = +wd.dataset.weekday;
-      const l = rtnExtraSchedules[idx];
-      l.weekdays = l.weekdays.includes(d) ? l.weekdays.filter(x => x !== d) : [...l.weekdays, d];
-      wd.setAttribute("aria-pressed", String(l.weekdays.includes(d)));
-      return;
-    }
-    const del = e.target.closest(".rtn-sched-extra-del");
-    if (del) { rtnExtraSchedules.splice(+del.closest(".rtn-sched-extra-row").dataset.idx, 1); renderRtnSchedExtra(); }
-  });
-  document.getElementById("rtnSchedExtraList").addEventListener("input", e => {
-    const row = e.target.closest(".rtn-sched-extra-row"); if (!row) return;
-    const l = rtnExtraSchedules[+row.dataset.idx];
-    if (e.target.classList.contains("rtn-sched-extra-start")) l.start = e.target.value;
-    else if (e.target.classList.contains("rtn-sched-extra-end")) l.end = e.target.value;
-    else if (e.target.classList.contains("rtn-sched-extra-interval")) {
-      l.weekInterval = parseInt(e.target.value, 10) || 1;
-      const anchorInput = row.querySelector(".rtn-sched-extra-anchor");
-      anchorInput.hidden = l.weekInterval <= 1;
-      if (l.weekInterval > 1 && !anchorInput.value) { anchorInput.value = keyOf(startOfWeek(TODAY)); l.weekAnchor = anchorInput.value; }
-    } else if (e.target.classList.contains("rtn-sched-extra-anchor")) l.weekAnchor = e.target.value;
-    const dur = row.querySelector(".rtn-sched-extra-dur");
-    const m = rtnDurFromRange(l.start, l.end);
-    dur.hidden = m == null;
-    dur.textContent = m == null ? "" : `= ${m} min`;
-  });
+  function renderRtnSchedExtra() { renderSchedExtra("rtnSchedExtraList", rtnExtraSchedules); }
+  // 2026-08-25: getArr is a GETTER, not the array itself -- openRtnForm() (unchanged)
+  // reassigns `rtnExtraSchedules = []` outright on every open (a fresh array object,
+  // not a mutation of the old one), same for fRptExtraSchedules below. A captured
+  // array reference here would go stale the moment that happened -- these delegates
+  // are bound ONCE at load, but need to see whichever array the `let` currently
+  // points to on every click, not whichever it pointed to when this ran.
+  function bindSchedExtraList(listId, addBtnId, getArr, renderFn) {
+    document.getElementById(addBtnId).addEventListener("click", () => {
+      getArr().push({ weekdays: [], start: "", end: "", weekInterval: 1, weekAnchor: "" });
+      renderFn();
+    });
+    document.getElementById(listId).addEventListener("click", e => {
+      const wd = e.target.closest("[data-weekday]");
+      if (wd) {
+        const row = wd.closest(".rtn-sched-extra-row"), idx = +row.dataset.idx, d = +wd.dataset.weekday;
+        const l = getArr()[idx];
+        l.weekdays = l.weekdays.includes(d) ? l.weekdays.filter(x => x !== d) : [...l.weekdays, d];
+        wd.setAttribute("aria-pressed", String(l.weekdays.includes(d)));
+        return;
+      }
+      const del = e.target.closest(".rtn-sched-extra-del");
+      if (del) { getArr().splice(+del.closest(".rtn-sched-extra-row").dataset.idx, 1); renderFn(); }
+    });
+    document.getElementById(listId).addEventListener("input", e => {
+      const row = e.target.closest(".rtn-sched-extra-row"); if (!row) return;
+      const l = getArr()[+row.dataset.idx];
+      if (e.target.classList.contains("rtn-sched-extra-start")) l.start = e.target.value;
+      else if (e.target.classList.contains("rtn-sched-extra-end")) l.end = e.target.value;
+      else if (e.target.classList.contains("rtn-sched-extra-interval")) {
+        l.weekInterval = parseInt(e.target.value, 10) || 1;
+        const anchorInput = row.querySelector(".rtn-sched-extra-anchor");
+        anchorInput.hidden = l.weekInterval <= 1;
+        if (l.weekInterval > 1 && !anchorInput.value) { anchorInput.value = keyOf(startOfWeek(TODAY)); l.weekAnchor = anchorInput.value; }
+      } else if (e.target.classList.contains("rtn-sched-extra-anchor")) l.weekAnchor = e.target.value;
+      const dur = row.querySelector(".rtn-sched-extra-dur");
+      const m = rtnDurFromRange(l.start, l.end);
+      dur.hidden = m == null;
+      dur.textContent = m == null ? "" : `= ${m} min`;
+    });
+  }
+  bindSchedExtraList("rtnSchedExtraList", "rtnSchedAddBtn", () => rtnExtraSchedules, renderRtnSchedExtra);
+  // #addForm's own additional-schedule layer -- see fRptSchedExtraField's own
+  // HTML comment. renderRtnFRptSchedExtra() mirrors renderRtnSchedExtra()'s own
+  // one-line-wrapper shape so openFormForEdit()/closeForm() (STEP 3, below) can
+  // call one name without reaching into the generic renderSchedExtra() directly.
+  let fRptExtraSchedules = [];
+  function renderRtnFRptSchedExtra() { renderSchedExtra("fRptSchedExtraList", fRptExtraSchedules); }
+  bindSchedExtraList("fRptSchedExtraList", "fRptSchedAddBtn", () => fRptExtraSchedules, renderRtnFRptSchedExtra);
   // ---- Hair wash: Rotation + Washes&Steps (2026-08-12 rotation rebuild) ----
   // Shown only when editing the single fixed hair-wash routine (HAIR_ROUTINE_ID) --
   // set explicitly per-openRtnForm-call (not derived from rtnEditId, which can carry
@@ -53834,6 +53992,13 @@
   }
 
   let eventEditId = null;
+  // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): the id of an EXISTING
+  // ROUTINE_TASKS record currently open for editing in THIS form -- null for a
+  // fresh add (including a new item that becomes a routine via the Repeats
+  // picker, still handled by the plain "!editingRoutineId" push path). Mirrors
+  // eventEditId/editingRecurTemplateId's own pattern exactly. Set by
+  // openEventFormForRoutine() (search that name), cleared by closeForm().
+  let editingRoutineId = null;
   let formKind = "event";
   // 2026-08-17 (Event/Repeats collapse): the picker's own state -- "none" means
   // "Doesn't repeat" (a plain one-off event); anything else means this save
@@ -53965,9 +54130,16 @@
   let fFillCalOn = true;
   // locked to "Doesn't repeat" while editing an existing one-off event — same
   // "no conversion in v1" rule the legacy weekly-repeat checkbox already used.
+  // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): "locked" used to mean simply
+  // "editing any existing event" (eventEditId), which force-cleared fRepeatChoice
+  // back to "none" -- exactly wrong for opening an existing ROUTINE_TASKS record,
+  // whose whole point is a repeat pattern the Save button must not silently strip.
+  // editingRoutineId (set by openEventFormForRoutine(), never together with
+  // eventEditId -- they open two different record types) is checked explicitly so
+  // a genuine one-off event's lock is completely unaffected.
   function syncFRepeatLock() {
     const field = document.getElementById("fRepeatSummaryField");
-    const locked = !!eventEditId;
+    const locked = !!eventEditId && !editingRoutineId;
     if (field) field.hidden = locked;
     if (locked && fRepeatChoice !== "none") { fRepeatChoice = "none"; syncFRepeatChoice(); }
   }
@@ -53997,6 +54169,12 @@
       document.getElementById("fRptIntervalField").hidden = false;
     }
     document.getElementById("fFillCalField").hidden = fRepeatChoice === "none";
+    // 2026-08-25 (Retiring Routines, Commit 1): same "only once a pattern exists"
+    // gating as fFillCalField just above. Sub-tasks make sense on any repeat kind;
+    // the additional-schedule layer only makes sense alongside a weekday pattern,
+    // same as the Routine editor's own #rtnSchedExtraField.
+    document.getElementById("fSubTasksField").hidden = fRepeatChoice === "none";
+    document.getElementById("fRptSchedExtraField").hidden = fRepeatChoice !== "weekly";
     const LABELS = {
       none: "Doesn't repeat", daily: "Every day", weekdays: "Weekdays (Mon–Fri)",
       eachweekday: (document.getElementById("fRptEachWeekdayBtn") || {}).textContent || "Every…",
@@ -54096,13 +54274,34 @@
         if (!anchorInput.value) anchorInput.value = fDate.value || keyOf(state.anchor);
       }
     } else if (unit === "month") {
-      fRepeatChoice = "interval";
-      document.getElementById("fRptIntervalN").value = String(n);
-      document.getElementById("fRptIntervalUnit").value = "months";
+      // 2026-08-25 (Retiring Routines, Commit 1): n=1 means "monthly" in the way
+      // anyone actually means it -- the same day each month (task.day, matching
+      // the Routine editor's own #rtnMonthlyDay) -- not "every 1 month from an
+      // arbitrary anchor". n>1 has no such everyday reading ("every 3 months" IS
+      // an interval), so it stays interval exactly as before. Defaults the day
+      // from the event's own date, same as the Routine editor defaults
+      // #rtnAnchorDate to today -- only when empty, so reopening an existing
+      // monthly pattern never clobbers a day she already picked.
+      if (n === 1) {
+        fRepeatChoice = "monthly";
+        const dayInput = document.getElementById("fRptMonthlyDay");
+        if (!dayInput.value) dayInput.value = String(parseKey(fDate.value || keyOf(state.anchor)).getDate());
+      } else {
+        fRepeatChoice = "interval";
+        document.getElementById("fRptIntervalN").value = String(n);
+        document.getElementById("fRptIntervalUnit").value = "months";
+      }
     } else if (unit === "year") {
-      fRepeatChoice = "interval";
-      document.getElementById("fRptIntervalN").value = String(n);
-      document.getElementById("fRptIntervalUnit").value = "years";
+      // same reasoning as "month" just above, one level up.
+      if (n === 1) {
+        fRepeatChoice = "yearly";
+        const dateInput = document.getElementById("fRptYearlyDate");
+        if (!dateInput.value) dateInput.value = fDate.value || keyOf(state.anchor);
+      } else {
+        fRepeatChoice = "interval";
+        document.getElementById("fRptIntervalN").value = String(n);
+        document.getElementById("fRptIntervalUnit").value = "years";
+      }
     }
     syncFRepeatChoice();
   }
@@ -54120,7 +54319,9 @@
       const u = document.getElementById("fRptIntervalUnit").value || "days";
       nInput.value = document.getElementById("fRptIntervalN").value || "1";
       unitSel.value = u === "days" ? "day" : u === "weeks" ? "week" : u === "months" ? "month" : "year";
-    } else { nInput.value = "1"; unitSel.value = "day"; }
+    } else if (fRepeatChoice === "monthly") { nInput.value = "1"; unitSel.value = "month"; }
+    else if (fRepeatChoice === "yearly") { nInput.value = "1"; unitSel.value = "year"; }
+    else { nInput.value = "1"; unitSel.value = "day"; }
   }
   document.getElementById("fRepeatOptions").addEventListener("click", e => {
     const quick = e.target.closest("[data-rpt-quick]");
@@ -54254,6 +54455,17 @@
     formKind = "event";
     fRepeatChoice = "none"; fRptWeekdays = []; fFillCalOn = true;
     convertingTodoId = null;
+    // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): form.reset() only resets
+    // real form CONTROLS to their HTML defaults -- fSubList's dynamically-built
+    // .rtn-sub-group/.rtn-sub-row divs and fRptExtraSchedules' rendered rows are
+    // plain content, not controls, so they need clearing explicitly or the next
+    // fresh Add would open with a stale routine's sub-tasks/extra schedules still
+    // sitting in the DOM.
+    editingRoutineId = null;
+    clearRtnSubRows(fSubList);
+    fRptExtraSchedules = [];
+    renderRtnFRptSchedExtra();
+    document.getElementById("fRptStartDate").value = "";
     // 2026-08-24 (one repeat sheet): form.reset() above already restores the
     // Until radios/date/count to their HTML defaults (real form controls, no
     // manual reset needed) -- this just puts the sheet itself back on step 1,
@@ -54600,6 +54812,112 @@
     const hasExtra = t.category || t.note || t.goal;
     setMoreOptionsOpen(!!hasExtra);
     setFollowUpsOpen(false);   // recurring events are never formKind "task" -- the whole field stays hidden
+    efpSyncAddForm();
+    fTitle.focus();
+  }
+  // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): opens THIS form pre-filled
+  // from an existing ROUTINE_TASKS record, saving back to the same record with the
+  // same id (buildRoutineFromCurrentForm() decides push-vs-replace off
+  // editingRoutineId, set below). Mirrors openFormForRecurEdit() just above,
+  // adapted for ROUTINE_TASKS' richer freq vocabulary (daily/weekly/monthly/yearly/
+  // interval, not just weekly) and its own extra fields (sub-tasks, calOn,
+  // startDate, additional-schedule layers). Called only from openRtnForm() (search
+  // that name for the two disclosed exceptions that stay on #rtnAddForm instead).
+  function openEventFormForRoutine(task, focusField) {
+    armBackGuard();
+    addRow.hidden = true; form.hidden = false;
+    document.getElementById("addFormBackdrop").hidden = false;
+    formDirty = false;
+    eventEditId = null; editingRecurTemplateId = null;
+    editingRoutineId = task.id;
+    const { icon, rest } = splitRtnIconTitle(task.title);
+    fTitle.value = icon ? `${icon} ${rest}` : rest;
+    state.track = task.track; syncTrack(); trackManuallySet = true;
+    formWho = "me"; syncWho();   // ROUTINE_TASKS has no who/locPath concept -- same as #rtnAddForm
+    fLoc.value = "";
+    formKind = "event"; syncKind();
+    fCat.value = task.category || "";
+    formSelectedMode = task.mode || ""; fModePickerExpanded = false; renderFModePicker();
+    setPresetSelected(null);
+    renderPresetsRow();
+    fGoal.value = task.goal || "";
+    document.getElementById("fNote").value = task.note || "";
+    document.getElementById("fStages").value = "";
+    fAllDay.checked = false;
+    fStart.disabled = fEnd.disabled = fDur.disabled = false;
+    setDurDisabled(false);
+    // the primary schedule layer -- schedulesOf(task)[0] already handles both the
+    // flat single-pattern shape AND a multi-layer task.schedules array the exact
+    // same way generatedFor() itself does, so this never needs its own branching.
+    const layers = schedulesOf(task);
+    const primary = layers[0] || task;
+    fStart.value = primary.start || task.start || "";
+    fEnd.value = primary.end || task.end || "";
+    fDur.value = fStart.value && fEnd.value ? String(toMin(fEnd.value) - toMin(fStart.value)) : "";
+    fEst.value = fDur.value;
+    syncDurBoxesFromFDur();
+    fFillCalOn = task.calOn !== false; syncFFillCalToggle();
+    document.getElementById("fRptStartDate").value = task.startDate || "";
+    // Until: endDate/repeatCount round-trip the same way buildRoutineFromCurrentForm()
+    // writes them -- repeatCount (if present) takes the radio back to "After N times"
+    // rather than the bare date, matching what she actually picked.
+    document.getElementById("fUntilForever").checked = !task.endDate;
+    document.getElementById("fRptUntilDate").value = !task.repeatCount ? (task.endDate || "") : "";
+    document.getElementById("fRptUntilCount").value = task.repeatCount || "";
+    if (task.repeatCount) {
+      document.querySelector('input[name="fUntilMode"][value="count"]').checked = true;
+    } else if (task.endDate) {
+      document.querySelector('input[name="fUntilMode"][value="date"]').checked = true;
+    }
+    // freq -> fRepeatChoice + this freq's own backing fields, same mapping
+    // computeFRepeatFields() reads back out of on save.
+    fDate.value = task.freq === "interval" ? (task.anchor || keyOf(state.anchor)) : keyOf(state.anchor);
+    fRptExtraSchedules = [];
+    if (task.freq === "once") {
+      // "once" has no reachable UI on this form (the Event form's own Date field
+      // already IS a one-off's date) -- fRepeatChoice stays "none" so Save treats
+      // this like any plain dated event; fDate carries the real date across.
+      fRepeatChoice = "none";
+      fDate.value = task.date || keyOf(state.anchor);
+    } else if (task.freq === "daily") {
+      fRepeatChoice = "daily";
+    } else if (task.freq === "monthly") {
+      fRepeatChoice = "monthly";
+      document.getElementById("fRptMonthlyDay").value = task.day || "";
+    } else if (task.freq === "yearly") {
+      fRepeatChoice = "yearly";
+      const y = TODAY.getFullYear();
+      document.getElementById("fRptYearlyDate").value = task.month && task.day ? `${y}-${pad(task.month)}-${pad(task.day)}` : "";
+    } else if (task.freq === "weekly") {
+      fRepeatChoice = "weekly";
+      fRptWeekdays = (primary.weekdays || []).slice();
+      document.getElementById("fRptWeekInterval").value = String(primary.weekInterval || 1);
+      document.getElementById("fRptWeekAnchor").value = primary.weekAnchor || "";
+      fRptExtraSchedules = layers.slice(1).map(l => ({
+        weekdays: (l.weekdays || []).slice(), start: l.start || "", end: l.end || "",
+        weekInterval: l.weekInterval || 1, weekAnchor: l.weekAnchor || "",
+      }));
+    } else if (task.freq === "interval") {
+      fRepeatChoice = "interval";
+      document.getElementById("fRptIntervalN").value = String(task.intervalDays || 2);
+      document.getElementById("fRptIntervalUnit").value = task.intervalUnit || "days";
+    } else {
+      fRepeatChoice = "none";
+    }
+    renderRtnFRptSchedExtra(); syncFRptWeekdayButtons();
+    // sub-tasks: same load order as openRtnForm() itself -- named groups seeded
+    // before the rows land, so an empty group she made but hasn't filled yet
+    // survives a reload.
+    clearRtnSubRows(fSubList);
+    (Array.isArray(task.groupOrder) ? task.groupOrder : []).forEach(label => {
+      const meta = (task.groupMeta && task.groupMeta[label]) || {};
+      rtnMakeGroupSection(label, false, meta.icon, meta.collapsed, fSubList);
+    });
+    (Array.isArray(task.subtasks) ? task.subtasks : []).forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0), s.group || "", fSubList));
+    syncFRepeatChoice(); syncFRepeatLock();
+    const hasExtra = task.category || task.note || task.goal;
+    setMoreOptionsOpen(!!hasExtra || (Array.isArray(task.subtasks) && task.subtasks.length > 0));
+    setFollowUpsOpen(false);
     efpSyncAddForm();
     fTitle.focus();
   }
@@ -57789,15 +58107,79 @@
     // render a button for the current selection.
     const mode = formSelectedMode || undefined;
     const goalVal = fGoal.value.trim();
+    // 2026-08-25 (Retiring Routines, Commit 1): reuses the existing id when editing
+    // (editingRoutineId, set by openEventFormForRoutine() -- STEP 3, below) instead
+    // of always minting a fresh one -- her own words: "if an id moves, every streak
+    // on the Habits page silently empties. That is the one unrecoverable failure in
+    // this whole job." readRtnSubs/rtnSubGroupSections are the SAME functions
+    // #rtnAddForm's own submit handler calls, just pointed at fSubList -- see
+    // fSubTasksField's own comment for why they take an explicit root now.
     const task = {
-      id: uid(), title, track: state.track, category: fCat.value.trim(),
+      id: editingRoutineId || uid(), title, track: state.track, category: fCat.value.trim(),
       note: noteVal, calOn: fFillCalOn, freq: "",
     };
     if (mode) task.mode = mode;
     if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
-    if (!allDay && start && end) task.end = end;
+    const subtasks = readRtnSubs(fSubList);
+    // no Set-total/From-steps toggle here (see fSubTasksField's own comment) --
+    // steps' own minutes always decide the length once any exist, same as
+    // #rtnAddForm's own unwritten "steps" default.
+    if (!allDay && start && end && !subtasks.length) task.end = end;
+    if (subtasks.length) task.subtasks = subtasks;
+    // groupOrder/groupMeta: same "read straight off the live DOM sections" logic
+    // as #rtnAddForm's own submit handler -- a group left unnamed is dropped (its
+    // rows already saved as ungrouped by readRtnSubs above).
+    const groupSecs = rtnSubGroupSections(fSubList);
+    if (groupSecs.length) {
+      const groupOrder = [], groupMeta = {};
+      groupSecs.forEach(sec => {
+        const label = sec.querySelector(".rtn-sub-group-name").value.trim();
+        if (!label) return;
+        groupOrder.push(label);
+        const icon = sec.querySelector(".rtn-sub-group-icon").value.trim();
+        const collapsed = sec.querySelector(".rtn-sub-group-grid").classList.contains("rtn-sub-group-collapsed");
+        if (icon || collapsed) groupMeta[label] = { ...(icon ? { icon } : {}), ...(collapsed ? { collapsed: true } : {}) };
+      });
+      if (groupOrder.length) {
+        task.groupOrder = groupOrder;
+        if (Object.keys(groupMeta).length) task.groupMeta = groupMeta;
+      }
+    }
+    // 2026-08-25: #rtnStartDate's own equivalent -- t.startDate IS a real, respected
+    // field (search "t.startDate" in the occurrence engine), this form just never
+    // exposed it before now. General across every freq type, same as endDate below.
+    const startDateVal = document.getElementById("fRptStartDate").value;
+    if (startDateVal) task.startDate = startDateVal;
     if (!computeFRepeatFields(task, dateVal)) return null;
+    // 2026-08-25: the additional-schedule layers (fRptExtraSchedules, see
+    // fRptSchedExtraField's own comment) only mean anything once computeFRepeatFields
+    // has already produced a weekly pattern above -- this is a POST-step that
+    // converts that flat weekdays/weekInterval/weekAnchor shape into task.schedules
+    // (primary layer + extras), exactly like #rtnAddForm's own submit handler does,
+    // rather than reimplementing weekly matching a second time.
+    if (task.freq === "weekly") {
+      const extra = fRptExtraSchedules.filter(l => l.weekdays.length);
+      for (const l of extra) {
+        if ((l.weekInterval || 1) > 1 && !l.weekAnchor) {
+          alert(`Set a "starting the week of" date for the extra schedule on ${l.weekdays.length} day(s).`);
+          return null;
+        }
+      }
+      if (extra.length) {
+        task.schedules = [
+          { weekdays: task.weekdays, ...(start ? { start } : {}), ...(end ? { end } : {}), ...(task.weekInterval > 1 ? { weekInterval: task.weekInterval, weekAnchor: task.weekAnchor } : {}) },
+          ...extra.map(l => ({
+            weekdays: l.weekdays.slice().sort((a, b) => a - b), start: l.start || "",
+            ...(l.start && l.end ? { end: l.end } : {}),
+            ...((l.weekInterval || 1) > 1 ? { weekInterval: l.weekInterval, weekAnchor: l.weekAnchor } : {}),
+          })),
+        ];
+        delete task.weekdays; delete task.weekInterval; delete task.weekAnchor; delete task.start; delete task.end;
+        const durationMin = rtnDurFromRange(start, end) || 0;
+        if (durationMin > 0) task.durationMin = durationMin;
+      }
+    }
     // 2026-08-24 ("repeats that can finally STOP"): the ONE place both the Save
     // button and #fChainBtn actually create a routine (see this function's own
     // header comment) -- checked, not assumed, since #fChainBtn saves outside the
@@ -57823,14 +58205,27 @@
       task.endDate = resolved; task.repeatCount = n;
     }
     // 2026-08-24: #fPhaseSel retired along with #fPhaseField -- see RETIRED-FEATURES.md.
-    // Optional-chained rather than deleted outright: this is the ONE shared place both
-    // the Save button and (formerly) #fChainBtn build a routine, so a null guard here
-    // is cheaper and safer than hunting every call path. task.phase is simply never
-    // set via this form any more; any pre-existing value on an already-saved routine
-    // is untouched.
-    const phase = document.getElementById("fPhaseSel")?.value || "during";
-    if (phase !== "during") task.phase = phase;
-    ROUTINE_TASKS.push(task);
+    // 2026-08-25 (Retiring Routines, Commit 1): task.phase is never SET via this
+    // form (the picker is gone), but editing an existing routine must not silently
+    // drop its phase/chain link -- same carry-forward #rtnAddForm's own submit
+    // handler already does (search "rtnPhaseTouched" for its own version of this).
+    if (editingRoutineId) {
+      const orig = ROUTINE_TASKS.find(x => x.id === editingRoutineId);
+      if (orig) {
+        if (orig.anchorTo != null) task.anchorTo = orig.anchorTo;
+        if (orig.anchorMode != null) task.anchorMode = orig.anchorMode;
+        if (orig.deadline != null) task.deadline = orig.deadline;
+        if (orig.deadlineLabel != null) task.deadlineLabel = orig.deadlineLabel;
+        if (orig.phase != null) task.phase = orig.phase;
+      }
+    }
+    if (editingRoutineId) {
+      const idx = ROUTINE_TASKS.findIndex(x => x.id === editingRoutineId);
+      if (idx !== -1) ROUTINE_TASKS[idx] = task;
+      else ROUTINE_TASKS.push(task);
+    } else {
+      ROUTINE_TASKS.push(task);
+    }
     saveRoutines();
     if (convertingTodoId) { TODOS = TODOS.filter(x => x.id !== convertingTodoId); saveTodos(TODOS); convertingTodoId = null; }
     if (task.repeatCount) showFRepeatUntilToast(`${task.repeatCount} time${task.repeatCount === 1 ? "" : "s"} · last on ${fRepeatUntilToastDate(task.endDate)}`);
@@ -57873,7 +58268,12 @@
     // there. Never while editing an existing one-off -- fRepeatChoice is locked
     // back to "none" for that case (syncFRepeatLock), same "no conversion in v1"
     // rule the legacy weekly-repeat checkbox below already used.
-    if (fRepeatChoice !== "none" && !eventEditId) {
+    // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): ALSO fires when editing an
+    // EXISTING routine (editingRoutineId) -- openEventFormForRoutine() (search that
+    // name) sets it and leaves fRepeatChoice at whatever the routine's own freq
+    // maps to, never "none", so this same branch naturally covers "save changes"
+    // too. buildRoutineFromCurrentForm() itself decides push-vs-replace by id.
+    if (fRepeatChoice !== "none" && (!eventEditId || editingRoutineId)) {
       const task = buildRoutineFromCurrentForm();
       if (!task) return;
       closeForm();
