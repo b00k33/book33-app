@@ -7605,6 +7605,14 @@
   }
   .efp-node svg { width: 20px; height: 20px; }
   .efp-node.efp-dim { opacity: .4; }
+  /* 2026-08-25 (Linh, "the ↻ progression node lights when a repeat is set and is
+     normal-weight otherwise -- not 40%"): the repeats node no longer gets .efp-dim
+     (see efpSyncAddForm()) -- its resting state IS normal-weight already, this is
+     purely the extra "lit" emphasis added on top once a repeat is actually set. */
+  .efp-node.efp-lit {
+    background: color-mix(in oklab, var(--efp-c) 46%, var(--field-bg));
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--efp-c) 45%, transparent);
+  }
   .efp-bar { width: 3px; flex: 1; min-height: 20px; margin: 2px 0; border-radius: 2px; background: color-mix(in oklab, var(--efp-c) 35%, transparent); }
   .efp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
   .efp-card {
@@ -7824,6 +7832,11 @@
     background: var(--field-bg); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
   }
   .rtn-repeat-sum:hover { border-color: var(--margin-rule); }
+  /* 2026-08-25 (Linh, Repeats-card fix): the ONLY dimmed/disabled look this control
+     ever gets now -- syncFRepeatLock()'s genuine lock while editing an existing
+     one-off event. Same opacity the app-wide ONE FIELD LANGUAGE law already uses
+     for a disabled select (~line 14277), not a new number. */
+  .rtn-repeat-sum:disabled { opacity: .55; cursor: not-allowed; border-color: var(--note-line); }
   /* 2026-08-17 (Linh, "simplify my Add/Edit Routine editor" brief): the Repeats
      picker -- an inline expand under #rtnRepeatBtn, same idiom as .addform-more,
      just visually boxed (var(--field-bg) card) so it reads as a distinct little
@@ -20302,64 +20315,21 @@
                   <div class="when-pop-list" id="fWhenPopList"></div>
                   <button type="button" class="when-pop-custom" id="fWhenPopCustom">Type an exact time…</button>
                 </div>
-                <!-- 2026-08-09 (design44, "add a How long duration picker"): hours+minutes
-                     boxes plus quick chips, a front-end over the existing #fDur/#fEst
-                     hidden inputs (see syncDurFromBoxes()/syncDurBoxesFromFDur()) so
-                     save/edit code reading those two ids is unchanged. No dedicated rail
-                     icon for this one -- the mockup's field-icon list names What/Part of
-                     life/When/Mode/Where only, not How long. -->
-                <div class="field full" id="fDurPickerField">
-                  <label>How long</label>
-                  <div class="dur" id="durPicker">
-                    <!-- 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes
-                         used to always show (~44px of their own row) even though most
-                         picks are one of the 5 quick chips below. "Custom" joins them as a
-                         6th chip -- tapping it reveals #durBoxes in place (setDurBoxesOpen());
-                         picking a real chip (or a matching value already in the boxes, via
-                         syncDurChipState()) presses that chip and hides the boxes again.
-                         openFormForEdit() opens them automatically when the saved duration
-                         doesn't match any of the 5 (see its own comment) -- same
-                         "never hide what she's already filled in" rule as everywhere else. -->
-                    <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
-                      <button type="button" class="track-opt" data-dur="30">30m</button>
-                      <button type="button" class="track-opt" data-dur="60">1h</button>
-                      <button type="button" class="track-opt" id="durCustomChip" data-dur-custom aria-pressed="false">Custom</button>
-                    </div>
-                    <div class="dur-boxes" id="durBoxes" hidden>
-                    <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span></span>
-                    <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span></span>
-                    </div>
-                  </div>
-                </div>
-                <!-- 2026-08-21: Where, promoted out of the old collapsed More options into
-                     the always-visible basics card -- Linh's call, since the approved
-                     mockup shows it here with its own icon. Confirmed live first it had no
-                     layout dependency on the More-options display:contents grid trick it
-                     used to sit inside. (Mode moved up to right after What, 2026-08-23 --
-                     see the field-row near the top of this card.) -->
-                <div class="efp-field-row">
-                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10.5c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10.5" r="2.6"/></svg></div>
-                  <div class="field" id="fLocField">
-                    <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
-                    <input type="text" id="fLoc" class="field-bare" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
-                    <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
-                    <datalist id="locList"></datalist>
-                  </div>
-                </div>
-              </div>
-              <!-- 2026-08-17 (Event/Repeats collapse, Linh: "a routine is really just an
-                   event that repeats -- collapse it"): the one plain-language Repeats
-                   control for the unified form. Tap the summary line to reveal the
-                   picker; choosing anything but "Doesn't repeat" saves this item as a
-                   real routine (ROUTINE_TASKS) instead of a plain calendar event -- see
-                   the submit handler. Locked to "Doesn't repeat" while editing an
-                   existing one-off event (syncFRepeatLock). Card dims/lights via
-                   efpSyncAddForm(), reading fRepeatChoice/editingRecurTemplateId --
-                   see that function's own comment for exactly what "on" means here. -->
-              <div class="efp-card" data-efp-card="repeats">
+                <!-- 2026-08-25 (Linh, from a screenshot: "where is the repeat function...
+                     fix the shape... make it more flowing and simple" -- STEP 2, "make it
+                     findable"): moved here from its own separate card further down (the
+                     exact same #fRepeatSummaryField subtree, id-for-id -- only its DOM
+                     position changed, see the note left at its old spot). It used to dim
+                     to 40% opacity/note-bg the instant fRepeatChoice was "none" -- true of
+                     every brand-new event, so the one control that lets her ADD a repeat
+                     read as disabled. efpSyncAddForm() now dims this ONLY for
+                     syncFRepeatLock()'s genuine lock (editing an existing one-off) --
+                     "not applicable", never "not set yet" -- see that function's comment.
+                     No more separate stacked <label> -- "Repeats" is folded into the
+                     button's own text so the whole thing reads as one line, same idea as
+                     the When buttons beside it. -->
                 <div class="field full" id="fRepeatSummaryField">
-                  <label>Repeats</label>
-                  <button type="button" class="rtn-repeat-sum" id="fRepeatSummaryBtn" aria-expanded="false" aria-controls="fRepeatOptions">Doesn't repeat</button>
+                  <button type="button" class="rtn-repeat-sum" id="fRepeatSummaryBtn" aria-expanded="false" aria-controls="fRepeatOptions">Repeats · Doesn't repeat</button>
                   <!-- 2026-08-24 ("one repeat sheet, and repeats that can finally STOP"):
                        replaces the old 9 .track-opt pills + up to 6 conditional stacked
                        fields with ONE sheet, reusing .rtn-repeat-picker/-opt/-step*/-back/
@@ -20424,6 +20394,60 @@
                     </div>
                   </div>
                 </div>
+                <!-- 2026-08-09 (design44, "add a How long duration picker"): hours+minutes
+                     boxes plus quick chips, a front-end over the existing #fDur/#fEst
+                     hidden inputs (see syncDurFromBoxes()/syncDurBoxesFromFDur()) so
+                     save/edit code reading those two ids is unchanged. No dedicated rail
+                     icon for this one -- the mockup's field-icon list names What/Part of
+                     life/When/Mode/Where only, not How long. -->
+                <div class="field full" id="fDurPickerField">
+                  <label>How long</label>
+                  <div class="dur" id="durPicker">
+                    <!-- 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes
+                         used to always show (~44px of their own row) even though most
+                         picks are one of the 5 quick chips below. "Custom" joins them as a
+                         6th chip -- tapping it reveals #durBoxes in place (setDurBoxesOpen());
+                         picking a real chip (or a matching value already in the boxes, via
+                         syncDurChipState()) presses that chip and hides the boxes again.
+                         openFormForEdit() opens them automatically when the saved duration
+                         doesn't match any of the 5 (see its own comment) -- same
+                         "never hide what she's already filled in" rule as everywhere else. -->
+                    <div class="track-picker dur-chips" id="durChips" role="group" aria-label="Quick duration">
+                      <button type="button" class="track-opt" data-dur="30">30m</button>
+                      <button type="button" class="track-opt" data-dur="60">1h</button>
+                      <button type="button" class="track-opt" id="durCustomChip" data-dur-custom aria-pressed="false">Custom</button>
+                    </div>
+                    <div class="dur-boxes" id="durBoxes" hidden>
+                    <span class="num"><input type="number" id="durHours" class="field-bare dur-input" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="Hours"><span class="u">h</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase hours">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease hours">▼</button></span></span>
+                    <span class="num"><input type="number" id="durMinutes" class="field-bare dur-input" min="0" max="59" step="5" inputmode="numeric" placeholder="0" aria-label="Minutes"><span class="u">m</span><span class="dur-stepper"><button type="button" class="dur-step dur-step-up" aria-label="Increase minutes">▲</button><button type="button" class="dur-step dur-step-down" aria-label="Decrease minutes">▼</button></span></span>
+                    </div>
+                  </div>
+                </div>
+                <!-- 2026-08-21: Where, promoted out of the old collapsed More options into
+                     the always-visible basics card -- Linh's call, since the approved
+                     mockup shows it here with its own icon. Confirmed live first it had no
+                     layout dependency on the More-options display:contents grid trick it
+                     used to sit inside. (Mode moved up to right after What, 2026-08-23 --
+                     see the field-row near the top of this card.) -->
+                <div class="efp-field-row">
+                  <div class="efp-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10.5c0 6-8 11-8 11s-8-5-8-11a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10.5" r="2.6"/></svg></div>
+                  <div class="field" id="fLocField">
+                    <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
+                    <input type="text" id="fLoc" class="field-bare" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
+                    <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
+                    <datalist id="locList"></datalist>
+                  </div>
+                </div>
+              </div>
+              <!-- 2026-08-25 (Linh, "where is the repeat function... fix it"): the
+                   findable Repeats summary + its picker sheet (#fRepeatSummaryField,
+                   #fRepeatOptions and everything inside it) moved up into the basics
+                   card, directly under the When line -- see that block, right after
+                   #fWhenPop. What's left here are the older per-pattern fields
+                   (#fRptWeekIntervalField etc.) and #fFillCalField, still toggled by
+                   syncFRepeatChoice()/syncKind() exactly as before -- untouched,
+                   only relocated content moved out from in front of them. -->
+              <div class="efp-card" data-efp-card="repeats">
                 <div class="field full" id="fRptWeekIntervalField" hidden>
                   <label for="fRptWeekInterval">Every <span class="field-hint">1 = every week</span></label>
                   <div style="display:flex;align-items:center;gap:8px">
@@ -50373,11 +50397,20 @@
   // editingRoutineId (set by openEventFormForRoutine(), never together with
   // eventEditId -- they open two different record types) is checked explicitly so
   // a genuine one-off event's lock is completely unaffected.
+  // 2026-08-25 (Linh, from a screenshot, "where is the repeat function... the one
+  // control that would let her make it repeat is styled as though it were
+  // disabled"): used to fully HIDE the field while locked, with no explanation
+  // anywhere -- now stays visible and real-<button disabled> instead, and
+  // syncFRepeatChoice() (called unconditionally below, not just when clearing a
+  // stray value) writes the "why" straight into the button's own text. Genuinely
+  // still locked for the one case this was built for: editing an existing
+  // one-off event can't retroactively turn it into a series from here.
   function syncFRepeatLock() {
-    const field = document.getElementById("fRepeatSummaryField");
+    const btn = document.getElementById("fRepeatSummaryBtn");
     const locked = !!eventEditId && !editingRoutineId;
-    if (field) field.hidden = locked;
-    if (locked && fRepeatChoice !== "none") { fRepeatChoice = "none"; syncFRepeatChoice(); }
+    if (btn) btn.disabled = locked;
+    if (locked && fRepeatChoice !== "none") fRepeatChoice = "none";
+    syncFRepeatChoice();
   }
   function updateEachWeekdayLabel() {
     const dv = document.getElementById("fDate").value || keyOf(state.anchor);
@@ -50433,7 +50466,17 @@
         if (cv > 0) untilTail = ` · after ${cv} time${cv === 1 ? "" : "s"}`;
       }
     }
-    if (summaryBtn) summaryBtn.textContent = (LABELS[fRepeatChoice] || "Doesn't repeat") + untilTail;
+    // 2026-08-25 (Linh, Repeats-card fix -- STEP 2, "say why in the control
+    // itself"): locked mirrors syncFRepeatLock()'s own calc (that function
+    // already forced fRepeatChoice back to "none" before calling here, so this
+    // read is never stale) -- the button explains the lock in its own text
+    // instead of vanishing, and drops the chevron since it isn't tappable.
+    const locked = !!eventEditId && !editingRoutineId;
+    if (summaryBtn) {
+      summaryBtn.textContent = locked
+        ? "Repeats · locked — already saved as a single event"
+        : "Repeats · " + (LABELS[fRepeatChoice] || "Doesn't repeat") + untilTail + " ›";
+    }
     syncAddFormTitle();
     efpSyncAddForm();
   }
@@ -50451,9 +50494,18 @@
   // STEP 3 asked for it and a future change letting this form carry a fitLink
   // would then only need to flip habitOn, not rebuild the card.
   function efpSyncAddForm() {
+    // 2026-08-25 (Linh, "dimming should mean 'not applicable', never 'not set
+    // yet'"): "on" (a repeat IS set) used to ALSO drive the summary row's own
+    // dim state -- backwards, since every brand-new event starts with no repeat
+    // set and the one control that lets her ADD one read as disabled. It still
+    // drives the rail NODE (a status light: lit once a pattern exists, plain
+    // otherwise -- never 40%, see .efp-node.efp-lit), just not the control
+    // itself any more. The control's own disabled look is owned entirely by
+    // syncFRepeatLock()/syncFRepeatChoice() now (real <button disabled>, text
+    // explains why) -- nothing here toggles .efp-dim on it.
     const on = fRepeatChoice !== "none" || !!editingRecurTemplateId;
-    document.querySelectorAll('#addForm [data-efp-node="repeats"], #addForm [data-efp-card="repeats"]')
-      .forEach(el => el.classList.toggle("efp-dim", !on));
+    document.querySelectorAll('#addForm [data-efp-node="repeats"]')
+      .forEach(el => el.classList.toggle("efp-lit", on));
     const habitOn = false;
     const habitCard = document.querySelector('#addForm [data-efp-card="habit"]');
     const habitNode = document.querySelector('#addForm [data-efp-node="habit"]');
