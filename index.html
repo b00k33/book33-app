@@ -7832,11 +7832,11 @@
     background: var(--field-bg); border: 1px solid var(--note-line); border-radius: var(--radius-sm);
   }
   .rtn-repeat-sum:hover { border-color: var(--margin-rule); }
-  /* 2026-08-25 (Linh, Repeats-card fix): the ONLY dimmed/disabled look this control
-     ever gets now -- syncFRepeatLock()'s genuine lock while editing an existing
-     one-off event. Same opacity the app-wide ONE FIELD LANGUAGE law already uses
-     for a disabled select (~line 14277), not a new number. */
-  .rtn-repeat-sum:disabled { opacity: .55; cursor: not-allowed; border-color: var(--note-line); }
+  /* 2026-08-25 ("make this repeat" on an already-saved event): the old lock that
+     disabled this control while editing a one-off is gone -- Save now confirms
+     and promotes instead (search "This will become a repeating event"). Nothing
+     disables this button any more; the :disabled rule that used to live here is
+     gone with it. */
   /* 2026-08-17 (Linh, "simplify my Add/Edit Routine editor" brief): the Repeats
      picker -- an inline expand under #rtnRepeatBtn, same idiom as .addform-more,
      just visually boxed (var(--field-bg) card) so it reads as a distinct little
@@ -20337,12 +20337,12 @@
                      position changed, see the note left at its old spot). It used to dim
                      to 40% opacity/note-bg the instant fRepeatChoice was "none" -- true of
                      every brand-new event, so the one control that lets her ADD a repeat
-                     read as disabled. efpSyncAddForm() now dims this ONLY for
-                     syncFRepeatLock()'s genuine lock (editing an existing one-off) --
-                     "not applicable", never "not set yet" -- see that function's comment.
-                     No more separate stacked <label> -- "Repeats" is folded into the
-                     button's own text so the whole thing reads as one line, same idea as
-                     the When buttons beside it. -->
+                     read as disabled. Never dims any more, full stop -- not even while
+                     editing an existing one-off (2026-08-25, "make this repeat": that lock
+                     is gone -- Save now promotes the event into a repeat instead, see the
+                     submit handler's own comment). No more separate stacked <label> --
+                     "Repeats" is folded into the button's own text so the whole thing reads
+                     as one line, same idea as the When buttons beside it. -->
                 <div class="field full" id="fRepeatSummaryField">
                   <button type="button" class="rtn-repeat-sum" id="fRepeatSummaryBtn" aria-expanded="false" aria-controls="fRepeatOptions">Repeats · Doesn't repeat</button>
                   <!-- 2026-08-24 ("one repeat sheet, and repeats that can finally STOP"):
@@ -50300,7 +50300,7 @@
     // editing a pre-existing RECURRING_EVENTS template -- see the comment above
     // #fRepeatField in the HTML. Never shown for a fresh add any more.
     document.getElementById("fRepeatField").hidden = !editingRecurTemplateId;
-    syncFRepeatLock();
+    syncFRepeatChoice();
     syncRepeatFields();
     syncAddFormTitle();
   }
@@ -50398,30 +50398,16 @@
      submit handler saves this as a real routine instead (ROUTINE_TASKS). ---- */
   let fRptWeekdays = [];
   let fFillCalOn = true;
-  // locked to "Doesn't repeat" while editing an existing one-off event — same
-  // "no conversion in v1" rule the legacy weekly-repeat checkbox already used.
-  // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): "locked" used to mean simply
-  // "editing any existing event" (eventEditId), which force-cleared fRepeatChoice
-  // back to "none" -- exactly wrong for opening an existing ROUTINE_TASKS record,
-  // whose whole point is a repeat pattern the Save button must not silently strip.
-  // editingRoutineId (set by openEventFormForRoutine(), never together with
-  // eventEditId -- they open two different record types) is checked explicitly so
-  // a genuine one-off event's lock is completely unaffected.
-  // 2026-08-25 (Linh, from a screenshot, "where is the repeat function... the one
-  // control that would let her make it repeat is styled as though it were
-  // disabled"): used to fully HIDE the field while locked, with no explanation
-  // anywhere -- now stays visible and real-<button disabled> instead, and
-  // syncFRepeatChoice() (called unconditionally below, not just when clearing a
-  // stray value) writes the "why" straight into the button's own text. Genuinely
-  // still locked for the one case this was built for: editing an existing
-  // one-off event can't retroactively turn it into a series from here.
-  function syncFRepeatLock() {
-    const btn = document.getElementById("fRepeatSummaryBtn");
-    const locked = !!eventEditId && !editingRoutineId;
-    if (btn) btn.disabled = locked;
-    if (locked && fRepeatChoice !== "none") fRepeatChoice = "none";
-    syncFRepeatChoice();
-  }
+  // 2026-08-25 ("make this repeat" on an already-saved event): there used to be a
+  // syncFRepeatLock() here that force-cleared fRepeatChoice back to "none" and
+  // disabled this button whenever eventEditId was set without editingRoutineId --
+  // i.e. every time she opened an already-saved one-off. That's exactly the case
+  // she asked to unlock: picking a repeat here now promotes the event into a real
+  // ROUTINE_TASKS record on Save (see the submit handler, "This will become a
+  // repeating event"), reusing the event's own id so every Habits streak keyed
+  // rt-<id>-<date> survives the move. Nothing hides or disables this control any
+  // more -- closeForm() already resets fRepeatChoice to "none" on every close, so
+  // it always opens clean regardless of what the last form session left it at.
   function updateEachWeekdayLabel() {
     const dv = document.getElementById("fDate").value || keyOf(state.anchor);
     const wd = WD_FULL[dowIndex(parseKey(dv))];
@@ -50476,16 +50462,10 @@
         if (cv > 0) untilTail = ` · after ${cv} time${cv === 1 ? "" : "s"}`;
       }
     }
-    // 2026-08-25 (Linh, Repeats-card fix -- STEP 2, "say why in the control
-    // itself"): locked mirrors syncFRepeatLock()'s own calc (that function
-    // already forced fRepeatChoice back to "none" before calling here, so this
-    // read is never stale) -- the button explains the lock in its own text
-    // instead of vanishing, and drops the chevron since it isn't tappable.
-    const locked = !!eventEditId && !editingRoutineId;
+    // 2026-08-25 ("make this repeat"): no more locked state to explain here --
+    // an already-saved one-off reads and behaves exactly like a new event now.
     if (summaryBtn) {
-      summaryBtn.textContent = locked
-        ? "Repeats · locked — already saved as a single event"
-        : "Repeats · " + (LABELS[fRepeatChoice] || "Doesn't repeat") + untilTail + " ›";
+      summaryBtn.textContent = "Repeats · " + (LABELS[fRepeatChoice] || "Doesn't repeat") + untilTail + " ›";
     }
     syncAddFormTitle();
     efpSyncAddForm();
@@ -50510,9 +50490,10 @@
     // set and the one control that lets her ADD one read as disabled. It still
     // drives the rail NODE (a status light: lit once a pattern exists, plain
     // otherwise -- never 40%, see .efp-node.efp-lit), just not the control
-    // itself any more. The control's own disabled look is owned entirely by
-    // syncFRepeatLock()/syncFRepeatChoice() now (real <button disabled>, text
-    // explains why) -- nothing here toggles .efp-dim on it.
+    // itself any more. 2026-08-25 ("make this repeat"): the control's own
+    // disabled look is gone entirely now, not just moved elsewhere -- nothing
+    // toggles .efp-dim OR .disabled on it any more, editing an existing one-off
+    // included.
     const on = fRepeatChoice !== "none" || !!editingRecurTemplateId;
     document.querySelectorAll('#addForm [data-efp-node="repeats"]')
       .forEach(el => el.classList.toggle("efp-lit", on));
@@ -51182,7 +51163,7 @@
       rtnMakeGroupSection(label, false, meta.icon, meta.collapsed, fSubList);
     });
     (Array.isArray(task.subtasks) ? task.subtasks : []).forEach(s => addRtnSubRow(s.text, Math.max(0, parseInt(s.min, 10) || 0), s.group || "", fSubList));
-    syncFRepeatChoice(); syncFRepeatLock();
+    syncFRepeatChoice();
     // 2026-08-25 ("flowing and simple" -- STEP 3): the old "More options"
     // auto-open condition (hasExtra) is gone -- those fields are always visible now.
     setFollowUpsOpen(false);
@@ -54538,14 +54519,112 @@
       : [];
     const estVal = formKind === "task" ? parseInt(document.getElementById("fEst").value, 10) : NaN;
 
+    // 2026-08-25 ("make this repeat" on an already-saved event, Linh: "when I
+    // wanted to retire the routines, I just wanted to deal with the repeat on
+    // events only"): promotes a plain EVENTS record into a real ROUTINE_TASKS
+    // record when she picks a repeat while editing a saved one-off. Reuses
+    // buildRoutineFromCurrentForm() itself -- no second builder -- by briefly
+    // borrowing editingRoutineId = eventEditId so that function's own existing
+    // "editingRoutineId || uid()" id logic (search that string) does the id
+    // preservation for us. The id MUST survive the move: every Habits streak and
+    // filled dot is keyed rt-<id>-<date> (her own words: "if an id moves, every
+    // streak silently empties"). Write-then-remove, in that order -- if the
+    // routine build fails validation (buildRoutineFromCurrentForm returns null,
+    // e.g. an empty weekly pattern), the event must still be there.
+    // ROUTINE_TASKS has no location or partner-assignment concept (see
+    // openEventFormForRoutine()'s own "no who/locPath concept" comment) -- an
+    // event holding either is the one thing this move can't carry silently, so
+    // Save says so and lets her decide rather than dropping it without asking.
+    if (fRepeatChoice !== "none" && eventEditId && !editingRoutineId) {
+      const ev = EVENTS.find(x => x.id === eventEditId);
+      if (!ev) return;
+      const loc = parseLocPath(fLoc.value);
+      const partnerAssigned = !!(ev.who && ev.who !== "me");
+      let msg = "This will become a repeating event.";
+      if (loc.length && partnerAssigned) msg += " Its location and partner assignment won't carry over — repeating events don't have either.";
+      else if (loc.length) msg += " Its location won't carry over — repeating events don't have one.";
+      else if (partnerAssigned) msg += " Its partner assignment won't carry over — repeating events don't have one.";
+      if (!confirm(msg)) return;
+      // capture the id now -- closeForm() (called a few lines below) resets both
+      // eventEditId and editingRoutineId to null, and the undo closure below runs
+      // long after that (whenever she taps Undo, if at all), so it can't reference
+      // either live variable directly without silently operating on null.
+      const promotedId = eventEditId;
+      const wasDone = isDone(promotedId);
+      editingRoutineId = promotedId;
+      const task = buildRoutineFromCurrentForm();
+      if (!task) { editingRoutineId = null; return; }
+      EVENTS = EVENTS.filter(x => x.id !== promotedId);
+      saveEvents(EVENTS);
+      if (wasDone) { delete DONE[promotedId]; DONE[`rt-${promotedId}-${dateVal}`] = true; saveDone(DONE); }
+      const evSnapshot = { ...ev };
+      showUndoSnackbar(`"${title}" now repeats`, () => {
+        ROUTINE_TASKS = ROUTINE_TASKS.filter(x => x.id !== promotedId);
+        saveRoutines();
+        EVENTS.push(evSnapshot);
+        if (wasDone) { delete DONE[`rt-${promotedId}-${dateVal}`]; DONE[promotedId] = true; }
+        saveEvents(EVENTS); saveDone(DONE);
+        render();
+      });
+      closeForm();
+      render();   // a new routine can touch many days — refresh every view, not just today
+      return;
+    }
+    // 2026-08-25 ("make this repeat" -- STEP 5, the reverse direction): setting an
+    // existing routine back to "Doesn't repeat" is the same move, mirrored. Without
+    // this branch, fRepeatChoice==="none" here falls straight past the routine
+    // branch below (its own condition requires fRepeatChoice !== "none") into the
+    // plain-event branch further down, where eventEditId is null for a routine
+    // (openEventFormForRoutine never sets it) -- so it silently created a brand-new
+    // unrelated event and left the original routine sitting there untouched. Same
+    // id-preservation rule as promotion, reversed; a routine's subtasks are the one
+    // thing a single dated event can't hold, so that's what Save's confirmation
+    // calls out specifically rather than dropping silently.
+    if (fRepeatChoice === "none" && editingRoutineId) {
+      const task = ROUTINE_TASKS.find(x => x.id === editingRoutineId);
+      if (!task) return;
+      const subN = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
+      let msg = "This will become a single event.";
+      if (subN) msg += ` Its ${subN} checklist step${subN === 1 ? "" : "s"} won't carry over — single events don't have a checklist.`;
+      if (!confirm(msg)) return;
+      // capture the id now -- same reasoning as promotion's own comment above:
+      // closeForm() clears editingRoutineId to null right after, before the undo
+      // closure below can ever run.
+      const demotedId = editingRoutineId;
+      const wasDone = isDone(`rt-${demotedId}-${dateVal}`);
+      const newEv = {
+        id: demotedId, date: dateVal, track: state.track, title, kind: formKind,
+        category: fCat.value.trim(), locPath: parseLocPath(fLoc.value), allDay, start, end,
+        ...(noteVal ? { note: noteVal } : {}),
+        ...(mode ? { mode } : {}),
+        ...(goalVal ? { goal: goalVal } : {}),
+      };
+      EVENTS.push(newEv);
+      saveEvents(EVENTS);
+      const taskSnapshot = { ...task };
+      ROUTINE_TASKS = ROUTINE_TASKS.filter(x => x.id !== demotedId);
+      saveRoutines();
+      if (wasDone) { delete DONE[`rt-${demotedId}-${dateVal}`]; DONE[demotedId] = true; saveDone(DONE); }
+      showUndoSnackbar(`"${title}" no longer repeats`, () => {
+        EVENTS = EVENTS.filter(x => x.id !== demotedId);
+        saveEvents(EVENTS);
+        ROUTINE_TASKS.push(taskSnapshot);
+        saveRoutines();
+        if (wasDone) { delete DONE[demotedId]; DONE[`rt-${demotedId}-${dateVal}`] = true; saveDone(DONE); }
+        render();
+      });
+      closeForm();
+      render();
+      return;
+    }
     // 2026-08-17 (Event/Repeats collapse, Linh: "a routine is really just an event
     // that repeats"): choosing a repeat pattern on a NEW item saves it as a real
     // routine (ROUTINE_TASKS) instead of a plain calendar event -- reuses the
     // exact same recurrence engine the Routines page writes to (schedulesOf /
     // routineOccursOn / generatedFor), so it recurs identically to a routine built
-    // there. Never while editing an existing one-off -- fRepeatChoice is locked
-    // back to "none" for that case (syncFRepeatLock), same "no conversion in v1"
-    // rule the legacy weekly-repeat checkbox below already used.
+    // there. The two branches above handle the promote/demote edge cases; what's
+    // left here is the plain, common case -- a brand-new item, or saving further
+    // changes to an already-repeating one.
     // 2026-08-25 (Retiring Routines, Commit 1, STEP 3): ALSO fires when editing an
     // EXISTING routine (editingRoutineId) -- openEventFormForRoutine() (search that
     // name) sets it and leaves fRepeatChoice at whatever the routine's own freq
