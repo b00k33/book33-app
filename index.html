@@ -10749,7 +10749,7 @@
      border/box so it doesn't fight the flat-design rule any other block already
      follows. Background painting is unaffected by pointer-events:none above (that
      only controls hit-testing, not paint), so this needs no opt-in of its own. */
-  .md-col.md-drag-target { background: color-mix(in oklab, var(--cosmic-gold) 8%, transparent); }
+  .md-col.md-drag-target, .ad-col.md-drag-target { background: color-mix(in oklab, var(--cosmic-gold) 8%, transparent); }
   /* the floating "block, but over here" preview a cross-column drag needs (see
      #mdDragGhost's own HTML comment) -- .md-item.tl-item above already supplies its
      background/color/radius/padding from data-track/data-category, this just adds
@@ -10757,6 +10757,20 @@
      clicks, and reads as a preview rather than a committed block. */
   .md-drag-ghost { z-index: 25; pointer-events: none; opacity: 0.85; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
   .md-drag-ghost[hidden] { display: none; }
+  /* 2026-08-26 (§4, "refuse the drop, put the block back, tell me why"): a
+     transient pill at the drop point -- position:fixed since a refusal can land
+     anywhere the pointer released, not just inside #mdGrid. --danger, the app's
+     one fixed (non-themed) error colour, same token every other refuse/delete
+     affordance already uses. Doesn't need to compete with the panel z-index tier
+     (search ".nav-tiers") -- no panel can be open mid-drag. */
+  .md-drag-refuse {
+    position: fixed; z-index: 320; transform: translate(-50%, -130%);
+    background: var(--danger); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 5px 10px; border-radius: var(--radius-sm); pointer-events: none;
+    opacity: 0; transition: opacity .15s ease; white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  }
+  .md-drag-refuse.show { opacity: 1; }
   /* 2026-08-15 (§3 build): grid half of the header+grid fasting band -- bottom corners
      only, see .md-col-head[data-fasting] above for the full reasoning. A plain
      background paints BEHIND an element's own children regardless of DOM order, so this
@@ -29498,6 +29512,98 @@
     if (dateKey !== keyOf(state.anchor) && !inVisibleMultiDayWindow(dateKey)) state.anchor = parseKey(dateKey);
     closeTlDetail();
     render();
+  }
+  // 2026-08-26 (multi-day drag-and-drop §3/§4): shared movability test for both
+  // new all-day drag IIFEs (chip-sideways, and grid-to-strip) -- the same three
+  // real, real events + routine occurrences with an rtTaskId parseOccId()
+  // resolves + recurring-event occurrences with a recurId, minus the fitcal-
+  // branch dragOk (§1) carries: a logged session is timed by nature and can
+  // never appear as an .ad-chip in the first place, so including that clause
+  // here would be dead code, not a safety net. Birthdays and the cycle chip
+  // never reach this test at all (see the drag handlers' own data-tl-detail
+  // gate) -- neither carries that attribute.
+  function alldayDragOk(ev) {
+    return !!ev && (!ev.generated
+      || (ev.fromRoutine && !!ev.rtTaskId && !!parseOccId(ev.id))
+      || (ev.fromRecurringEvent && !!ev.recurId));
+  }
+  // 2026-08-26 (multi-day drag-and-drop §3, "drag an ALL DAY chip sideways to
+  // another day"): NOT a call to rescheduleItem() with an empty timeStr — that
+  // function divides by toMin(timeStr) unconditionally on its very first line
+  // (`toMin(timeStr) + dur`), which is NaN the moment timeStr is "" (an all-day
+  // item's real, permanent state, not a placeholder waiting for a time). A
+  // genuinely separate all-day-only mover is needed rather than a reuse. Same
+  // three movable storage shapes as rescheduleItem's own (a fitcal- session is
+  // never all-day, so it never reaches here — see alldayDragOk below), same
+  // date-only semantics setRtnOvr's movedTo / EVENT_TIME_OVR.date already carry.
+  function rescheduleAllDayItem(e, dateKey) {
+    if (!e) return;
+    if (e.fromRoutine && e.rtTaskId) {
+      const p = parseOccId(e.id);
+      if (!p) return;
+      setRtnOvr(e.rtTaskId, p.date, { movedTo: dateKey !== p.date ? dateKey : undefined });
+    } else if (e.fromRecurringEvent && e.recurId) {
+      const prev = EVENT_TIME_OVR[e.id];
+      const fromDate = prev && prev.fromDate ? prev.fromDate : e.date;
+      EVENT_TIME_OVR[e.id] = { fromDate, date: dateKey, start: "", end: "" };
+      saveEvTimeOvr();
+    } else if (!e.generated) {
+      const ev = EVENTS.find(x => x.id === e.id);
+      if (!ev) return;
+      ev.date = dateKey;
+      saveEvents(EVENTS);
+    } else {
+      return;
+    }
+    closeTlDetail();
+    render();
+  }
+  // 2026-08-26 (multi-day drag-and-drop §4, "up onto the strip to make it
+  // all-day"): the mirror of rescheduleItem()'s own `ev.allDay = false` on a
+  // timed move -- only ever called for a real EVENTS row (see alldayDragOk /
+  // the drag handler's own gate), because allDay/start/end are that shape's own
+  // fields. A routine occurrence or recurring-event occurrence has nowhere to
+  // put "all day" (setRtnOvr stores {start,end,dur,movedTo}, EVENT_TIME_OVR
+  // stores {fromDate,date,start,end} -- neither has an allDay slot), so those
+  // two refuse the drop instead of calling this (see dragRefusalReason below).
+  function makeAllDayItem(e, dateKey) {
+    const ev = EVENTS.find(x => x.id === e.id);
+    if (!ev) return;
+    ev.date = dateKey; ev.allDay = true; ev.start = ""; ev.end = "";
+    saveEvents(EVENTS);
+    closeTlDetail();
+    render();
+  }
+  // shared by both new all-day drag IIFEs (chip-sideways and grid-to-strip) so a
+  // birthday/cycle-chip (which never arm to begin with, see alldayDragOk) never
+  // needs an entry here -- only the two kinds that CAN sideways-move but CAN'T
+  // become all-day need a reason to show.
+  function dragRefusalReason(e) {
+    if (e.fromRoutine) return "Routines can't go all-day";
+    if (e.fromRecurringEvent) return "Recurring events can't go all-day";
+    return "Can't make this all-day";
+  }
+  // small transient pill at the drop point -- same dashed-rule+pill FAMILY the
+  // hover ghosts already use, just standalone (no line, fixed to the viewport,
+  // not #mdGrid-relative) since a refusal can land anywhere the pointer released,
+  // including outside the grid entirely. Created once, reused every call, exactly
+  // like #mdDragGhost's own single-persistent-element pattern.
+  function showDragRefusal(msg, x, y) {
+    let el = document.getElementById("mdDragRefuse");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "mdDragRefuse";
+      el.className = "md-drag-refuse";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.classList.remove("show");
+    void el.offsetWidth;
+    el.classList.add("show");
+    clearTimeout(showDragRefusal._t);
+    showDragRefusal._t = setTimeout(() => el.classList.remove("show"), 1600);
   }
   // same optional endStr as rescheduleItem above, for the same reason and with the same
   // fall-back — "Add to another day" and "Move this day" share one field set.
@@ -54992,14 +55098,24 @@
   // which column a click actually landed over by comparing clientX against each
   // .md-col's own rect. Do not flip .md-col's pointer-events to make this easier;
   // that regresses the exact bug the CSS comment documents.
-  function mdColAtX(clientX) {
-    const cols = document.querySelectorAll("#mdCols > .md-col");
+  // 2026-08-26 (multi-day drag-and-drop §3/§4, "the drop target resolution is the
+  // same clientX-against-rects approach as mdColAtX() -- generalise that helper
+  // rather than writing a second copy"): the same clientX-vs-getBoundingClientRect
+  // loop, parameterised over the selector -- mdColAtX() below is now a one-line
+  // caller of this for the timed grid, and the all-day drag IIFEs further down
+  // call it directly with "#mdAlldayRow .ad-col" for the strip. Same reasoning as
+  // .md-col applies to .ad-col too even though it isn't pointer-events:none itself
+  // (a chip's own click handler would otherwise win the hit-test over an empty
+  // stretch of the same column) -- one resolver, one rule, for both rows.
+  function colAtX(selector, clientX) {
+    const cols = document.querySelectorAll(selector);
     for (const col of cols) {
       const r = col.getBoundingClientRect();
       if (clientX >= r.left && clientX < r.right) return col;
     }
     return null;
   }
+  function mdColAtX(clientX) { return colAtX("#mdCols > .md-col", clientX); }
   const mdCols = document.getElementById("mdCols");
   mdCols.addEventListener("click", e => {
     if (e.target.closest(".tl-item")) return;   // a real block handles its own click via [data-tl-detail]
@@ -55539,9 +55655,10 @@
     const grid = document.getElementById("mdGrid");
     const ghost = document.getElementById("mdDragGhost");
     const ghostTitle = ghost.querySelector(".md-item-title-txt");
-    let timer = null, pressX = 0, pressY = 0, drag = null, candidate = null, hoverCol = null;
+    let timer = null, pressX = 0, pressY = 0, drag = null, candidate = null, hoverCol = null, hoverAdCol = null;
     function cancelPress() { clearTimeout(timer); timer = null; candidate = null; }
     function clearHighlight() { if (hoverCol) hoverCol.classList.remove("md-drag-target"); hoverCol = null; }
+    function clearAdHighlight() { if (hoverAdCol) hoverAdCol.classList.remove("md-drag-target"); hoverAdCol = null; }
     function arm(id, item, pointerId, mouse) {
       const ev = TL_ITEMS_BY_ID[id];
       if (!ev || (ev.generated && !(ev.fromRoutine && ev.rtTaskId) && !(ev.fromRecurringEvent && ev.recurId))) return;
@@ -55580,13 +55697,28 @@
       }
       if (!drag) return;
       e.preventDefault();
+      const gridRect = grid.getBoundingClientRect();
+      // 2026-08-26 (§4, "up onto the strip to make it all-day"): a block dragged
+      // ABOVE the grid's own top edge is over #mdAlldayRow instead (a static
+      // sibling of #mdTimelineScroll, stacked directly above it -- see
+      // alldayRowMount()'s own insertion point) -- switch to the "make all-day"
+      // preview rather than resolving a time nobody asked for.
+      if (e.clientY < gridRect.top) {
+        clearHighlight();
+        ghost.hidden = true; mdHoverLine.hidden = true;
+        const adCol = colAtX("#mdAlldayRow .ad-col", e.clientX);
+        if (adCol !== hoverAdCol) { clearAdHighlight(); hoverAdCol = adCol; if (adCol) adCol.classList.add("md-drag-target"); }
+        drag.adCol = adCol; drag.col = null; drag.startMin = null;
+        return;
+      }
+      clearAdHighlight();
       const col = mdColAtX(e.clientX);
-      if (!col) { ghost.hidden = true; mdHoverLine.hidden = true; clearHighlight(); return; }
+      if (!col) { ghost.hidden = true; mdHoverLine.hidden = true; clearHighlight(); drag.adCol = null; return; }
       if (col !== hoverCol) { clearHighlight(); hoverCol = col; hoverCol.classList.add("md-drag-target"); }
       const ev = TL_ITEMS_BY_ID[drag.id];
       const dur = ev ? itemDurationMin(ev) : 30;
       const step = drag.mouse ? 5 : 15;
-      const colRect = col.getBoundingClientRect(), gridRect = grid.getBoundingClientRect();
+      const colRect = col.getBoundingClientRect();
       // offset 0, not layerTopOffset() -- a .md-col is an unpadded flex child of
       // #mdGrid (see topForMin()/minForTop()'s own 2026-08-26 comment), same reason
       // mdColAtX()'s own click/hover listeners already use 0 here.
@@ -55607,7 +55739,7 @@
       mdHoverLine.style.right = "auto";
       mdHoverLine.style.top = `${top}px`;
       mdHoverLine.querySelector(".hv-lbl").textContent = `${fmtTime(minToTime(startMin))} – ${fmtTime(minToTime(endMin))}`;
-      drag.col = col; drag.startMin = startMin;
+      drag.col = col; drag.startMin = startMin; drag.adCol = null;
     }, { passive: false });
     function endDrag(e) {
       cancelPress();
@@ -55616,7 +55748,7 @@
       d.el.classList.remove("tl-dragging");
       document.body.classList.remove("dragging-block");
       ghost.hidden = true; mdHoverLine.hidden = true;
-      clearHighlight();
+      clearHighlight(); clearAdHighlight();
       // same "a lingering tap isn't a drag" fix the 1-day view needed (2026-08-10,
       // "i cant edit work" -- search that date): touch only arms via the long-press
       // timer, not real movement, so a plain tap that simply outlasts LONG_PRESS_MS
@@ -55629,10 +55761,21 @@
       }
       suppressNextItemClick = true;
       const ev = TL_ITEMS_BY_ID[d.id];
+      if (!ev) { renderCalDaysUI(); return; }
+      // 2026-08-26 (§4): dropped on the all-day strip -- only a real handwritten
+      // event can become all-day (see makeAllDayItem's own comment for why the
+      // other two movable-but-not-here kinds have nowhere to store it). Refuse
+      // visibly rather than silently doing nothing -- neither branch below ever
+      // mutated d.el's own position, so "put it back" is just the fade coming off.
+      if (d.adCol) {
+        if (!ev.generated) makeAllDayItem(ev, d.adCol.dataset.dayKey);
+        else { showDragRefusal(dragRefusalReason(ev), e.clientX, e.clientY); renderCalDaysUI(); }
+        return;
+      }
       // no target column ever resolved (finger/pointer released outside every
       // column, e.g. over the hour rail) -- nothing to drop onto; just re-render to
       // restore the block, same as the no-op path below.
-      if (ev && d.col && d.startMin != null) {
+      if (d.col && d.startMin != null) {
         rescheduleItem(ev, d.col.dataset.dayKey, minToTime(d.startMin));
       } else {
         renderCalDaysUI();
@@ -55645,7 +55788,7 @@
       drag.el.classList.remove("tl-dragging");
       document.body.classList.remove("dragging-block");
       ghost.hidden = true; mdHoverLine.hidden = true;
-      clearHighlight();
+      clearHighlight(); clearAdHighlight();
       drag = null;
       renderCalDaysUI();
     });
@@ -55720,6 +55863,148 @@
     }
     cols.addEventListener("pointerup", endResize);
     cols.addEventListener("pointercancel", endResize);
+  })();
+
+  // 2026-08-26 (multi-day drag-and-drop §3/§4, "drag an ALL DAY chip sideways...
+  // and between timed and ALL DAY"): the #mdAlldayRow twin of the two IIFEs
+  // above -- same gesture constants, same "float a ghost, fade the real chip,
+  // never move it positionally" technique. Bound at the document level rather
+  // than on #mdAlldayRow itself, same reason the existing "click empty ad-col"
+  // delegate is (search "creates those elements lazily on first render") --
+  // alldayRowMount() builds the row on first render, so there's no element to
+  // bind to at boot. That also means a touch that starts here never bubbles
+  // through #mdTimelineScroll (bindSwipe()'s own container) at all -- #mdAlldayRow
+  // is a static SIBLING of it, not a descendant (same mount comment) -- so unlike
+  // §1/§2, this drag needs no mdDragConsumedTouch guard against the week-swipe.
+  // Two drop zones share one drag: release inside the strip moves the chip
+  // sideways (rescheduleAllDayItem() -- NOT rescheduleItem(), see that function's
+  // own comment for why an empty timeStr breaks it); release down inside the
+  // timed grid gives it a real time (rescheduleItem(), completely unmodified --
+  // an all-day item becoming timed is the same storage write a timed-to-timed
+  // move already makes for these three kinds, so §1's own function already
+  // handles it with zero changes).
+  (function () {
+    const LONG_PRESS_MS = 450, MOVE_CANCEL_PX = 12, MOUSE_DRAG_PX = 4;
+    const grid = document.getElementById("mdGrid");
+    const ghost = document.getElementById("mdDragGhost");
+    const ghostTitle = ghost.querySelector(".md-item-title-txt");
+    let timer = null, pressX = 0, pressY = 0, drag = null, candidate = null, hoverCol = null, hoverAdCol = null;
+    function cancelPress() { clearTimeout(timer); timer = null; candidate = null; }
+    function clearHighlight() { if (hoverCol) hoverCol.classList.remove("md-drag-target"); hoverCol = null; }
+    function clearAdHighlight() { if (hoverAdCol) hoverAdCol.classList.remove("md-drag-target"); hoverAdCol = null; }
+    function arm(id, chip, pointerId, mouse) {
+      const ev = TL_ITEMS_BY_ID[id];
+      if (!alldayDragOk(ev)) return;
+      drag = { id, el: chip, mouse };
+      try { chip.setPointerCapture(pointerId); } catch (err) {}
+      chip.classList.add("tl-dragging");
+      document.body.classList.add("dragging-block");
+      ghost.dataset.track = chip.dataset.track || "";
+      ghost.dataset.category = chip.dataset.category || "";
+      if (!mouse && navigator.vibrate) navigator.vibrate(10);
+    }
+    document.addEventListener("touchmove", e => { if (drag) e.preventDefault(); }, { passive: false });
+    document.addEventListener("pointerdown", e => {
+      // ad-chip-cont excluded: a continuation chip (a later column of a
+      // multi-day span) shares its id with the span's FIRST chip -- dragging it
+      // would move the whole span by the wrong end. Dormant today (no path sets
+      // e.dateEnd, see mdAlldayColsHtml()'s own comment) but excluded anyway,
+      // same "cheap insurance against a case that can't happen yet" the resize
+      // IIFE's own mouse-only check already models.
+      const chip = e.target.closest("#mdAlldayRow .ad-chip[data-tl-detail]");
+      if (!chip || chip.classList.contains("ad-chip-cont")) return;
+      pressX = e.clientX; pressY = e.clientY;
+      const id = chip.dataset.tlDetail, pointerId = e.pointerId;
+      const dragEv = TL_ITEMS_BY_ID[id];
+      if (dragEv && !alldayDragOk(dragEv)) return;
+      if (e.pointerType === "mouse") candidate = { id, chip, pointerId };
+      else timer = setTimeout(() => { timer = null; arm(id, chip, pointerId, false); }, LONG_PRESS_MS);
+    });
+    document.addEventListener("pointermove", e => {
+      if (timer && (Math.abs(e.clientX - pressX) > MOVE_CANCEL_PX || Math.abs(e.clientY - pressY) > MOVE_CANCEL_PX)) cancelPress();
+      if (candidate && !drag && (Math.abs(e.clientX - pressX) > MOUSE_DRAG_PX || Math.abs(e.clientY - pressY) > MOUSE_DRAG_PX)) {
+        const c = candidate; candidate = null;
+        arm(c.id, c.chip, c.pointerId, true);
+      }
+      if (!drag) return;
+      e.preventDefault();
+      const gridRect = grid.getBoundingClientRect();
+      if (e.clientY >= gridRect.top) {
+        // dragged down into the timed grid -- same live time-preview §1 shows,
+        // reusing the exact same ghost/mdHoverLine elements (only one drag can
+        // ever be live at a time, so sharing them is safe).
+        clearAdHighlight();
+        const col = mdColAtX(e.clientX);
+        if (!col) { ghost.hidden = true; mdHoverLine.hidden = true; clearHighlight(); drag.col = null; return; }
+        if (col !== hoverCol) { clearHighlight(); hoverCol = col; hoverCol.classList.add("md-drag-target"); }
+        const ev = TL_ITEMS_BY_ID[drag.id];
+        const dur = ev ? itemDurationMin(ev) : 30;
+        const step = drag.mouse ? 5 : 15;
+        const colRect = col.getBoundingClientRect();
+        let startMin = Math.round(minForTop(e.clientY - colRect.top, 0) / step) * step;
+        startMin = Math.max(START_MIN, Math.min(END_MIN - dur, startMin));
+        const endMin = Math.min(startMin + dur, END_MIN);
+        const top = topForMin(startMin, 0), bottom = topForMin(endMin, 0);
+        ghost.hidden = false;
+        ghost.style.left = `${colRect.left - gridRect.left}px`;
+        ghost.style.width = `${colRect.width}px`;
+        ghost.style.right = "auto";
+        ghost.style.top = `${top}px`;
+        ghost.style.height = `${Math.max(18, bottom - top)}px`;
+        ghostTitle.textContent = ev ? ev.title : "";
+        mdHoverLine.hidden = false;
+        mdHoverLine.style.left = `${colRect.left - gridRect.left}px`;
+        mdHoverLine.style.width = `${colRect.width}px`;
+        mdHoverLine.style.right = "auto";
+        mdHoverLine.style.top = `${top}px`;
+        mdHoverLine.querySelector(".hv-lbl").textContent = `+ ${fmtTime(minToTime(startMin))}`;
+        drag.col = col; drag.startMin = startMin; drag.adCol = null;
+      } else {
+        // still over the all-day strip -- sideways-move preview, same colAtX()
+        // resolver §1's own grid-to-strip branch uses, just against .ad-col
+        clearHighlight();
+        ghost.hidden = true; mdHoverLine.hidden = true;
+        const adCol = colAtX("#mdAlldayRow .ad-col", e.clientX);
+        if (adCol !== hoverAdCol) { clearAdHighlight(); hoverAdCol = adCol; if (adCol) adCol.classList.add("md-drag-target"); }
+        drag.adCol = adCol; drag.col = null; drag.startMin = null;
+      }
+    }, { passive: false });
+    function endDrag(e) {
+      cancelPress();
+      if (!drag) return;
+      const d = drag; drag = null;
+      d.el.classList.remove("tl-dragging");
+      document.body.classList.remove("dragging-block");
+      ghost.hidden = true; mdHoverLine.hidden = true;
+      clearHighlight(); clearAdHighlight();
+      const movedPx = Math.max(Math.abs(e.clientX - pressX), Math.abs(e.clientY - pressY));
+      if (!d.mouse && movedPx < MOVE_CANCEL_PX) {
+        renderCalDaysUI();
+        openTlDetail(d.id, document.querySelector(`#mdAlldayRow [data-tl-detail="${CSS.escape(d.id)}"]`));
+        return;
+      }
+      suppressNextItemClick = true;
+      const ev = TL_ITEMS_BY_ID[d.id];
+      if (!ev) { renderCalDaysUI(); return; }
+      if (d.col && d.startMin != null) {
+        rescheduleItem(ev, d.col.dataset.dayKey, minToTime(d.startMin));
+      } else if (d.adCol) {
+        rescheduleAllDayItem(ev, d.adCol.dataset.dayKey);
+      } else {
+        renderCalDaysUI();
+      }
+    }
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", () => {
+      cancelPress();
+      if (!drag) return;
+      drag.el.classList.remove("tl-dragging");
+      document.body.classList.remove("dragging-block");
+      ghost.hidden = true; mdHoverLine.hidden = true;
+      clearHighlight(); clearAdHighlight();
+      drag = null;
+      renderCalDaysUI();
+    });
   })();
 
   /* ---- drag any sidebar to-do (Personal list, Also today) onto the timeline:
