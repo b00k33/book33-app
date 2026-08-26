@@ -134,7 +134,56 @@ unreachable (nothing left sets `state.view = "chains"`).
 existing chain data must keep occurring/positioning/exporting correctly forever, even
 though nothing can create a NEW link through the UI any more.
 
-## 6. Known dead code left in place (intentional)
+## 6. Variable hour-row heights — retired 2026-08-26
+
+Every hour row on the calendar grid (single-day, multi-day, mobile) is now the SAME
+height — `HOUR_H()` (`--hour-h`) — for every hour the "Hours shown" trim doesn't
+collapse to 0. This retires TWO earlier, separate features that both grew a row taller
+or shorter than that one shared height:
+
+- **2026-08-04, "hours size to their content automatically"** — an empty hour shrank
+  to `compactH()`'s 22px, a busy one stayed full height.
+- **2026-08-24/25, "three plain preset heights"** — a power hour (Best/2nd Best/Money)
+  or a bad hour (Worst/2nd Worst) drew at its own fixed preset (139/56px) regardless of
+  `--hour-h` or busy/empty.
+
+Linh's own reasoning: a 2-hour block should look exactly twice as tall as a 1-hour
+block, which a variable-height grid can never guarantee — "the way Google Calendar
+does it." Power/bad hours still matter to her; the mark moved from the ROW onto
+whichever EVENT is genuinely mostly inside the window instead (see below).
+
+**Removed (retired, not deleted — left in place, unreferenced):**
+- `computeCompactHours()`, `state.compactHours`, `compactH()`'s call from `hourRowH()`,
+  the `.hour-row.empty`/`.has` class distinction in `buildHoursHtml()`.
+- `POWER_HOUR_TYPE_H`, `powerHourH()`'s call from `hourRowH()`.
+- `hourRowH()` itself is simplified to two branches: the "Hours shown" trim → 0,
+  otherwise `HOUR_H()`. Nothing else.
+
+**Added in its place:** `powerMarkFor(start, end)` — an event counts as a power-hour
+event when MORE than half of its own real duration overlaps one window (not "starts
+inside", not "touches"). Stamped as `data-power="good|bad|money"` in `renderTimeline()`/
+`mdColumnHtml()`. The block keeps its normal Mode fill and gains a coloured
+`outline`/`outline-offset` ring plus a `filter:drop-shadow()` bloom (deliberately NOT
+`box-shadow` — `.tl-block[data-track]`/`.tl-item.done` both force `box-shadow:none` —
+and NOT a `::after` overlay — `.tl-item.done`'s Day-mode checkmark and
+`.tl-item[data-origin="repeat"]`'s stripe both already claim one). Multi-day
+(`.md-item`/`.md-line`/`.md-bar`) keeps the ring, drops the bloom — too narrow.
+
+**Kept, deliberately, exactly as before:** `POWER_HOURS` (the five times/labels/kinds),
+`powerHourPopoverHtml()`, the Money digit treatment, `#powerNote`, and the gutter
+`.power-marker` dot–line–dot (including its Money glow) — only the ROW-HEIGHT role of
+power hours is gone; everything else about them is unchanged. The "Hours shown" trim
+(`hourRange`/`hourTrimActive()`/`computeHourRange()`) and pinch-to-zoom on `--hour-h`
+are both untouched.
+
+**Desktop `--hour-h`:** 96px (94 light) → 54px (53 light) — 96 was tuned for a grid
+where most hours actually drew at 22px; with every hour now genuinely that tall, 96
+would force far more scrolling than before. Measured live at 1440×900: the default
+"Hours shown" range (6am–10pm, 16 hours) fits with effectively no scroll at 54px.
+Mobile/tablet/base `--hour-h` (74/77px) were already the "busy ordinary" values and
+needed no change — they're just uniform now too.
+
+## 7. Known dead code left in place (intentional)
 
 Self-contained, unreachable, and harmless — left rather than torn out, and disclosed
 here so nobody "discovers" it and wires it back up:
@@ -145,3 +194,5 @@ here so nobody "discovers" it and wires it back up:
   `trackcat` grouping)
 - `syncWho()`, `syncTrack()`, `syncTrackSummary()` (null-guarded no-ops now; their
   callers exist for the data round-trip in §4)
+- `computeCompactHours()`, `POWER_HOUR_TYPE_H`, `powerHourH()` (§6 above — their
+  ROW-HEIGHT role is retired; `POWER_HOURS` itself is still very much live)

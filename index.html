@@ -2114,6 +2114,59 @@
   }
   .power-marker:hover .power-dot, .power-marker:focus-visible .power-dot,
   .power-marker:hover .power-line, .power-marker:focus-visible .power-line { opacity: 1; }
+  /* 2026-08-26 (Linh, "make every hour row on the calendar the same height" §3): the
+     power-hour MARK moves from the ROW (retired -- see hourRowH()'s own comment) onto
+     whichever EVENT is genuinely mostly inside the window (powerMarkFor(), JS),
+     stamped data-power="good|bad|money" in renderTimeline()/mdColumnHtml(). .power-
+     marker above (the gutter dot-line-dot) is completely unchanged -- this is
+     additional, not a replacement.
+     Built from outline/outline-offset, NOT box-shadow: .tl-block[data-track] and
+     .tl-item.done both force box-shadow:none (search either, further down), which
+     would silently eat a ring built that way. The bloom is filter:drop-shadow, NOT a
+     ::after overlay -- .tl-item.done already claims ::after for its Day-mode desktop
+     checkmark ([data-desk-day1][data-theme="light"] ... .tl-item.done::after) and
+     .tl-item[data-origin="repeat"] already claims ::before for its diagonal stripe;
+     a power-marked block that's also done, or also a repeating item, would silently
+     lose whichever pseudo-element I used the moment either of those rules also
+     matched. filter is untouched by any of that, and .tl-item already carries a
+     filter transition for its own hover brightness bump (search ".tl-item:hover")
+     -- this reuses that same mechanism rather than introducing a new one.
+     outline-offset is NEGATIVE (drawn INSIDE the border, not flush against it) so a
+     block that's both power-marked AND mid-resize doesn't read as one ring:
+     .tl-item.tl-resizing[data-track] draws its own flush 2px gold box-shadow ring at
+     the edge (search it) -- Money's own mark colour IS that same gold
+     (--pwr-money-mark: var(--cosmic-gold)), so without the inset the two would sit
+     exactly on top of each other and a Money block would look permanently
+     mid-resize. Inset, they read as two concentric rings instead.
+     opacity (.done/.tl-past) fades outline+filter along with the fill for free --
+     both are just more paint on the same box, no separate fade rule needed; the one
+     deliberate exception is [data-desk-day1][data-theme="light"] .tl-item.done itself
+     opting OUT of the fade (search "keep the fill, no faded strikethrough") -- the
+     ring correctly stays full-strength there too, matching whatever the block does,
+     not a case that needs separate handling. */
+  .tl-item[data-power="good"]  { --pwr-mark: var(--pwr-good-mark);  --pwr-bloom-r1: 2px; --pwr-bloom-r2: 6px; --pwr-bloom-mix: 45%; }
+  .tl-item[data-power="bad"]   { --pwr-mark: var(--pwr-bad-mark);   --pwr-bloom-r1: 2px; --pwr-bloom-r2: 6px; --pwr-bloom-mix: 45%; }
+  .tl-item[data-power="money"] { --pwr-mark: var(--pwr-money-mark); --pwr-bloom-r1: 3px; --pwr-bloom-r2: 9px; --pwr-bloom-mix: 75%; }
+  .tl-item[data-power] {
+    outline: 2px solid var(--pwr-mark); outline-offset: -2px;
+    filter: drop-shadow(0 0 var(--pwr-bloom-r1) var(--pwr-mark))
+            drop-shadow(0 0 var(--pwr-bloom-r2) color-mix(in oklab, var(--pwr-mark) var(--pwr-bloom-mix), transparent));
+  }
+  /* explicit (not left to source order): .tl-item:hover's own filter:brightness(1.06)
+     (search it) has the same specificity as .tl-item[data-power] above -- without
+     this, whichever of the two happened to sit later in the file would win outright
+     on hover (filter isn't additive across separate rules) and the loser's effect
+     would vanish while hovering. This combines both on purpose. */
+  .tl-item[data-power]:hover {
+    filter: brightness(1.06)
+            drop-shadow(0 0 var(--pwr-bloom-r1) var(--pwr-mark))
+            drop-shadow(0 0 var(--pwr-bloom-r2) color-mix(in oklab, var(--pwr-mark) var(--pwr-bloom-mix), transparent));
+  }
+  /* 2026-08-26 (§3c): the 3/5/7-day columns are too narrow for the bloom to read as
+     anything but noise bleeding into the next day's column -- keep the ring (costs no
+     layout space, still reads at a glance) and drop the glow there specifically. */
+  .md-item[data-power], .md-line[data-power], .md-bar[data-power] { filter: none; }
+  .md-item[data-power]:hover, .md-line[data-power]:hover, .md-bar[data-power]:hover { filter: brightness(1.06); }
   /* the Best/Worst time-range labels read on the opposite (right) side of the
      timeline from the zodiac hour markers, above the event cards */
   /* 2026-08-01 ("these events look ugly"): z 4 → 1 so Best/Worst/Money pills sit UNDER the
@@ -16015,26 +16068,38 @@
      renderDay()-only call site is not -- see its comment) and the next full render. */
   [data-desk-day1] #dayAlldayRow { display: none !important; }
 
-  /* ---- 4.4 The grid — one column, --hour-h 96px (94 light), fasting tints the whole
+  /* ---- 4.4 The grid — one column, --hour-h 54px (53 light), fasting tints the whole
      column (data-desk-fasting, see renderDayFastTint()'s desktop half — a
      deliberate reversal of the mobile "no tint at 1 day" rule, NOT a mistake). */
   /* 2026-08-24 ("taller hour rows", three-preset pass): 60/58 → 76/74, keeping the
      2026-08-16 dark-vs-light 2px offset as a ratio-free constant.
      2026-08-25 ("power 139, ordinary 96, bad 56"): 76/74 → 96/94, her own explicit
      destination numbers for this rule (96 is the ordinary-row anchor the 139/56
-     presets were rescaled FROM, not a further ratio off 76) — same 2px offset kept.
-     This is the ordinary-hour preset on desktop — the DESKTOP third of the three
-     knobs (see POWER_HOUR_TYPE_H's comment in JS for the other two); power/bad
-     hours ignore it and draw at their own preset heights via hourRowH(). The
-     !important is what beats a restored pinch-zoom inline --hour-h at this
+     presets were rescaled FROM, not a further ratio off 76).
+     2026-08-26 ("make every hour row on the calendar the same height"): 96/94 → 54/53
+     — RETIRES the three-preset system entirely (compactH()/POWER_HOUR_TYPE_H no
+     longer feed hourRowH(), see their own comments); every SHOWN hour is this one
+     value now, not just the "busy ordinary" tier. 96 was tuned for a grid where MOST
+     hours actually rendered at 22px (compact) or a preset — the real average row
+     was nowhere near 96px tall. With every hour now genuinely 96px, hourTrimActive()
+     is ALWAYS on for single-day (deskDay1Active()||mobileDay1Active(), see its own
+     comment) so the default "Hours shown" range (PREFS.dayStart/dayEnd, 6am-10pm =
+     16 hours) is what actually renders — measured live at a 1440×900 window:
+     #timelineScroll starts 54px down, leaving 846px before the window edge. 846/16 ≈
+     53px, so 16 shown hours fit with effectively no scroll on that reference size —
+     54/53 keeps the existing 1px dark-vs-light gap scaled by the same ~0.98 ratio
+     94/96 already used (54×0.98≈53). A taller/shorter window scrolls proportionally
+     more/less, same as any fixed-row calendar; pinch-to-zoom (search HOUR_H_KEY)
+     is the escape hatch for a different preferred density, untouched by this number.
+     The !important is what beats a restored pinch-zoom inline --hour-h at this
      breakpoint — keep it. */
   /* 2026-08-16 (desktop multi-day build): broadened from [data-desk-day1] — the
      multi-day grid's own hour rail (.md-hours) is built from the SAME .hour-row
      markup/class as the single-day timeline and reads this same --hour-h var
      (HOUR_H(), JS), so 3/5/7 gets the identical comfortable row height 1-day
      has instead of falling back to mobile's shorter default. */
-  [data-desk-day] { --hour-h: 96px !important; }
-  [data-desk-day][data-theme="light"] { --hour-h: 94px !important; }
+  [data-desk-day] { --hour-h: 54px !important; }
+  [data-desk-day][data-theme="light"] { --hour-h: 53px !important; }
   [data-desk-day1] #dayTimelineWrap[data-desk-fasting="true"] { background: color-mix(in oklab, var(--fast) 7%, transparent); }
   [data-desk-day1] .hour-rail, [data-desk-day1] .ad-gutter { width: 46px; }
   /* ---- 4.5 Calendar blocks — 2026-08-15 corrections pass (items 0/2/3/4).
@@ -23362,40 +23427,30 @@
   // range, for the same reason and through this same single function. Everything
   // else about this mechanism, including which consumers route through it, is
   // untouched; it was already built to work anywhere, just never switched on here.
-  // 2026-08-24 (three preset heights): the powerHourFloor() max this used to fold in
-  // is gone — power/bad hours never reach this function any more (hourRowH() below
-  // answers them with their own preset before its compact branch), so only ordinary
-  // hours route through here. The 22 base and the hour-range trim are unchanged.
+  // 2026-08-26 (Linh, "make every hour row on the calendar the same height" — RETIRES
+  // both the 2026-08-04 content-sizing this function implements AND the 2026-08-24/25
+  // "three preset heights" that used to sit ahead of it in hourRowH() — see that
+  // function's own comment, RETIRED-FEATURES.md, and CLAUDE.md design44 §5 for the new
+  // rule). Left in place, unreferenced, rather than deleted: hourRowH() no longer calls
+  // this, and state.compactHours is no longer populated (computeCompactHours()'s own
+  // call sites are gone too, same reasoning) — every shown hour is HOUR_H() now,
+  // uniformly. Power hours keep their meaning; the mark moved onto the EVENT booked in
+  // them (see powerMarkFor(), data-power, near POWER_HOURS) instead of the row.
   function compactH(h) {
     if (hourTrimActive() && typeof h === "number" && (h < hourRange.start || h >= hourRange.end)) return 0;
     return Math.min(22, HOUR_H());
   }
-  // 2026-08-24 (Linh, "three plain preset heights — one per type of hour"): the row
-  // height ACTUALLY drawn for hour `h` right now. The hour's TYPE picks its height —
-  // no Math.max floors (see POWER_HOUR_TYPE_H's own comment for why those quietly
-  // broke), in strict priority order:
-  //   1. outside the "Hours shown" range → 0 (the trim; checked FIRST so a 3:22 Best
-  //      hour before a 6am day-start stays hidden, exactly as it always did — the
-  //      check used to live only inside compactH(), which power hours now bypass)
-  //   2. power hour (Best / 2nd Best / Money) → its preset, busy or empty
-  //   3. bad hour (Worst / 2nd Worst) → its preset, busy or empty — a BUSY bad hour
-  //      is genuinely shorter than a busy ordinary one now, which the floor version
-  //      never delivered (behaviour change, flagged in the 2026-08-24 commit)
-  //   4. ordinary + empty (state.compactHours) → compactH()'s 22 quiet-hour shrink
-  //   5. ordinary + busy → HOUR_H()
-  // A real event's own block height comes from topForMin() diffs over these same rows
-  // (see renderTimeline), so blocks inside a 44px bad hour compress with it, floored
-  // at 26px desktop / 14px elsewhere. Single source of truth for buildHoursHtml (the
-  // real render, feeding BOTH #hours and #mdHours — see its own comment),
-  // repositionRows (live pinch-zoom preview), and bonusBeforeHour/minForTop
-  // (topForMin's own inverse math) so the single-day rail, the multi-day rail, the
-  // live-drag preview, and the position math itself never disagree about how tall a
-  // row actually is.
+  // 2026-08-26 (same brief as compactH() above — RETIRES the "three preset heights"
+  // priority chain this used to run: power/bad presets, then state.compactHours'
+  // 22px shrink, only falling to HOUR_H() last. Every SHOWN hour is now exactly
+  // HOUR_H() — a 2-hour block is exactly twice a 1-hour block's height, which the old
+  // variable-height grid could never guarantee. The "Hours shown" trim is the one
+  // thing that still zeroes a row; it's checked first, unchanged. bonusBeforeHour()
+  // below still needs to exist (the trim's -HOUR_H() collapse for hidden hours is
+  // real work), but every term it sums for a SHOWN hour is now 0 by construction.
   function hourRowH(h) {
     if (hourTrimActive() && (h < hourRange.start || h >= hourRange.end)) return 0;
-    const preset = powerHourH(h);
-    if (preset) return preset;
-    return state.compactHours.has(h) ? compactH(h) : HOUR_H();
+    return HOUR_H();
   }
   const isBlockStartHour = h => (h - ANIMAL_BAND_START) % 2 === 0;
   // pixel adjustment already "banked" strictly BEFORE this hour (i.e. from hours that
@@ -23403,14 +23458,14 @@
   // its own internal layout, only what comes after it. Every hour is independently
   // eligible (not just zodiac-band starts; isBlockStartHour is unrelated, it only marks
   // where an animal icon/boundary sits).
-  // 2026-08-18: reads hourRowH() (compact shrink OR power/bad preset) instead of only
-  // checking state.compactHours — a Best/Money hour needs banking (it renders TALLER
-  // than HOUR_H()), or every event after it would render under-shifted by exactly the
-  // same misalignment bug fixed elsewhere that session (desk-grid's hour-height race).
-  // 2026-08-24 (three presets): a bad hour now banks a NEGATIVE delta even when busy
-  // (44 < HOUR_H()) — the same negative-sum path compact hours have always exercised,
-  // nothing new to handle. hourRowH(h) - HOUR_H() is 0 for a busy ordinary hour, so
-  // this is a no-op exactly where it always was.
+  // 2026-08-18/2026-08-24: historically read hourRowH() instead of just checking
+  // state.compactHours, because a compact/power/bad hour could bank a non-zero delta.
+  // 2026-08-26 (retires that): hourRowH() only ever returns 0 (trimmed) or HOUR_H()
+  // now, so every term for a SHOWN hour is 0 by construction — this function only
+  // still does real work for the "Hours shown" trim's -HOUR_H() collapse per hidden
+  // hour, same as it always did (trimmed hours returned 0 here before compact/power
+  // ever existed too). Kept as a real function, not simplified away, because the trim
+  // case is still genuine, non-trivial work.
   function bonusBeforeHour(hour) {
     let sum = 0;
     for (let h = START_HOUR; h + 1 <= hour && h < END_HOUR; h++) {
@@ -28966,14 +29021,16 @@
   // they're the exact 1.447×/0.579× ratios of the 2026-08-24 110/76/44 set, rescaled
   // to a 96px ordinary row (the new [data-desk-day] --hour-h). Same three knobs,
   // same priority order, just bigger.
-  // THE THREE KNOBS — retune hour heights by changing these numbers and nothing else:
-  //   · power (Best / 2nd Best / 💰 Money):  139  (here)
-  //   · bad   (Worst / 2nd Worst):            56  (here)
-  //   · ordinary (every other hour):          the --hour-h CSS variable — 96px at
-  //     [data-desk-day] (94 light), 77 base, 74 phone/tablet; search "--hour-h:" for
-  //     all six declarations. Empty ordinary hours still shrink to compactH()'s 22.
-  // Changing POWER_HOURS' own times above automatically moves which hour gets which
-  // height, nothing else to keep in sync.
+  // 2026-08-26 (Linh, "make every hour row on the calendar the same height"): RETIRED
+  // — hourRowH() no longer calls powerHourH(), so these row-height presets do
+  // nothing now (every hour is HOUR_H(), power or not). Power hours keep their
+  // meaning: the mark moved onto the EVENT booked in the window instead of the row
+  // — see powerMarkFor()/data-power just below, and CLAUDE.md design44 §5 for the
+  // new rule. Left in place, unreferenced, per this file's retirement convention —
+  // see RETIRED-FEATURES.md. POWER_HOURS itself is very much still live (the gutter
+  // .power-marker, powerHourPopoverHtml(), the Money digit treatment, #powerNote
+  // all still read it directly) — only THIS pair (the row-height preset table and
+  // the function that looked a row up in it) is dead.
   const POWER_HOUR_TYPE_H = { good: 139, money: 139, bad: 56 };
   function powerHourH(h) {
     let ph = 0;
@@ -28981,6 +29038,43 @@
       if (Math.floor(toMin(p.time) / 60) === h) ph = Math.max(ph, POWER_HOUR_TYPE_H[p.k] || 0);
     });
     return ph;
+  }
+  // 2026-08-26 (same brief as above): the event-level replacement for the row-height
+  // mark. An event counts as a power-hour event when MORE than half of its own real
+  // duration falls inside the window ("more than half", not "starts inside"/
+  // "touches") -- a 12:30-2:30pm block only has 52 of its 120 min in 2nd Best
+  // (12:22-13:22) and stays unmarked; a 12:30-1pm block is 100% inside and is
+  // marked. Takes RAW start/end (itemEndMin()'s own +1440 overnight value included,
+  // NOT the visible-window-clamped cs/ce renderTimeline() also carries) so a block
+  // that starts before START_MIN or runs past END_MIN is judged against its real
+  // length, not a truncated one. Checks each window's own clock time AND its
+  // +/-1440 neighbour so an overnight item (end > 1440) is compared against the
+  // SAME window recurring the next day too, not a huge phantom gap -- confirmed
+  // this is exactly why a long overnight block (Sleep) still correctly never
+  // qualifies: it may clip the edge of a window on either side, but that's a small
+  // fraction of its own many-hour length either way.
+  // Two DIFFERENT windows can mathematically never both clear 50% of the SAME
+  // event: the five windows never overlap each other, so their overlaps with any
+  // one event are disjoint slices of it and can never sum past 100% -- two slices
+  // each over half would already sum past that. The max-overlap/tie-to-earlier
+  // rule below is defensive (kept in case POWER_HOURS' own times or window length
+  // ever change), not a case that can fire today -- confirmed by that same
+  // disjoint-window argument, not just assumed.
+  function powerMarkFor(s, endMin) {
+    if (s === null || endMin === null) return "";
+    const dur = endMin - s;
+    if (dur <= 0) return "";
+    let best = null;
+    POWER_HOURS.forEach(p => {
+      const base = toMin(p.time);
+      [base - 1440, base, base + 1440].forEach(ws => {
+        const we = ws + 60;
+        const ov = Math.min(endMin, we) - Math.max(s, ws);
+        if (ov <= 0) return;
+        if (!best || ov > best.ov || (ov === best.ov && ws < best.ws)) best = { k: p.k, ov, ws };
+      });
+    });
+    return best && best.ov / dur > 0.5 ? best.k : "";
   }
   // 2026-08-04: the "preset power hours larger" seeding that used to live here relied
   // entirely on state.expandedBlocks, which no longer exists now hours size to their
@@ -29065,6 +29159,13 @@
   // a stale state.compactHours. Mirrors itemEndMin's own clamping so a genuinely
   // multi-hour block (e.g. a 7:30-8:15 routine) keeps every hour it touches full-size,
   // not just the one its start-time falls in.
+  // 2026-08-26 (Linh, "make every hour row on the calendar the same height"): RETIRED —
+  // no call site runs this any more (renderDay()'s and renderMultiDayGrid()'s calls are
+  // both gone, see their own comments) and state.compactHours is never populated, so
+  // hourRowH()'s state.compactHours.has(h) branch (also retired, see its comment) would
+  // find nothing anyway. Left in place, unreferenced, per this file's retirement
+  // convention — see RETIRED-FEATURES.md. Every hour is HOUR_H() now regardless of
+  // content; an empty hour is exactly as tall as a busy one.
   function computeCompactHours(items) {
     const busy = new Set();
     items.forEach(e => {
@@ -29163,24 +29264,19 @@
       // begins — vs. a mid-block hour, where the animal's own icon sits (see CSS
       // .hour-row::after) — unrelated to compacting, purely the icon/hairline.
       const zb = isBlockStartHour(h);
-      // 2026-08-04: replaces the old manual-drag bonus entirely — compact/full is a
-      // plain lookup against the Set computeCompactHours() just built, no dragging,
-      // no per-hour user state at all. "has"/"empty" per her own reference wording.
-      const compact = state.compactHours.has(h);
-      // 2026-08-18: only emit an inline height when it actually differs from the plain
-      // CSS var(--hour-h) a busy row would otherwise get — keeps every ordinary busy
-      // hour exactly as live-reactive to --hour-h (pinch-zoom, desktop's own override)
-      // as before; only a compact row or a power/bad-hour preset (2026-08-24/25: any
-      // Best/2nd Best/Money/Worst/2nd Worst hour, which now draws at its own 139/56
-      // regardless of --hour-h or busy/empty — see POWER_HOUR_TYPE_H) needs its own.
+      // 2026-08-26 ("make every hour row the same height"): RETIRES the compact/"has"
+      // lookup that used to live here (see compactH()'s own retirement comment) — every
+      // shown hour is HOUR_H() now, so there is no per-row content class to compute.
+      // rowH still differs from HOUR_H() for exactly one reason (the "Hours shown"
+      // trim, hourRowH()'s first branch), so this naturally still emits the height:0px
+      // a trimmed row needs and nothing for every normal row — no redundant inline
+      // height on the common case, same as before, just fewer reasons for it to fire.
       const rowH = hourRowH(h);
-      const style = (compact || rowH !== HOUR_H()) ? ` style="height:${rowH.toFixed(0)}px"` : "";
+      const style = rowH !== HOUR_H() ? ` style="height:${rowH.toFixed(0)}px"` : "";
       // item 6: marks the row so CSS can drop its own .hour-label (a 0-height
       // row alone still leaves that absolutely-positioned label floating, see
-      // [data-desk-day1] .hour-row[data-out-of-range] CSS) — only ever true
-      // for an hour that's ALSO compact (busy hours always fall inside
-      // hourRange by construction, see computeHourRange), so this
-      // never needs to fight a "has" row's real height.
+      // [data-desk-day1] .hour-row[data-out-of-range] CSS) — driven by the same trim
+      // as rowH above (computeHourRange), independent of the now-retired compact set.
       const outOfRange = hourTrimActive() && (h < hourRange.start || h >= hourRange.end);
       // 2026-08-26 ("make the hour column a visible add button"): a second label,
       // same .hour-label class (so it inherits every existing width/colour/
@@ -29190,7 +29286,7 @@
       // that rail's own CSS never matches the hover selector, so it just sits
       // there unused, display:none, same as .hour-label-static would if #mdHours
       // ever needed one.
-      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label hour-label-static">${hourLabel(h)}</span><span class="hour-label hour-label-hover">+ ${hourLabel(h)}</span></div>`;
+      html += `<div class="hour-row" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label hour-label-static">${hourLabel(h)}</span><span class="hour-label hour-label-hover">+ ${hourLabel(h)}</span></div>`;
     }
     // the closing boundary label under the last row. 2026-08-16 (item 2): when the grid
     // is trimmed this has to read the trim's own end, not a hardcoded midnight — a grid
@@ -29646,7 +29742,10 @@
       // separate from ce (clamped to the visible window, for positioning/height
       // math only) so the time label below still reads the item's real end time
       // even when it runs past the bottom of the visible hours.
-      placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps });
+      // 2026-08-26 ("make every hour row the same height" §3): powerMarkFor() also
+      // takes the RAW s/eEnd, not cs/ce -- an item clamped at the visible window's
+      // edge must still be judged by its own real duration, not a truncated one.
+      placed.push({ e, cs, ce, trueEnd: eEnd, isBlock: (ce - cs >= 30) || !!hasSteps, powerMark: powerMarkFor(s, eEnd) });
     });
 
     // 2026-08-24: this file's own single copy of the merge rule is now
@@ -29797,6 +29896,13 @@
       // tick, so a block fades in on its own the moment it crosses "now". Applies to every
       // finished block, nested marker overlays (#5) included -- neither is excluded here.
       const isPast = todayNowMin !== null && ce <= todayNowMin;
+      // 2026-08-26 ("make every hour row the same height" §3): p.powerMark was computed
+      // per-item, pre-merge (powerMarkFor(), see the placed.push() above) -- a merged
+      // box (p.mergeCount > 1) folds several real occurrences into one visual span
+      // that isn't any single event's own duration, so it deliberately carries no
+      // powerMark through mergeAdjacentTlItems() and stays unmarked here, rather than
+      // judging the aggregate span as if it were one event.
+      const powerMark = p.powerMark || "";
       // her single-line variant is "name + START time", not the full range: at 9px in a
       // flex row beside the title there is room for one time, and the end time is one tap
       // away in the detail sheet. Non-tight blocks keep the full range exactly as before.
@@ -29961,7 +30067,7 @@
       // several -- tapping it (like tapping anywhere on the box) opens the
       // detail sheet, which shows the merge sub-list (renderTlMergeList).
       const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
-      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
+      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${powerMark ? ` data-power="${powerMark}"` : ""}${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
         <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
@@ -33472,10 +33578,11 @@
      #timelineScroll/#dayTimelineWrap); calDays>1 (mobile only, <1024px — desktop
      always resolves to 1, see calDaysActive()) renders the new N-column grid into
      the sibling #multiDayWrap instead, toggled by renderCalDaysUI() at the end of
-     renderDay(). Everything here shares the real HOUR_H()/topForMin()/
-     state.compactHours system already built for the single-day view — see
-     layerTopOffset()'s mdRendering branch and renderMultiDayGrid()'s own comment for
-     exactly how. ============================================================ */
+     renderDay(). Everything here shares the real HOUR_H()/topForMin() system already
+     built for the single-day view (2026-08-26: state.compactHours no longer part of
+     that — see computeCompactHours()'s retirement comment) — see layerTopOffset()'s
+     mdRendering branch and renderMultiDayGrid()'s own comment for exactly how.
+     ============================================================ */
   const PREFS_KEY = "book33-prefs";
   // navMode added 2026-08-15 (§5 build) -- exactly the extension this comment block
   // already anticipated (see below): ntMerge() deep-merges under these defaults, so
@@ -33717,7 +33824,7 @@
     // does, rather than silently showing just the first occurrence's own time.
     const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
     const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
-    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       style="top:${top}px;height:${h}px;${colStyle}">
       <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
       <span class="md-item-time">${timeTxt}</span>
@@ -33741,7 +33848,7 @@
     const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
     const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
-    return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+    return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" style="top:${top}px;height:${h}px;${colStyle}">
       <span class="md-line-time">${timeTxt}</span><span class="md-line-title">${esc(e.title)}</span>${mergeBadge}
     </div>`;
@@ -33765,7 +33872,7 @@
     // 2026-08-24: no visible text on a bar either way, but a merged run's aria-label
     // still says so, same reasoning as mdItemHtml()'s own badge just above.
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
-    return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"
+    return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
   function mdColumnHtml(d, items, labelable) {
@@ -33775,7 +33882,11 @@
       if (s === null) return;
       const eEnd = itemEndMin(e);
       if (eEnd === null || s >= END_MIN || eEnd <= START_MIN) return;
-      placed.push({ e, cs: Math.max(s, START_MIN), ce: Math.min(eEnd, END_MIN) });
+      // 2026-08-26 ("make every hour row the same height" §3c): same powerMarkFor()
+      // call as renderTimeline(), same raw s/eEnd (not the clamped cs/ce) -- see that
+      // call's own comment. Dropped by mergeAdjacentTlItems() for an actual merged
+      // run, same reasoning as the single-day view.
+      placed.push({ e, cs: Math.max(s, START_MIN), ce: Math.min(eEnd, END_MIN), powerMark: powerMarkFor(s, eEnd) });
     });
     // 2026-08-24 ("multi-day Sleep blocks don't merge"): this column used to build its
     // own `placed` array with no merge step at all -- the single-day timeline's own
@@ -34106,23 +34217,18 @@
   }
 
   // called once per visible window (renderCalDaysUI(), below) whenever calDays>1 on
-  // mobile. Builds N days' worth of items, then resolves ONE shared compact-hours
-  // set for the whole window before laying anything out.
+  // mobile. Builds N days' worth of items and lays them out against the ONE shared
+  // hour rail (#mdHours) — same rail math as the single-day view (buildHoursHtml()
+  // feeds both, see its own comment).
   //
-  // Why shared, not per-day (the audit's topForMinFor(mins, compactSet) idea, or
-  // swapping state.compactHours in per column): this grid has exactly ONE hour
-  // rail (#mdHours), drawn once, shared by every column ("hour rail 30px fixed...
-  // each column gets its own vertical slice of the SHARED hour rail" — §1). A
-  // single rail can only draw ONE height per hour row. If compact-hours varied per
-  // column, whichever set the rail happened to be drawn with would be WRONG for
-  // every other column's own items (their topForMin() would bank a different
-  // bonusBeforeHour() than what the rail actually drew), i.e. exactly the
-  // misaligned-block bug §1 is explicit about not reintroducing. Making the set the
-  // INTERSECTION of every visible day's own compact hours (an hour stays compact
-  // only when NO visible day has anything touching it) keeps one rail, one
-  // topForMin() pass, and every column correctly aligned to it — the smaller,
-  // safer change once a single shared rail is a given, and it's what "ONE
-  // --hour-h scale... computed in a single render pass" describes for this view.
+  // 2026-08-26 ("make every hour row the same height"): this used to resolve a
+  // shared compact-hours SET across every visible day first (the INTERSECTION —
+  // an hour stayed compact only when NO visible day had anything in it — since a
+  // single shared rail can only draw one height per row, and a per-column set would
+  // have misaligned every other column's own topForMin()). That whole problem is
+  // gone now that content never changes a row's height at all: every column reads
+  // the exact same HOUR_H() from the exact same rail, with nothing left to
+  // reconcile across days. See computeCompactHours()'s own retirement comment.
   function renderMultiDayGrid(days) {
     const dayList = [];
     for (let i = 0; i < days; i++) {
@@ -34130,12 +34236,6 @@
       // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
       dayList.push({ d, items: dayItemsFor(d) });
     }
-    let shared = null;
-    dayList.forEach(({ items }) => {
-      const c = computeCompactHours(items);
-      shared = shared === null ? c : new Set([...shared].filter(h => c.has(h)));
-    });
-    state.compactHours = shared || new Set();
     // openTlDetail() resolves ids through this map — extend it (not reset; the
     // single-day body above already seeded state.anchor's own items) with every
     // visible day's items so a tap on ANY column's card/bar can open the sheet.
@@ -34703,14 +34803,10 @@
     // which is what actually turns hourRange into real 0-height rows via
     // compactH(h) — see its own comment.
     computeHourRange(timed);
-    // 2026-08-04 (Linh: "hours size to their content automatically"): see this
-    // function's own comment near buildHours() for exactly what "compact" means here.
-    computeCompactHours(timed);
-    // 2026-08-02 (code44 per-block expand): buildHours() used to be a one-time boot call
-    // (the hour ruler never changed shape before). Now that a row's own height depends
-    // on content, it has to rebuild every renderDay() too, or the row backdrop stays
-    // stuck at its old heights while events/bands/etc (which already read
-    // state.compactHours directly) render in their new, correct positions.
+    // 2026-08-26 ("make every hour row the same height"): the computeCompactHours(timed)
+    // call that used to sit here is retired — see its own comment. buildHours() below
+    // still rebuilds every renderDay() (the trim can still change hourRange between
+    // renders), just never reads a content-based compact set any more.
     buildHours();
     // 2026-08-02: scroll the timeline to 6am once, the first time the Day page renders —
     // not on every renderDay() call (adding an event, ticking a task, etc. all call this
