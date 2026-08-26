@@ -10676,6 +10676,15 @@
   /* today marked by this gold circle ALONE, same idiom .mo-cell[data-today] .mo-num
      already uses elsewhere — no background wash on the column itself (item 3). */
   .md-col-head[data-today="true"] .md-col-head-num { background: var(--margin-rule); color: var(--accent-on); }
+  /* 2026-08-26 (week-aligned views): the SELECTED day — now that Week/Work week are
+     Mon-anchored, the anchor can sit in any column, and stepping ‹ › is only legible
+     if you can see which day is selected. Quieter than today and a different device:
+     today = gold FILL (light) / gold RING (dark, below), selected = a thin ink-soft
+     ring + weight, colour-and-weight only per §0, never a box. :not([data-today])
+     because when today IS the selected day, today wins — the two never stack. */
+  .md-col-head[data-selected="true"]:not([data-today="true"]) .md-col-head-num {
+    box-shadow: 0 0 0 1.5px var(--ink-soft); font-weight: 800;
+  }
   /* Black-badge / white-number date circles (Linh: "day numbers be black but white
      number"), gold RING marking today instead of a gold fill -- every day reads as the
      same component, today is emphasis (ring) not a different fill. Dark theme only;
@@ -18215,8 +18224,8 @@
           <span class="cal-days-picker" role="group" aria-label="Days shown">
             <button type="button" class="cal-days-btn" data-cal-days="1" aria-label="1 day">1</button>
             <button type="button" class="cal-days-btn" data-cal-days="3" aria-label="3 days">3</button>
-            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="5 days">5</button>
-            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="7 days">7</button>
+            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="Work week (Mon to Fri)">5</button>
+            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="Week (Mon to Sun)">7</button>
           </span>
         </div>
         <button type="button" class="nav-month-jump" data-navmonth-jump="week">Week view</button>
@@ -19909,8 +19918,8 @@
           <div class="vsw-menu" id="ddtDaysMenu" hidden>
             <button type="button" class="cal-days-btn" data-cal-days="1" aria-label="1 day">Day <span class="k">1</span></button>
             <button type="button" class="cal-days-btn" data-cal-days="3" aria-label="3 days">3 days <span class="k">3</span></button>
-            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="5 days">5 days <span class="k">5</span></button>
-            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="7 days">Week <span class="k">7</span></button>
+            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="Work week">Work week <span class="k">5</span></button>
+            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="Week">Week <span class="k">7</span></button>
           </div>
         </span>
         <!-- 2026-08-16: day/night had NO visible switch at this breakpoint — both existing
@@ -20437,8 +20446,8 @@
           <div class="cal-days-picker" id="calDaysPicker" role="group" aria-label="Days shown">
             <button type="button" class="cal-days-btn" data-cal-days="1" aria-label="1 day">1</button>
             <button type="button" class="cal-days-btn" data-cal-days="3" aria-label="3 days">3</button>
-            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="5 days">5</button>
-            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="7 days">7</button>
+            <button type="button" class="cal-days-btn" data-cal-days="5" aria-label="Work week (Mon to Fri)">5</button>
+            <button type="button" class="cal-days-btn" data-cal-days="7" aria-label="Week (Mon to Sun)">7</button>
           </div>
         </div>
         <!-- one flow chip per live chain root rendering today -- Before/Event/After
@@ -29468,11 +29477,15 @@
   // multi-day-view Reschedule picked from the detail sheet's own date field to a
   // day OUTSIDE the visible window (still follows, unchanged).
   function inVisibleMultiDayWindow(dateKey) {
-    const days = calDaysActive();
-    if (days <= 1) return false;
+    // 2026-08-26 (week-aligned views): reads mdWindowDays() -- the same derivation
+    // renderMultiDayGrid() draws from -- rather than its own addDays(anchor, i)
+    // copy. With Week/Work week starting at startOfWeek(anchor), an anchor-based
+    // loop here would disagree with the visible columns and dropping onto a day
+    // inside the week would re-anchor the grid mid-drop (the exact jump §0 of the
+    // drag brief exists to prevent).
+    if (calDaysActive() <= 1) return false;
     const target = keyOf(parseKey(dateKey));
-    for (let i = 0; i < days; i++) if (keyOf(addDays(state.anchor, i)) === target) return true;
-    return false;
+    return mdWindowDays().some(d => keyOf(d) === target);
   }
   function rescheduleItem(e, dateKey, timeStr, endStr) {
     if (!e) return;
@@ -33840,6 +33853,32 @@
   function calDaysActive() {
     return PREFS.calDays || 1;
   }
+  // 2026-08-26 ("make Week and 5 days week-aligned"): THE one statement of which
+  // day-counts are week-aligned. 7 = Week (Mon-Sun always), 5 = Work week (Mon-Fri
+  // always); 3 stays a rolling window from the selected day, deliberately -- "that's
+  // what it's good at". Read by mdWindowDays() below AND the swipe handler (which
+  // must advance a week-aligned view by 7 regardless of visible-column count, so
+  // Mon-Fri swipes to next week's Mon-Fri, never to Saturday).
+  function mdWeekAligned() { return calDaysActive() >= 5; }
+  // The visible multi-day window, as the array of Dates -- THE single source every
+  // consumer reads (renderMultiDayGrid's columns, inVisibleMultiDayWindow's drag
+  // re-anchor guard, the swipe step). Computed from state.anchor each call:
+  // week-aligned counts start from startOfWeek(anchor) (the existing Monday-based
+  // helper -- not a second copy), rolling counts from the anchor itself. Because
+  // the window is DERIVED, stepping the anchor one day inside the same week doesn't
+  // move a week-aligned grid at all -- the page only turns when the anchor crosses
+  // into the next week, which is the chosen arrow behaviour, not a special case in
+  // stepDay(). At 5 days a weekend anchor is legitimately NOT in this window
+  // (Sat/Sun fall outside Mon-Fri): the Day-page header/cycle chip still follow the
+  // anchor, no column is marked selected, and inVisibleMultiDayWindow() correctly
+  // answers false so a reschedule to that day re-anchors normally.
+  function mdWindowDays() {
+    const days = calDaysActive();
+    const first = mdWeekAligned() ? startOfWeek(state.anchor) : state.anchor;
+    const out = [];
+    for (let i = 0; i < days; i++) out.push(addDays(first, i));
+    return out;
+  }
   // 2026-08-15 (desktop DAY view build): true unless the sidebar's "Parts of life"
   // checklist has this life-category unchecked (PREFS.tracksOff) -- read by
   // renderTimeline() to filter the grid, and by the sidebar itself to paint each
@@ -33982,7 +34021,7 @@
   function mdColHeadHtml(d) {
     const { done, total } = dayProgress(d);
     const fastHrs = fastedHoursOn(d);
-    return `<div class="md-col-head" data-today="${keyOf(d) === keyOf(TODAY)}" data-fasting="${fastHrs > 0}">
+    return `<div class="md-col-head" data-today="${keyOf(d) === keyOf(TODAY)}" data-selected="${keyOf(d) === keyOf(state.anchor)}" data-fasting="${fastHrs > 0}">
       <span class="md-col-head-wd">${WD_MIN[dowIndex(d)]}</span>
       <span class="md-col-head-num">${d.getDate()}</span>
       ${total ? `<span class="md-col-head-bar"><span class="md-col-head-bar-fill" style="width:${(done / total * 100).toFixed(1)}%"></span></span>
@@ -34434,12 +34473,12 @@
   // the exact same HOUR_H() from the exact same rail, with nothing left to
   // reconcile across days. See computeCompactHours()'s own retirement comment.
   function renderMultiDayGrid(days) {
-    const dayList = [];
-    for (let i = 0; i < days; i++) {
-      const d = addDays(state.anchor, i);
-      // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
-      dayList.push({ d, items: dayItemsFor(d) });
-    }
+    // 2026-08-26 (week-aligned views): the window comes from mdWindowDays() -- ONE
+    // derivation shared with inVisibleMultiDayWindow() and the swipe handler -- not
+    // an inline addDays(anchor, i) loop. `days` (the param) still drives the column-
+    // width math below and always equals the array length by construction.
+    const dayList = mdWindowDays().map(d => ({ d, items: dayItemsFor(d) }));
+    // (the origin filter that used to run here was removed 2026-08-24, see #tlOriginFilter)
     // openTlDetail() resolves ids through this map — extend it (not reset; the
     // single-day body above already seeded state.anchor's own items) with every
     // visible day's items so a tap on ANY column's card/bar can open the sheet.
@@ -45524,7 +45563,8 @@
   // off calDaysActive() (never a static word) so it can never drift from the real
   // PREFS.calDays state the [data-cal-days] delegate is driving.
   function calDaysDropdownLabel(n) {
-    return n === 1 ? "Day" : n === 7 ? "Week" : `${n} days`;
+    // 5 reads "Work week" since 2026-08-26 -- it's Mon-Fri always now (see mdWeekAligned())
+    return n === 1 ? "Day" : n === 7 ? "Week" : n === 5 ? "Work week" : `${n} days`;
   }
   function renderDeskDayTopbar() {
     const d = state.anchor;
@@ -54839,8 +54879,13 @@
         if (!t) return;
         const dx = t.clientX - sx, dy = t.clientY - sy;
         if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dy) > SWIPE_MAX_OFF_AXIS) return;
-        const days = calDaysActive();
-        state.anchor = addDays(state.anchor, dx < 0 ? days : -days);
+        // 2026-08-26 (week-aligned views): a week-aligned window (mdWeekAligned() --
+        // the same rule mdWindowDays() derives the columns from) advances by a whole
+        // week regardless of visible-column count, so Work week's Mon-Fri swipes to
+        // next week's Mon-Fri instead of stepping 5 and landing mid-week. Rolling
+        // counts (1/3) keep advancing by their own window, exactly as before.
+        const step = mdWeekAligned() ? 7 : calDaysActive();
+        state.anchor = addDays(state.anchor, dx < 0 ? step : -step);
         renderDay();
       }, { passive: true });
       el.addEventListener("touchcancel", () => { tracking = false; }, { passive: true });
