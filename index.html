@@ -2932,8 +2932,22 @@
      widgets rail itself starts showing (wrFallback), matching "overlaying the widgets
      rail" being a desktop-only description. Below it: full width/height, no docked
      sliver -- "no room for a sidebar" per the brief. */
+  /* 2026-08-26 (Linh, reported twice: "I can't close the to-do list in the mobile
+     view"): z-index 62 -> 300, reusing .tl-detail-overlay's own existing tier rather
+     than inventing a new number -- this is the same KIND of surface (full-screen
+     sheet + backdrop), just a separate class so its own render lifecycle stays
+     decoupled from tl-detail's (see the SHARED SLIDE PANEL comment above). At
+     412x915, .nav-tiers (the mobile top bar, position:relative but z-index:210) was
+     painting OVER this overlay's whole top 65px -- #editPanelClose sits at
+     top:8/left:360, squarely inside that band, so document.elementFromPoint on its
+     centre returned navTopTodoBtn (the button that OPENS the panel) instead, and
+     tapping X re-opened it instead of closing it. Confirmed live before this fix:
+     4 taps on the visible X, panel still open. 300 clears the bar (210) and stays
+     below everything that can open FROM one of this overlay's four occupants —
+     nothing here opens .ev-scope-overlay (320) or .b33mp-overlay (340), so there's
+     no ordering fight to resolve. */
   .slide-panel-overlay {
-    position: fixed; inset: 0; z-index: 62; background: color-mix(in oklab, black 68%, transparent);
+    position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 68%, transparent);
     backdrop-filter: blur(3px); display: flex; align-items: stretch; justify-content: flex-end;
   }
   .slide-panel-overlay[hidden] { display: none; }
@@ -2943,6 +2957,13 @@
     background: var(--paper); border: none; box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
   }
   @media (min-width: 1024px) {
+    /* click-outside-to-close (the #editPanelOverlay click listener, search
+       "e.target.closest(\".slide-panel-sheet\")") only has an "outside" to click at
+       this width, where the sheet is a docked min(440px,92vw) sliver. Below 1024px
+       the sheet above is 100vw x 100vh -- there IS no backdrop showing through, so
+       that listener can structurally never fire there. The X button (now fixed,
+       above) and Escape (desktop keyboard only) are the two real exits below this
+       breakpoint; don't count the backdrop as a third one on a phone. */
     .slide-panel-sheet { width: min(440px, 92vw); border-left: 1px solid var(--margin-rule); }
   }
   /* title+close header/scrolling body, same values as .rtn-side-head/-body (the
