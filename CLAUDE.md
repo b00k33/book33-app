@@ -45,19 +45,30 @@ palette map further down. Gold for numbers/accents; colour = category.
 ### 5. Proportional & aligned
 Calendar: one fixed SCALE (--hour-h) — blocks are always sized to real duration and
 snapped to hour lines off that one scale, overlaps split into side-by-side columns, and
-everything aligns to a shared grid/column edge. Row HEIGHT itself is not uniform, by
-design (2026-08-24/25, "three preset heights" — supersedes the older two-layered-floor
-wording, which predates both): `hourRowH()` picks a row's height by TYPE, in priority
-order — outside the "Hours shown" range → 0; a power hour (Best/2nd Best/💰 Money,
-`POWER_HOURS`) → its own preset, busy or empty; a bad hour (Worst/2nd Worst) → its own
-preset, busy or empty; an empty ordinary hour → `compactH()`'s 22px shrink; a busy
-ordinary hour → `--hour-h`. THE THREE KNOBS (`POWER_HOUR_TYPE_H` in JS, `--hour-h` in
-CSS — comments on both name the other): power 139px, bad 56px, ordinary 96px desktop /
-94 light / 74 phone+tablet. These are HEIGHTS now, not floors — no `Math.max` against
-`--hour-h` — so a busy bad hour is genuinely shorter than a busy ordinary one. A real
-event's block height still comes only from its own duration (`topForMin()` diffs over
-these same rows) and is never constrained by its row, floored at 26px desktop / 14px
-elsewhere so a very short block stays legible.
+everything aligns to a shared grid/column edge. Row HEIGHT **is uniform** (2026-08-26,
+"make every hour row the same height" — SUPERSEDES 2026-08-24/25's "three preset
+heights", which itself superseded the older two-layered-floor wording; see
+RETIRED-FEATURES.md §6 for the full retirement): `hourRowH(h)` is two branches only —
+outside the "Hours shown" range → 0, otherwise `HOUR_H()`. Every shown hour is the same
+height regardless of content or power-hour status, so a 2-hour block is always exactly
+twice a 1-hour block's height, "the way Google Calendar does it." `--hour-h`: 54px
+desktop / 53 light / 77 base / 74 phone+tablet — `compactH()`/`POWER_HOUR_TYPE_H`/
+`powerHourH()` still exist but are unreferenced (retired, not deleted, per this file's
+own convention). A real event's block height still comes only from its own duration
+(`topForMin()` diffs over these same rows), floored at 26px desktop / 14px elsewhere so
+a very short block stays legible.
+Power hours (`POWER_HOURS` — Best/2nd Best/💰 Money = good/good/money, Worst/2nd Worst =
+bad) keep their meaning; the mark moved off the ROW and onto the EVENT booked in it. An
+event qualifies when MORE than half of its own real duration overlaps one window (not
+"starts inside") — `powerMarkFor(start, end)`, stamped `data-power="good|bad|money"` in
+`renderTimeline()`/`mdColumnHtml()`. A marked block keeps its normal Mode fill and gains
+a coloured `outline`/`outline-offset` ring (NOT `box-shadow` — `.tl-block[data-track]`/
+`.tl-item.done` both force `box-shadow:none`) plus a `filter:drop-shadow()` bloom (NOT a
+`::after` overlay — `.tl-item.done`'s Day-mode checkmark and
+`.tl-item[data-origin="repeat"]`'s stripe both already claim one), strongest for Money.
+The gutter `.power-marker` dot–line–dot (including its Money glow) is unchanged and
+sits alongside this, not replaced by it. Multi-day (`.md-item`/`.md-line`/`.md-bar`)
+keeps the ring, drops the bloom — the columns are too narrow for it to read cleanly.
 
 ### 6. Consistency
 One component identical everywhere (button, chip, card, dropdown, toggle). Reuse existing
