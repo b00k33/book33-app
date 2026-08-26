@@ -8872,6 +8872,29 @@
   }
   .addform-head-save::before { content: ""; position: absolute; inset: -7px -4px; }
   .addform-head-save:hover { filter: brightness(1.06); }
+  /* 2026-08-26 ("Delete from the form itself"): quiet on purpose -- flat, --danger
+     text/icon, no fill -- Save stays the one loud action in this header, not a second
+     button competing with it. Same invisible-::before tap-target expansion as
+     .addform-head-close/-save above, sized to whatever the label/icon-only state
+     currently renders rather than a fixed box. */
+  .addform-head-del {
+    position: relative; flex: none; display: flex; align-items: center; gap: 4px;
+    border: none; border-radius: 999px; padding: 8px 12px; font-size: 13px;
+    font-family: var(--font-body); font-weight: 600; cursor: pointer;
+    background: none; color: var(--danger);
+  }
+  .addform-head-del::before { content: ""; position: absolute; inset: -6px -2px; }
+  .addform-head-del:hover, .addform-head-del:focus-visible { background: color-mix(in oklab, var(--danger) 10%, transparent); }
+  .addform-head-del-ic { font-size: 14px; line-height: 1; }
+  /* 2026-08-26: measured live at every width the form actually renders at, 600px down
+     to 320px (past design44's own 360px floor), with "New routine" showing -- the
+     longest of the three real title states. The header never wraps and the title
+     never clips at any of them: .addform-head-title's own flex:1 gives up width
+     before either neighbour is squeezed. The icon-only fallback this rule held
+     before measuring turned out to be unneeded, so the label stays on
+     unconditionally. .addform-head-del-label is still its own element (not inlined
+     into the button), so an icon-only breakpoint is a one-line media query away if a
+     future title ever runs longer than these three. */
   /* 2026-08-13 (CLAUDE.md audit: "every editor needs a top-right Save"): Recipe/
      Goal/Person/Family task/Work-manual section/Shopping item editors had no
      header row at all (unlike Events/Routines/Meal-log) and no close button to
@@ -21101,6 +21124,15 @@
           <div class="addform-head full">
             <button type="button" class="addform-head-close" id="cancelBtn" aria-label="Close">✕</button>
             <span class="addform-head-title" id="addFormTitleText">New task</span>
+            <!-- 2026-08-26 ("Delete from the form itself"): hidden by default, shown by
+                 syncAddFormTitle() the moment any of eventEditId/editingRoutineId/
+                 editingRecurTemplateId is set -- there is nothing to delete on a fresh
+                 add. aria-label/title carry the name always (not just as an icon-only
+                 fallback -- measured live, the label never actually needs to drop; see
+                 .addform-head-del-ic/-label below). -->
+            <button type="button" class="addform-head-del" id="eventDeleteBtn" aria-label="Delete" title="Delete" hidden>
+              <span class="addform-head-del-ic" aria-hidden="true">🗑</span><span class="addform-head-del-label">Delete</span>
+            </button>
             <button type="submit" class="addform-head-save" id="eventSubmitBtn">Save</button>
           </div>
           <!-- 2026-08-26 ("Presets move to the ☆, and the row goes away"): #presetsRow
@@ -32463,7 +32495,15 @@
     tlDelTarget = target;
     document.getElementById("tlDelTitle").textContent = `Delete “${target.title}”?`;
     const isRecurring = target.kind === "routine" || target.kind === "recur-event";
-    document.getElementById("tlDelActions").innerHTML = isRecurring
+    // 2026-08-26 ("Delete from the form itself"): the form's editor has no occurrence
+    // id -- it's editing the TEMPLATE, not a day on the calendar -- so "Just this one"
+    // is meaningless there and fails silently (parseOccId(undefined)/a junk
+    // EVENT_SKIPS key). target.seriesOnly collapses the pair to the one button that's
+    // actually reachable; the wholeSeries branches below already work from
+    // rtTaskId/recurId alone, nothing there needs to change.
+    document.getElementById("tlDelActions").innerHTML = target.seriesOnly
+      ? `<button type="button" class="ev-scope-btn ev-scope-danger ev-scope-primary" data-tl-del-scope="series">Delete series</button>`
+      : isRecurring
       ? `<button type="button" class="ev-scope-btn ev-scope-danger ev-scope-primary" data-tl-del-scope="one">Just this one</button>
          <button type="button" class="ev-scope-btn ev-scope-danger" data-tl-del-scope="series">Whole series</button>`
       : `<button type="button" class="ev-scope-btn ev-scope-danger ev-scope-primary" data-tl-del-scope="one">Delete</button>`;
@@ -32476,6 +32516,14 @@
   function tlDeleteDone() {
     closeTlDeleteConfirm();
     closeTlDetail();
+    // 2026-08-26 ("Delete from the form itself"): a delete triggered from #addForm
+    // leaves it open editing a record that no longer exists -- Save would resurrect
+    // it. Harmless no-op for every other caller (detail sheet, desktop row, compact
+    // ×): the form is never open when THOSE fire, so this branch never runs for them.
+    // formDirty cleared first so the unsaved-changes confirm doesn't ask on the way
+    // out (closeForm() also clears it as part of its own reset, but set it explicitly
+    // here so this doesn't depend on staying in sync with that).
+    if (!form.hidden) { formDirty = false; closeForm(); }
     render();
   }
   document.getElementById("tlDelActions").addEventListener("click", e => {
@@ -52342,6 +52390,13 @@
     const editing = !!eventEditId || !!editingRecurTemplateId;
     const kindLabel = (fRepeatChoice !== "none" && !eventEditId) ? "routine" : "event";
     el.textContent = `${editing ? "Edit" : "New"} ${kindLabel}`;
+    // 2026-08-26 ("Delete from the form itself"): the one place all three edit-state
+    // vars (eventEditId/editingRoutineId/editingRecurTemplateId) are already read
+    // together, called on every open and every kind change -- hooking Delete's
+    // visibility here means there's no fourth place that has to be kept in sync.
+    // Hidden (not disabled) on a fresh add: nothing to delete, so no greyed-out bin.
+    const delBtn = document.getElementById("eventDeleteBtn");
+    if (delBtn) delBtn.hidden = !(eventEditId || editingRoutineId || editingRecurTemplateId);
   }
   function syncKind() {
     // follow-up stages were a task-only field; formKind is always "event" now, so
@@ -56699,6 +56754,25 @@
     saveEvents(EVENTS); renderDay();
   });
   document.getElementById("cancelBtn").addEventListener("click", closeForm);
+  // 2026-08-26 ("Delete from the form itself"): reuses the SAME confirm sheet/archive/
+  // undo path every other delete in the app goes through (openTlDeleteConfirm) --
+  // this only adds a caller, it doesn't touch tryTlDelete()'s own attribute routing or
+  // any of the other entry points. Title is read from the real stored record, not the
+  // (possibly mid-edit, possibly blank) form field, same as tryTlDelete()'s own
+  // branches do. seriesOnly:true on the two recurring kinds -- see openTlDeleteConfirm's
+  // own comment for why "Just this one" doesn't apply from a template editor.
+  document.getElementById("eventDeleteBtn").addEventListener("click", () => {
+    if (editingRoutineId) {
+      const t = ROUTINE_TASKS.find(x => x.id === editingRoutineId);
+      if (t) openTlDeleteConfirm({ kind: "routine", rtTaskId: editingRoutineId, title: t.title, seriesOnly: true });
+    } else if (editingRecurTemplateId) {
+      const t = RECURRING_EVENTS.find(x => x.id === editingRecurTemplateId);
+      if (t) openTlDeleteConfirm({ kind: "recur-event", recurId: editingRecurTemplateId, title: t.title, seriesOnly: true });
+    } else if (eventEditId) {
+      const t = EVENTS.find(x => x.id === eventEditId);
+      if (t) openTlDeleteConfirm({ kind: "plain", id: eventEditId, title: t.title });
+    }
+  });
   // 2026-08-02 (Linh, book44: "one click outside if nothing filled; a small warning
   // if something was filled — Discard / Keep editing / Save"). Delegated input/change
   // on the form itself catches every field (text, pickers that are really buttons +
