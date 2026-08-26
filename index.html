@@ -6209,9 +6209,48 @@
   .evl-pat-cell.evl-pat-on[data-track="work"]     { background: var(--tl-work-bg);     color: var(--tl-work-title); }
   .evl-pat-cell.evl-pat-on[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
   .evl-pat-cell.evl-pat-on[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
+  /* 2026-08-26 ("the right grid per repeat"): section headings + the yearly strip.
+     The J-D strip is desktop-only -- at 412px twelve columns leave ~26px each with
+     the cell text off, i.e. twelve unreadable marks, so the phone renders
+     .evl-year-phone (a month-grouped list) instead; the two are gated by the same
+     640px breakpoint the cell text already flips on. .evl-pat-times is the phone's
+     times sub-line for the weekly grid -- the 18px cells stay time-less there, so
+     this line is how the phone gets times at all. */
+  .evl-pat-sec-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em;
+    margin: 16px 0 4px; font-weight: 600;
+  }
+  .evl-pat-sec-head:first-child { margin-top: 4px; }
+  .evl-year-sort { display: flex; gap: 4px; text-transform: none; letter-spacing: 0; }
+  .evl-pat-year { grid-template-columns: minmax(96px, 1fr) repeat(12, minmax(24px, 1fr)); }
+  .evl-pat-times {
+    grid-column: 1 / -1; display: none; font-size: 11px; color: var(--ink-soft);
+    font-variant-numeric: tabular-nums; padding: 0 0 6px 16px; cursor: pointer;
+  }
+  .evl-year-phone { display: none; flex-direction: column; }
+  .evl-year-month-head {
+    font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600; padding: 12px 0 2px;
+  }
+  .evl-pat-other { display: flex; flex-direction: column; }
+  /* no .evl-rpt-row-style negative bleed margin: measured at 412px it pushed the row
+     to 420px and gave the whole page a 4px horizontal scroll. Hover inset comes from
+     the row's own padding instead. */
+  .evl-year-row {
+    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 4px 8px;
+    border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+  .evl-year-row:hover, .evl-year-row:active { background: color-mix(in oklab, var(--ink) 7%, transparent); }
+  .evl-year-row-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+  .evl-year-row-freq { flex: none; font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+  .evl-year-row-date { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink-faint); }
   @media (max-width: 640px) {
     .evl-pat-grid { grid-template-columns: minmax(72px, 1fr) repeat(7, minmax(18px, 1fr)); }
     .evl-pat-cell { font-size: 0; }
+    .evl-pat-times { display: block; }
+    .evl-pat-year { display: none; }
+    .evl-year-phone { display: flex; }
   }
   .evl-rpt-list { display: flex; flex-direction: column; }
   .evl-rpt-row {
@@ -50531,16 +50570,63 @@
       return Array.from({ length: 7 }, () => ({ on: true, time: t }));
     }
     if (kind === "fam" && task.freq === "weekly") return Array.from({ length: 7 }, (_, i) => ({ on: i === task.weekday, time: "" }));
-    const fill = Array.from({ length: 7 }, () => ({ on: false, time: "" }));
-    let d = new Date(TODAY);
-    for (let i = 0; i < 40; i++) {
-      if (evlSeriesOccursOn(kind, task, d)) {
-        const wd = dowIndex(d);
-        if (!fill[wd].on) fill[wd] = { on: true, time: kind === "routine" && task.start ? fmtTime(task.start) : "" };
-      }
-      d = addDays(d, 1);
-    }
-    return fill;
+    // 2026-08-26 ("the right grid per repeat"): the 40-day forward walk that used to
+    // run here for everything else is GONE, and with it the all-blank rows it
+    // produced (its own comment admitted a yearly date months out came back empty --
+    // on her real data that was 24 blank rows of 29). Non-weekly series don't reach
+    // this function any more: renderRepeatsPattern() sections them by
+    // evlSeriesSection() below -- yearly kinds read month/day straight off their own
+    // record (evlYearlyDate), everything else renders as an evlFreqWords() sentence
+    // list. A weekly/daily/fam-weekly rule is still read directly above, unchanged.
+    return Array.from({ length: 7 }, () => ({ on: false, time: "" }));
+  }
+  // 2026-08-26 ("the right grid per repeat"): the real month/day of an annual
+  // series, straight off the record -- NO occurrence walk. Confirmed all three
+  // yearly kinds carry it: a person is only ever in birthdaysList() with real
+  // p.month/p.day, and routine/family "yearly" store t.month/t.day (their own
+  // occurs-on tests read exactly those fields). Null = not resolvable as a date,
+  // which routes the series to the "everything else" list instead of ever
+  // rendering a blank row.
+  function evlYearlyDate(kind, task) {
+    if (kind === "person") return task.month && task.day ? { month: task.month, day: task.day } : null;
+    if (task && task.freq === "yearly" && task.month && task.day) return { month: task.month, day: task.day };
+    return null;
+  }
+  // Which Pattern section a series belongs to. Every series lands in exactly one:
+  //   week  -- daily + weekly rules (routine daily/weekly, every RECURRING_EVENTS
+  //            template, family weekly): the Mon-Sun grid reads the rule directly.
+  //   year  -- annual dates (birthdays, routine yearly, family yearly) WITH a
+  //            resolvable month/day: the J-D strip / month list.
+  //   other -- monthly, interval (every N days/weeks/months/years), sinceLastDone,
+  //            numMoney, asNeeded, and any malformed yearly with no stored date:
+  //            no 7- or 12-cell grid says anything true about these (a month strip
+  //            fits monthly alone; an interval rule fits neither), so they render
+  //            as the sentence evlFreqWords() already writes, plus their real next
+  //            occurrence -- a short list, never a blank grid row.
+  function evlSeriesSection(kind, task) {
+    if (kind === "person") return evlYearlyDate(kind, task) ? "year" : "other";
+    if (kind === "recur") return "week";
+    const f = task.freq;
+    if (f === "daily" || f === "weekly") return "week";
+    if (f === "yearly" && evlYearlyDate(kind, task)) return "year";
+    return "other";
+  }
+  // Phone sub-line for the weekly grid (and anywhere the printed times need words):
+  // groups days sharing the same printed time -- "Mon Tue Thu 10am – 6pm · Wed
+  // 2pm – 6pm". Built from the SAME fill objects the desktop cells render, so the
+  // two widths can never disagree about a time. Days with no stored time
+  // contribute nothing (the grid cells already show WHICH days; this line only
+  // exists to carry the times the 18px phone cells can't).
+  function evlFillTimesSummary(fill) {
+    const groups = new Map();
+    fill.forEach((c, wd) => {
+      if (!c.on || !c.time) return;
+      if (!groups.has(c.time)) groups.set(c.time, []);
+      groups.get(c.time).push(wd);
+    });
+    return [...groups.entries()]
+      .map(([time, days]) => `${days.map(d => WD_FULL[d].slice(0, 3)).join(" ")} ${time}`)
+      .join(" · ");
   }
   // next occurrence on/after today, and the count within the visible date range --
   // both walk the same real evlSeriesOccursOn() test, never a formula, so a
@@ -50578,19 +50664,96 @@
     return out;
   }
   const evlTrackDot = track => `background:var(--${track}-seed, var(--ink-faint))`;
-  // Pattern layout (default): rows = series, columns = Mon..Sun, a filled cell per
-  // day it occurs (colour + start time), a recessed empty cell where it doesn't --
-  // fits ~10 series without scrolling on desktop; mobile drops the in-cell time and
-  // lets the day columns compress (see the ≤640px rule), keeping just the fill.
+  // Pattern layout (default), 2026-08-26 ("the right grid per repeat"): one section
+  // per way-of-repeating, because one Mon-Sun grid asked every series which weekday
+  // it falls on -- a question a birthday can't answer (the old 40-day walk left 24
+  // of her 29 rows blank). Sections, each omitted entirely when empty:
+  //   Every week  -- the existing Mon-Sun grid, unchanged in shape, sorted by first
+  //                  active weekday then start time then title (stated rule; it used
+  //                  to follow evlRepeatingSeries()'s arbitrary build order). On the
+  //                  phone the 18px cells stay time-less (font-size:0) and a
+  //                  sub-line under the name carries the grouped times instead.
+  //   Every year  -- desktop: a 12-column J-D strip in the same visual language,
+  //                  day-of-month in the marked cell, sorted by month then day so
+  //                  the marks fall on a readable diagonal (her own ask), with a
+  //                  date/A-Z toggle remembered in PREFS.evlYearlySort. Phone: the
+  //                  strip would be twelve ~26px unreadable marks, so it renders as
+  //                  a month-grouped LIST (month heading, then "name … 3rd" rows)
+  //                  -- deliberately NOT the List view's shape (no time/freq/next/
+  //                  count columns; only name + date under a month heading).
+  //   Everything else -- monthly/interval/sinceLastDone/numMoney/asNeeded: the
+  //                  evlFreqWords() sentence + real next occurrence, as a short
+  //                  list. No grid pretends to fit these.
   function renderRepeatsPattern(series) {
     if (!series.length) return `<div class="evl-pat-empty">Nothing repeats yet.</div>`;
-    let html = `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("");
-    series.forEach(s => {
-      const fill = evlPatternFill(s.kind, s.task);
-      html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</div>`;
-      html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-track="${s.track}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
-    });
-    return html + `</div>`;
+    const buckets = { week: [], year: [], other: [] };
+    series.forEach(s => buckets[evlSeriesSection(s.kind, s.task)].push(s));
+    let html = "";
+
+    if (buckets.week.length) {
+      const rows = buckets.week.map(s => ({ s, fill: evlPatternFill(s.kind, s.task) }));
+      rows.sort((a, b) => {
+        const fd = f => { const i = f.findIndex(c => c.on); return i === -1 ? 9 : i; };
+        return fd(a.fill) - fd(b.fill)
+          || (a.fill.find(c => c.on && c.time) || { time: "￿" }).time.localeCompare((b.fill.find(c => c.on && c.time) || { time: "￿" }).time)
+          || a.s.title.localeCompare(b.s.title);
+      });
+      html += `<div class="evl-pat-sec-head">Every week</div>`;
+      html += `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("");
+      rows.forEach(({ s, fill }) => {
+        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</div>`;
+        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-track="${s.track}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
+        const times = evlFillTimesSummary(fill);
+        if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}">${esc(times)}</div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (buckets.year.length) {
+      const sortMode = PREFS.evlYearlySort || "date";
+      const rows = buckets.year.map(s => ({ s, ymd: evlYearlyDate(s.kind, s.task) }));
+      rows.sort((a, b) => sortMode === "az"
+        ? a.s.title.localeCompare(b.s.title)
+        : (a.ymd.month - b.ymd.month || a.ymd.day - b.ymd.day || a.s.title.localeCompare(b.s.title)));
+      html += `<div class="evl-pat-sec-head">Every year
+        <span class="evl-year-sort" id="evlYearSortToggle" role="group" aria-label="Sort yearly by">
+          <button type="button" class="evl-view-opt" data-evl-ysort="date" aria-pressed="${String(sortMode !== "az")}">Date order</button>
+          <button type="button" class="evl-view-opt" data-evl-ysort="az" aria-pressed="${String(sortMode === "az")}">A–Z</button>
+        </span></div>`;
+      // desktop: the J-D strip
+      html += `<div class="evl-pat-grid evl-pat-year"><div class="evl-pat-head"></div>` + MON_SHORT.map(m => `<div class="evl-pat-head">${m[0]}</div>`).join("");
+      rows.forEach(({ s, ymd }) => {
+        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</div>`;
+        for (let m = 1; m <= 12; m++) {
+          const on = m === ymd.month;
+          html += `<div class="evl-pat-cell${on ? " evl-pat-on" : ""}" data-track="${s.track}">${on ? ymd.day : ""}</div>`;
+        }
+      });
+      html += `</div>`;
+      // phone: month-grouped list in date order; a flat "name … 3 Aug" list under A-Z
+      html += `<div class="evl-year-phone">`;
+      if (sortMode === "az") {
+        rows.forEach(({ s, ymd }) => {
+          html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-date">${ymd.day} ${MON_SHORT[ymd.month - 1]}</span></div>`;
+        });
+      } else {
+        let lastMonth = 0;
+        rows.forEach(({ s, ymd }) => {
+          if (ymd.month !== lastMonth) { html += `<div class="evl-year-month-head">${MON_SHORT[ymd.month - 1]}</div>`; lastMonth = ymd.month; }
+          html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-date">${ymd.day}${ordinal(ymd.day)}</span></div>`;
+        });
+      }
+      html += `</div>`;
+    }
+
+    if (buckets.other.length) {
+      html += `<div class="evl-pat-sec-head">Everything else</div><div class="evl-pat-other">`;
+      buckets.other.forEach(s => {
+        html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-freq">${esc(evlFreqWords(s.kind, s.task))}</span><span class="evl-year-row-date">${esc(evlNextLabel(evlSeriesNext(s.kind, s.task)))}</span></div>`;
+      });
+      html += `</div>`;
+    }
+    return html;
   }
   // List layout: the maintenance view -- one row per series, tap opens it in its
   // real editor (openRtnForm/openFamForm/openFormForRecurEdit/openPplForm, same as
@@ -50753,6 +50916,15 @@
   document.getElementById("evlRepeatsToggle").addEventListener("click", e => {
     const btn = e.target.closest("[data-evl-view]"); if (!btn) return;
     PREFS.evlRepeatsView = btn.dataset.evlView; savePrefs();
+    renderEventsPage();
+  });
+  // 2026-08-26 ("the right grid per repeat"): the yearly section's Date order / A-Z
+  // toggle -- remembered exactly the way the Pattern/List toggle above is
+  // (PREFS + savePrefs + re-render). Delegated on the body because the toggle is
+  // re-rendered with the section; evlRowClickHandler ignores it (no data-evl-kind).
+  document.getElementById("evlRepeatsBody").addEventListener("click", e => {
+    const btn = e.target.closest("[data-evl-ysort]"); if (!btn) return;
+    PREFS.evlYearlySort = btn.dataset.evlYsort; savePrefs();
     renderEventsPage();
   });
   /* ---- .ics export: your real events, respecting the filters above, PLUS any
