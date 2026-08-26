@@ -203,3 +203,56 @@ here so nobody "discovers" it and wires it back up:
   callers exist for the data round-trip in §4)
 - `computeCompactHours()`, `POWER_HOUR_TYPE_H`, `powerHourH()` (§6 above — their
   ROW-HEIGHT role is retired; `POWER_HOURS` itself is still very much live)
+
+## 8. Nav rail trim — retired 2026-08-26
+
+Linh: "cut the nav rail down to the pages I actually use. It currently pins twelve,
+and I use six." `NAV_ITEMS` (the single array read by `navPanelRowHtml()`,
+`navIconRailRowHtml()`, `navTabRowHtml()` and `dnrRailRowHtml()`) cut from 13 rows to
+6 pinned pages + Settings: **day → Today, month → Calendar, lifeMap → Life Map, events
+→ Events (new — see below), people → People, health → Body**.
+
+**Unpinned (removed as a rail row only):** Presets, Habits, Nutrition, Medical, Money,
+CBD Work, Growth.
+
+**This is a rail retirement, not a page retirement — same distinction §5 (Chains) and
+§6 draw.** Every one of the 7 unpinned pages keeps its own page, route and
+`CATEGORIES` entry completely untouched, and stays reachable two ways regardless of
+NAV_ITEMS membership: the ▤ Chapters accordion (`navPanelChaptersHtml()` /
+`dnrChaptersHtml()`, both read `CATEGORIES` directly, never `NAV_ITEMS`) and the
+quick-add bar's "go to X" (`qaFindView()`, same `CATEGORIES` source). Confirmed both
+routes independently resolve all 7 before cutting anything — see the full per-page
+route audit that was run before this change; medical/money/cbdWork/growth have only
+these two generic routes (no page-specific shortcut existed for them before either),
+habits and presets are the best-covered with several extra dedicated entry points
+each (Today-page cards, the fire-shortcut button, the Upkeep dial, etc.) — none of
+that changes here.
+
+**The one real loss — a live badge, not a route:** Medical's rail row carried
+`count: () => needsBooking()`, a live count of overdue/soon medical checks. Checked
+whether that count surfaces anywhere else in the app before unpinning: **it does not**
+— `needsBooking()` had exactly one caller (that row), and no other widget, dashboard
+tile, or page shows this number. The Medical page's own `#medNeeds` section ("Needs
+booking") computes the same overdue/soon filter in place, but that's the Medical page
+showing its own detail list to itself, not a second surfacing elsewhere. `needsBooking()`
+is kept in place, unreferenced, per this file's "stale, not deleted" convention — see
+its own preceding comment in index.html (~line 43020) — MEDICAL.checks/medStatus() are
+both still live, so reviving the badge is a one-line change, not a rebuild.
+
+**A second, smaller badge loss, same shape:** Presets carried `count: () =>
+SAVED_EVENTS.length`. Not separately investigated for other surfacing (not asked), but
+disclosed here alongside Medical's since it's the same kind of loss — a live number
+that only ever appeared on this now-unpinned rail row.
+
+**Added, not retired — noted here only because it's adjacent:** Events (`events`)
+is a brand-new NAV_ITEMS row. It already had a page, a route, and a `CATEGORIES`
+entry (`calendar` chapter, "Plan" group) — it simply had no rail row until now. Its
+desktop-rail icon (`B33_ICONS.events`) uses a new colour token, `--ic-violet`
+(declared alongside `--ic-green`/`--ic-blue`/`--ic-sky`, all three declaration
+sites), since violet was genuinely unused anywhere else and can't be mistaken for an
+existing category colour.
+
+**Kept, deliberately, exactly as before:** `CATEGORIES` itself; every unpinned page's
+own render function, data and routes; `B33_ICONS` entries for unpinned pages (still
+shown inside Chapters); the Chapters row and Settings footer row, both untouched
+including their separators.

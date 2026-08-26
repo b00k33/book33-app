@@ -382,6 +382,17 @@
     --ic-green: var(--work-seed);
     --ic-blue: var(--marriage-seed);
     --ic-sky: var(--info-blue);
+    /* 2026-08-26 (nav rail trim, Events icon): a fourth icon-only hue, but a
+       different shape from the three above -- green/blue/sky are pass-through
+       ALIASES of real part-of-life seeds (Work/Marriage/the info-blue mix), brought
+       into this family only because those seeds read too dim on a near-black rail.
+       Violet has no such seed to alias: it's deliberately unused anywhere else in
+       the app (Linh's own reasoning -- so it can't be mistaken for a category
+       colour), so there's nothing to pass through. This literal hex IS the token,
+       chosen to land in the same contrast neighbourhood as its siblings against the
+       light rail's own pale ground (measured live: --ic-green 4.1:1, --ic-blue
+       3.3:1 here; this candidate 4.16:1) rather than picked by eye. */
+    --ic-violet: #8560C8;
 
     /* derived — resolve against whatever --tone-mix/seeds are active */
     --margin-rule: color-mix(in oklab, var(--accent-seed), var(--tone-mix) var(--jewel-mix));
@@ -594,7 +605,7 @@
          blue tint wanted here (design44 §4: dark surfaces stay neutral). */
       --chrome-tint: var(--paper);
       /* drawn icon set: brightened icon-only hues -- see the :root aliases' comment */
-      --ic-green: #4EA36B; --ic-blue: #3BA8D2; --ic-sky: #33B4E8;
+      --ic-green: #4EA36B; --ic-blue: #3BA8D2; --ic-sky: #33B4E8; --ic-violet: #A78BFA;
       --dl-num: #EAC24E; --dl-day: #EFE7D6; --dl-small: #9C8F79; --dl-sep: #5F5645;
     }
   }
@@ -634,7 +645,7 @@
     --sky-day: rgba(217, 169, 63, 0.07);
     --quiet-tint: rgba(70, 120, 190, 0.16);   /* see the media-query block's copy of this token, above, for the why */
     --chrome-tint: var(--paper);              /* ditto — dark chrome = the neutral staircase, no blue */
-    --ic-green: #4EA36B; --ic-blue: #3BA8D2; --ic-sky: #33B4E8;   /* ditto — brightened icon hues */
+    --ic-green: #4EA36B; --ic-blue: #3BA8D2; --ic-sky: #33B4E8; --ic-violet: #A78BFA;   /* ditto — brightened icon hues */
     --dl-num: #EAC24E; --dl-day: #EFE7D6; --dl-small: #9C8F79; --dl-sep: #5F5645;
   }
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -43006,44 +43017,62 @@
      (NAV_ITEMS below), sourced from CATEGORIES so a renamed/removed page is at
      least a visible/greppable break here too, not silent drift into a second
      competing registry. ============================================================ */
+  // 2026-08-26 (Linh: "cut the nav rail down to the pages I actually use" -- pinned
+  // twelve, used six): no longer called from anywhere -- its one caller was the
+  // medical NAV_ITEMS row's own `count`, removed below along with the row itself.
+  // Kept in place rather than deleted, per this file's own "stale, not deleted"
+  // convention (see RETIRED-FEATURES.md) -- MEDICAL.checks/medStatus() are both
+  // still live (the Medical page's own "Needs booking" section, #medNeeds, computes
+  // the same overdue/soon filter in place), so reviving this badge later is a
+  // one-line change, not a rebuild.
   function needsBooking() {
     return MEDICAL.checks.filter(c => { const st = medStatus(c).st; return st === "overdue" || st === "soon"; }).length;
   }
+  // 2026-08-26 (same rail trim): NAV_ITEMS cut from 13 rows to 6 + Settings.
+  // Unpinning is NOT retiring -- presets/habits/nutrition/medical/money/cbdWork/
+  // growth all keep their page, their route and their CATEGORIES entry untouched,
+  // and stay reachable through the ▤ Chapters accordion (navPanelChaptersHtml()/
+  // dnrChaptersHtml(), both read CATEGORIES directly, never this array) and the
+  // quick-add bar's "go to X" (qaFindView(), same CATEGORIES source) -- confirmed
+  // both routes independently resolve all seven before cutting anything. See
+  // RETIRED-FEATURES.md for the full list, including the one real loss (Medical's
+  // live booking-count badge above -- the only NAV_ITEMS badge whose count doesn't
+  // surface anywhere else in the app) and the Presets badge (SAVED_EVENTS.length)
+  // that goes with it.
+  // `group` is null on all six kept items on purpose, not left over from their old
+  // groups (health/people used to carry "Body & health"/"Life") -- with only one
+  // item left per former group, the .nir-sep/.dnr-sep separator condition in
+  // renderNavIconRail()/renderDeskNavRail() (`item.group !== lastGroup && lastGroup
+  // && item.group`) would otherwise draw a hairline before every item, since each
+  // one's group would always differ from the last. null keeps all six in one block
+  // -- the separators before Chapters and before Settings are untouched.
   const NAV_ITEMS = [
-    { viewId: "day",       label: "Today",     icon: "☀",  group: null },
-    // 2026-08-21 (Linh: "place life map under today"): group:null (not its old
-    // "Life" group -- see NAV_ITEMS' original list further down, People/Money/CBD
-    // Work/Growth stayed there) puts it in the SAME ungrouped top block as Today/
-    // Calendar/Routines/Habits below -- renderNavPanel()/renderNavIconRail() print a
-    // group heading only when item.group is truthy AND differs from the previous
-    // item's, so group:null here means no heading, same as its neighbours.
-    { viewId: "lifeMap",   label: "Life Map",  icon: "🗺",  group: null },
+    { viewId: "day",     label: "Today",     icon: "☀",  group: null },
     // "Calendar" here means the month-grid overview, distinct from "Today" (the day
     // timeline) above -- the two are complementary views of the same data, same
     // distinction Google Calendar itself makes between its own "Today" and "Month".
-    { viewId: "month",     label: "Calendar",  icon: "🗓",  group: null },
-    // 2026-08-25 (Retiring Routines, Commit 2/3): "Routines" nav entry retired along
-    // with the page it opened -- routineCount()'s badge went with it. Presets kept
-    // its own entry (Commit 2) since it's still a real destination page.
-    { viewId: "presets",   label: "Presets",   icon: "☆",  group: null, count: () => SAVED_EVENTS.length },
-    { viewId: "habits",    label: "Habits",    icon: "▨",  group: null },
+    { viewId: "month",   label: "Calendar",  icon: "🗓",  group: null },
+    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: null },
+    // 2026-08-26: new to this rail -- Events already had a real page and a real
+    // CATEGORIES entry (calendar chapter, "Plan" group) but no rail row of its own
+    // until now. b33IconSvg("events") (B33_ICONS, below) draws it on the desktop
+    // rail; "🗂" is the navIconHtml() emoji fallback every OTHER surface (mobile
+    // drawer, mobile icon rail, tab strip, desktop launcher popover) renders
+    // unconditionally -- none of those four ever call b33IconSvg, so this fallback
+    // is the primary rendering on most surfaces, not a rare edge case.
+    { viewId: "events",  label: "Events",    icon: "🗂",  group: null },
+    { viewId: "people",  label: "People",    icon: "☺",  group: null },
     // CATEGORIES' real id for this page is "health" (nav label "Fasting" there)
     // though the page's own <h1> says "Body" -- "Body" is the more accurate
-    // umbrella label for a nav item sitting next to Nutrition/Medical, so used here
-    // instead of either existing label.
-    { viewId: "health",    label: "Body",      icon: "◐",  group: "Body & health" },
-    { viewId: "nutrition", label: "Nutrition", icon: "🍎", group: "Body & health" },
-    { viewId: "medical",   label: "Medical",   icon: "✚",  group: "Body & health", count: () => needsBooking() },
-    { viewId: "people",    label: "People",    icon: "☺",  group: "Life" },
-    { viewId: "money",     label: "Money",     icon: "$",  group: "Life" },
-    { viewId: "cbdWork",   label: "CBD Work",  icon: "⚕",  group: "Life" },
-    { viewId: "growth",    label: "Growth",    icon: "↗",  group: "Life" },
+    // umbrella label for a standalone nav item, so used here instead of either
+    // existing label.
+    { viewId: "health",  label: "Body",      icon: "◐",  group: null },
     // no "settings" view exists -- CATEGORIES' real "notify" view is the closest
     // analog to a general preferences home, and is where the Drawer/Tabs toggle
     // itself lives (renderNotifyPage's Global group), so routing here is self-
     // consistent -- "_footer" is a layout signal read by renderNavPanel() below
     // (hairline-separated last row), not a group label that gets printed anywhere.
-    { viewId: "notify",    label: "Settings",  icon: "⚙",  group: "_footer" },
+    { viewId: "notify",  label: "Settings",  icon: "⚙",  group: "_footer" },
   ];
   // 2026-08-15 fix: the CSS property alone (font-variant-emoji:text) isn't reliable
   // enough on its own -- the master build spec's §8 (icon language) explicitly warns
@@ -46232,6 +46261,14 @@
     money: ["var(--gold-bright)", `<circle cx="12" cy="12" r="8.8" fill="currentColor"/><g class="icxs" stroke-width="1.9" stroke-linecap="round"><path d="M14.8 9.3c-.5-.9-1.5-1.4-2.7-1.4-1.6 0-2.7.8-2.7 2 0 2.9 5.5 1.5 5.5 4.4 0 1.3-1.2 2.1-2.8 2.1-1.4 0-2.5-.6-3-1.6M12 6.2v1.6M12 16.5v1.6"/></g>`],
     cbdWork: ["var(--ic-sky)", `<rect x="3" y="7.4" width="18" height="13" rx="2.4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" d="M8.6 7V5.4c0-.9.7-1.6 1.6-1.6h3.6c.9 0 1.6.7 1.6 1.6V7"/><path class="icx" d="M10.9 11.2h2.2v2h2v2.2h-2v2h-2.2v-2h-2v-2.2h2z"/>`],
     growth: ["var(--cat-personal-fitness)", `<path fill="currentColor" d="M5.7 19.5c-.5-.5-.5-1.2 0-1.7l8.2-8.2h-3.6a1.15 1.15 0 1 1 0-2.3h6.4c.63 0 1.15.5 1.15 1.15v6.4a1.15 1.15 0 1 1-2.3 0v-3.6l-8.2 8.2c-.5.5-1.2.5-1.7 0z"/>`],
+    // 2026-08-26 (nav rail trim, new Events row): a stack of cards -- a list of
+    // things booked, the one item in this whole set that's a stack rather than a
+    // single glyph, per Linh's own drawing. --ic-violet (new token, see its
+    // declaration up near --ic-green/--ic-blue/--ic-sky) rather than reusing an
+    // existing --ic-* hue: violet has no existing category meaning anywhere in the
+    // app, so it can't be misread as a part-of-life colour the way green (Work) or
+    // blue (Marriage) would be.
+    events: ["var(--ic-violet)", `<rect class="ic2" x="5.4" y="3.2" width="13.2" height="4" rx="1.6" fill="currentColor"/><rect x="3.2" y="8" width="17.6" height="12.8" rx="2.6" fill="currentColor"/><g class="icx"><rect x="5.6" y="10.6" width="6.4" height="2.4" rx="1.2"/><rect x="5.6" y="15" width="10.4" height="2.4" rx="1.2"/></g>`],
     notify: ["var(--ink-soft)", `<path fill="currentColor" d="M13.6 2.9c.5.1.9.6.9 1.1l.1 1.5c.6.2 1.2.6 1.7 1l1.4-.6c.5-.2 1.1 0 1.4.4l1.6 2.8c.3.5.2 1.1-.3 1.4l-1.2.9a7.3 7.3 0 0 1 0 2l1.2.9c.4.3.5 1 .3 1.4l-1.6 2.8c-.3.5-.9.6-1.4.4l-1.4-.6c-.5.4-1.1.8-1.7 1l-.1 1.5c0 .5-.4 1-.9 1.1a9 9 0 0 1-3.2 0c-.5-.1-.9-.6-.9-1.1l-.1-1.5c-.6-.2-1.2-.6-1.7-1l-1.4.6c-.5.2-1.1 0-1.4-.4l-1.6-2.8c-.3-.5-.2-1.1.3-1.4l1.2-.9a7.3 7.3 0 0 1 0-2l-1.2-.9c-.4-.3-.5-1-.3-1.4l1.6-2.8c.3-.5.9-.6 1.4-.4l1.4.6c.5-.4 1.1-.8 1.7-1l.1-1.5c0-.5.4-1 .9-1.1a9 9 0 0 1 3.2 0z"/><circle class="icx" cx="12" cy="12" r="3.1"/>`],
     reopenSidebar: ["var(--gold-bright)", `<rect x="3" y="4.6" width="18" height="16.6" rx="2.6" fill="currentColor"/><path class="icx" d="M4.6 10.4h14.8v8.2c0 .7-.5 1.2-1.2 1.2H5.8c-.7 0-1.2-.5-1.2-1.2z"/><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8 2.6v2.6M16 2.6v2.6"/></g><path fill="currentColor" d="M10.5 12l4 2.9-4 2.9z"/>`],
     // ---- right widget rail (keys = WR_PINNED_IDS / WR_WIDGET_IDS) ----
