@@ -11200,6 +11200,21 @@
      @media(max-width:640px) below (the file's own phone breakpoint) sizes it up
      into the actual hero treatment her reference shows. */
   .day-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 12px; }
+  /* 2026-08-26 ("stop saying the same thing four times"): today's date was on screen
+     four times at 3/5/7 days -- this row (weekday + the gold day-number circle) was
+     one of them, and unlike the desktop headline/mini-calendar/column head, it can
+     only ever show ONE day's number, which is actively wrong once several days are
+     visible. The existing data-cal-multi attribute (renderMultiDayGrid's own gate,
+     search it) already means "more than one day showing" everywhere else in this
+     file, so this reuses it rather than adding a second gate. Deliberately NOT
+     breakpoint-scoped: the duplication measured the same on a 412px phone (64px) as
+     on desktop (53px), so the fix is too. Day view is untouched -- data-cal-multi is
+     only ever "true" once calDaysActive() > 1, so this rule simply never matches
+     there. #dayCtxChips (the birthday chip) is inside this row and disappears with
+     it at multi-day; that's fine -- COMMIT 3 of this brief covers birthdays showing
+     correctly in the all-day band instead, which is multi-day's own real surface
+     for them, not this single-day strip. */
+  #wrap[data-cal-multi="true"] #dayHeaderRow { display: none; }
   .dhr-date { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
   .dhr-weekday { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); }
   .dhr-daynum { font-family: var(--font-display); font-size: 24px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -12425,10 +12440,22 @@
      version anyway. One implementation, every width, rather than two idioms for one
      control. renderModeHiddenPill() only renders it when it has something to say,
      so on an ordinary day it takes no space at all. */
+  /* 2026-08-26 ("stop saying the same thing four times", STEP 4): was a full-width
+     gold slab -- a status ("Mode is filtering") rendered with the visual weight of
+     an action. Compact right-aligned chip instead (picked over moving it into the
+     top bar: the phone top bar already carries menu/month/search/date-badge/to-dos
+     with no room left, so it would need a second, different home there anyway --
+     an in-flow chip works identically at every width, no per-width split). Right-
+     alignment comes from .tl-hidden-pill-row (justify-content:flex-end) below, not
+     from anything here, so this stays a plain flex-none chip. min-height:44px is
+     new -- the old full-width bar cleared 44px on padding+font alone, a narrow chip
+     doesn't. max-width caps .tlmp-state's ellipsis to something a chip-sized
+     control should actually claim, so a long hidden-item list truncates instead of
+     re-widening the chip back toward a bar. */
   .tl-mode-hidden-pill {
-    display: flex; align-items: center; gap: 8px;
-    box-sizing: border-box; width: 100%; margin: 0 0 8px;
-    padding: 6px 12px; border-radius: 999px; border: none;
+    display: flex; align-items: center; gap: 8px; min-height: 44px;
+    box-sizing: border-box; max-width: min(280px, 100%); margin: 0 0 8px;
+    padding: 6px 14px; border-radius: 999px; border: none;
     font-size: 11px; font-weight: 700; text-align: left; cursor: pointer;
     background: var(--margin-rule); color: var(--accent-on);
   }
@@ -12482,8 +12509,12 @@
      whole per-breakpoint split is gone: the row is now a plain block wrapper that
      behaves identically everywhere, which is the point -- one behaviour, not two.
      Kept as a wrapper rather than deleted so the pill keeps a stable parent to be
-     hidden/shown inside without disturbing .day-main's own child spacing. */
-  .tl-hidden-pill-row { display: block; }
+     hidden/shown inside without disturbing .day-main's own child spacing.
+     2026-08-26: flex + justify-content:flex-end -- the chip (see its own comment)
+     is right-aligned, not full-width, at every width; this row still collapses to
+     zero height whenever the pill itself is hidden (a flex row with one hidden
+     child reserves no space, same as the old block wrapper did). */
+  .tl-hidden-pill-row { display: flex; justify-content: flex-end; }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -45628,9 +45659,27 @@
     // 2026-08-16: this was hidden until the mockup brought it back beside "Today", and
     // the mockup reads "Friday, 14 August" — no year. Kept for any year that ISN'T the
     // current one, where dropping it would make a browsed date genuinely ambiguous.
+    // 2026-08-26 ("Week header: stop saying the same thing four times"): a single
+    // weekday+date string was true for Day, false for 3/5/7 -- "Wednesday, 26 August"
+    // while seven days spanning Mon-Sun show, none of them Wednesday. Only writer of
+    // #ddtDate (checked -- nothing else reads its text, only CSS asserting it never
+    // truncates), so safe to branch here. mdWindowDays() is the SAME multi-day window
+    // renderMultiDayGrid()/the swipe handler/the drag guard all already share -- its
+    // first/last day are the range shown. No year shown here either, matching the
+    // single-day string's own precedent, and for the same reason: a browsed year that
+    // ISN'T the current one would be ambiguous without it, so it's added the same way.
     if (dateEl) {
-      const yr = d.getFullYear() === TODAY.getFullYear() ? "" : ` ${d.getFullYear()}`;
-      dateEl.textContent = `${WD_FULL[dowIndex(d)]}, ${d.getDate()} ${MONTHS[d.getMonth()]}${yr}`;
+      if (calDaysActive() > 1) {
+        const win = mdWindowDays(), first = win[0], last = win[win.length - 1];
+        const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
+        const yr = last.getFullYear() === TODAY.getFullYear() ? "" : ` ${last.getFullYear()}`;
+        dateEl.textContent = sameMonth
+          ? `${first.getDate()}–${last.getDate()} ${MON_SHORT[last.getMonth()]}${yr}`
+          : `${first.getDate()} ${MON_SHORT[first.getMonth()]} – ${last.getDate()} ${MON_SHORT[last.getMonth()]}${yr}`;
+      } else {
+        const yr = d.getFullYear() === TODAY.getFullYear() ? "" : ` ${d.getFullYear()}`;
+        dateEl.textContent = `${WD_FULL[dowIndex(d)]}, ${d.getDate()} ${MONTHS[d.getMonth()]}${yr}`;
+      }
     }
     // 2026-08-24: the old inline .ddt-day-btn fill (1/3/5/7 segmented control) is gone,
     // replaced by the static "Day ▾" popover markup above -- only its dynamic LABEL
