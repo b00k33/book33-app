@@ -6203,16 +6203,33 @@
   }
   .evl-view-opt:hover { color: var(--ink-soft); }
   .evl-view-opt[aria-pressed="true"] { background: color-mix(in oklab, var(--margin-rule) 16%, transparent); color: var(--margin-rule); font-weight: 600; }
-  .evl-pat-grid { display: grid; grid-template-columns: minmax(96px, 1fr) repeat(7, minmax(30px, 1fr)); gap: 2px; align-items: stretch; }
+  /* 2026-08-26 ("Mode colours + wider names"): name column is the ONLY flexible
+     (fr) track now -- day/month cells get a bounded minmax instead of their old
+     equal-share 1fr, so a wide desktop no longer stretches single-digit cells while
+     starving the column that actually holds long text (Bug 2's "month columns have
+     space to spare"). */
+  .evl-pat-grid { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(7, minmax(34px, 56px)); gap: 2px; align-items: stretch; }
   .evl-pat-head { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; text-align: center; padding: 2px 0; }
   .evl-pat-head:first-child { text-align: left; }
+  /* height:32px/white-space:nowrap/ellipsis (pre-2026-08-26) truncated names MID-WORD
+     ("Kylie Roche's birth"). Replaced with a real 2-line clamp on the inner text span
+     -- normal wrapping only ever breaks at a space, so a word is never cut, and the
+     grid's own align-items:stretch grows the whole row (cells included) to match
+     whenever a name genuinely needs the second line. */
   .evl-pat-name {
-    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 8px 0 0; height: 32px;
-    font-family: var(--font-body); font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px 4px 0;
+    font-family: var(--font-body); font-size: 13px; color: var(--ink);
     cursor: pointer;
   }
   .evl-pat-name:hover, .evl-pat-name:focus-visible { color: var(--margin-rule); }
-  .evl-pat-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .evl-pat-name-text, .evl-year-row-name-text {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden; line-height: var(--lh-snug);
+  }
+  /* background comes from data-mode below (regenerateModeStyles()) -- no-Mode series
+     fall through to this flat neutral, the SAME --track-neutral-bar every other
+     textless neutral dot/bar on the calendar already uses (search --track-neutral-bar). */
+  .evl-pat-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--track-neutral-bar); }
   /* 2026-08-26 ("full start-finish times"): a cell now carries "10am – 6pm", ~2x the
      old start-only width. Chosen too-narrow behaviour: the range WRAPS at its spaces
      into two centred lines inside the 32px cell (line-height tuned so two 9px lines
@@ -6222,16 +6239,24 @@
     font-size: 9px; line-height: 1.2; text-align: center; padding: 0 2px;
     font-variant-numeric: tabular-nums; color: var(--ink-faint); background: var(--field-bg);
   }
-  .evl-pat-cell.evl-pat-on[data-track="work"]     { background: var(--tl-work-bg);     color: var(--tl-work-title); }
-  .evl-pat-cell.evl-pat-on[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
-  .evl-pat-cell.evl-pat-on[data-track="personal"] { background: var(--tl-personal-bg); color: var(--tl-personal-title); }
-  /* 2026-08-26 ("the right grid per repeat"): section headings + the yearly strip.
-     The J-D strip is desktop-only -- at 412px twelve columns leave ~26px each with
-     the cell text off, i.e. twelve unreadable marks, so the phone renders
-     .evl-year-phone (a month-grouped list) instead; the two are gated by the same
-     640px breakpoint the cell text already flips on. .evl-pat-times is the phone's
-     times sub-line for the weekly grid -- the 18px cells stay time-less there, so
-     this line is how the phone gets times at all. */
+  /* Mode colour, not track colour (2026-08-26, "Mode colours are not reaching the
+     cells"): the old data-track="work|marriage|personal" rules here pointed at
+     --tl-work-bg/--tl-marriage-bg/--tl-personal-bg, which the SAME-DAY "No Mode
+     becomes one neutral" change (RETIRED-FEATURES.md §3) flattened to all resolve to
+     --track-neutral -- every cell rendered that one flat neutral (near-black in dark
+     theme) regardless of which of the 3 it matched, since track colour is no longer a
+     colour source anywhere else in the app either. Base rule below is that same
+     neutral (matches a no-Mode block everywhere else); the real colour comes from
+     data-mode, added per-Mode in regenerateModeStyles() -- the exact mechanism
+     .tl-item[data-mode]/.mo-chip[data-mode] already use, just extended to this page,
+     so a Mode's colour can never drift between the calendar and here. */
+  .evl-pat-cell.evl-pat-on { background: var(--track-neutral); color: var(--ink); }
+  /* 2026-08-26 ("group yearly by month" -- Change 4): the old 12-column J-D strip
+     showed ONE marked cell per row, ~92% empty cells with 30+ birthdays -- retired
+     entirely (was desktop-only anyway; .evl-year-months below was already the
+     phone-only "month-grouped list" fallback, now the ONLY yearly rendering at every
+     width). .evl-pat-times is the weekly grid's phone times sub-line -- the 18px
+     cells stay time-less there, so this line is how the phone gets times at all. */
   .evl-pat-sec-head {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em;
@@ -6239,12 +6264,15 @@
   }
   .evl-pat-sec-head:first-child { margin-top: 4px; }
   .evl-year-sort { display: flex; gap: 4px; text-transform: none; letter-spacing: 0; }
-  .evl-pat-year { grid-template-columns: minmax(96px, 1fr) repeat(12, minmax(24px, 1fr)); }
   .evl-pat-times {
     grid-column: 1 / -1; display: none; font-size: 11px; color: var(--ink-soft);
     font-variant-numeric: tabular-nums; padding: 0 0 6px 16px; cursor: pointer;
   }
-  .evl-year-phone { display: none; flex-direction: column; }
+  /* Date-order groups each month's heading + rows into one .evl-year-month-block so
+     break-inside:avoid (desktop multi-column below) can't split a month across two
+     columns; A-Z order has no headings, so its rows sit straight inside .evl-year-months. */
+  .evl-year-months { display: flex; flex-direction: column; }
+  .evl-year-month-block { break-inside: avoid; }
   .evl-year-month-head {
     font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.08em;
     font-weight: 600; padding: 12px 0 2px;
@@ -6255,18 +6283,22 @@
      the row's own padding instead. */
   .evl-year-row {
     display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 4px 8px;
-    border-radius: 8px; font-size: 13px; cursor: pointer;
+    border-radius: 8px; font-size: 13px; cursor: pointer; break-inside: avoid;
   }
   .evl-year-row:hover, .evl-year-row:active { background: color-mix(in oklab, var(--ink) 7%, transparent); }
-  .evl-year-row-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+  .evl-year-row-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; color: var(--ink); }
   .evl-year-row-freq { flex: none; font-size: 12px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
   .evl-year-row-date { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+  /* desktop/tablet: let the month blocks flow into columns instead of one long
+     half-empty list -- her literal ask (a plain scannable list) is satisfied at any
+     width by .evl-year-months alone; this just puts spare desktop width to use. */
+  @media (min-width: 641px) {
+    .evl-year-months { display: block; column-width: 260px; column-gap: 24px; }
+  }
   @media (max-width: 640px) {
-    .evl-pat-grid { grid-template-columns: minmax(72px, 1fr) repeat(7, minmax(18px, 1fr)); }
+    .evl-pat-grid { grid-template-columns: minmax(128px, 1fr) repeat(7, minmax(18px, 30px)); }
     .evl-pat-cell { font-size: 0; }
     .evl-pat-times { display: block; }
-    .evl-pat-year { display: none; }
-    .evl-year-phone { display: flex; }
   }
   .evl-rpt-list { display: flex; flex-direction: column; }
   .evl-rpt-row {
@@ -41517,6 +41549,13 @@
       css += `:root[data-theme="light"] .tl-item[data-mode="${m.id}"][data-track], :root[data-theme="light"] .tl-detail-head[data-mode="${m.id}"][data-track] { --cat-c: var(--mode-${m.id}); --cat-t: var(--mode-${m.id}-on); --cat-edge: transparent; }\n`;
       css += `.mo-chip[data-mode="${m.id}"] { background: var(--mode-${m.id}); color: var(--mode-${m.id}-on); }\n`;
       css += `.tl-allday-chip[data-mode="${m.id}"], #dayAlldayRow .ad-chip[data-mode="${m.id}"], .wk-bd[data-mode="${m.id}"], .mo-bd[data-mode="${m.id}"] { background: var(--mode-${m.id}); color: var(--mode-${m.id}-on); }\n`;
+      // 2026-08-26 (Repeats/Pattern "Mode colours are not reaching the cells"): same
+      // mechanism, extended to the Pattern page's week/year cells and its dot -- both
+      // keyed off the SAME data-mode attribute (see evlSeriesMode()), so they can
+      // never disagree with each other the way the old two-separate-colour-systems
+      // version could.
+      css += `.evl-pat-cell.evl-pat-on[data-mode="${m.id}"] { background: var(--mode-${m.id}); color: var(--mode-${m.id}-on); }\n`;
+      css += `.evl-pat-dot[data-mode="${m.id}"] { background: var(--mode-${m.id}); }\n`;
       // 2026-08-23 ("colour presets by Mode") .preset-card[data-mode] rules retired
       // 2026-08-26 along with .preset-card itself -- see "Presets move to the ☆, and
       // the row goes away." The new #presetsPop list is plain text rows (Mode already
@@ -41556,6 +41595,33 @@
       travel.accent = "#C4607A";
       saveModes();
     }
+    try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+  })();
+  // 2026-08-26 (Repeats/Pattern CHANGE 3, "birthdays should be gold"): adds a
+  // Birthdays Mode and back-fills it onto every already-saved birthday (a PEOPLE
+  // entry with day+month set) that doesn't already carry a mode of its own -- so the
+  // gold reaches her real historical data immediately, not just people added from
+  // here on. Same one-time, idempotent, never-stomps-a-deliberate-value idiom as the
+  // two migrations above; guarded on !p.mode specifically so a birthday she's
+  // already tagged with some OTHER Mode on purpose is left alone.
+  // Accent is #D4AF37 -- the CURRENT value of --accent-seed, the one token in the
+  // file's own --work-seed/--marriage-seed/--personal-seed/--accent-seed "seed"
+  // family that's gold ("metallic gold -- fixed", its own comment says), not an
+  // invented hex.
+  (function migrateBirthdayModeOnce() {
+    const FLAG = "book33-birthday-mode-migrated";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    let modesChanged = false;
+    if (!MODES.some(m => m.id === "birthday")) {
+      MODES.push({ id: "birthday", name: "Birthdays", emoji: "🎂", accent: "#D4AF37", order: 9, shows: { tracks: [], categories: [] } });
+      modesChanged = true;
+    }
+    let peopleChanged = false;
+    PEOPLE.forEach(p => {
+      if (p.day && p.month && !p.mode) { p.mode = "birthday"; peopleChanged = true; }
+    });
+    if (peopleChanged) savePeople();
+    if (modesChanged) saveModes(); // saveModes() calls applyModeColours() itself
     try { localStorage.setItem(FLAG, "1"); } catch (e) {}
   })();
   // boot: after both one-time migrations above (each already calls applyModeColours()
@@ -50905,7 +50971,25 @@
     birthdaysList().forEach(p => out.push({ kind: "person", id: p.id, task: p, track: "personal", title: `${p.name}’s birthday` }));
     return out;
   }
-  const evlTrackDot = track => `background:var(--${track}-seed, var(--ink-faint))`;
+  // 2026-08-26 (Repeats/Pattern BUG 1, "Mode colours are not reaching the cells"):
+  // the ONE colour resolver for a Pattern series -- template-level (no date), reads
+  // .mode straight off the routine/recurring-event template, the family task (no
+  // Mode field exists there, so always null -- see the migration comment above for
+  // why that's fine, not a gap) or the person (birthdays, defaulted to "birthday" by
+  // migrateBirthdayModeOnce()). Both the dot and every cell in a series' row read
+  // THIS SAME return value via data-mode, so they can't independently drift the way
+  // the old evlTrackDot()-for-the-dot / data-track-CSS-for-the-cell split could.
+  // Birthdays default to "birthday" even with no p.mode of their own -- found live
+  // while testing: migrateBirthdayModeOnce() only ever runs once, so a person added
+  // AFTER it's already run (any new birthday from here on) would never get backfilled
+  // and would render neutral instead of gold. Checking s.task.mode FIRST means a
+  // birthday she's deliberately given some OTHER Mode still wins -- this is only a
+  // default for the common "no mode set" case, same as the migration itself only
+  // ever touches a person with no mode.
+  function evlSeriesMode(s) {
+    if (s.task.mode) return s.task.mode;
+    return s.kind === "person" ? "birthday" : null;
+  }
   // Pattern layout (default), 2026-08-26 ("the right grid per repeat"): one section
   // per way-of-repeating, because one Mon-Sun grid asked every series which weekday
   // it falls on -- a question a birthday can't answer (the old 40-day walk left 24
@@ -50943,8 +51027,9 @@
       html += `<div class="evl-pat-sec-head">Every week</div>`;
       html += `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("");
       rows.forEach(({ s, fill }) => {
-        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</div>`;
-        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-track="${s.track}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
+        const mode = evlSeriesMode(s);
+        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span class="evl-pat-name-text">${esc(s.title)}</span></div>`;
+        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-mode="${mode || ""}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
         const times = evlFillTimesSummary(fill);
         if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}">${esc(times)}</div>`;
       });
@@ -50953,7 +51038,7 @@
 
     if (buckets.year.length) {
       const sortMode = PREFS.evlYearlySort || "date";
-      const rows = buckets.year.map(s => ({ s, ymd: evlYearlyDate(s.kind, s.task) }));
+      const rows = buckets.year.map(s => ({ s, ymd: evlYearlyDate(s.kind, s.task), mode: evlSeriesMode(s) }));
       rows.sort((a, b) => sortMode === "az"
         ? a.s.title.localeCompare(b.s.title)
         : (a.ymd.month - b.ymd.month || a.ymd.day - b.ymd.day || a.s.title.localeCompare(b.s.title)));
@@ -50962,28 +51047,27 @@
           <button type="button" class="evl-view-opt" data-evl-ysort="date" aria-pressed="${String(sortMode !== "az")}">Date order</button>
           <button type="button" class="evl-view-opt" data-evl-ysort="az" aria-pressed="${String(sortMode === "az")}">A–Z</button>
         </span></div>`;
-      // desktop: the J-D strip
-      html += `<div class="evl-pat-grid evl-pat-year"><div class="evl-pat-head"></div>` + MON_SHORT.map(m => `<div class="evl-pat-head">${m[0]}</div>`).join("");
-      rows.forEach(({ s, ymd }) => {
-        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</div>`;
-        for (let m = 1; m <= 12; m++) {
-          const on = m === ymd.month;
-          html += `<div class="evl-pat-cell${on ? " evl-pat-on" : ""}" data-track="${s.track}">${on ? ymd.day : ""}</div>`;
-        }
-      });
-      html += `</div>`;
-      // phone: month-grouped list in date order; a flat "name … 3 Aug" list under A-Z
-      html += `<div class="evl-year-phone">`;
+      // 2026-08-26 (CHANGE 4, "group yearly by month"): retires the old 12-column
+      // J-D strip -- one marked cell per row was ~92% empty cells with 30+ birthdays.
+      // Date order groups rows under a month heading (skipping empty months
+      // entirely, since it only ever loops over rows that exist); A-Z stays the flat
+      // list it always was. Same row shape at every width now, no separate desktop
+      // grid to keep in sync.
+      const yearRowHtml = ({ s, ymd, mode }) => `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span class="evl-year-row-name-text">${esc(s.title)}</span></span><span class="evl-year-row-date">${sortMode === "az" ? `${ymd.day} ${MON_SHORT[ymd.month - 1]}` : `${ymd.day}${ordinal(ymd.day)}`}</span></div>`;
+      html += `<div class="evl-year-months">`;
       if (sortMode === "az") {
-        rows.forEach(({ s, ymd }) => {
-          html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-date">${ymd.day} ${MON_SHORT[ymd.month - 1]}</span></div>`;
-        });
+        html += rows.map(yearRowHtml).join("");
       } else {
         let lastMonth = 0;
-        rows.forEach(({ s, ymd }) => {
-          if (ymd.month !== lastMonth) { html += `<div class="evl-year-month-head">${MON_SHORT[ymd.month - 1]}</div>`; lastMonth = ymd.month; }
-          html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-date">${ymd.day}${ordinal(ymd.day)}</span></div>`;
+        rows.forEach(r => {
+          if (r.ymd.month !== lastMonth) {
+            if (lastMonth) html += `</div>`;
+            html += `<div class="evl-year-month-block"><div class="evl-year-month-head">${MON_SHORT[r.ymd.month - 1]}</div>`;
+            lastMonth = r.ymd.month;
+          }
+          html += yearRowHtml(r);
         });
+        if (lastMonth) html += `</div>`;
       }
       html += `</div>`;
     }
@@ -50991,7 +51075,8 @@
     if (buckets.other.length) {
       html += `<div class="evl-pat-sec-head">Everything else</div><div class="evl-pat-other">`;
       buckets.other.forEach(s => {
-        html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span><span class="evl-year-row-freq">${esc(evlFreqWords(s.kind, s.task))}</span><span class="evl-year-row-date">${esc(evlNextLabel(evlSeriesNext(s.kind, s.task)))}</span></div>`;
+        const mode = evlSeriesMode(s);
+        html += `<div class="evl-year-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-year-row-name"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span class="evl-year-row-name-text">${esc(s.title)}</span></span><span class="evl-year-row-freq">${esc(evlFreqWords(s.kind, s.task))}</span><span class="evl-year-row-date">${esc(evlNextLabel(evlSeriesNext(s.kind, s.task)))}</span></div>`;
       });
       html += `</div>`;
     }
@@ -51007,7 +51092,7 @@
       const time = t.start ? (t.end ? `${fmtTime(t.start)}–${fmtTime(t.end)}` : fmtTime(t.start)) : "";
       const count = evlSeriesCountInRange(s.kind, t, from, to);
       return `<div class="evl-rpt-row" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}">
-        <span class="evl-rpt-name"><span class="evl-pat-dot" style="${evlTrackDot(s.track)}"></span>${esc(s.title)}</span>
+        <span class="evl-rpt-name"><span class="evl-pat-dot" data-mode="${evlSeriesMode(s) || ""}"></span>${esc(s.title)}</span>
         <span class="evl-rpt-time">${esc(time)}</span>
         <span class="evl-rpt-freq">${esc(evlFreqWords(s.kind, t))}</span>
         <span class="evl-rpt-next">${esc(evlNextLabel(evlSeriesNext(s.kind, t)))}</span>
