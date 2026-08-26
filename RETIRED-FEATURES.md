@@ -66,17 +66,24 @@ Removing these would be a regression, not a cleanup:
 
 - **`e.track` / `t.track` / `p.track` are still written on every save.** Existing values
   in localStorage are untouched. See §4.
-- **`CATS`, `saveCategories()`, `applyCategoryColours()`, `regenerateCategoryStyles()`,
-  `catDotColor()`, `resolveEventColorHex()`, the `--*-seed` / `--cat-c` / `--cat-t`
-  tokens** — all still live. They are the calendar's **quiet colour fallback**.
-- **Why the fallback exists:** Linh's instruction was to colour the calendar by **Mode**
-  instead. Mode colouring already wins wherever a Mode is set (`regenerateModeStyles()`
-  emits `.tl-item[data-mode="…"]` rules that override the track rules). But **Mode is an
-  optional field** — measured against her real data on 2026-08-24, **47 of 118 items had
-  no Mode**, including nearly every clinic patient appointment. Without the fallback her
-  clinic day would render colourless. She chose the fallback explicitly.
-- **So:** Mode decides the colour when set; track decides it silently when not. Neither
-  is ever *named* on screen.
+- **`CATS`, `saveCategories()`, `applyCategoryColours()`, `catDotColor()`,
+  `resolveEventColorHex()`, the `--*-seed` tokens** — all still live.
+  `catDotColor()`/`--*-seed` still colour the small life-dot on blocks/cards, the
+  5/7-day legend (`mdLegendHtml()`) and the "Piling up" dot — the last surfaces that
+  render a per-track colour anywhere.
+- **2026-08-26 update ("No Mode becomes one neutral"):** the per-track colour
+  *fallback* this section used to defend is **gone**. A Mode-less item no longer
+  borrows its part-of-life colour — every no-Mode block/chip/bar/dot renders ONE
+  neutral (`--track-neutral`, plus a deeper `--track-neutral-bar` for the textless
+  bar/dot tier). `regenerateCategoryStyles()` still exists but is a no-op (its
+  callers survive); the `--cat-c` / `--cat-t` tokens are still the calendar's colour
+  plumbing, now carrying **Mode accent when set, the one neutral when not**. The old
+  justification (2026-08-24: 47 of 118 real items had no Mode, so a clinic day would
+  render "colourless" without the track fallback) was re-decided by Linh: those items
+  now *deliberately* render neutral — quiet, uncoloured, receding — instead of
+  encoding a category she can no longer see or set anywhere.
+- **So (current):** Mode decides the colour when set; nothing decides it when not —
+  no Mode *is* the one neutral. Track is never named or coloured on a block again.
 
 ## 4. Data policy — this is a UI retirement, not a data migration
 
