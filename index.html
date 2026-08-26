@@ -33901,10 +33901,27 @@
     // does, rather than silently showing just the first occurrence's own time.
     const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
     const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
+    // 2026-08-26 (multi-day drag-and-drop §2, "drag its top/bottom edge to resize"):
+    // same resizable test as renderTimeline() (search "const resizable ="), copied
+    // verbatim -- not merged, and either a real (non-generated) event, a routine
+    // occurrence with an rtTaskId, or a fitcal- session. No isBlock clause needed
+    // here: every item mdItemHtml() ever renders is already >=34px by construction
+    // (mdColumnHtml's own tier pick), i.e. always "a block" in the 1-day view's
+    // sense. .md-line/.md-bar (the two shorter tiers) get no handles at all -- too
+    // short to carry a grab edge without eating the whole block, drag-to-move only.
+    // Notably NOT resizable here either way (same asymmetry the 1-day view already
+    // has, not something this brief introduces): a recurring-event occurrence
+    // (fromRecurringEvent/recurId) can be DRAGGED (§1's dragOk includes it) but
+    // was never resizable in the 1-day view's own resizable clause, copied as-is.
+    const resizable = !p.mergeCount && (!e.generated || (e.fromRoutine && !!e.rtTaskId) || e.id.indexOf("fitcal-") === 0);
+    const resizeHandles = resizable
+      ? `<div class="tl-resize-handle tl-resize-top" data-resize="top" aria-hidden="true"></div><div class="tl-resize-handle tl-resize-bottom" data-resize="bottom" aria-hidden="true"></div>`
+      : "";
     return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       style="top:${top}px;height:${h}px;${colStyle}">
       <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
       <span class="md-item-time">${timeTxt}</span>
+      ${resizeHandles}
     </div>`;
   }
   // 2026-08-25 ("show event name and time in 5/7-day view"), STEP 3 middle tier
@@ -55632,6 +55649,77 @@
       drag = null;
       renderCalDaysUI();
     });
+  })();
+
+  // 2026-08-26 (multi-day drag-and-drop §2, "drag its top/bottom edge to resize"):
+  // the #mdCols twin of the #eventsLayer resize IIFE two blocks up -- same
+  // mouse-only gate (the handles themselves are pointer:fine-CSS-gated too, this
+  // is cheap insurance against a stray synthetic pointer event), same "read the
+  // live minute straight off the pointer's Y every move, anchor edge stays put"
+  // shape, same 15-min default / 5-min Shift-held snap. Resize is same-day by
+  // definition -- it never touches mdColAtX() or the multi-day re-anchor guard,
+  // both §1 problems that only exist because a MOVE can cross columns. Only
+  // .md-item (the >=34px two-line card) ever carries resize handles at all (see
+  // mdItemHtml()'s own resizable/resizeHandles) -- .md-line and .md-bar are too
+  // short to give up any of their own height to a grab edge, so they stay
+  // drag-to-move only, same STEP 2 decision the brief itself calls for.
+  (function () {
+    const MIN_DUR = 15;
+    const cols = document.getElementById("mdCols");
+    let rdrag = null;
+    cols.addEventListener("pointerdown", e => {
+      const handle = e.target.closest(".tl-resize-handle");
+      if (!handle || e.pointerType !== "mouse") return;
+      const item = handle.closest(".tl-item");
+      const id = item.dataset.tlDetail;
+      const ev = TL_ITEMS_BY_ID[id];
+      if (!ev) return;
+      e.stopPropagation(); e.preventDefault();
+      rdrag = { id, el: item, edge: handle.dataset.resize, startMin: toMin(ev.start), endMin: itemEndMin(ev), pointerId: e.pointerId };
+      try { item.setPointerCapture(e.pointerId); } catch (err) {}
+      item.classList.add("tl-resizing");
+      document.body.classList.add("dragging-block");
+      mdHoverLine.classList.add("tl-resize-preview");
+    });
+    cols.addEventListener("pointermove", e => {
+      if (!rdrag) return;
+      e.preventDefault();
+      const col = rdrag.el.closest(".md-col");
+      const colRect = col.getBoundingClientRect(), gridRect = document.getElementById("mdGrid").getBoundingClientRect();
+      const step = e.shiftKey ? 5 : 15;
+      // offset 0, not layerTopOffset() -- same reason as every other #mdCols/#mdGrid
+      // geometry read this brief adds (search "offset 0, not layerTopOffset").
+      let mins = Math.round(minForTop(e.clientY - colRect.top, 0) / step) * step;
+      mins = Math.max(START_MIN, Math.min(END_MIN, mins));
+      let startMin = rdrag.startMin, endMin = rdrag.endMin;
+      if (rdrag.edge === "top") startMin = Math.max(START_MIN, Math.min(mins, rdrag.endMin - MIN_DUR));
+      else endMin = Math.min(END_MIN, Math.max(mins, rdrag.startMin + MIN_DUR));
+      rdrag.liveStart = startMin; rdrag.liveEnd = endMin;
+      const top = topForMin(startMin, 0), bottom = topForMin(endMin, 0);
+      rdrag.el.style.top = `${top}px`;
+      rdrag.el.style.height = `${bottom - top}px`;
+      mdHoverLine.hidden = false;
+      mdHoverLine.style.left = `${colRect.left - gridRect.left}px`;
+      mdHoverLine.style.width = `${colRect.width}px`;
+      mdHoverLine.style.right = "auto";
+      const activeMin = rdrag.edge === "top" ? startMin : endMin;
+      mdHoverLine.style.top = `${rdrag.edge === "top" ? top : bottom}px`;
+      mdHoverLine.querySelector(".hv-lbl").textContent = `↕ ${fmtTime(minToTime(activeMin))} · ${fmtDurShort(endMin - startMin)}`;
+    }, { passive: false });
+    function endResize() {
+      if (!rdrag) return;
+      const d = rdrag; rdrag = null;
+      d.el.classList.remove("tl-resizing");
+      mdHoverLine.classList.remove("tl-resize-preview");
+      document.body.classList.remove("dragging-block");
+      mdHoverLine.hidden = true;
+      suppressNextItemClick = true;
+      const ev = TL_ITEMS_BY_ID[d.id];
+      if (ev && d.liveStart != null) resizeItem(ev, minToTime(d.liveStart), minToTime(d.liveEnd));
+      else renderCalDaysUI();
+    }
+    cols.addEventListener("pointerup", endResize);
+    cols.addEventListener("pointercancel", endResize);
   })();
 
   /* ---- drag any sidebar to-do (Personal list, Also today) onto the timeline:
