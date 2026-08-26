@@ -6686,11 +6686,33 @@
      (search "Mode chips should tessellate"), reused rather than invented fresh. Same
      height/size as the old .rtn-sub-add so nothing about their footprint changes,
      .rtn-sub-actions' own `flex:1` keeps them equal width and equally reachable. */
-  .rtn-sub-add, .rtn-sub-addgroup { height: 36px; box-sizing: border-box; border: 1px solid transparent; border-radius: 10px;
-    background: color-mix(in oklab, var(--margin-rule) 15%, var(--field-bg));
-    color: color-mix(in oklab, var(--margin-rule) 65%, var(--ink) 35%);
+  /* 2026-08-26 (Linh: "the form's action buttons take the Mode colour" -- her chosen
+     option B): reads --sub-add-tint/-ink, a SECOND pair applyEfTint()/
+     renderFModePicker() set alongside #addForm's own --ef-tint/--ef-ink (search
+     "single choke-point") -- same live per-Mode resolution Save/the Mode chip/
+     .field-bare:focus-visible already use, but with NO no-Mode fallback baked in, so
+     these two can fall back to their own quiet grey below instead of inheriting
+     Save's already-shipped gold default (see STEP 3's comment on that call site).
+     color is --sub-add-ink, not a hardcoded white: white on Travel's #C4526E
+     measures 4.39:1, just under the 4.5:1 floor -- accentOnFor() (what sets it)
+     already picks readable ink for whatever fill it's given, so using it instead of
+     a literal avoids that failure for every Mode, not just Travel.
+     Selector is `.add-btn.rtn-sub-add` (two classes), not the plain single-class form
+     the rest of this rule already used -- found live while verifying: both buttons
+     also carry `.add-btn`, and the unscoped "GG33 button pass" (search that name,
+     ~line 12893) restyles `.add-btn` at the SAME (0,1,0) specificity but later in the
+     file, so it was silently winning the background/color/border fight by source
+     order alone and neither this rule's old formula nor this fix ever actually
+     painted the button -- same bug class this file's own CLAUDE.md already documents
+     under "an earlier same-specificity override loses on source order alone." Two
+     classes reliably beats one regardless of order, without touching the shared
+     .add-btn rule that many other unrelated buttons still rely on. */
+  .add-btn.rtn-sub-add, .add-btn.rtn-sub-addgroup { height: 36px; box-sizing: border-box; border-radius: 10px;
+    background: var(--sub-add-tint, var(--field-bg));
+    color: var(--sub-add-ink, var(--ink-soft));
+    border: 1px solid var(--sub-add-tint, var(--note-line));
     font-size: 13px; display: flex; align-items: center; justify-content: center; }
-  .rtn-sub-add:hover, .rtn-sub-addgroup:hover { background: color-mix(in oklab, var(--margin-rule) 24%, var(--field-bg)); }
+  .add-btn.rtn-sub-add:hover, .add-btn.rtn-sub-addgroup:hover { filter: brightness(1.06); box-shadow: none; }
   /* 2026-08-26: moved from below the buttons into .efp-subhead (the section header,
      next to the "Sub-tasks" label) so the running total reads as part of the heading
      instead of only appearing in its own row once you scroll past the add buttons. */
@@ -52286,16 +52308,27 @@
   // without a second code path (her Decision #1). #addForm's existing gold-when-no-Mode
   // default is a separate, already-shipped choice this commit doesn't touch -- see the
   // commit's own report for that tension against Decision #1.
-  function applyEfTint(host, modeId, noModeFallback) {
+  // 2026-08-26 ("the form's action buttons take the Mode colour"): tintProp/inkProp
+  // are optional, defaulting to --ef-tint/--ef-ink so every existing call site above
+  // is byte-for-byte unchanged -- widened again, same instruction as the 2026-08-25
+  // widening this function's own history already documents, rather than a second
+  // copy of it. Needed because #fSubAdd/#fSubAddGroup want the SAME per-Mode
+  // resolution as Save but a DIFFERENT no-Mode fallback (quiet grey, not Save's own
+  // already-shipped gold) -- two buttons reading the plain --ef-tint they inherit
+  // from #addForm could never diverge from Save's fallback, since a CSS custom
+  // property has exactly one value at any given host; a second property pair is
+  // the only way to give them their own no-Mode answer without touching Save's.
+  function applyEfTint(host, modeId, noModeFallback, tintProp, inkProp) {
     if (!host) return;
+    tintProp = tintProp || "--ef-tint"; inkProp = inkProp || "--ef-ink";
     const m = modeId ? MODES.find(x => x.id === modeId) : null;
     const tint = (m && m.accent) || noModeFallback || null;
     if (tint) {
-      host.style.setProperty("--ef-tint", tint);
-      host.style.setProperty("--ef-ink", accentOnFor(tint));
+      host.style.setProperty(tintProp, tint);
+      host.style.setProperty(inkProp, accentOnFor(tint));
     } else {
-      host.style.removeProperty("--ef-tint");
-      host.style.removeProperty("--ef-ink");
+      host.style.removeProperty(tintProp);
+      host.style.removeProperty(inkProp);
     }
   }
   function mostUsedModeIds(n) {
@@ -52328,6 +52361,15 @@
     // this function right afterward, so this one call covers all of them.
     applyEfTint(document.getElementById("addForm"), formSelectedMode,
       getComputedStyle(document.documentElement).getPropertyValue("--gold-bright").trim() || "#EAC24E");
+    // 2026-08-26 ("the form's action buttons take the Mode colour", STEP 3): rendered
+    // both ways live before deciding -- gold-on-light for these two specifically read
+    // exactly like the fill the light-theme --margin-rule repoint (~line 709) exists
+    // to keep off primary-action-adjacent surfaces, so no fallback is passed here.
+    // With no Mode selected this leaves --sub-add-tint/-ink unset, and
+    // .add-btn.rtn-sub-add's own CSS falls back to a quiet --field-bg/--note-line/
+    // --ink-soft look instead -- deliberately NOT the same fallback Save keeps
+    // (that gold default is a separate, already-shipped choice, untouched here).
+    applyEfTint(document.getElementById("addForm"), formSelectedMode, null, "--sub-add-tint", "--sub-add-ink");
   }
   renderFModePicker();
   document.getElementById("fModePicker").addEventListener("click", e => {
