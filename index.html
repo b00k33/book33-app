@@ -6202,9 +6202,14 @@
   }
   .evl-pat-name:hover, .evl-pat-name:focus-visible { color: var(--margin-rule); }
   .evl-pat-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  /* 2026-08-26 ("full start-finish times"): a cell now carries "10am – 6pm", ~2x the
+     old start-only width. Chosen too-narrow behaviour: the range WRAPS at its spaces
+     into two centred lines inside the 32px cell (line-height tuned so two 9px lines
+     fit) -- never ellipsised or clipped, which would read as a different time. */
   .evl-pat-cell {
     height: 32px; border-radius: var(--field-radius-sm); display: flex; align-items: center; justify-content: center;
-    font-size: 9px; font-variant-numeric: tabular-nums; color: var(--ink-faint); background: var(--field-bg);
+    font-size: 9px; line-height: 1.2; text-align: center; padding: 0 2px;
+    font-variant-numeric: tabular-nums; color: var(--ink-faint); background: var(--field-bg);
   }
   .evl-pat-cell.evl-pat-on[data-track="work"]     { background: var(--tl-work-bg);     color: var(--tl-work-title); }
   .evl-pat-cell.evl-pat-on[data-track="marriage"] { background: var(--tl-marriage-bg); color: var(--tl-marriage-title); }
@@ -50558,15 +50563,37 @@
   // window -- still the actual engine, just walked day by day instead of read as a
   // single field. May legitimately come back all-empty (e.g. a yearly date months
   // away); the List view still carries the real frequency text either way.
-  function evlWeeklyFillFromSchedules(schedules) {
+  // 2026-08-26 ("full start-finish times"): each layer's end resolves by the SAME
+  // rule the detail sheet / generatedFor() already use -- the layer's own l.end,
+  // else the routine's shared durationMin, else nothing (start alone, never
+  // "10am –" with a dangling dash). Resolved HERE at the call site, deliberately
+  // NOT by adding `end` to schedulesOf()'s synthesised fallback layer: that helper
+  // has a dozen callers which each already apply this exact fallback themselves,
+  // and giving the fallback layer a pre-filled end would silently change what
+  // "l.end" means to every one of them. The em-dash range is built once here, so
+  // the desktop cells and the phone's times sub-line (evlFillTimesSummary reads
+  // these same objects) can never disagree about a time.
+  function evlWeeklyFillFromSchedules(schedules, task) {
     const fill = Array.from({ length: 7 }, () => ({ on: false, time: "" }));
-    (schedules || []).forEach(l => (l.weekdays || []).forEach(wd => { fill[wd] = { on: true, time: fmtTime(l.start || "") }; }));
+    (schedules || []).forEach(l => {
+      let label = "";
+      if (l.start) {
+        const end = l.end || (task && task.durationMin ? minToTime(Math.min(timeToMin(l.start) + task.durationMin, 1439)) : "");
+        label = end ? `${fmtTime(l.start)} – ${fmtTime(end)}` : fmtTime(l.start);
+      }
+      (l.weekdays || []).forEach(wd => { fill[wd] = { on: true, time: label }; });
+    });
     return fill;
   }
   function evlPatternFill(kind, task) {
-    if ((kind === "routine" && task.freq === "weekly") || kind === "recur") return evlWeeklyFillFromSchedules(schedulesOf(task));
+    if ((kind === "routine" && task.freq === "weekly") || kind === "recur") return evlWeeklyFillFromSchedules(schedulesOf(task), task);
     if (kind === "routine" && task.freq === "daily") {
-      const t = fmtTime(task.start || "");
+      // same end resolution as generatedFor()'s own daily branch: durationMin or nothing
+      let t = "";
+      if (task.start) {
+        const end = task.durationMin ? minToTime(Math.min(timeToMin(task.start) + task.durationMin, 1439)) : "";
+        t = end ? `${fmtTime(task.start)} – ${fmtTime(end)}` : fmtTime(task.start);
+      }
       return Array.from({ length: 7 }, () => ({ on: true, time: t }));
     }
     if (kind === "fam" && task.freq === "weekly") return Array.from({ length: 7 }, (_, i) => ({ on: i === task.weekday, time: "" }));
