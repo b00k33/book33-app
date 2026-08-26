@@ -4575,6 +4575,46 @@
     position: absolute; left: calc(-1 * var(--gutter)); top: -8px; width: 34px;
     text-align: right; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
   }
+  /* 2026-08-26 ("make the hour column a visible add button"): #hours' own click
+     listener used to resolve a Y-coordinate against the WHOLE column (one target,
+     the whole gutter, 15-min rounding). It's now per-HOUR instead — resolved in
+     JS (search "STEP 2+4" for the #hours click listener, "STEP 5" for openAt()'s
+     #hours branch) by flooring minForTop()'s own existing, already-correct
+     continuous Y->minute mapping down to the hour, NOT by giving .hour-row its
+     own gutter-reaching CSS box. A margin-left/padding-left "bleed" trick was
+     tried first and reverted: it
+     shifts the row's PADDING box (the containing block every absolutely-positioned
+     child inside it -- .hour-label, the ::before/::after hairlines above -- measures
+     its own `left` against), so the SAME existing left:calc(-1*gutter) offsets
+     that already correctly land those children in the gutter would overshoot by
+     another full gutter-width once the row's own box moved. Caught live (measured
+     .hour-label landing at x=188 instead of the correct 266, 78px past #hours'
+     own edge) rather than assumed — see the build report. JS math changes nothing
+     about any existing element's box, so nothing else can drift out of place. */
+  /* the "+3pm" hover swap -- both labels share .hour-label (inherits every
+     existing width/colour/breakpoint rule above and below this block for free);
+     only which ONE is display:block changes. Mouse/trackpad only ((hover:hover)
+     and (pointer:fine), not a pointerType check, so it can never leak onto touch
+     -- "nothing on touch" per the brief). */
+  .hour-label-hover { display: none; }
+  @media (hover: hover) and (pointer: fine) {
+    /* only the gutter is ever actually reachable by a mouse (#eventsLayer sits on
+       top of the rest of the row, z-index 2 vs #hours' 1 -- see .events-layer
+       below), so :hover here only ever fires while the pointer is over the label's
+       own small area anyway; cursor is purely visual, no box to move or resize. */
+    #hours .hour-row:not([data-out-of-range]) { cursor: copy; }
+    #hours .hour-row:not([data-out-of-range]):hover .hour-label-static { display: none; }
+    /* the wash sits on the LABEL itself (its own small box), not the row -- "the
+       hour's label area takes a quiet gold wash" is literal, and it sidesteps
+       every containing-block question a row-wide background would raise (see the
+       margin/padding revert above). Negative margin cancels the padding's own
+       nudge so the text doesn't shift right when the wash grows around it. */
+    #hours .hour-row:not([data-out-of-range]):hover .hour-label-hover {
+      display: block; color: var(--margin-rule);
+      background: color-mix(in oklab, var(--margin-rule) 14%, transparent);
+      border-radius: 4px; padding: 2px 4px; margin: -2px -4px;
+    }
+  }
   .events-layer { position: absolute; top: 0; left: var(--gutter); right: 0; bottom: 0; z-index: 2; cursor: copy; }
   .events-layer .tl-item { cursor: default; }
   /* 2026-08-15 (Day mode, Phase 1): the radius is a TOKEN now (--blk-radius), not a literal
@@ -29142,7 +29182,15 @@
       // hourRange by construction, see computeHourRange), so this
       // never needs to fight a "has" row's real height.
       const outOfRange = hourTrimActive() && (h < hourRange.start || h >= hourRange.end);
-      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label">${hourLabel(h)}</span></div>`;
+      // 2026-08-26 ("make the hour column a visible add button"): a second label,
+      // same .hour-label class (so it inherits every existing width/colour/
+      // breakpoint rule for free instead of a duplicate ruleset) -- swapped in on
+      // hover only, #hours-scoped (search "hour-label-hover"). Harmless inside
+      // #mdHours too (shared by this same function, see its own comment above) --
+      // that rail's own CSS never matches the hover selector, so it just sits
+      // there unused, display:none, same as .hour-label-static would if #mdHours
+      // ever needed one.
+      html += `<div class="hour-row ${compact ? "empty" : "has"}" data-hour="${h}"${zb ? ' data-zb="true"' : ""}${zb ? ` data-block-h="${h}"` : ""}${outOfRange ? ' data-out-of-range="true"' : ""}${style}><span class="hour-label hour-label-static">${hourLabel(h)}</span><span class="hour-label hour-label-hover">+ ${hourLabel(h)}</span></div>`;
     }
     // the closing boundary label under the last row. 2026-08-16 (item 2): when the grid
     // is trimmed this has to read the trim's own end, not a hardcoded midnight — a grid
@@ -54903,6 +54951,22 @@
         return;
       }
       const rect = document.getElementById("eventsLayer").getBoundingClientRect();
+      // 2026-08-26 ("make the hour column a visible add button", STEP 5): #hours
+      // gets its own branch -- exactly ON the hour under the point, no 15-min
+      // rounding (STEP 4) -- instead of falling into #eventsLayer's own continuous
+      // Y->minute math below. Reuses minForTop() itself (same rect/offset
+      // convention this whole system already relies on for #hours -- see its
+      // mouse click listener's own comment) rather than re-deriving the
+      // hour-row/padding-top offset math a second time; only the final step
+      // (round to 15 min -> floor to the hour) differs. bind()/the double-tap+
+      // scroll-guard machinery above is completely untouched -- this only
+      // changes what a CONFIRMED double-tap resolves to.
+      if (el.id === "hours") {
+        const h = Math.max(START_HOUR, Math.min(END_HOUR - 1, Math.floor(minForTop(clientY - rect.top) / 60)));
+        if (hourRowH(h) === 0) return;   // a trimmed ("Hours shown") hour -- not really there
+        openForm(minToTime(h * 60), locForMinute(h * 60));
+        return;
+      }
       let minutes = Math.round(minForTop(clientY - rect.top) / 15) * 15;
       minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
       openForm(minToTime(minutes), locForMinute(minutes));
@@ -54938,15 +55002,27 @@
   })();
   // mouse half of the #hours side (the hour-LABEL gutter #eventsLayer doesn't cover) —
   // same lastPointerType gate as #eventsLayer's own click listener above.
+  // 2026-08-26 ("make the hour column a visible add button", STEP 2+4): was a
+  // continuous Y-coordinate->minute mapping rounded to 15 min, with no location --
+  // now floors to the HOUR under the point and opens exactly ON it, no rounding,
+  // plus locForMinute() same as #eventsLayer's own click listener already passes
+  // (this one never did before). Measured against #eventsLayer's own rect, NOT
+  // #hours' -- #hours is a real flow element (pushed down by .timeline-wrap's
+  // padding-top), #eventsLayer is position:absolute;top:0 and ignores that same
+  // padding (see topForMin()/layerTopOffset()'s own comment), so the two rects
+  // sit a few px apart. minForTop()'s default offset already compensates for
+  // that gap FROM the #eventsLayer frame -- exactly what #eventsLayer's own click
+  // listener measures from, and what openAt()'s #hours branch above already uses
+  // for touch. #hours' own rect has that same gap baked in a SECOND time, which
+  // 15-min rounding used to absorb invisibly but a hard floor to the hour does
+  // not -- caught live (an 8px-high click still inside a row's own box floored to
+  // the PREVIOUS hour) rather than assumed; see the build report.
   document.getElementById("hours").addEventListener("click", e => {
     if (lastPointerType !== "mouse") return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    // 2026-08-02 (code44 per-block expand): minForTop is the piecewise inverse of
-    // topForMin, so a click/drag after an expanded block still resolves to the right
-    // minute instead of drifting by however many blocks are expanded above it.
-    let minutes = Math.round(minForTop(e.clientY - rect.top) / 15) * 15;
-    minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
-    openForm(minToTime(minutes));
+    const rect = document.getElementById("eventsLayer").getBoundingClientRect();
+    const h = Math.max(START_HOUR, Math.min(END_HOUR - 1, Math.floor(minForTop(e.clientY - rect.top) / 60)));
+    if (hourRowH(h) === 0) return;   // a trimmed ("Hours shown") hour -- not really there
+    openForm(minToTime(h * 60), locForMinute(h * 60));
   });
 
   // 2026-08-05 (Part D, "press-and-hold a block, then drag to a new time; snaps to
