@@ -14172,16 +14172,19 @@
        minimum on its own. (#navTopDateBadge, the third icon this comment used to
        describe, is gone -- 2026-08-27, "the Mode filter moves off the calendar",
        COMMIT 1 STEP 2 -- see its removal note on the HTML.) */
+    /* 2026-08-27 (COMMIT 3 STEP 2): a GENUINE 44x44 box, no ring -- the ::after-padded-
+       hit-area trick retired along with the 28px circle it was compensating for (same
+       "real box, not a padded dot" shape #navModeBadge, this row's own neighbour,
+       already uses). No border/background -- these are line-drawn icons now, chrome
+       comes from the stroke itself, not a circle around it. */
     .nav-search-btn, .nav-todo-btn {
-      position: relative; width: 28px; height: 28px; flex: none;
-      border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
-      border-radius: 50%; font-size: 13px; cursor: pointer;
+      position: relative; width: 44px; height: 44px; flex: none;
+      border: none; background: none; color: var(--ink);
+      border-radius: 50%; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
     }
-    .nav-search-btn::after, .nav-todo-btn::after {
-      content: ""; position: absolute; inset: -8px;
-    }
-    .nav-search-btn:hover, .nav-todo-btn:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+    .nav-search-btn svg, .nav-todo-btn svg { width: 22px; height: 22px; }
+    .nav-search-btn:hover, .nav-todo-btn:hover { color: var(--gold-bright); }
     /* ---- .nav-day-strip -- the 7-day strip itself, #navDayStrip inside #navDateSlot.
        2026-08-27 fix: this enabling rule MUST come after the shared base-hide list
        (search ".nav-day-strip { display: none; }") -- same specificity, so source
@@ -14307,25 +14310,47 @@
     }
     .day-pending-banner:hover { background: var(--note-bg); color: var(--ink); }
     .day-pending-banner[hidden] { display: none; }
+    /* 2026-08-27 (COMMIT 3 STEP 1): literal, theme-independent -- Night's own already-
+       vetted --note-bg hex, reused rather than inventing a new one. --fab-ink is set in
+       JS (search "fabInk") via accentOnFor(), not hardcoded -- computed once against
+       this exact value, not per-theme (the value itself never changes by theme). */
+    :root { --fab-graphite: #161616; }
     .day-fab {
-      position: fixed; z-index: 90; right: 16px;
+      position: fixed; z-index: 90;
+      /* 2026-08-27 (COMMIT 3 STEP 1, "inset it so it stops covering the last column's
+         blocks"): right was 16px, same as the timeline's own right edge -- the FAB's
+         full 52px sat flush over whatever rendered there. Insetting further doesn't fit
+         a 412px screen without also shrinking the timeline's own reserved clearance
+         below, so both move together: right 16px -> 24px, and the matching
+         padding-right a few lines down grows to match. */
+      right: 24px;
       bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 16px));
       /* 2026-08-25 (mobile GCal rebuild, §3): a rounded square, not a circle --
          matches her reference; radius keeps it on the app's soft-cornered rule. */
       width: 52px; height: 52px; border-radius: 16px; border: none;
-      /* #12100c, not a --blk-txt/--accent-on token: this is the file's own sanctioned
-         dark-ink-on-saturated-gold hex (measured 8.8:1 against --margin-rule in both
-         themes, see .day-nav-gear's own note a few thousand lines up) -- --blk-txt
-         itself is only ever defined inside #dayTimelineWrap .tl-item, so referencing
-         it here would silently fall back to inherited (light) ink instead. */
-      background: var(--margin-rule); color: #12100c; font-size: 24px; line-height: 1;
+      /* 2026-08-27 (COMMIT 3 STEP 1, "black white palette"): graphite, not gold -- the
+         one deliberate exception this commit makes on purpose (see its own commit
+         message for the full list of what's still gold). --fab-graphite is a new,
+         literal, theme-independent token (declared once at :root, not per-theme) --
+         Night's own already-vetted #161616 "raised surface" hex, reused rather than
+         invented, giving real near-black in Day mode and a slight lift off Night's
+         near-black page background so the FAB doesn't disappear into it. Ink comes
+         from accentOnFor(), computed at boot (search "fabInk") rather than hardcoded --
+         confirmed it resolves to white against this specific hex. */
+      background: var(--fab-graphite); color: var(--fab-ink); font-size: 24px; line-height: 1;
       box-shadow: 0 6px 18px -4px rgba(0,0,0,.4); cursor: pointer;
       display: flex; align-items: center; justify-content: center;
     }
-    .day-fab:hover { background: var(--gold-bright); }
+    .day-fab:hover { background: color-mix(in oklab, var(--fab-graphite) 80%, white); }
     /* clears the FAB so it never sits over a busy day's last block -- 52px button +
-       its own bottom offset + a little breathing room, rounded up. */
-    #timelineScroll, #mdTimelineScroll { padding-bottom: 84px; }
+       its own bottom offset + a little breathing room, rounded up.
+       2026-08-27 (COMMIT 3 STEP 1): padding-right added, same reasoning, same rounding
+       convention, for the FAB's horizontal footprint -- 52px button + 24px right offset
+       + a little breathing room. Shared with #timelineScroll (1-day) as well as
+       #mdTimelineScroll (3/5/7-day, week-aligned or not): confirmed live at every
+       day-count that a block in the last column/the single day's own right edge no
+       longer renders under the FAB's fixed x-range. */
+    #timelineScroll, #mdTimelineScroll { padding-bottom: 84px; padding-right: 84px; }
   }
   /* 2026-08-02 (Linh, three rounds in, still "ugly": "why are you ignoring my request
      to use google cal ui design for calendar vs everything else" -- the last three
@@ -18716,8 +18741,15 @@
            #navModeBadge (below) takes its old slot, immediately left of search, per
            her spec ("immediately left of search"). -->
       <button type="button" class="nav-mode-badge" id="navModeBadge" hidden></button>
-      <button type="button" class="nav-search-btn" id="navTopSearchBtn" aria-label="Search">🔍</button>
-      <button type="button" class="nav-todo-btn" id="navTopTodoBtn" aria-label="To-do list">☑</button>
+      <!-- 2026-08-27 (COMMIT 3 STEP 2, "☑ is a square emoji inside a circular border, two
+           fighting shapes"): replaced with the app's own dominant inline-SVG line-icon
+           convention (viewBox 0 0 24 24, stroke-width 2, round caps/joins -- the same
+           spec #efp-node/LM_ICONS/MAND_ICONS already use), stroke="currentColor" so both
+           follow --ink today and the palette once stages 3-5 land, no hardcoded hex.
+           Paths reused verbatim from the approved mock (she already saw and signed off
+           on this exact shape). -->
+      <button type="button" class="nav-search-btn" id="navTopSearchBtn" aria-label="Search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg></button>
+      <button type="button" class="nav-todo-btn" id="navTopTodoBtn" aria-label="To-do list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h2.4M4 12h2.4M4 17h2.4"/><path d="M10.5 7H20M10.5 12H20M10.5 17h6"/></svg></button>
       <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, STEP 3): moved here verbatim from
            .day-step-row (same id/class/handlers -- see that row's own comment). -->
       <button type="button" class="day-nav-gear" id="dayNavGear" aria-label="Day view settings" title="Day view settings">⚙</button>
@@ -42857,6 +42889,11 @@
     const vsDark = (L + 0.05) / 0.0558, vsWhite = 1.05 / (L + 0.05);
     return vsDark >= vsWhite ? "#1a1408" : "#FFFFFF";
   }
+  // 2026-08-27 (COMMIT 3 STEP 1, "via accentOnFor(), not hardcoded"): --fab-graphite
+  // (#161616, declared beside .day-fab's own CSS) is literal and theme-independent, so
+  // this only needs to run once at boot, not per-render or per-theme-toggle like
+  // applyModeAccent() below.
+  document.documentElement.style.setProperty("--fab-ink", accentOnFor("#161616"));
   let modeAccentLastId;
   function applyModeAccent(force) {
     const am = activeMode();
