@@ -11849,7 +11849,16 @@
     padding: 0 16px 12px; min-width: 0;
   }
   #navPanelExtras * { min-width: 0; }
-  #navPanelExtras:empty { display: none; }
+  /* 2026-08-27 (nav-panel exit-trap fix): was #navPanelExtras:empty -- "empty" used
+     to be a reliable proxy for "not in drawer mode" back when #deskSidebar being
+     reparented in was the ONLY thing this element ever contained. Now that it also
+     holds a static close ✕ (#navExtrasClose, see the HTML) that's never removed, it
+     is never truly :empty, so that rule stopped hiding it outside drawer mode --
+     it would otherwise show as a bare bordered strip with a stray ✕ floating in the
+     classic full nav-panel list on every OTHER mobile page. States the real
+     condition directly instead: same body.dd-drawers-active gate its position/width
+     rules below already use. */
+  body:not(.dd-drawers-active) #navPanelExtras { display: none; }
 
   /* ============================================================
      MOBILE DAY-VIEW DRAWERS (2026-08-18) — "show only the calendar by default."
@@ -12034,6 +12043,39 @@
     width: min(272px, 84vw); overflow-y: auto;
     padding: 0 16px 12px; border-right: 1px solid var(--note-line);
   }
+  /* 2026-08-27 (nav-panel exit-trap fix, STEP 2.2): "a real close control inside
+     the panel... top-right, deliberately NOT top-left, which is where #miniCalPrev
+     now lives and where a mis-tap changes the month" (her own words -- #miniCalPrev
+     no longer actually lands there once the root cause is fixed, but top-right is
+     still the right call: it's nowhere near the reparented mini-cal's own header
+     controls regardless of exactly where those land). Sticky, not fixed/absolute --
+     the panel scrolls (mini-cal + numerology + Parts of life can run taller than
+     the viewport), and a close control that scrolls out of reach with the content
+     defeats the point of being a SECOND, independent exit from the backdrop tap.
+     margin cancels #navPanelExtras's own 16px side padding so the bar reaches both
+     edges -- the ✕ itself still lands 44x44 via its own box, just flush right. */
+  /* margin is vertical-only, deliberately -- #navPanelExtras and #navChaptersExtras
+     use DIFFERENT side padding (16px vs 0, see their own rules), so a shared negative
+     side-margin sized for one overflows the other's real edge. Sitting inside
+     whatever padding each container already provides keeps the ✕ safely in bounds
+     both places at the cost of a few px inset on the Calendar panel only -- found
+     live (the Chapters close button measured 15px past its own panel's right edge
+     with a -16px margin borrowed from the Calendar panel's padding). */
+  .nav-extras-head {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center;
+    margin: 0 0 4px; background: var(--paper);
+  }
+  /* margin-left:auto (not justify-content:flex-end on the parent) so this lands
+     top-right whether it's the row's only child (Calendar's header) or the second
+     of two (Chapters' header, alongside its "Chapters" label) -- one rule, both
+     shapes, rather than two different header layouts to keep in sync. */
+  .nav-extras-close {
+    width: 44px; height: 44px; border: none; background: none; cursor: pointer;
+    color: var(--ink-faint); font-size: 16px; display: flex; align-items: center; justify-content: center;
+    margin-left: auto;
+  }
+  .nav-extras-close:hover { color: var(--ink); }
   /* 2026-08-20 (nav unification): the Chapters flyout -- byte-for-byte the same
      collapsed/expanded shape as #navPanelExtras just above (same left:52px slot,
      same zero-padding-when-collapsed fix so there's no phantom strip at the closed
@@ -18670,7 +18712,14 @@
          has to sit outside that scroll box entirely, not just escape via
          position:fixed alone. Empty on every page except mobile single-Day view
          (see #navPanelExtras:empty below), so this move is a no-op everywhere else. -->
-    <div id="navPanelExtras"></div>
+    <div id="navPanelExtras">
+      <!-- 2026-08-27 (nav-panel exit-trap fix, STEP 2.2): static, not part of the
+           reparented #deskSidebar content below it -- placeDayDrawers() reparents
+           #deskSidebar's children in AFTER this, never replacing #navPanelExtras's
+           own innerHTML wholesale, so one boot-time listener (search "navExtrasClose"
+           in the JS) is enough; this button never gets torn down by a render. -->
+      <div class="nav-extras-head"><button type="button" class="nav-extras-close" id="navExtrasClose" aria-label="Close calendar panel">✕</button></div>
+    </div>
     <!-- 2026-08-20 (nav unification): the icon rail's "Chapters" flyout -- same
          reasoning as #navPanelExtras just above (position:fixed, direct child of
          .nav-panel, NOT inside #navPanelBody, so it can expand past .nav-panel-
@@ -43533,7 +43582,14 @@
   function renderNavChaptersExtras() {
     const host = document.getElementById("navChaptersExtras");
     if (!host) return;
-    host.innerHTML = `<div class="nav-panel-group-lbl">Chapters</div>` + navPanelChaptersHtml();
+    // 2026-08-27 (nav-panel exit-trap fix, STEP 2.2/4): same real close ✕ as
+    // #navExtrasClose on the Calendar flyout, top-right, sticky (see its own CSS
+    // comment for why sticky, not fixed/absolute) -- rebuilt into the header row
+    // every render rather than static markup, since this whole host is innerHTML-
+    // replaced each time (unlike #navPanelExtras, which is reparented content and
+    // never rewritten -- see that button's own comment). Wired via the click
+    // delegate just below, not a per-render addEventListener, for the same reason.
+    host.innerHTML = `<div class="nav-extras-head"><div class="nav-panel-group-lbl" style="padding:0">Chapters</div><button type="button" class="nav-extras-close" data-chapters-close aria-label="Close chapters panel">✕</button></div>` + navPanelChaptersHtml();
   }
   // 2026-08-20 (nav unification, her §5): dev-only self-check, run once at boot --
   // "adding a view to CATEGORIES must make it reachable with no second edit
@@ -43863,9 +43919,31 @@
     if (e.key === "Escape" && (navPanelIsOpen() || dayRightDrawerIsOpen())) closeAllDayDrawers();
     if (e.key === "Escape" && dayTopZoneIsOpen()) closeDayTopZone();
   });
+  // 2026-08-27 (nav-panel exit-trap fix, ROOT CAUSE): e.target.closest("[data-view]")
+  // has no lower bound -- when the click lands on a row with no data-view of its own
+  // (the Calendar/Chapters rail toggles are deliberately built that way, see the
+  // "one exception" comment on navIconRailRowHtml() above), closest() keeps walking
+  // PAST this delegate's own root and matches #wrap[data-view], a page-scoping
+  // attribute that mirrors state.view on a generic ancestor, not a real navigation
+  // target. That silently re-set state.view to itself, called render(), and --
+  // critically -- closeNavPanel() (which strips .open along with .cal-open/
+  // .chapters-open), immediately followed by the dedicated data-cal-toggle/
+  // data-chapters-toggle handler re-adding just .cal-open/.chapters-open a moment
+  // later on the same click. Net effect: the rail (#navPanel) slid fully offscreen
+  // (its own .open-less base transform is translateX(-100%), which at the rail's
+  // 52px width computes to exactly -52px) while the flyout it supposedly belongs to
+  // (gated on .cal-open/.chapters-open alone, independent of .open) stayed rendered
+  // and expanded -- orphaned, no backdrop (updateDayDrawersBackdrop() correctly
+  // read .open as gone), no way back in, and the mini-cal's own #miniCalPrev ended
+  // up sitting exactly where #navDrawerBtn used to be once #navPanelExtras's
+  // left:52 (relative to the now -52-shifted rail) resolved to the screen edge.
+  // Fixed at the source: closest() must never be allowed to escape this delegate's
+  // own root and match an ancestor's incidental data-view. e.currentTarget is this
+  // listener's own host (#navPanelBody), stable regardless of what the event later
+  // does to the DOM.
   document.getElementById("navPanelBody").addEventListener("click", e => {
     const btn = e.target.closest("[data-view]");
-    if (!btn) return;
+    if (!btn || !e.currentTarget.contains(btn)) return;
     state.view = btn.dataset.view;
     render();
     closeNavPanel();
@@ -43875,6 +43953,19 @@
   // carries data-cal-toggle, NOT data-view, so the two never fire on the same
   // click. Toggles #navPanel's own .cal-open state, which the CSS above reads to
   // expand/collapse #navPanelExtras.
+  // 2026-08-27 (nav-panel exit-trap fix, STEP 2.2): pulled out of the toggle handler
+  // below so a real close ✕ inside the panel (see #navExtrasClose, boot listener
+  // further down) can call the exact same "collapse the flyout, keep the rail"
+  // action instead of a fourth hand-written copy of it -- the chapters-toggle
+  // handler just below already inlined this same three-line shape once (for the
+  // "opening chapters closes calendar" mutual-exclusivity rule); both now call this.
+  function closeNavCalFlyout() {
+    const panel = document.getElementById("navPanel");
+    if (!panel || !panel.classList.contains("cal-open")) return;
+    panel.classList.remove("cal-open");
+    const btn = document.querySelector("[data-cal-toggle]");
+    if (btn) { btn.setAttribute("aria-expanded", "false"); btn.classList.remove("cal-active"); }
+  }
   document.getElementById("navPanelBody").addEventListener("click", e => {
     const calBtn = e.target.closest("[data-cal-toggle]");
     if (!calBtn) return;
@@ -43887,6 +43978,11 @@
     // top of each other. closeNavChaptersFlyout() is a no-op if it wasn't open.
     if (open) closeNavChaptersFlyout();
   });
+  // 2026-08-27 (nav-panel exit-trap fix, STEP 2.2): the panel's own close ✕, static
+  // markup (search "navExtrasClose" in the HTML), persists across renders since
+  // #navPanelExtras's content is reparented in (placeDayDrawers()), never rebuilt
+  // via innerHTML -- one boot-time listener is enough, no per-render rewiring needed.
+  document.getElementById("navExtrasClose")?.addEventListener("click", closeNavCalFlyout);
   // 2026-08-20 (nav unification): same "separate delegate, same host, deliberately
   // independent" shape as the Calendar toggle just above -- a chapter-head row
   // carries data-chapter-toggle, never data-view, so the two never collide. Just
@@ -43925,9 +44021,10 @@
     chapBtn.setAttribute("aria-expanded", String(open));
     chapBtn.classList.toggle("chapters-active", open);
     if (open) {
-      const calBtn = document.querySelector("[data-cal-toggle]");
-      panel.classList.remove("cal-open");
-      if (calBtn) { calBtn.setAttribute("aria-expanded", "false"); calBtn.classList.remove("cal-active"); }
+      closeNavCalFlyout();   // 2026-08-27: was inlined here (3 lines, byte-for-byte
+                              // the same as closeNavCalFlyout() above) -- now the
+                              // shared function, see its own comment for why a third
+                              // copy would otherwise have been needed.
       renderNavChaptersExtras();
     }
   });
@@ -43938,6 +44035,11 @@
   // (data-chapter-toggle, re-render just this flyout) or pick a real page
   // (data-view, navigate and close the whole nav panel like every other nav pick).
   document.getElementById("navChaptersExtras").addEventListener("click", e => {
+    // 2026-08-27 (nav-panel exit-trap fix, STEP 2.2/4): the new close ✕ -- checked
+    // first, same reason the +N-more toggle is checked before its own row-click
+    // fallthrough elsewhere in this file (search "COMMIT 3, STEP 3"): let it win
+    // outright rather than also falling through to the data-view branch below.
+    if (e.target.closest("[data-chapters-close]")) { closeNavChaptersFlyout(); return; }
     const chBtn = e.target.closest("[data-chapter-toggle]");
     if (chBtn) {
       navToggleChapter(chBtn.dataset.chapterToggle);
@@ -43945,8 +44047,15 @@
       renderNavPanel();
       return;
     }
+    // 2026-08-27: contains() guard -- same fix, same reason, as #navPanelBody's own
+    // [data-view] delegate (search "ROOT CAUSE" above). Without it, ANY stray tap in
+    // here that isn't a chapter-toggle or a real view row (padding, the close ✕
+    // before the branch just above existed) falls through to closest("[data-view]"),
+    // which has no lower bound and walks past this delegate's own root to
+    // #wrap[data-view] -- a page-scoping attribute, not a real target -- silently
+    // re-rendering and closing the whole nav panel on what should be a no-op tap.
     const viewBtn = e.target.closest("[data-view]");
-    if (!viewBtn) return;
+    if (!viewBtn || !e.currentTarget.contains(viewBtn)) return;
     state.view = viewBtn.dataset.view;
     render();
     closeNavPanel();

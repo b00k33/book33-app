@@ -111,6 +111,17 @@ mode-hidden pill may sit between the top of the page and the calendar. Everythin
 goes in a drawer. (Enforced live, not just stated — see `dayLayoutAboveCalendarGuard()`
 in index.html, and the mobile report below.)
 
+**Every panel, sheet and drawer needs a working exit on a phone — and more than one.**
+Tapping outside must close it, and there must be a visible close control that is not
+covered, not offscreen, and not sitting where another control used to be. Escape is not
+an exit on a phone. Before shipping any panel, open it at 412×915 and try to leave: tap
+outside, tap the close control, tap the thing that opened it. **All three must work.**
+(2026-08-27: the nav-panel Calendar/Chapters flyouts trapped this exact way — a
+`closest("[data-view]")` delegate with no lower bound matched a page-scoping attribute
+on a distant ancestor, silently closing the rail out from under its own expand panel.
+Second trap of exactly this shape, after the to-do panel — worth a standing rule rather
+than a one-off fix each time.)
+
 ### The mobile report — required on every commit that touches layout
 A rule nobody measures is a wish. Run this at 412×915 in a mobile context, in both
 themes, and paste the results into the commit report:
