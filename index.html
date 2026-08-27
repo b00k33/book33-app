@@ -12707,114 +12707,23 @@
   }
   .theme-toggle:hover { transform: scale(1.08); }
 
-  /* Mode-hidden pill, stage 2 of the modes build (2026-08-20).
-     2026-08-24: this used to be a SECOND class layered on top of .tl-origin-hidden-pill
-     (the markup carried both), which supplied position/right/padding/radius/shadow.
-     The origin filter and its pill were removed that day (Linh doesn't use them), so
-     those base declarations are folded in here and the extra class dropped from the
-     markup -- deleting .tl-origin-hidden-pill outright would have silently stripped
-     this pill of its positioning.
-     The old stacking maths is gone with them: it sat THREE slots down (under the
-     filter row and the origin pill, +34+6+34+6), reserving space for two elements
-     that no longer exist. It now takes the top slot directly, re-measured live on
-     both mobile and desktop -- see the [data-desk-day] override below.
-     2026-08-22 (Linh: "make the hidden-by-Mode control obvious and reversible" --
-     she didn't know this was a control, or that tapping it revealed everything):
-     was plain textContent, single-state (only ever rendered while something was
-     hidden, so it read as a passing alert). Now a real two-state toggle -- see
-     renderModeHiddenPill()'s own comment -- so it needs two children (a
-     truncating state label + a fixed-width hint, same "label + small uppercase
-     hint" shape #trackSummaryBtn/.who-edit already use) instead of one text
-     node, and a visibly distinct "on" (revealed) look instead of relying on
-     text alone to carry the state. */
-  /* 2026-08-24 pt.2 (Linh: it "sits on top of my calendar and gets in the way").
-     position:fixed / the stacked `top` formula / z-index:190 / the right offset /
-     the drop shadow are all GONE -- this is a normal in-flow block directly above
-     the timeline now, so it pushes the calendar down instead of covering it. The
-     `top` maths in particular was deleted rather than re-tuned: it was written to
-     stack beneath the origin-filter row and its pill, both since removed, so the
-     number no longer described anything real.
-     Chose in-flow over the widget rail deliberately -- see the commit message: the
-     rail only exists at >=1200px AND 1-day-only, so it would have covered exactly
-     one case while mobile, tablet and desktop multi-day all still needed this
-     version anyway. One implementation, every width, rather than two idioms for one
-     control. renderModeHiddenPill() only renders it when it has something to say,
-     so on an ordinary day it takes no space at all. */
-  /* 2026-08-26 ("stop saying the same thing four times", STEP 4): was a full-width
-     gold slab -- a status ("Mode is filtering") rendered with the visual weight of
-     an action. Compact right-aligned chip instead (picked over moving it into the
-     top bar: the phone top bar already carries menu/month/search/date-badge/to-dos
-     with no room left, so it would need a second, different home there anyway --
-     an in-flow chip works identically at every width, no per-width split). Right-
-     alignment comes from .tl-hidden-pill-row (justify-content:flex-end) below, not
-     from anything here, so this stays a plain flex-none chip. min-height:44px is
-     new -- the old full-width bar cleared 44px on padding+font alone, a narrow chip
-     doesn't. max-width caps .tlmp-state's ellipsis to something a chip-sized
-     control should actually claim, so a long hidden-item list truncates instead of
-     re-widening the chip back toward a bar. */
-  .tl-mode-hidden-pill {
-    display: flex; align-items: center; gap: 8px; min-height: 44px;
-    box-sizing: border-box; max-width: min(280px, 100%); margin: 0 0 8px;
-    padding: 6px 14px; border-radius: 999px; border: none;
-    font-size: 11px; font-weight: 700; text-align: left; cursor: pointer;
-    background: var(--margin-rule); color: var(--accent-on);
-  }
-  /* 2026-08-22 (Linh: her screenshot showed this pill floating over a Life Map cell)
-     bug fix, belt-and-braces: the pill's own `hidden` attribute is driven purely by
-     flag logic with no page check at all -- it's only ever touched inside
-     renderTimeline() (Day-view-only), so once shown it stays hidden=false on every
-     other page forever. .tl-hidden-pill-row (its wrapper) is deliberately
-     display:contents (no box, see its own comment) so it can't scope it either.
-     Real page-scoping here, keyed off #wrap's own data-view (kept current on every
-     navigation by render(), see its "document.getElementById('wrap').dataset.view =
-     state.view" line) -- this holds even if some future code path forgets to
-     re-hide it correctly, the same way this bug happened in the first place.
-     Day-view behaviour (click handler, text, two-way toggle) untouched -- this is
-     pure visibility, layered on top of the existing hidden-attribute logic. */
-  #wrap[data-view]:not([data-view="day"]) .tl-mode-hidden-pill { display: none !important; }
-  /* (the [data-desk-day] `top` override that used to sit here is gone with
-     position:fixed -- it re-anchored the floating pill to #deskDayTopbar's 55px bar,
-     which is meaningless for an in-flow block.) */
-  .tl-mode-hidden-pill .tlmp-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-  .tl-mode-hidden-pill .tlmp-hint {
-    flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-    color: color-mix(in oklab, var(--accent-on) 72%, transparent);
-  }
-  /* the "on" (revealed) state -- a genuinely different fill, not just different
-     text, so it reads as a flipped switch even at a glance. NOT --accent-on:
-     measured live in dark theme, --accent-on resolves to plain white and
-     --gold-bright to a light/bright gold there (#EAC24E) -- white-on-that is
-     roughly a 1.7:1 contrast ratio, nowhere near the 4.5:1 floor. #241B04 is
-     the SAME dark-on-gold-bright pairing .cad-variant-btn[aria-pressed="true"]
-     already uses (a closer match than .tl-desk-done's --accent-on, which
-     turns out not to be the safe precedent its own comment nearby assumed) --
-     ~10:1 against the dark-theme gold and comfortably high against light
-     theme's --cosmic-gold too (#D8B45C, also a light/bright tone). */
-  .tl-mode-hidden-pill[aria-pressed="true"] { background: var(--gold-bright); color: #241B04; }
-  .tl-mode-hidden-pill[aria-pressed="true"] .tlmp-hint { color: color-mix(in oklab, #241B04 72%, transparent); }
-  /* To-do's own mode-hidden pill (stage 5) -- same message/reveal-tap idiom as
-     .tl-mode-hidden-pill above, but the To-do page is a plain top-to-bottom
-     scrolling list, not a fixed-viewport calendar, so this one sits IN FLOW right
-     above the list instead of floating fixed over the page. */
+  /* 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEP 4): the
+     Day-timeline Mode-hidden pill (.tl-hidden-pill-row/.tl-mode-hidden-pill/
+     .tlmp-state/.tlmp-hint, stage 2 of the modes build, 2026-08-20 -- reworked
+     2026-08-22 into a two-way toggle, moved in-flow 2026-08-24 pt.2, compacted to a
+     chip 2026-08-26) is deleted outright. Replaced by #navModeBadge in the top bar
+     (search "nav-mode-badge"). To-do's OWN mode-hidden pill just below
+     (.todo-mode-hidden-pill / #todoModeHiddenPill) is a SEPARATE control on a
+     separate page, out of scope for this brief, and is untouched. */
+  /* To-do's own mode-hidden pill (stage 5) -- the To-do page is a plain top-to-bottom
+     scrolling list, not a fixed-viewport calendar, so this sits IN FLOW right above
+     the list instead of floating fixed over the page. */
   .todo-mode-hidden-pill {
     display: block; width: 100%; text-align: left; box-sizing: border-box;
     margin: 0 0 12px; padding: 8px 14px; border: none; border-radius: 999px;
     background: var(--margin-rule); color: var(--accent-on);
     font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
   }
-  /* 2026-08-24 pt.2: .tl-hidden-pill-row was scaffolding for the fixed-position era --
-     display:contents above 640px (so the pill's own fixed/top/right rules applied
-     untouched) and a flex row below it (the one width where the pill was already
-     in-flow). With the pill in-flow at EVERY width and moved inside .day-main, the
-     whole per-breakpoint split is gone: the row is now a plain block wrapper that
-     behaves identically everywhere, which is the point -- one behaviour, not two.
-     Kept as a wrapper rather than deleted so the pill keeps a stable parent to be
-     hidden/shown inside without disturbing .day-main's own child spacing.
-     2026-08-26: flex + justify-content:flex-end -- the chip (see its own comment)
-     is right-aligned, not full-width, at every width; this row still collapses to
-     zero height whenever the pill itself is hidden (a flex row with one hidden
-     child reserves no space, same as the old block wrapper did). */
-  .tl-hidden-pill-row { display: flex; justify-content: flex-end; }
   /* ============ ASTRO STRIP ============ */
   .astro {
     width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -13640,7 +13549,7 @@
      hidden here, un-hidden inside the ≤640px blocks that actually style each one
      (search "GCal-shaped mobile top bar" for those). Without this base rule they'd
      fall back to the browser's default button display everywhere ABOVE 640px too. */
-  .nav-month-btn, .nav-search-btn, .nav-date-badge, .nav-todo-btn, .day-fab { display: none; }
+  .nav-month-btn, .nav-search-btn, .nav-mode-badge, .nav-todo-btn, .day-fab { display: none; }
   @media (max-width: 640px) {
     /* 2026-08-04 (Step 2): was position:absolute/top:6/left:6, floating over whatever
        page content sat underneath. Now a normal flex item inside the real .nav-tiers
@@ -14194,22 +14103,63 @@
       padding: 8px 4px; cursor: pointer;
     }
     .nav-month-jump:hover { color: var(--gold-bright); }
-    /* 2026-08-24: the three new top-bar icons (search/date-badge/to-do) -- same
-       compact-icon-set look .jump-btn/.theme-toggle already share on this row, plus
-       the "pad the hit area, don't grow the dot" 44px-target trick #b33Live[data-mini]
-       and .day-nav-gear already use, since a visually-matched 28px circle is under
-       CLAUDE.md's binding minimum on its own. */
-    .nav-search-btn, .nav-date-badge, .nav-todo-btn {
+    /* 2026-08-24: the top-bar icons (search/to-do) -- same compact-icon-set look
+       .jump-btn/.theme-toggle already share on this row, plus the "pad the hit area,
+       don't grow the dot" 44px-target trick #b33Live[data-mini] and .day-nav-gear
+       already use, since a visually-matched 28px circle is under CLAUDE.md's binding
+       minimum on its own. (#navTopDateBadge, the third icon this comment used to
+       describe, is gone -- 2026-08-27, "the Mode filter moves off the calendar",
+       COMMIT 1 STEP 2 -- see its removal note on the HTML.) */
+    .nav-search-btn, .nav-todo-btn {
       position: relative; width: 28px; height: 28px; flex: none;
       border: 1px solid var(--note-line); background: var(--paper); color: var(--ink);
       border-radius: 50%; font-size: 13px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
     }
-    .nav-search-btn::after, .nav-date-badge::after, .nav-todo-btn::after {
+    .nav-search-btn::after, .nav-todo-btn::after {
       content: ""; position: absolute; inset: -8px;
     }
-    .nav-date-badge { font-weight: 800; font-variant-numeric: tabular-nums; }
-    .nav-date-badge:hover, .nav-search-btn:hover, .nav-todo-btn:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+    .nav-search-btn:hover, .nav-todo-btn:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+    /* 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEP 3): a
+       GENUINE 44x44 box, not this row's other two icons' 28px-visual/::after-padded
+       trick -- her spec asked for it explicitly ("A 44×44 button"), and that padding
+       trick doesn't actually enlarge the hit target anyway (elementFromPoint() at a
+       padded corner resolves to the NEXT sibling button, not this one -- confirmed
+       live during the still-paused "readable blocks" brief; unrelated fix, not
+       redone here). Reads as slightly larger than #navTopSearchBtn/#navTopTodoBtn
+       beside it -- disclosed, not smoothed over: resizing THOSE two is that other
+       brief's own scope, not this one's.
+       background/color are set inline per-render (renderModeBadge(), JS) to
+       var(--mode-<id>) / var(--mode-<id>-on) -- the SAME two custom properties
+       applyModeColours() already maintains for every other Mode-coloured surface,
+       not a fresh accentOnFor() call here (one source of truth, already correct). */
+    .nav-mode-badge {
+      position: relative; width: 44px; height: 44px; flex: none;
+      border: none; border-radius: 50%; cursor: pointer; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-mode-badge .nmb-emoji { line-height: 1; }
+    /* count bubble -- same shape/idiom as #navIconRail's own .nir-count (search it),
+       reused rather than re-derived: position:absolute top-right overlay, the app's
+       existing --margin-rule/--accent-on pairing rather than trying to derive a
+       SECOND contrast decision (bubble-on-Mode-fill) on top of accentOnFor()'s own
+       badge-fill-vs-emoji one. */
+    .nav-mode-badge .nmb-count {
+      position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 3px;
+      border-radius: 999px; background: var(--margin-rule); color: var(--accent-on);
+      font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+      font-variant-numeric: tabular-nums; border: 2px solid var(--paper);
+    }
+    /* 2026-08-27 (COMMIT 1 STEP 3): belt-and-braces, same reasoning and same pattern
+       as the OLD pill's own #wrap[data-view]:not([data-view="day"]) rule (search it,
+       just below -- being deleted from THAT selector's old target but the shape is
+       worth keeping): renderModeBadge() only runs from renderTimeline(), which only
+       runs when render()'s dispatcher calls renderDay() -- i.e. state.view==="day"
+       ONLY. On every other page nothing re-runs it, so the badge's own `hidden`
+       attribute would go stale the instant she navigates away mid-filter. Real page-
+       scoping keyed off #wrap's data-view (kept current every navigation) closes
+       that gap regardless of whether some future code path forgets to re-hide it. */
+    #wrap[data-view]:not([data-view="day"]) .nav-mode-badge { display: none !important; }
     /* #dayRow2 no longer lands in #navDateSlot (placeDateLine() stopped reparenting
        it here, 2026-08-24) -- these three rules are dormant, never matching anything
        any more. Left in place rather than deleted, per this file's own reversible-
@@ -16769,10 +16719,11 @@
     [data-wr-panel-open] #deskColMain { margin-right: 320px; }
   }
   /* 2026-08-24 pt.2: the rail used to reserve 41px of top padding whenever
-     body.mode-pill-on was set, purely to get out of the way of .tl-mode-hidden-pill
-     floating across its top-right corner. That pill no longer floats (it's an in-flow
-     block above the timeline now), so both the class and this padding are gone --
-     the rail keeps its full column height back. */
+     body.mode-pill-on was set, purely to get out of the way of the old Mode-hidden
+     pill floating across its top-right corner. That pill is long gone (moved
+     in-flow 2026-08-24, deleted outright 2026-08-27 -- see "nav-mode-badge"), so
+     both the class and this padding are gone too -- the rail keeps its full column
+     height back. */
   /* explicit base rule, not just relying on :empty -- content set by
      renderSunWeekAhead() only refreshes on a full renderDay() pass, not on
      every resize, so a card populated while desktop-Sunday would otherwise
@@ -16816,9 +16767,8 @@
     display: flex; align-items: center; justify-content: center;
   }
   /* --accent-on measured live in dark theme resolves to plain white here, and
-     white-on-gold-bright is ~1.7:1 contrast (see .tl-mode-hidden-pill[aria-pressed]'s
-     own comment, same finding) -- #241B04 is the same proven dark-on-gold-bright
-     pairing used there and by .cad-variant-btn[aria-pressed], not a new guess. */
+     white-on-gold-bright is ~1.7:1 contrast -- #241B04 is the same proven
+     dark-on-gold-bright pairing .cad-variant-btn[aria-pressed] uses, not a new guess. */
   .sun-week-quickadd:hover { background: var(--gold-bright); color: #241B04; }
   /* four Sunday review cards (part C) -- .h-stats/.h-stat is the app's own
      shared stat-grid component (Weight/Fitness/Nutrition/Cycle/Review all reuse
@@ -18399,7 +18349,8 @@
      syncModeFocus() (below activeMode(), called from the global render() dispatcher, the
      same "current on every navigation" hook renderNavExtras() already uses).
      Because syncModeFocus() checks state.modeRevealAll before adding the class,
-     tapping the EXISTING "reveal everything" pill (#tlModeHiddenPill/#todoModeHiddenPill)
+     tapping the EXISTING "reveal everything" controls (#navModeBadge/#todoModeHiddenPill,
+     2026-08-27: was #tlModeHiddenPill on Day, now the top-bar badge -- see "nav-mode-badge")
      brings all of this back too, for free, with zero new UI -- one escape hatch, not two.
      display:none only, same reversible pattern #astroLine already used when it was retired
      -- nothing here touches a calculation (universalDay()/personalYear()/personalMonth()/
@@ -18638,16 +18589,26 @@
            same pattern) -- its click listener is gone too, see the STEP 5 note near
            the old toggleNumPanel(). -->
       <button type="button" class="jump-btn num-star-btn" id="numStarBtn" hidden title="Numerology & astrology" aria-label="Toggle numerology and astrology panel" aria-pressed="false">★</button>
-      <!-- 2026-08-24 (GCal-shaped mobile top bar): search/date-badge/to-do promoted
-           back OUT of the chapters drawer into real top-bar icons -- search calls the
-           SAME openJump() the buried #navSearchBtn drawer row and "/" already call
-           (not a new search feature, just a more reachable trigger for the existing
-           one); the date badge is the exact #dnrDateBadge pattern from the desktop
-           launcher, reused via the shared .nav-date-badge-live class rather than a
-           second hand-written version; to-do opens the existing #editPanel to-do
-           sheet (openTodoPanel()), same panel the "N pending" banner below opens. -->
+      <!-- 2026-08-24 (GCal-shaped mobile top bar): search/to-do promoted back OUT of
+           the chapters drawer into real top-bar icons -- search calls the SAME
+           openJump() the buried #navSearchBtn drawer row and "/" already call (not a
+           new search feature, just a more reachable trigger for the existing one);
+           to-do opens the existing #editPanel to-do sheet (openTodoPanel()), same
+           panel the "N pending" banner below opens.
+           2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1, STEP 2):
+           #navTopDateBadge (the date-badge-in-a-circle that used to sit here) is
+           gone -- her own words, "it should be at the top row, that information is
+           redundant": #dayRow2/#navDateSlot's own date strip, directly below this
+           bar, already shows the date. Its click handler was "jump to today"
+           (state.anchor = TODAY, state.view = "day") -- shared via the
+           .nav-date-badge-live class/delegate with #dnrDateBadge (desktop's own copy,
+           untouched, still live) and, on mobile, the exact same action is already one
+           tap away via .day-step-row's own "Today" word-as-jump-control inside the
+           top drawer -- nothing reachable is lost, purely redundant chrome removed.
+           #navModeBadge (below) takes its old slot, immediately left of search, per
+           her spec ("immediately left of search"). -->
+      <button type="button" class="nav-mode-badge" id="navModeBadge" hidden></button>
       <button type="button" class="nav-search-btn" id="navTopSearchBtn" aria-label="Search">🔍</button>
-      <button type="button" class="nav-date-badge nav-date-badge-live" id="navTopDateBadge"></button>
       <button type="button" class="nav-todo-btn" id="navTopTodoBtn" aria-label="To-do list">☑</button>
       <!-- 2026-08-04 (Linh: "move the magnifier out of top-right, into the chapter
            dropdown as the last item"): the ⌕ button that used to live here is gone --
@@ -18927,10 +18888,11 @@
        deliberately survive: they still stamp data-origin on every .tl-item, which is
        what draws the 4px left-edge origin rail (solid / dashed / dotted) on the blocks
        themselves. That rail is a separate, still-wanted feature. -->
-  <!-- 2026-08-24 pt.2: #tlHiddenPillRow used to live HERE, as a #wrap-level sibling of
-       every page (a hangover from when it was position:fixed chrome, which doesn't care
-       where it sits in the DOM). It is now in normal flow directly above the timeline,
-       inside .day-main -- search "tlHiddenPillRow" for its new home and the reasoning. -->
+  <!-- #tlHiddenPillRow used to live HERE, as a #wrap-level sibling of every page (a
+       hangover from when it was position:fixed chrome, which doesn't care where it
+       sits in the DOM) -- moved in-flow above the timeline 2026-08-24 pt.2, then
+       deleted outright 2026-08-27 ("the Mode filter moves off the calendar", COMMIT
+       1 STEP 4) in favour of #navModeBadge in the top bar. Nothing mounts here now. -->
 
   <!-- ================= HEALTH & WELLNESS — TODAY ================= -->
   <div class="page" id="todayPage" hidden>
@@ -21019,41 +20981,19 @@
              Morning/Night don't need this: tapping Focus again in the ambient rail
              already covers "back in" for them. -->
         <button type="button" id="modeTakeoverReentryPill" class="mode-takeover-reentry-pill" hidden data-mt-reenter></button>
-        <!-- 2026-08-24 pt.2 (Linh: the gold "Showing everything · Filter ›" pill "sits on
-             top of my calendar and gets in the way"): moved here from #wrap level, where
-             it was position:fixed chrome floating over whatever the calendar had drawn in
-             the top-right. In flow directly above the timeline it pushes the calendar
-             down instead of covering it -- and since renderModeHiddenPill() now renders
-             nothing at all when the active Mode is hiding nothing, an ordinary day pays
-             no vertical space for it.
-             Placed immediately before #timelineScroll, which sits directly beside
-             #multiDayWrap (verified live: adjacent direct children of .day-main), so this
-             ONE position serves 1-day and 3/5/7-day alike. Living inside .day-main also
-             means it travels with placeDeskGrid()'s existing reparent into #deskColMain,
-             so it stays pinned to the calendar column on desktop with no extra JS.
-             Kept: the id, the hidden attribute, the click handler, the two child spans,
-             the two-way aria-pressed toggle -- this is a move plus a visibility rule, not
-             a rewrite of the control. -->
-        <div class="tl-hidden-pill-row" id="tlHiddenPillRow">
-          <!-- Mode filtering, stage 2 of "Modes, Sessions & Everything Attached"
-               (2026-08-20): her spec's own non-negotiable rule, restated for THIS filter
-               (§2: "this rule applies to every filtered surface in the app, without
-               exception") -- nothing mode-filtering hides is ever silent. Content-driven
-               (names the top few hidden items) rather than a static count, since her spec
-               asks for both.
-               2026-08-22 ("make the hidden-by-Mode control obvious and reversible"): was
-               a single textContent node that only ever appeared while something was
-               hidden, so it read as a passing alert rather than a setting she owned (she
-               didn't know tapping it revealed everything). Now a real two-way toggle --
-               aria-pressed reflects "revealed" (true) vs "filtered" (false); two child
-               spans (state text + a small fixed hint) instead of one, same shape
-               #trackSummaryBtn/.who-edit already use.
-               2026-08-24 pt.2 narrows that "always rendered" to "rendered whenever it has
-               something to say" -- the revealed state still always shows (it's the only
-               way back to filtering), but "Showing everything" with nothing hidden was
-               carrying no information while still taking space. -->
-          <button type="button" class="tl-mode-hidden-pill" id="tlModeHiddenPill" aria-pressed="false" hidden><span class="tlmp-state" id="tlModeHiddenPillState"></span><span class="tlmp-hint" id="tlModeHiddenPillHint"></span></button>
-        </div>
+        <!-- 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEP 4):
+             #tlHiddenPillRow / #tlModeHiddenPill -- the in-flow gold pill that used to
+             sit here (its own history: fixed-overlay, "gets in the way" fix moved it
+             in-flow 2026-08-24, "obvious and reversible" two-way toggle 2026-08-22) --
+             is deleted outright, not hidden-and-kept. Replaced by #navModeBadge in the
+             top bar (search "nav-mode-badge" in the HTML/CSS/JS) -- same three facts
+             (which Mode, that it's active, how many items it's hiding), 0px instead of
+             the 52px this row measured live just before removal (44px pill +
+             8px margin -- corrects her brief's own cited 136px; the row this build
+             already compacted on 2026-08-26 was smaller than the number that prompted
+             this rewrite, disclosed in the commit report rather than silently
+             assumed). Nothing else in the calendar column shifts as a result: this was
+             the row's whole job. -->
         <div class="timeline-scroll" id="timelineScroll">
         <!-- 2026-08-14: id added (class untouched) purely so layerTopOffset() can look
              this exact element up by id instead of the old bare document.querySelector(
@@ -30325,9 +30265,10 @@
     // one line further down. activeMode() is resolved ONCE here (it does a real
     // day-assembly scan; calling it per-item would be a second scan of the same
     // data renderTimeline already has), reused for every item's modeVisible()
-    // check AND passed straight to renderModeHiddenPill so the pill's own text
-    // is built from the exact items this filter excluded -- never a second,
-    // possibly-disagreeing pass over the day.
+    // check AND passed straight to renderModeBadge (2026-08-27: was
+    // renderModeHiddenPill, see that function's own replacement note) so the
+    // badge's own count is built from the exact items this filter excluded --
+    // never a second, possibly-disagreeing pass over the day.
     const activeM = activeMode();
     syncModeReveal(activeM);
     // 2026-08-20: numerology/astrology's .mode-focus reads the same am -- refreshing it
@@ -30341,7 +30282,7 @@
       if (!ok) modeHidden.push(e);
       return ok;
     });
-    renderModeHiddenPill(modeHidden, activeM);
+    renderModeBadge(modeHidden, activeM);
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -42073,8 +42014,9 @@
     </div>`).join("");
   }
   // §2 "Filtering the day" (2026-08-20, stage 2). ONE predicate, reused by both
-  // renderTimeline's filter (below) and renderModeHiddenPill (below) so the pill's
-  // own "what's hidden" text can never disagree with what's actually filtered.
+  // renderTimeline's filter (below) and renderModeBadge (below, 2026-08-27: was
+  // renderModeHiddenPill) so the badge's own count can never disagree with what's
+  // actually filtered.
   // `am` is the already-resolved activeMode() for this render pass -- callers
   // compute it once, not per item (activeMode() itself does a real day-assembly
   // scan, and renderTimeline calls this once per item on the day).
@@ -42100,8 +42042,9 @@
   // instead of a second scan; syncModeFocus() is the convenience wrapper for spots that
   // don't already have one -- render()'s own "global chrome, current on every
   // navigation" spot (same as renderNavExtras()), and the
-  // #tlModeHiddenPill/#todoModeHiddenPill/#moShowAnywayBtn handlers, none of which
-  // resolve activeMode() themselves.
+  // #navModeBadge/#todoModeHiddenPill/#moShowAnywayBtn handlers (2026-08-27:
+  // #navModeBadge replaces #tlModeHiddenPill), none of which resolve activeMode()
+  // themselves.
   function applyModeFocusClass(am) {
     document.body.classList.toggle("mode-focus", am.id !== "home" && !state.modeRevealAll);
   }
@@ -42119,98 +42062,61 @@
     if (e.category && am.shows.categories && am.shows.categories.indexOf(e.category) !== -1) return true;
     return false;
   }
-  // her spec, same non-negotiable rule as the origin filter's own pill: "Whenever
-  // anything is hidden, show a small persistent pill... naming the top few kinds...
-  // tapping to reveal everything." `hidden` is the exact array modeVisible's own
-  // renderTimeline call site excluded this pass -- never a second, possibly-
-  // disagreeing scan. Named by TITLE (her example: "clinic, dinner, hair wash"),
-  // capped at 3 names + a "+N more" tail so a heavy filter day doesn't overflow
-  // the pill's own max-width.
-  // Modes stage 4 (2026-08-21): now also covers the page-wide widgets .mode-focus
-  // hides (widget rail, fire shortcut, Mandarin card, notes, days-shown picker) --
-  // ONE combined pill, not a second one, same reveal-all tap fixes both. Reads
-  // .mode-focus straight off <body> rather than a new param: renderTimeline's own
-  // call site already runs applyModeFocusClass(am) immediately before calling this,
-  // so the class is guaranteed current by the time this reads it. The widget-hidden
-  // fact is folded in BEFORE the item-name list (not appended after it) on purpose --
-  // this pill is a single-line, 280px, ellipsis-truncated button (see .tl-mode-
-  // hidden-pill CSS), so on a heavy filter day it's the item-name preview that
-  // should get clipped first, never the widgets fact.
-  // 2026-08-22 ("make the hidden-by-Mode control obvious and reversible" -- she found
-  // Sleep missing from Day view, didn't know this pill was tappable): rebuilt as an
-  // always-rendered, both-ways-labelled toggle instead of an appear-only-when-hidden
-  // alert -- her own diagnosis of why it read wrong ("she did not know the pill was a
-  // control"). Hidden only for Home (am.shows === null; modeVisible() filters nothing
-  // there, so there is genuinely no toggle to offer -- matches the Home exception
-  // already documented on modeVisible() itself). Every other mode: always visible,
-  // states its OWN current side honestly ("Showing X only · N hidden" filtered,
-  // "Showing everything" revealed) rather than only ever announcing one direction --
-  // this is also what makes STEP 4's per-mode reset harmless instead of silent: the
-  // reset still happens (mtActiveTakeoverModeId()'s Study/Cleaning takeover genuinely
-  // needs it, see that function's own comment -- a real reason, not a default left
-  // alone), but there is no longer a moment where the control just isn't there to
-  // check; whatever the real state is, this says so the instant she looks.
-  // 2026-08-24 pt.2 (Linh: the gold pill "sits on top of my calendar and gets in the
-  // way"). body.mode-pill-on and setModePillFlag() are GONE with this change, not
-  // renamed: their whole job was making the desktop widget rail yield the top of its
-  // column while this pill floated across it. It doesn't float any more (see the CSS
-  // -- position:fixed/top/z-index all removed, it's an in-flow block directly above
-  // the timeline now), so there is nothing left to clear and the rail's matching
-  // padding-top rule went with them. Nothing else ever read that class.
-  function renderModeHiddenPill(hidden, am) {
-    const pill = document.getElementById("tlModeHiddenPill");
-    const stateEl = document.getElementById("tlModeHiddenPillState");
-    const hintEl = document.getElementById("tlModeHiddenPillHint");
-    if (!pill || !stateEl || !hintEl) return;
-    if (am.id === "home") { pill.hidden = true; return; }
-    pill.setAttribute("aria-pressed", String(!!state.modeRevealAll));
-    if (state.modeRevealAll) {
-      // this state stays even though it carries no count -- it is the ONLY way back
-      // to filtering, and she needs to see she's in a temporarily-revealed state.
-      // (The 2026-08-22 "she didn't know this was a control" fix is what it protects;
-      // that problem was real, so the control must stay findable, just not floating.)
-      pill.hidden = false;
-      stateEl.textContent = "Showing everything";
-      hintEl.textContent = "Filter ›";
-      return;
-    }
-    const widgetsHidden = document.body.classList.contains("mode-focus");
-    // 2026-08-24 pt.2 -- "don't show it when it has nothing to say". READ THIS BEFORE
-    // relying on it: as the code stands today this guard never actually fires, and
-    // that is worth knowing rather than discovering later. applyModeFocusClass() sets
-    // .mode-focus to `am.id !== "home" && !state.modeRevealAll`, and renderTimeline()
-    // calls it immediately before this function -- so in the only branch that reaches
-    // this line (non-Home, not revealed) widgetsHidden is ALWAYS true. A real Mode
-    // always hides the widgets; that IS something to say, so the pill is never
-    // actually information-free here.
-    // Kept deliberately anyway: it is the correct guard for the condition it names,
-    // it costs one comparison, and it starts doing real work the moment .mode-focus
-    // stops being unconditional for every non-Home Mode (per-Mode widget lists are
-    // exactly what CLAUDE.md's Modes law §3 has planned). What actually got the pill
-    // off her calendar is the in-flow move, not this.
-    if (!hidden.length && !widgetsHidden) { pill.hidden = true; return; }
-    pill.hidden = false;
-    let detail = "";
-    if (hidden.length) {
-      const names = hidden.map(e => e.title).filter(Boolean);
-      const shown = names.slice(0, 3).join(", ");
-      const more = names.length > 3 ? ` +${names.length - 3} more` : "";
-      const widgetsPart = widgetsHidden ? " + widgets" : "";
-      detail = ` · ${hidden.length} thing${hidden.length === 1 ? "" : "s"}${widgetsPart} hidden: ${shown}${more}`;
-    } else if (widgetsHidden) {
-      detail = " · widgets hidden";
-    }
-    stateEl.textContent = `Showing ${am.name} only${detail}`;
-    hintEl.textContent = "Show all ›";
+  // 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEPS 3-4):
+  // REPLACES renderModeHiddenPill() (the 2026-08-20/22/24 in-flow gold pill --
+  // Linh: it "sits on top of my calendar and gets in the way" and "costs 136px on
+  // every screen it appears on"; measured live before this change: the pill/row
+  // this build compacted to a right-aligned chip on 2026-08-26 actually cost 52px
+  // (44px pill + 8px margin), not 136 -- disclosed in the commit report rather than
+  // silently correcting her cited number, since it doesn't change what to build,
+  // only how much space is reclaimed). #navModeBadge (top bar, 44x44, immediately
+  // left of search) carries the SAME three facts her non-negotiable rule requires
+  // ("nothing mode-filtering hides is ever silent") in 0px instead of 52: the emoji
+  // says WHICH mode, the accent tint says it's ACTIVE, the count bubble says the
+  // COST -- not a fourth pill, a smaller one.
+  // `hidden` is the exact array modeVisible()'s own renderTimeline() call site
+  // excluded this pass -- never a second, possibly-disagreeing scan, same sourcing
+  // discipline the old pill used.
+  // Deliberate simplification, disclosed rather than silently dropped: the old pill
+  // also showed (with no count) whenever ONLY the page-wide widgets were hidden by
+  // .mode-focus and zero calendar items were actually excluded ("· widgets hidden").
+  // A count-bubble badge has no honest way to display a widgets-only fact -- her own
+  // spec frames the three facts as which/active/COST, and there is no numeric cost
+  // to show when hidden.length is 0. So: badge shows only when hidden.length > 0.
+  // On an ordinary quiet day under an active Mode (nothing on the calendar needs
+  // hiding), the widget rail still silently loses its numerology per .mode-focus --
+  // exactly as it always has -- just with no badge announcing it any more. Flagged
+  // in the commit report, not fixed here: this is what her spec's own count-driven
+  // design implies, not a bug found along the way.
+  function renderModeBadge(hidden, am) {
+    const badge = document.getElementById("navModeBadge");
+    if (!badge) return;
+    if (am.id === "home" || state.modeRevealAll || !hidden.length) { badge.hidden = true; return; }
+    badge.hidden = false;
+    // var(--mode-<id>) / var(--mode-<id>-on): the SAME two custom properties
+    // applyModeColours() already maintains for every other Mode-coloured surface
+    // (search it) -- reused, not a second accentOnFor() call for this one badge.
+    badge.style.background = `var(--mode-${am.id})`;
+    badge.style.color = `var(--mode-${am.id}-on)`;
+    const n = hidden.length > 99 ? "99+" : String(hidden.length);
+    badge.setAttribute("aria-label", `${am.name} is filtering — ${hidden.length} item${hidden.length === 1 ? "" : "s"} hidden. Open Mode filter.`);
+    badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span><span class="nmb-count" aria-hidden="true">${n}</span>`;
   }
-  // 2026-08-22: real two-way toggle now (was always-true, one-way -- the only way
-  // back to filtered used to be waiting for the active Mode itself to change). Flips
-  // whichever way it isn't right now; renderModeHiddenPill()'s own aria-pressed read
-  // is what decides current side, so this never needs to know it independently.
-  document.getElementById("tlModeHiddenPill").addEventListener("click", () => {
-    state.modeRevealAll = !state.modeRevealAll;
+  // 2026-08-27 (COMMIT 1, interim -- COMMIT 2 replaces this with "open the sheet"):
+  // the sheet doesn't exist yet, and a tappable badge that does nothing on tap is a
+  // half-finished control, not a smaller pill -- so for now this performs the same
+  // single-direction "reveal everything" action #moShowAnywayBtn already uses
+  // elsewhere (state.modeRevealAll = true), rather than reintroducing the OLD pill's
+  // two-way toggle her own spec explicitly retires (the badge is never rendered at
+  // all once revealed -- see renderModeBadge() above). Recovery back to filtered is
+  // the same auto-reset every other modeRevealAll consumer already relies on --
+  // syncModeReveal() clears it the instant the active mode id itself changes -- not
+  // a manual toggle; COMMIT 2's sheet is what gives that a deliberate, visible
+  // control instead of "wait for the mode to change."
+  document.getElementById("navModeBadge").addEventListener("click", () => {
+    state.modeRevealAll = true;
     // renderDay() -> renderTimeline() refreshes .mode-focus itself (applyModeFocusClass
-    // above), so numerology/astrology comes back (or re-hides) the instant this pill does.
+    // above), so numerology/astrology comes back the instant this badge does.
     renderDay();
   });
   // §4 to-do mode-tagging (stage 5): "the active mode's to-dos, PLUS untagged ones" --
@@ -42243,7 +42149,7 @@
   document.getElementById("todoModeHiddenPill").addEventListener("click", () => {
     state.modeRevealAll = true;
     // renderTodoPage() refreshes .mode-focus itself (applyModeFocusClass above), same
-    // as #tlModeHiddenPill's handler.
+    // as #navModeBadge's handler (2026-08-27: was #tlModeHiddenPill).
     renderTodoPage();
   });
   // populates #todoModePicker (the to-do editor's own Mode row) from the live MODES
@@ -46081,7 +45987,7 @@
     if (!isDev || !mobileDayDrawersActive()) return;
     const main = document.querySelector(".day-main");
     if (!main) return;
-    const ALLOWED_IDS = new Set(["dayTopDrawer", "ddGrab", "ddBackToTopFlash", "dayAlldayRow", "tlHiddenPillRow"]);
+    const ALLOWED_IDS = new Set(["dayTopDrawer", "ddGrab", "ddBackToTopFlash", "dayAlldayRow"]);
     const offenders = [];
     for (const el of main.children) {
       if (el.id === "timelineScroll" || el.id === "multiDayWrap") break;
@@ -59169,8 +59075,9 @@
     applyModeFocusClass(am);
     // 2026-08-23: everything is always visible now -- no more todoModeVisible()
     // filter / renderTodoModeHiddenPill() call here (both stay defined, and
-    // #tlModeHiddenPill on the Day view remains a fully independent way to reach
-    // state.modeRevealAll -- "one escape hatch, not two", see its own comment).
+    // #navModeBadge (2026-08-27: was #tlModeHiddenPill) on the Day view remains a
+    // fully independent way to reach state.modeRevealAll -- "one escape hatch, not
+    // two", see its own comment).
     // Instead the flat list is grouped into sections by each to-do's own .mode
     // field (never modeOf() -- that's routine-override resolution, for calendar
     // items only). A stale/deleted Mode id folds into "No mode", matching the
