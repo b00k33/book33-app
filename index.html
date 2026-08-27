@@ -34462,17 +34462,33 @@
   // aria-label carried explicitly even though the visible text already states
   // the same thing (unlike mdBarHtml(), which truly has no visible text) --
   // matches her "aria-label stays on every variant" instruction literally.
-  function mdLineHtml(p) {
+  // 2026-08-27 (mobile 3/5/7-day grid fix, COMMIT 3, "give the name the space the
+  // time was taking"): the time span was unconditional, even though the block's own
+  // vertical position on the hour grid already states its start time -- at a narrow
+  // effective width that time text was winning the fight for space over the name,
+  // which the axis can't say. Measured live (detached-DOM probe matching this exact
+  // markup/CSS): time text "6:55am" ~41px + the row's own 12px chrome (4+4 padding +
+  // 4 gap) leaves the title ~52px of room at a full unsplit 3-day column (105px),
+  // ~37px at the existing labelable floor (90px), but goes NEGATIVE (-3px) the moment
+  // an overlap halves that same 105px column to ~50px -- her own cited "halves to 50"
+  // case. Reused 90px (labelable's own already-vetted threshold) rather than inventing
+  // a third similar number: below it, drop the time and let the name have the row.
+  // effW mirrors the exact px math colStyle below already computes for a split block
+  // (colWidth/cols, minus the 1px+1px / 2px side inset .md-line.tl-item's own CSS
+  // reserves either way) -- same formula, not a second guess at it.
+  function mdLineHtml(p, colWidth) {
     const { e, top, h, col, cols } = p;
     const colStyle = cols > 1
       ? `left:calc(${(col / cols * 100).toFixed(2)}% + 1px);width:calc(${(100 / cols).toFixed(2)}% - 2px);right:auto;`
       : "";
+    const effW = (colWidth || 0) / (cols || 1) - 2;
+    const showTime = effW >= 90;
     const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
     const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
     return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" style="top:${top}px;height:${h}px;${colStyle}">
-      <span class="md-line-time">${timeTxt}</span><span class="md-line-title">${esc(e.title)}</span>${mergeBadge}
+      ${showTime ? `<span class="md-line-time">${timeTxt}</span>` : ""}<span class="md-line-title">${esc(e.title)}</span>${mergeBadge}
     </div>`;
   }
   // bar: pure colour, no text at all — tap wires to the exact same
@@ -34497,7 +34513,7 @@
     return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
-  function mdColumnHtml(d, items, labelable) {
+  function mdColumnHtml(d, items, labelable, colWidth) {
     let placed = [];
     items.forEach(e => {
       const s = toMin(e.start);
@@ -34544,7 +34560,7 @@
     const html = placed.map(p => {
       if (!labelable) return mdBarHtml(p);
       if (p.h >= 34) return mdItemHtml(p);
-      if (p.h >= 18) return mdLineHtml(p);
+      if (p.h >= 18) return mdLineHtml(p, colWidth);
       return mdBarHtml(p);
     }).join("");
     // 2026-08-15 (§3 build): fastedHoursOn(d) again, this column's own date -- the CSS
@@ -35035,7 +35051,7 @@
     computeHourRange(dayList.flatMap(({ items }) => items.filter(e => !e.allDay && e.start)));
     document.getElementById("mdHours").innerHTML = buildHoursHtml();
     document.getElementById("mdColHeads").innerHTML = dayList.map(({ d }) => mdColHeadHtml(d)).join("");
-    document.getElementById("mdCols").innerHTML = dayList.map(({ d, items }) => mdColumnHtml(d, items, labelable)).join("");
+    document.getElementById("mdCols").innerHTML = dayList.map(({ d, items }) => mdColumnHtml(d, items, labelable, colWidth)).join("");
     const legendHost = document.getElementById("mdLegend");
     // STEP 4: same show/hide condition as before (now fed by labelable rather
     // than the old day-count compact) -- "keep it for now," not "decide its
