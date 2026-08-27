@@ -5404,6 +5404,25 @@
      chrome (background/border/shadow) — that's already the .ml-sheet it sits inside */
   #mealLogForm { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 16px; }
   #mealLogForm .full { grid-column: 1 / -1; }
+  /* ---- Mode filter sheet (2026-08-27, "the Mode filter moves off the calendar",
+     COMMIT 2) — same sheet chrome as the outcome/meal-log sheets above; opens from
+     #navModeBadge. --ef-tint (applyEfTint(), set to the active Mode's own accent on
+     open, same mechanism #tlDetailSheet already uses off modeOf(e)) tints .btn-save
+     below so "the Mode's own colour, tap to clear it" reads as one idea, not two. ---- */
+  .mfs-sheet { width: min(400px, 100vw); padding: 16px; gap: 16px; overflow: visible; }
+  .mfs-sheet .btn-save { width: 100%; background: var(--ef-tint, var(--margin-rule)); border-color: var(--ef-tint, var(--margin-rule)); color: var(--ef-ink, var(--accent-on)); }
+  .mfs-head { display: flex; align-items: flex-start; gap: 10px; }
+  .mfs-emoji { font-size: 22px; line-height: 1; flex: none; }
+  .mfs-head-t { min-width: 0; flex: 1; padding-top: 2px; }
+  .mfs-name { font-size: 15px; font-weight: 800; color: var(--ink); line-height: var(--lh-tight); }
+  .mfs-cause { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+  /* explicit 44px, not inherited -- this sheet has no .tl-detail-head wrapper, so
+     .tl-detail-close's own base rule (34px) would otherwise apply unchanged; her
+     STEP 3 asks for a genuine 44x44, same standard the nav-panel fix (21a793a)
+     set for every panel's close control. */
+  .mfs-head .tl-detail-close { margin-left: auto; flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .mfs-cost { font-size: 13px; color: var(--ink); }
+  .mfs-cost b { font-variant-numeric: tabular-nums; }
   /* 2026-08-06 (Linh: "a little confetti burst or a springy check with a soft colour
      pop"): celebrateTickAt() (JS, near toggleDone) appends one of these per tick-to-
      done, positioned via inline left/top rather than any ancestor -- fixed, so it reads
@@ -18813,6 +18832,21 @@
     <div class="tl-detail-sheet ml-sheet" id="mealLogSheet" role="dialog" aria-label="Log what you ate"></div>
   </div>
 
+  <!-- 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 2): #navModeBadge's
+       own sheet -- what's running, what it costs, and the two ways to change it.
+       Same overlay+sheet chrome as the outcome/meal-log sheets above (component
+       reuse, not a fourth pattern -- her own STEP 1 instruction: reuse .tl-detail-
+       sheet/.tl-walk-sheet/.slide-panel-sheet, don't invent one). Rendered by
+       renderModeFilterSheet(). Three exits, same discipline CLAUDE.md §8 now
+       requires everywhere (the nav-panel exit-trap fix, 21a793a, is why this is
+       binding, not optional): backdrop tap and Escape close it via the SAME
+       delegate shape #ocOverlay/#linkExplainOverlay already use below; the ✕ is a
+       genuine 44x44 (search "explicit 44px" near its CSS), not inherited from
+       .tl-detail-head's media-query override, which this sheet doesn't use. -->
+  <div class="tl-detail-overlay mfs-overlay" id="mfsOverlay" hidden>
+    <div class="tl-detail-sheet mfs-sheet" id="mfsSheet" role="dialog" aria-modal="true" aria-labelledby="mfsTitle"></div>
+  </div>
+
   <!-- person profile sheet (2026-08-05, Linh's Book44 mock): one person's family,
        significant dates, life updates and notes — rendered by ppRenderSheet(),
        opened from the People table (and from family chips inside itself: the web). -->
@@ -30059,6 +30093,12 @@
   // TL_ITEMS_BY_ID above. Read by renderTlMergeList (near openTlDetail) to show
   // every individual occurrence a merged box folded together.
   let TL_MERGE_GROUPS = {};
+  // 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 2): the exact
+  // items modeVisible() excluded this render pass, plus the day's real total before
+  // that filter -- renderModeFilterSheet() reads these (see renderTimeline()'s own
+  // "share one render pass's result" comment near where they're set). Same rebuilt-
+  // fresh-every-render lifetime as TL_ITEMS_BY_ID/TL_MERGE_GROUPS above.
+  let MODE_HIDDEN_TODAY = [], MODE_HIDDEN_TOTAL = 0;
   // 2026-08-14 (§1 multi-day calendar): pulled out of renderTimeline() below (which
   // now just calls this) so the new multi-day columns' own overlap handling
   // (renderMultiDayGrid()/mdColumnHtml()) uses the SAME side-by-side lane algorithm
@@ -30282,6 +30322,15 @@
       if (!ok) modeHidden.push(e);
       return ok;
     });
+    // 2026-08-27 (COMMIT 2, the sheet): module state, same "share one render pass's
+    // result, never rescan" discipline as TL_ITEMS_BY_ID above -- renderModeFilterSheet()
+    // (opened from the badge, well after this render pass finished) reads these
+    // rather than calling activeModeItem()/modeVisible() a second time, so the sheet's
+    // own "N of your T events" can never disagree with what the badge just showed.
+    // Total is BEFORE the mode filter, AFTER trackVisible() above -- "everything on
+    // the day that could show" is the honest denominator, not the raw unfiltered feed.
+    MODE_HIDDEN_TODAY = modeHidden;
+    MODE_HIDDEN_TOTAL = items.length + modeHidden.length;
     renderModeBadge(modeHidden, activeM);
     items.forEach(e => {
       const s = toMin(e.start);
@@ -32770,6 +32819,11 @@
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && !document.getElementById("tlDetailOverlay").hidden) closeTlDetail();
   });
+  // 2026-08-27 (COMMIT 2, "the sheet"): third of #mfsOverlay's three required exits
+  // (backdrop tap and the ✕ are in its own click delegate, near renderModeFilterSheet).
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !document.getElementById("mfsOverlay").hidden) closeModeFilterSheet();
+  });
 
   /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): the shared
      explainer sheet every ↻ linked badge opens (see linkInfo()/linkedBadgeHtml() for
@@ -34198,6 +34252,15 @@
     // 2026-08-26 (Rebuild the All Events page): the All/Repeats/One-offs filter and
     // the Repeats view's Pattern/List toggle, remembered between visits.
     evlFilter: "all", evlRepeatsView: "pattern",
+    // 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 2): added here,
+    // one commit ahead of the "add PREFS.modeFilterDayOnly" step in COMMIT 3's own
+    // brief -- built now because COMMIT 2's sheet needs a REAL, live toggle for it
+    // ("reachable link", her words), and a link to a preference that doesn't exist
+    // yet would be a dead control. COMMIT 3 confirms it's already here rather than
+    // re-adding it; COMMIT 3's own real work is making modeVisible() honour it.
+    // Default true ("what am I doing right now" is a Day-view question -- 3/5/7-day
+    // and Month are for planning, so a Thursday-evening flight shouldn't hide Monday).
+    modeFilterDayOnly: true,
   };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
@@ -42102,22 +42165,82 @@
     badge.setAttribute("aria-label", `${am.name} is filtering — ${hidden.length} item${hidden.length === 1 ? "" : "s"} hidden. Open Mode filter.`);
     badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span><span class="nmb-count" aria-hidden="true">${n}</span>`;
   }
-  // 2026-08-27 (COMMIT 1, interim -- COMMIT 2 replaces this with "open the sheet"):
-  // the sheet doesn't exist yet, and a tappable badge that does nothing on tap is a
-  // half-finished control, not a smaller pill -- so for now this performs the same
-  // single-direction "reveal everything" action #moShowAnywayBtn already uses
-  // elsewhere (state.modeRevealAll = true), rather than reintroducing the OLD pill's
-  // two-way toggle her own spec explicitly retires (the badge is never rendered at
-  // all once revealed -- see renderModeBadge() above). Recovery back to filtered is
-  // the same auto-reset every other modeRevealAll consumer already relies on --
-  // syncModeReveal() clears it the instant the active mode id itself changes -- not
-  // a manual toggle; COMMIT 2's sheet is what gives that a deliberate, visible
-  // control instead of "wait for the mode to change."
-  document.getElementById("navModeBadge").addEventListener("click", () => {
-    state.modeRevealAll = true;
-    // renderDay() -> renderTimeline() refreshes .mode-focus itself (applyModeFocusClass
-    // above), so numerology/astrology comes back the instant this badge does.
-    renderDay();
+  // 2026-08-27 (COMMIT 2, "the sheet"): replaces COMMIT 1's interim one-directional
+  // reveal (badge tap = state.modeRevealAll = true, no way to see WHY first) with
+  // opening the real sheet -- what's running, what it costs, and the two ways to
+  // change it, per her own 5-part content order.
+  document.getElementById("navModeBadge").addEventListener("click", openModeFilterSheet);
+  // ============================================================
+  // §2b "the sheet" (2026-08-27, COMMIT 2). Reuses .tl-detail-overlay/.tl-detail-
+  // sheet verbatim (her STEP 1: pick an existing pattern, don't invent a fourth) --
+  // same shape as openOutcomeSheet/closeOutcomeSheet/renderOutcomeSheet just above
+  // (own module state, own render-into-host function, own overlay click delegate),
+  // not the big #tlDetailOverlay's event-editing machinery, which this has nothing
+  // to do with.
+  // ============================================================
+  function openModeFilterSheet() {
+    // the badge that opens this is only ever visible when activeModeItem() is real
+    // and hidden.length > 0 (see renderModeBadge() above) -- this guard is defence
+    // in depth, same defensive shape openOutcomeSheet() uses for its own lookup,
+    // not a path expected to actually trigger.
+    if (!activeModeItem()) return;
+    renderModeFilterSheet();
+    document.getElementById("mfsOverlay").hidden = false;
+  }
+  // pure close -- no state.* write of any kind. Her STEP 4: "closing doesn't itself
+  // change state" is a REQUIREMENT to prove live, not a side note -- backdrop tap,
+  // the ✕ and Escape all route here, and none of them may reveal anything or touch
+  // PREFS. Only the dedicated buttons inside the sheet (below) change state.
+  function closeModeFilterSheet() {
+    document.getElementById("mfsOverlay").hidden = true;
+  }
+  function renderModeFilterSheet() {
+    const item = activeModeItem();
+    const host = document.getElementById("mfsSheet");
+    if (!item || !host) { closeModeFilterSheet(); return; }
+    const am = modeById(modeOf(item));
+    applyEfTint(host, am.id);
+    const endMin = itemEndMin(item);
+    const timeLabel = endMin != null ? `${fmtTime(item.start)} – ${fmtTime(minToTime(endMin))}` : fmtTime(item.start);
+    const hiddenN = MODE_HIDDEN_TODAY.length;
+    const dayOnly = PREFS.modeFilterDayOnly !== false;
+    host.innerHTML = `
+      <div class="mfs-head">
+        <span class="mfs-emoji" aria-hidden="true">${am.emoji || ""}</span>
+        <div class="mfs-head-t">
+          <div class="mfs-name" id="mfsTitle">${esc(am.name)} is filtering your day</div>
+          <div class="mfs-cause">${esc(item.title)} — ${timeLabel}</div>
+        </div>
+        <button type="button" class="tl-detail-close" data-mfs-close aria-label="Close">×</button>
+      </div>
+      <div class="mfs-cost"><b>${hiddenN}</b> of your <b>${MODE_HIDDEN_TOTAL}</b> event${MODE_HIDDEN_TOTAL === 1 ? "" : "s"} ${hiddenN === 1 ? "is" : "are"} hidden right now.</div>
+      <button type="button" class="btn-save" data-mfs-reveal>Show everything today</button>
+      <div class="ddt-gear-row">
+        <span>Never filter the week view</span>
+        <button type="button" class="ddt-gear-toggle" data-mfs-daypref aria-pressed="${dayOnly}">${dayOnly ? "On" : "Off"}</button>
+      </div>`;
+  }
+  document.getElementById("mfsOverlay").addEventListener("click", e => {
+    if (e.target === e.currentTarget || e.target.closest("[data-mfs-close]")) { closeModeFilterSheet(); return; }
+    if (e.target.closest("[data-mfs-reveal]")) {
+      state.modeRevealAll = true;
+      closeModeFilterSheet();
+      // renderDay() -> renderTimeline() refreshes .mode-focus itself
+      // (applyModeFocusClass above), so numerology/astrology comes back the
+      // instant the badge does.
+      renderDay();
+      return;
+    }
+    if (e.target.closest("[data-mfs-daypref]")) {
+      // COMMIT 3 is what makes this pref actually change what modeVisible() does on
+      // 3/5/7-day and Month -- until it ships, this saves the real, persisted choice
+      // (loadPrefs()'s deep-merge means it's never undefined once set) but nothing
+      // reads it yet outside this row's own On/Off label.
+      PREFS.modeFilterDayOnly = !PREFS.modeFilterDayOnly;
+      savePrefs();
+      renderModeFilterSheet();
+      return;
+    }
   });
   // §4 to-do mode-tagging (stage 5): "the active mode's to-dos, PLUS untagged ones" --
   // her own confirmed rule, deliberately looser than modeVisible's calendar rule. A
