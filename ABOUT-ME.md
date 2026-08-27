@@ -1,7 +1,9 @@
 # About me — build Book33 to these preferences
 ## How I work with you
 - I'm newer to coding — explain in plain, simple language, step by step.
-- I preview changes before publishing; always STOP and let me look before pushing.
+- Push automatically when you're done — don't stop and wait for me. I'll undo with
+  git if I don't like it. (I approve designs before they become instructions; I
+  don't approve pushes.)
 - I notice small visual details and care a lot about polish.
 ## What I value in the design
 - Clean, simple, streamlined, organized. Symmetrical, aligned, logical layouts.
@@ -9,7 +11,8 @@
   my model for how the calendar should look and feel.
 - Consistency above all — one design system, one source of truth, nothing that
   drifts or looks different from screen to screen.
-- Mobile-first: I use this on my phone; it must fit the screen perfectly.
+- Mobile-first, literally. I use this on my phone. Design the phone version first
+  and the desktop version second. If you only did desktop, you're not done.
 ## Efficiency — this matters a lot to me
 - I want to do what I want with the LEAST effort — the fewest taps and the
   shortest path to get anything done.

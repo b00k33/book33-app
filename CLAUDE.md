@@ -79,10 +79,37 @@ Anything representing a page (fasting bar, summary strip) is tappable → naviga
 Whole element is the tap target; cursor:pointer + hover/press; keyboard accessible. Mobile
 tap targets ≥ ~24px.
 
-### 8. Mobile vs desktop
-Density/tessellation is a desktop/wide gain. Under @media (max-width:640px) collapse to a
-clean single column; never leave mobile cramped; never change a working mobile layout when
-the request is about desktop.
+### 8. Mobile is the primary format (rewritten 2026-08-27 — Linh's own words)
+Supersedes the old "§8 Mobile vs desktop," which read as *"leave mobile alone when the
+ask is about desktop"* and licensed exactly that: three separate mobile-layout failures
+(nothing-above-the-calendar shipped desktop-only first; `#mdAlldayRow`'s chip rules
+tuned only at 5/7-day desktop's 150–200px columns towering at a phone's 42px; the whole
+mobile drawer system gated to 1-day) all passed the old rule because it never required
+mobile to be *built*, only not *wrecked*. The "don't wreck a working mobile layout"
+protection is kept — it was never the problem — the part that permitted ignoring mobile
+entirely is gone.
+
+The phone is the real device. A change is not finished until it works at 412×915.
+Desktop is the second target, not the first.
+
+Every change that touches layout ships both widths in the same commit. There is no such
+thing as a desktop-only UI change here. If a request only describes desktop, the mobile
+behaviour still has to be decided, built and stated — ask if it isn't obvious; never
+default to "leave mobile as it is."
+
+A number tuned at one width is a bug at the other. Any `min-width`, `max-width`, fixed
+px or "measured live" value must say which width it was measured at, and must be
+checked at the other. Column widths are the usual trap: a 7-day column is ~180px on
+desktop and ~42px on a phone.
+
+Density/tessellation is still a desktop gain; mobile still collapses to a clean single
+column; still never wreck a working mobile layout to serve a desktop request. But
+"don't wreck it" never means "don't build it."
+
+Mobile Day view, every day-count: only the drawer grab handle, the all-day row, and the
+mode-hidden pill may sit between the top of the page and the calendar. Everything else
+goes in a drawer. (Enforced live, not just stated — see `dayLayoutAboveCalendarGuard()`
+in index.html, and the mobile report below.)
 
 ### 9. Every code change (workflow)
 Commit and push to main automatically (no waiting for approval), EXCEPT confirm before
@@ -1072,5 +1099,7 @@ active. The active Mode reshapes the whole app.**
    fall into.
 
 ## Before finishing
-- Confirm every rule is met; check dark AND light; check nothing is cut off or
-  overlapping at 360px.
+- Confirm every rule is met; check dark AND light.
+- Mobile report required (see §8 and "The mobile report" below) — screenshots at
+  412×915 in both themes, plus the four measured numbers. A commit touching layout
+  without one is not finished.
