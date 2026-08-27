@@ -11791,6 +11791,37 @@
      built): the THIRD zone (date-nav/1-3-5-7/mood chips/quick-add) is no longer part
      of this fixed-overlay family at all -- #dayTopDrawer moved in-flow, see its own
      rule below and its markup's own comment (inside .day-main). */
+  /* 2026-08-27 ("one layout law for every day-count", COMMIT 2 STEP 3): the law above
+     placeDayDrawers() says these five never sit above the calendar -- but each one's
+     own render function (renderBodyWidget/renderSessionCard/renderDayCtx/
+     renderModeAmbientRail, plus dayHeaderRowHtml's caller) writes into its host with
+     NO check on where that host currently lives, so "not above the calendar" has only
+     ever been true because placeDayDrawers() happens to run afterward and physically
+     move it -- true today, but a call-order accident, not a guarantee. Option (b) over
+     (a): CSS that keys off the DOM position itself needs no JS coordination and can't
+     drift out of sync with a future render-order change -- the moment JS reparents one
+     of these OUT of being a direct .day-main child (into a drawer, or desktop's own
+     #deskColLeft/#wrPinned), this selector simply stops matching, no class toggle
+     required. Mobile/tablet only (<1024px, matching deskGridMq) -- desktop's own
+     placeDeskGrid() already reparents all five unconditionally on every render, so
+     "briefly a direct child before JS moves it" isn't a real desktop risk the way it
+     is here.
+     #modeAmbientRail is NOT one of the four dayLayoutAboveCalendarGuard()'s own
+     comment names (dayBodyCard/daySessionCard/dayCtxWrap/dayHeaderRow) -- found
+     while building that guard: placeDayDrawers() never reparents it at all (only
+     placeDeskGrid()'s desktop branch does, into #wrPinned), so on mobile it returns
+     straight to #modeAmbientRailHome -- a real .day-main direct child -- every render.
+     Invisible on an ordinary day (self-hidden unless she's actually in ambient
+     Morning/Night), which is exactly why it went unnoticed; the same fix closes it. */
+  @media (max-width: 1023px) {
+    .day-main > #dayBodyCard,
+    .day-main > #daySessionCard,
+    .day-main > #dayCtxWrap,
+    .day-main > #dayHeaderRow,
+    .day-main > #modeAmbientRail {
+      display: none;
+    }
+  }
   .day-right-drawer {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 301;
     /* 2026-08-18 pt.6: same widening as .nav-panel, same number on both sides so the
@@ -45463,23 +45494,27 @@
 
   /* ============================================================
      MOBILE DAY-VIEW DRAWERS (2026-08-18). Linh: "the Day view should show ONLY the
-     calendar by default... hidden and only appear when I swipe for it." Scoped to
-     single-Day mobile only (same <1024px cutoff #navPanel's own edge-swipe already
-     uses, so all three edge gestures feel consistent) -- 3/5/7-day mobile views are
-     untouched, and desktop (deskGridMq) never runs this. Reparents the SAME existing
-     elements placeDeskGrid()'s desktop branch already knows how to place, just into
-     the two new drawers (+ #navPanel, extended to carry #deskSidebar) instead of
-     #deskGrid's zones -- nothing here duplicates markup, logic, or click wiring. ---
+     calendar by default... hidden and only appear when I swipe for it." <1024px only
+     (same cutoff #navPanel's own edge-swipe uses); desktop (deskGridMq) never runs
+     this. Reparents the SAME existing elements placeDeskGrid()'s desktop branch
+     already knows how to place, just into the two new drawers (+ #navPanel, extended
+     to carry #deskSidebar) instead of #deskGrid's zones -- nothing here duplicates
+     markup, logic, or click wiring.
+
+     2026-08-27 ("one layout law for every day-count") widened this from single-Day
+     only to every day-count (calDaysActive()===1 dropped from mobileDayDrawersActive(),
+     below) and states THE LAW this whole mechanism exists to enforce, from here on:
+
+       Mobile Day view, every day-count: only three things may sit between the top of
+       the page and the calendar -- the drawer grab handle, the all-day row, and the
+       mode-hidden pill when it has something to say. Everything else goes in a
+       drawer. A new widget gets a home marker and a line in this function, or it does
+       not ship on mobile.
+
+     dayLayoutAboveCalendarGuard() (search it, called at the end of this function)
+     checks this live, every render, and console.warns the offender's id if it's ever
+     broken -- don't rely on remembering to re-read this comment when adding a widget.
      ============================================================ */
-  // 2026-08-27 ("one layout law for every day-count"): calDaysActive()===1 dropped.
-  // Measured live: at 7 days this gate being false left #dayBodyCard/#daySessionCard/
-  // #dayCtxWrap/#dayHeaderRow/etc. in raw in-flow DOM order above the calendar (the
-  // ONLY thing that ever moves them is placeDayDrawers(), which never ran outside
-  // 1-day) -- #mdTimelineScroll started at y=530, 58% of a 915px viewport gone before
-  // the first hour. Every element this function reparents, and every OTHER caller of
-  // it (the edge-swipe gestures, renderDeskWidgetRail's icon-drawer branch), now runs
-  // at every day-count instead of only 1 -- see this commit's own report for what that
-  // exposed and how each was handled.
   function mobileDayDrawersActive() {
     return !deskGridMq.matches && state.view === "day";
   }
@@ -45571,6 +45606,16 @@
     const sessionCardHome = document.getElementById("daySessionCardHome");
     const ctxWrap = document.getElementById("dayCtxWrap");
     const ctxWrapHome = document.getElementById("dayCtxWrapHome");
+    // 2026-08-27 (COMMIT 2 STEP 3): found while writing the CSS fallback that hides
+    // these five if a reparent is ever skipped -- #modeAmbientRail was the one of the
+    // five placeDayDrawers() never actually claimed; only placeDeskGrid()'s desktop
+    // branch moves it (into #wrPinned), so on mobile it always fell back to its own
+    // .day-main home, invisible on an ordinary day only because it self-hides outside
+    // Morning/Night ambient mode. Same shape as ctxWrap in every way below -- no
+    // takeover guard needed (renderModeTakeover() never claims this one, only
+    // sessionCard).
+    const ambRail = document.getElementById("modeAmbientRail");
+    const ambRailHome = document.getElementById("modeAmbientRailHome");
     const rightBody = document.getElementById("dayRightDrawerBody");
     if (active) {
       // #deskSidebar moves as ONE unit (not picked apart into its mini-cal/numerology/
@@ -45601,6 +45646,7 @@
       if (bodyCard && rightBody && bodyCard.parentElement !== rightBody) rightBody.appendChild(bodyCard);
       if (!mtActiveTakeoverModeId() && sessionCard && rightBody && sessionCard.parentElement !== rightBody) rightBody.appendChild(sessionCard);
       if (ctxWrap && rightBody && ctxWrap.parentElement !== rightBody) rightBody.appendChild(ctxWrap);
+      if (ambRail && rightBody && ambRail.parentElement !== rightBody) rightBody.appendChild(ambRail);
       if (wrMobile && rightBody && wrMobile.parentElement !== rightBody) rightBody.appendChild(wrMobile);
       // both confirmed viewport-agnostic (just fill whatever element currently holds
       // their target ids) -- normally called from placeDeskGrid()'s desktop branch /
@@ -45657,6 +45703,10 @@
       // out from under it by a resize.
       if (!deskGridMq.matches && !mtActiveTakeoverModeId() && sessionCardHome && sessionCard && sessionCardHome.nextElementSibling !== sessionCard) sessionCardHome.after(sessionCard);
       if (!deskGridMq.matches && ctxWrapHome && ctxWrap && ctxWrapHome.nextElementSibling !== ctxWrap) ctxWrapHome.after(ctxWrap);
+      // ambRail keeps the same !deskGridMq.matches guard as ctxWrap/sessionCard just
+      // above -- placeDeskGrid()'s "on" branch (search ambRailHome) actively claims it
+      // into #wrPinned on desktop, running before this function each render.
+      if (!deskGridMq.matches && ambRailHome && ambRail && ambRailHome.nextElementSibling !== ambRail) ambRailHome.after(ambRail);
       if (wrMobileHome && wrMobile && wrMobileHome.nextElementSibling !== wrMobile) wrMobileHome.after(wrMobile);
       // leaving drawer mode (resize past 1024px, or navigating off the Day page)
       // while #dayTopDrawer/#dayRightDrawer was open would otherwise strand it
@@ -45669,6 +45719,36 @@
       // by the navMobileMq change listener a few hundred lines up (closeAllDayDrawers).
       closeDayTopZone(); closeDayRightDrawer();
     }
+    dayLayoutAboveCalendarGuard();
+  }
+  // 2026-08-27 ("one layout law for every day-count", STEP 2): enforces the law
+  // stated in this section's own header comment above, live, every render -- not
+  // just documented and hoped for. Same hostname gate as navReachabilityGuard()
+  // (search it) -- no localhost/dev-flag convention existed before that one either,
+  // so this reuses it rather than inventing a second. Walks .day-main's DIRECT
+  // children in DOM order and stops at the calendar itself (#timelineScroll/
+  // #multiDayWrap) -- everything checked here is, by definition, "above the
+  // calendar." A fixed/absolute-positioned child (the takeover overlay, the
+  // takeover re-entry pill) is skipped: an overlay doesn't push the calendar down,
+  // so it isn't a "sits above it in flow" violation the way a real block would be.
+  // Anything else with real rendered height that isn't on the allowlist is the bug
+  // this whole commit exists to catch before it ships -- named home markers
+  // (#dayBodyCardHome etc.) are never on the list and never trip it either, since a
+  // hidden 0-height marker reports height 0.
+  function dayLayoutAboveCalendarGuard() {
+    const isDev = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+    if (!isDev || !mobileDayDrawersActive()) return;
+    const main = document.querySelector(".day-main");
+    if (!main) return;
+    const ALLOWED_IDS = new Set(["dayTopDrawer", "ddGrab", "ddBackToTopFlash", "dayAlldayRow", "tlHiddenPillRow"]);
+    const offenders = [];
+    for (const el of main.children) {
+      if (el.id === "timelineScroll" || el.id === "multiDayWrap") break;
+      const pos = getComputedStyle(el).position;
+      if (pos === "fixed" || pos === "absolute") continue;
+      if (el.getBoundingClientRect().height > 0 && !ALLOWED_IDS.has(el.id)) offenders.push(el.id || `.${el.className}`);
+    }
+    if (offenders.length) console.warn("[day-layout guard] rendered ABOVE the calendar on mobile, not in a drawer:", offenders);
   }
   window.addEventListener("resize", placeDayDrawers);
   if (deskGridMq.addEventListener) deskGridMq.addEventListener("change", placeDayDrawers);
