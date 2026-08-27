@@ -43810,6 +43810,14 @@
     const SWIPE_MIN_PX = 60, SWIPE_MAX_OFF_AXIS = 50, BOTTOM_EDGE_PX = 28;
     let sx = 0, sy = 0, tracking = false;
     document.body.addEventListener("touchstart", e => {
+      // 2026-08-27 ("one layout law for every day-count"): this gesture now arms at
+      // 3/5/7 days too. Checked for a fight with #mdTimelineScroll's own horizontal
+      // week-swipe (search mdWindowDays) and there isn't one -- that gesture requires
+      // |dx|>=60 with |dy|<=50 (dominant HORIZONTAL), this one requires -dy>=60 with
+      // |dx|<=50 (dominant VERTICAL); a single touch can't satisfy |dx|>=60 and
+      // |dx|<=50 at once, so the two are mutually exclusive by their own thresholds.
+      // No target-based guard needed here (unlike the right-edge swipe just below,
+      // which genuinely does overlap it).
       if (e.touches.length !== 1 || !mobileDayDrawersActive()) { tracking = false; return; }
       const y = e.touches[0].clientY;
       if (y < window.innerHeight - BOTTOM_EDGE_PX) { tracking = false; return; }
@@ -43864,7 +43872,17 @@
     const SWIPE_MIN_PX = 40, SWIPE_MAX_OFF_AXIS = 80, EDGE_ZONE_PX = 40;
     let sx = 0, sy = 0, tracking = false;
     document.body.addEventListener("touchstart", e => {
-      if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayRightDrawerIsOpen()) { tracking = false; return; }
+      // 2026-08-27 ("one layout law for every day-count"): this gesture now arms at
+      // 3/5/7 days too, where its 40px-wide right-edge strip sits inside
+      // #mdTimelineScroll's own rightmost column -- that element owns the SAME
+      // leftward-swipe gesture for its week/window advance (search mdWindowDays), and
+      // UNLIKE the bottom-edge flick just above, the two threshold shapes genuinely
+      // overlap (both want dominant-horizontal, |dx|>=60ish with a generous |dy| cap).
+      // Confirmed live with a synthetic 70px leftward touch starting on #mdTimelineScroll
+      // near the right edge: without this guard the window advanced a week AND the
+      // drawer opened from one gesture; with it, only the window advances. Bail here
+      // and leave the gesture to the scroller uncontested.
+      if (e.touches.length !== 1 || !mobileDayDrawersActive() || dayRightDrawerIsOpen() || e.target.closest("#mdTimelineScroll")) { tracking = false; return; }
       const x = e.touches[0].clientX;
       if (x < window.innerWidth - EDGE_ZONE_PX) { tracking = false; return; }
       sx = x; sy = e.touches[0].clientY; tracking = true;
@@ -45453,8 +45471,17 @@
      the two new drawers (+ #navPanel, extended to carry #deskSidebar) instead of
      #deskGrid's zones -- nothing here duplicates markup, logic, or click wiring. ---
      ============================================================ */
+  // 2026-08-27 ("one layout law for every day-count"): calDaysActive()===1 dropped.
+  // Measured live: at 7 days this gate being false left #dayBodyCard/#daySessionCard/
+  // #dayCtxWrap/#dayHeaderRow/etc. in raw in-flow DOM order above the calendar (the
+  // ONLY thing that ever moves them is placeDayDrawers(), which never ran outside
+  // 1-day) -- #mdTimelineScroll started at y=530, 58% of a 915px viewport gone before
+  // the first hour. Every element this function reparents, and every OTHER caller of
+  // it (the edge-swipe gestures, renderDeskWidgetRail's icon-drawer branch), now runs
+  // at every day-count instead of only 1 -- see this commit's own report for what that
+  // exposed and how each was handled.
   function mobileDayDrawersActive() {
-    return !deskGridMq.matches && state.view === "day" && calDaysActive() === 1;
+    return !deskGridMq.matches && state.view === "day";
   }
   function placeDayDrawers() {
     const active = mobileDayDrawersActive();
