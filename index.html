@@ -5315,6 +5315,24 @@
      narrow COLUMN instead of a narrow window. */
   #mdAlldayRow .tl-allday-chip.bday-ribbon .bd-open { min-width: 70px; }
   #mdAlldayRow .tl-allday-chip.bday-ribbon .bd-acts { margin-left: 0; flex: 1 1 100%; margin-top: 4px; }
+  /* 2026-08-27 ("one layout law for every day-count", COMMIT 3): stamped by
+     mdAlldayNarrowPass() (search it, called from renderMdAlldayRow() and
+     placeDayDrawers()) once a rendered ribbon's OWN height proves the full card
+     doesn't fit this column -- collapses to an icon-only pill matching a plain
+     .ad-chip.tl-item's own min-height:44px (search it; border-radius:6px already
+     comes from that same shared class, untouched here). Same specificity as the
+     min-height:36px base rule above ((1,3,0) each, via .bday-ribbon[data-narrow]
+     vs [data-category]) -- later source order wins, same reasoning that rule's
+     own comment documents, no !important needed. */
+  #mdAlldayRow .tl-allday-chip.bday-ribbon[data-narrow] { min-height: 44px; padding: 0; }
+  #mdAlldayRow .tl-allday-chip.bday-ribbon[data-narrow] .bd-txt,
+  #mdAlldayRow .tl-allday-chip.bday-ribbon[data-narrow] .bd-acts { display: none; }
+  /* fills the pill so the WHOLE 44px is the tap target, not just the icon's own
+     line-height centred inside it -- .bd-open is the real <button>, aria-label/
+     title already carry "Open <name>'s birthday", unchanged, so it opens the same
+     detail sheet the full ribbon's button did. */
+  #mdAlldayRow .tl-allday-chip.bday-ribbon[data-narrow] .bd-open { flex: 1; width: 100%; align-self: stretch; justify-content: center; gap: 0; }
+  #mdAlldayRow .tl-allday-chip.bday-ribbon[data-narrow] .tlac-ic { font-size: 20px; }
   /* fixed light tone, not the theme-flipping --ink-soft -- the banner itself is always
      dark (see its own comment), so a subtitle that goes dark-brown in light theme would
      go unreadable the same way the title would have. */
@@ -11153,6 +11171,27 @@
      that same 2026-08-24 rule) is untouched -- this is scoped to the ID, not .ad-row
      itself, on purpose. */
   #mdAlldayRow { border-bottom: none; }
+  /* 2026-08-27 ("one layout law for every day-count", COMMIT 3, STEP 3): a day
+     with several all-day items (multiple birthdays, or birthdays + other items)
+     stacks them inside .ad-col (flex-direction:column, below) -- uncapped, enough
+     of them pushes the whole row, and the calendar under it, further down with no
+     ceiling. .ad-col already folds a 3rd+ item into its own "+N more" button
+     (search .ad-more) rather than stacking every item in full, so the realistic
+     ceiling is 2 full chips + that button, not an unbounded count -- live-measured
+     with 3 real test birthdays on one day (2 shown, 1 folded): 62px + 62px + 20px
+     + gaps = 164px. 180px clears that with a little room so the common 2-item day
+     never shows a scrollbar; anything taller (a pathological chip height, or a
+     future change to the fold count) scrolls inside the row instead of growing
+     it, so #mdTimelineScroll's top is never at the mercy of how many all-day
+     items exist on the busiest visible day. Scoped to the same <1024px band as
+     the icon-only fallback above (search "!deskGridMq.matches-gated") -- inert
+     for any realistic desktop day (2 real chips + a fold button sits well under
+     180px there too), but gated explicitly rather than left to "probably never
+     triggers," so desktop stays provably unchanged rather than just unchanged in
+     whatever cases got tested. */
+  @media (max-width: 1023px) {
+    #mdAlldayRow { max-height: 180px; overflow-y: auto; }
+  }
   .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
   /* position:relative/z-index:0 (2026-08-26): a stacking context for .ad-col:empty's
      own 44px tap pad below, same reason .md-col needs it for .md-bar's pad (search
@@ -34805,6 +34844,41 @@
     });
     alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), () =>
       `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${mdAlldayColsHtml(perDay)}</div>`);
+    mdAlldayNarrowPass();
+  }
+  // 2026-08-27 ("one layout law for every day-count", COMMIT 3): a full birthday
+  // ribbon needs room for an icon + title + up to 3 round action buttons -- the
+  // brief's own first guess was a column-width cutoff ("somewhere near 90px"), but
+  // live measurement disproved that a width alone can call it: at 1023px (the
+  // WIDEST column the <1024px band ever produces, 3-day), a short name ("Al") fits
+  // in 75px while a long name in that SAME 161.7px column still towers to 138.8px
+  // -- name length matters as much as column width, so a width-only rule would
+  // still ship this bug for long names. Measuring the chip's own rendered height
+  // AFTER mount catches both causes at once (anywhere the card doesn't fit, in
+  // either dimension, shows up as extra height), so it subsumes a width-only rule
+  // rather than trading it for a narrower one. 70px sits clear of every measured
+  // "working" case (48-62px, the intentional 2-line-title + wrapped-acts shape --
+  // search "chip height dropped from ~95px to ~52px") and every measured "broken"
+  // case (75-196px, every day-count, both test names, both ends of the mobile
+  // width band). Called after every #mdAlldayRow (re)build (above) and again from
+  // placeDayDrawers() (search "mdAlldayNarrowPass" there) so a pure resize/rotate
+  // -- which changes column width without rebuilding the row's HTML -- re-measures
+  // too; both calls just re-stamp the same live elements, so doing it twice on a
+  // normal render is harmless.
+  // !deskGridMq.matches-gated on purpose -- this brief is scoped to mobile
+  // (mobileDayDrawersActive(), throughout this section) and desktop must stay
+  // unchanged. Live-tested without the guard: an extreme-length name (the same
+  // long test name used above) towers past 70px at desktop 7-day's ~122px columns
+  // too, since desktop's own tuning was only ever verified against real (shorter)
+  // names -- collapsing it there would arguably also be an improvement, but it's
+  // a real behaviour change outside what this commit asked for, so desktop is
+  // force-cleared instead of left to inherit the mobile fix as a side effect.
+  function mdAlldayNarrowPass() {
+    const row = document.getElementById("mdAlldayRow");
+    if (!row) return;
+    row.querySelectorAll(".bday-ribbon").forEach(chip => {
+      chip.toggleAttribute("data-narrow", !deskGridMq.matches && chip.getBoundingClientRect().height > 70);
+    });
   }
 
   // called once per visible window (renderCalDaysUI(), below) whenever calDays>1 on
@@ -45719,6 +45793,7 @@
       // by the navMobileMq change listener a few hundred lines up (closeAllDayDrawers).
       closeDayTopZone(); closeDayRightDrawer();
     }
+    mdAlldayNarrowPass();
     dayLayoutAboveCalendarGuard();
   }
   // 2026-08-27 ("one layout law for every day-count", STEP 2): enforces the law
