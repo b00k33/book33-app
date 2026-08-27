@@ -34265,7 +34265,15 @@
   // trims the SINGLE-DAY timeline's own hour range, which is hidden outright at
   // multi-day regardless, so widening it here would be a no-op that just muddies what
   // the gate means.
-  function hourTrimActive() { return deskDay1Active() || mobileDay1Active(); }
+  // 2026-08-27 (mobile 3/5/7-day grid fix, COMMIT 1): used to be mobileDay1Active()
+  // here, so 3/5/7-day mobile fell through to the untrimmed full 22-24 hour range --
+  // that's the whole reason it opened on 3am. mobileDayMq.matches alone (any day
+  // count) is the correct gate: "mobile width" is the actual reason to trim, day
+  // count never was. Desktop is untouched on purpose -- deskDay1Active() still means
+  // exactly what it did (desktop AND exactly 1 day); the same reasoning likely
+  // applies to desktop 3/5/7 too (its columns are wide enough that 16 fewer dead
+  // rows would help there as well), but that's a separate ask, not decided here.
+  function hourTrimActive() { return deskDay1Active() || mobileDayMq.matches; }
   // 2026-08-16 (desktop multi-day build, "same layout and design as 1"): the broad
   // twin of deskDay1Active() — desktop width, Day page, ANY day count. Drives
   // [data-desk-day], the attribute the shared CHROME (chapters rail already used
@@ -34960,6 +34968,16 @@
     // unused right now) -- kept toggling it here only so nothing that might
     // read it later silently goes stale; disclosed rather than fixed quietly.
     document.getElementById("mdGrid").classList.toggle("md-compact", !labelable);
+    // 2026-08-27 (mobile 3/5/7-day grid fix, COMMIT 1): computeHourRange() used to
+    // run only inside renderDay()'s single-day body, off state.anchor's own items
+    // alone -- now that hourTrimActive() also covers mobile multi-day, the shared
+    // hourRange feeding buildHoursHtml()/topForMin() below must reflect EVERY
+    // visible day's items, not whatever the single-day pass last left behind for
+    // just the anchor day -- otherwise an early/late item on a non-anchor visible
+    // day would silently sit in an hour the trim swallowed. Same timed-only filter
+    // renderDay() uses for its own call (computeHourRange reads .start/itemEndMin,
+    // which all-day items don't carry) -- must run before buildHoursHtml() just below.
+    computeHourRange(dayList.flatMap(({ items }) => items.filter(e => !e.allDay && e.start)));
     document.getElementById("mdHours").innerHTML = buildHoursHtml();
     document.getElementById("mdColHeads").innerHTML = dayList.map(({ d }) => mdColHeadHtml(d)).join("");
     document.getElementById("mdCols").innerHTML = dayList.map(({ d, items }) => mdColumnHtml(d, items, labelable)).join("");
