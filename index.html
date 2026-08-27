@@ -10821,6 +10821,23 @@
   }
 
   /* ============================================================
+     MOBILE DAY-VIEW MOCK (2026-08-27, COMMIT 1) — the top bar's "August ▾" +
+     day-count control and the merged `‹ date › ⚙` nav row both retire in favour of
+     a real 7-day strip in .nav-tiers (#navDayStrip, below). Per this file's own
+     convention: left in place, unreferenced, not deleted -- see RETIRED-FEATURES.md
+     #9. #dayNavGear is the one piece of .day-step-row that does NOT retire (STEP 3:
+     "reuse existing handlers") -- its markup physically moved into .topbar-right
+     (see the HTML), so this rule only needs to hide what's left behind.
+     ============================================================ */
+  @media (max-width: 640px) {
+    .day-step-row, #navMonthBtn, #navMonthPop, #dayRow2 .date-row { display: none; }
+    /* #dayNavGear's base rule is display:none, only turned on by ".day-step-row
+       .day-nav-gear" above (now hidden along with its old row) -- this is that same
+       enabling rule for its new home. */
+    .topbar-right .day-nav-gear { display: inline-flex; }
+  }
+
+  /* ============================================================
      MULTI-DAY CALENDAR (§1 build, 2026-08-14) — 1/3/5/7-day views on the Today
      page, mobile-only (<1024px, see the min-width:1024px gate at the end of this
      block). Comfortable (1/3 days) cards and compact (5/7) bars both carry
@@ -13568,7 +13585,7 @@
      hidden here, un-hidden inside the ≤640px blocks that actually style each one
      (search "GCal-shaped mobile top bar" for those). Without this base rule they'd
      fall back to the browser's default button display everywhere ABOVE 640px too. */
-  .nav-month-btn, .nav-search-btn, .nav-mode-badge, .nav-todo-btn, .day-fab { display: none; }
+  .nav-month-btn, .nav-search-btn, .nav-mode-badge, .nav-todo-btn, .day-fab, .nav-day-strip { display: none; }
   @media (max-width: 640px) {
     /* 2026-08-04 (Step 2): was position:absolute/top:6/left:6, floating over whatever
        page content sat underneath. Now a normal flex item inside the real .nav-tiers
@@ -14139,6 +14156,45 @@
       content: ""; position: absolute; inset: -8px;
     }
     .nav-search-btn:hover, .nav-todo-btn:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+    /* ---- .nav-day-strip -- the 7-day strip itself, #navDayStrip inside #navDateSlot.
+       2026-08-27 fix: this enabling rule MUST come after the shared base-hide list
+       (search ".nav-day-strip { display: none; }") -- same specificity, so source
+       order decides, same reason every sibling in that list (.nav-search-btn etc.) is
+       styled down here and not up where it's first introduced in the HTML comment.
+       Always 7 columns regardless of the active day-count (1/3/5/7): "that is what
+       makes it a replacement for '‹ date ›' rather than an addition" -- the visible
+       WINDOW is marked via .sel (mdWindowDays(), 1 column at day-count 1, up to all 7
+       at day-count 7 or 5-aligned), literal TODAY via .today (a ring, never a fill --
+       same "today never gets a background" idiom .mini-cal-cell/.cyc-cell/.eight-row
+       already use elsewhere, so a selected-and-today column doesn't fight itself).
+       Fill token is var(--margin-rule)/var(--accent-on) -- the SAME pair
+       .cal-days-btn[aria-pressed]/.mini-cal-cell[data-selected] already use for
+       "filled control," not a new colour treatment, and resolves whatever the
+       current accent actually is (never hardcoded). Column width is intentionally
+       narrower than a 44px tap-target square -- measured at 412px, seven columns
+       plus the hamburger plus three 44px trailing icons leaves ~27px per column;
+       each column's full 44px-tall box is still the real hit target (width doesn't
+       need to hit 44px when height already does), and 11px is the type floor CLAUDE.md
+       sets elsewhere in this file, not shrunk below it here. */
+    .nav-day-strip { display: flex; width: 100%; gap: 1px; }
+    .nds-day {
+      flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 1px; min-height: 44px; padding: 2px 0;
+      border: none; background: none; border-radius: var(--radius-sm);
+      font: inherit; cursor: pointer; color: var(--ink);
+    }
+    .nds-wd { font-size: 11px; font-weight: 700; color: var(--ink-faint); line-height: 1; }
+    .nds-n { font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .nds-day.today { box-shadow: inset 0 0 0 1.5px var(--margin-rule); }
+    .nds-day.sel { background: var(--margin-rule); }
+    .nds-day.sel .nds-wd, .nds-day.sel .nds-n { color: var(--accent-on); }
+    /* the two facts #weekday used to carry that are NOT date duplicates -- UD9 and the
+       day's planetary ruler -- now live here as the strip's own first two chips
+       (#numGroupStrip already scrolls; both are first children so they're the
+       default-visible items, matching the old "UD stays the always-visible summary
+       piece" intent). #dayRulerChip reuses glyphHtml()'s own sizing (no .planet
+       class -- that class's own override was scoped to its old .weekday parent). */
+    #numGroupStrip #dayRulerChip { font-size: 11px; color: var(--ink-soft); }
     /* 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEP 3): a
        GENUINE 44x44 box, not this row's other two icons' 28px-visual/::after-padded
        trick -- her spec asked for it explicitly ("A 44×44 button"), and that padding
@@ -18580,6 +18636,13 @@
          level [data-cal-days] delegate pick it up for free, no new state). Tablet/
          desktop: this slot stays empty exactly as before, nothing here shows there. -->
     <div class="nav-date-slot" id="navDateSlot">
+      <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1): the approved-mock replacement for
+           "August ▾" below -- always 7 columns (renderNavDayStrip(), near renderDay()'s
+           other date-label lines), tap a day to jump to it, swipe to step the window
+           (bindSwipe(), reused verbatim -- see its own call site). #navMonthBtn/#navMonthPop
+           retire in place just below (RETIRED-FEATURES.md #9); "Week view" (the one fact in
+           that popover with no other entry point in the file) moved into the ⚙ gear sheet. -->
+      <div class="nav-day-strip" id="navDayStrip" role="tablist" aria-label="Day"></div>
       <button type="button" class="nav-month-btn" id="navMonthBtn" aria-haspopup="true" aria-expanded="false" aria-label="Change calendar view"><span class="nav-month-lbl" id="navMonthLbl"></span><span class="nav-month-caret" aria-hidden="true">▾</span></button>
       <div class="nav-month-pop" id="navMonthPop" hidden>
         <div class="nav-month-pop-row">
@@ -18629,6 +18692,9 @@
       <button type="button" class="nav-mode-badge" id="navModeBadge" hidden></button>
       <button type="button" class="nav-search-btn" id="navTopSearchBtn" aria-label="Search">🔍</button>
       <button type="button" class="nav-todo-btn" id="navTopTodoBtn" aria-label="To-do list">☑</button>
+      <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, STEP 3): moved here verbatim from
+           .day-step-row (same id/class/handlers -- see that row's own comment). -->
+      <button type="button" class="day-nav-gear" id="dayNavGear" aria-label="Day view settings" title="Day view settings">⚙</button>
       <!-- 2026-08-04 (Linh: "move the magnifier out of top-right, into the chapter
            dropdown as the last item"): the ⌕ button that used to live here is gone --
            search now lives at the bottom of #categoryTabs' own drawer (see
@@ -20484,9 +20550,16 @@
                  the script -- desktop never had a toggle to begin with, num-group-strip
                  is always shown there). -->
             <div class="weekday-moon-row">
-              <span class="ud-badge" id="udBadge"></span>
+              <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, RETIRED-FEATURES.md #9):
+                   #udBadge moved INTO #numGroupStrip below (Linh: "is not a repeat -- move
+                   it into #numGroupStrip with the other numerology chips") -- first child,
+                   so it's the strip's default-visible item even though the strip itself
+                   scrolls. #weekday's NAME text retires in place (the new top-bar day strip
+                   states the weekday) but its planet-ruler glyph+popover was a genuine
+                   separate fact, not a duplicate -- that piece moves into #numGroupStrip
+                   too, as #dayRulerChip, rather than retiring along with the name. -->
               <div class="day-hero-more">
-                <div class="weekday" id="weekday"></div>
+                <div class="weekday" id="weekday" hidden></div>
                 <!-- 2026-08-06 (Linh: "moon-phase icon floating loose below the date row,
                      in a faint empty box" -> "move it into the numerology dropdown"):
                      moved from here into #numGroupStrip below, alongside PM/sign/animal/
@@ -20498,6 +20571,8 @@
                      home-marker pattern as everywhere else in this file. -->
                 <div id="numGroupStripHome" hidden></div>
                 <div class="num-group-strip" id="numGroupStrip">
+                  <span class="ud-badge" id="udBadge"></span>
+                  <span class="num-hover-trigger" id="dayRulerChip" tabindex="0"></span>
                   <div class="moon-badge" id="moonBadge"></div>
                   <span class="date-pm num-hover-trigger" id="pmHover" tabindex="0"></span>
                   <div class="day-astro-bits" id="dayAstroBits"></div>
@@ -20507,6 +20582,13 @@
                 </div>
               </div>
             </div>
+            <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, RETIRED-FEATURES.md #9):
+                 .date-row retires in place on mobile -- #dateBig duplicates the new top-bar
+                 day strip's own date; #prevDay/#todayPill/#nextDay are subsumed by tapping a
+                 day in the strip (jump to any day, including today) or swiping it (step the
+                 window); #patientsNudge was ALREADY display:none on mobile before this change
+                 (measured live, unrelated CSS), so nothing reachable on phone is lost. Kept
+                 for desktop/tablet, where this row still renders. -->
             <div class="date-row">
               <!-- 2026-08-05 (Linh: "move Today and Today's Patients into the date
                    dropdown — tapping the date opens a tidy dropdown with those
@@ -20802,10 +20884,12 @@
           <button type="button" class="nav-arrow day-step" id="dayStepPrev" aria-label="Previous day">‹</button>
           <span class="day-step-date" id="dayStepDate"></span>
           <button type="button" class="nav-arrow day-step" id="dayStepNext" aria-label="Next day">›</button>
-          <!-- same #ddtGear popover, mounted off this button instead — see
-               renderDdtGearPop()/gearAnchorEl(), which pick whichever gear is on
-               screen. Not a second settings UI. -->
-          <button type="button" class="day-nav-gear" id="dayNavGear" aria-label="Day view settings" title="Day view settings">⚙</button>
+          <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, STEP 3): #dayNavGear physically
+               moved out of this row into .topbar-right (see .nav-tiers markup above) --
+               "reuse existing handlers" meant literally that: same id, gearAnchorEl()/
+               renderDdtGearPop() find it exactly as before via getElementById, no JS
+               changed. This row is retiring anyway (RETIRED-FEATURES.md #9); #dayNavGear
+               is the one thing in it that had to survive somewhere else. -->
           <!-- 2026-08-10 fix: placeDeskGrid()'s "off" branch (mobile/tablet) restores
                .patients-above-day via `addRowHome.after(addRowEl)` — deleting this marker
                outright (an earlier pass in this same edit) broke the RETURN half of that
@@ -35525,6 +35609,38 @@
     render();
   });
 
+  // 2026-08-27 (mobile Day-view mock, COMMIT 1): the top-bar replacement for "August ▾" --
+  // always 7 columns (Mon-Sun containing state.anchor), the active day-count's real window
+  // filled via mdWindowDays() -- the SAME derivation the multi-day grid itself reads, so
+  // "which columns are filled" can never disagree with what the grid actually shows -- and
+  // literal today ringed separately (today != selected once she's paged away from it, same
+  // "today is a ring, selected is a fill" split .mini-cal-cell already uses). Tapping a
+  // column jumps state.anchor there (generalises what #todayPill/#prevDay/#nextDay used to
+  // cover); swiping steps the window (bindSwipe(), reused on this element too -- see its
+  // own call site, near #timelineScroll/#mdTimelineScroll's calls).
+  function renderNavDayStrip() {
+    const strip = document.getElementById("navDayStrip");
+    if (!strip) return;
+    const monday = startOfWeek(state.anchor);
+    const activeKeys = new Set(mdWindowDays().map(keyOf));
+    const todayKey = keyOf(new Date());
+    let html = "";
+    for (let i = 0; i < 7; i++) {
+      const day = addDays(monday, i);
+      const k = keyOf(day);
+      const sel = activeKeys.has(k);
+      const isToday = k === todayKey;
+      html += `<button type="button" class="nds-day${sel ? " sel" : ""}${isToday ? " today" : ""}" data-nds-date="${k}" aria-pressed="${sel}" aria-label="${WD_FULL[i]} ${day.getDate()} ${MON_SHORT[day.getMonth()]}${isToday ? ", today" : ""}"><span class="nds-wd">${WD_MIN[i]}</span><span class="nds-n">${day.getDate()}</span></button>`;
+    }
+    strip.innerHTML = html;
+  }
+  document.addEventListener("click", e => {
+    const btn = e.target.closest("[data-nds-date]");
+    if (!btn) return;
+    state.anchor = parseKey(btn.dataset.ndsDate);
+    render();
+  });
+
   // 2026-08-02 (Linh: "the day time view shows 6am-10pm ... expandable button"): tracks
   // whether the timeline's scroll position has been set to 6am yet — see renderDay().
   let tlScrollInit = false;
@@ -35559,6 +35675,9 @@
     // both rather than a second hand-rolled template string. Hidden ≥641px.
     const stepDateEl = document.getElementById("dayStepDate");
     if (stepDateEl) stepDateEl.textContent = dayDateLabel(d, true);
+    // 2026-08-27 (mobile Day-view mock, COMMIT 1): the new top-bar day strip -- same
+    // "recompute every renderDay()" convention as every other date label on this line.
+    renderNavDayStrip();
     // 2026-08-04: moved up from further below (where `timed` used to live right before
     // renderTimeline(timed) consumed it) — computeCompactHours() needs the day's real
     // item list BEFORE buildHours() runs, since buildHours() is what actually reads
@@ -35693,6 +35812,12 @@
     // font-family unwound, which is a one-line CSS rule beside .planet's own.
     document.getElementById("weekday").innerHTML =
       `<span class="wd-full">${WD_FULL[dowIndex(d)]}</span><span class="wd-short">${WD_FULL[dowIndex(d)].slice(0, 3)}</span><span class="planet num-hover-trigger" tabindex="0">${glyphHtml(pl.icon)}${dayRulerPopoverHtml(pl)}</span>`;
+    // 2026-08-27 (mobile Day-view mock, COMMIT 1): #weekday is hidden now (its name text
+    // duplicated the new top-bar day strip), but its planet-ruler glyph+popover is a real,
+    // separate numerology fact -- same glyphHtml(pl.icon)/dayRulerPopoverHtml(pl) content,
+    // just written into #dayRulerChip (inside #numGroupStrip) instead. #weekday's own line
+    // above is left as-is (harmless on a hidden element) rather than split apart.
+    document.getElementById("dayRulerChip").innerHTML = `${glyphHtml(pl.icon)}${dayRulerPopoverHtml(pl)}`;
     document.getElementById("dateBig").innerHTML =
       `<span class="date-num">${d.getDate()}</span><span class="date-mon">${MON_SHORT[d.getMonth()]}</span>`;
     // 2026-08-02 (Linh: "shown when mouse hovers over PM9"): focusPopoverHtml() reuses
@@ -46672,6 +46797,7 @@
         <button type="button" class="ddt-gear-toggle" id="ddtMaxBtn" aria-pressed="${PREFS.dayMax === true}">${PREFS.dayMax === true ? "On" : "Off"}</button></div>` : ""}
       <div class="ddt-gear-row"><span>Day starts at</span><select id="ddtDayStartSel">${hourOpts(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6)}</select></div>
       <div class="ddt-gear-row"><span>Day ends at</span><select id="ddtDayEndSel">${hourOpts(Number.isFinite(PREFS.dayEnd) ? PREFS.dayEnd : 22)}</select></div>
+      ${showDays ? `<button type="button" class="ddt-gear-link" id="ddtGearWeekView">Week view →</button>` : ""}
       <button type="button" class="ddt-gear-link" id="ddtGearNotify">Notification settings →</button>`;
     btn.parentElement.style.position = "relative";
     btn.parentElement.appendChild(pop);
@@ -46687,6 +46813,16 @@
       ddtGearOpen = false;
       renderDdtGearPop();
       state.view = "notify"; render();
+      return;
+    }
+    // 2026-08-27 (mobile Day-view mock, COMMIT 1): #navMonthPop's "Week view" jump had no
+    // other entry point in the file (unlike "Month view", already reachable via the ☰
+    // menu's own "Calendar" row) -- relocated here rather than retired along with the rest
+    // of that popover. Same state.view mutation #navMonthPop's own delegate used.
+    if (e.target.closest("#ddtGearWeekView")) {
+      ddtGearOpen = false;
+      renderDdtGearPop();
+      state.view = "week"; render();
       return;
     }
     if (ddtGearOpen && !e.target.closest(".ddt-gear-pop") && !e.target.closest("#ddtGear, #dayNavGear")) {
@@ -56000,6 +56136,11 @@
     }
     bindSwipe(document.getElementById("timelineScroll"));
     bindSwipe(document.getElementById("mdTimelineScroll"));
+    // 2026-08-27 (mobile Day-view mock, COMMIT 1, "swiping the strip steps the window"):
+    // the SAME step-size rule (a whole week for 5/7-day, calDaysActive() otherwise) --
+    // bindSwipe() already reads calDaysActive()/mdWeekAligned() live at release time, so
+    // this needed no new logic, just a third element.
+    bindSwipe(document.getElementById("navDayStrip"));
   })();
   // 2026-08-11 (Fix: expanding calendar hours misaligns blocks — acceptance criterion
   // "re-run on every trigger that changes scale: the expand/zoom control, WINDOW
