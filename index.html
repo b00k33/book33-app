@@ -11206,6 +11206,20 @@
      whatever cases got tested. */
   @media (max-width: 1023px) {
     #mdAlldayRow { max-height: 180px; overflow-y: auto; }
+    /* 2026-08-27 (mobile 3/5/7-day grid fix, COMMIT 2): #mdAlldayRow is .ad-row
+       (display:flex, gutter + .ad-cols side by side) -- flex-wrap:wrap here lets
+       .ad-recur-row (below) force itself onto its own full-width line above that
+       pair via flex-basis:100%, without touching .ad-row's shared base rule (also
+       used by #dayAlldayRow, single-day, which never has a recur row to wrap for). */
+    #mdAlldayRow { flex-wrap: wrap; }
+    /* every-visible-day series, said once as a full-width chip instead of seven
+       per-column blanks -- see mdAlldayRecurBannerHtml()/mdAlldayColsHtml() (JS).
+       flex-basis:100% (not width:100%) is what actually forces the wrap onto its
+       own line inside a flex container; margin-bottom separates it from the
+       gutter+cols row wrapping below it once it does. */
+    #mdAlldayRow .ad-recur-row {
+      flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px;
+    }
   }
   .ad-cols { display: flex; flex: 1; gap: 4px; min-width: 0; }
   /* position:relative/z-index:0 (2026-08-26): a stacking context for .ad-col:empty's
@@ -34815,7 +34829,41 @@
       });
       counts.forEach((n, key) => { if (n === perDay.length) everyDayKeys.add(key); });
     }
-    return perDay.map(({ d, dk, bdays, others }, i) => {
+    // 2026-08-27 (mobile 3/5/7-day grid fix, COMMIT 2, option (b)): the every-visible-
+    // day case above reads fine at desktop column widths (100-330px) as one real chip
+    // plus blank continuation segments, but at mobile widths (42-105px measured) it's
+    // 11-of-14 empty boxes with nowhere for the title to land -- narrowing the gap
+    // between them (option (a)) still leaves every segment too narrow to label. Below
+    // deskGridMq (same gate every other mobile-only piece of this row already uses,
+    // e.g. mdAlldayNarrowPass()'s own comment just below this function), an every-day
+    // series stops drawing ANY per-column segment (real or continuation) and prints
+    // ONCE instead, as a full-width chip above the day columns -- see
+    // mdAlldayRecurBannerHtml() and its caller renderMdAlldayRow(). Desktop is
+    // completely untouched: the block below only ever executes when mobileMulti is
+    // true, so every desktop column keeps exactly the real-chip-then-continuation
+    // shape it already had.
+    const mobileMulti = !deskGridMq.matches;
+    // tapping the banner opens ONE occurrence, not seven -- today's own, if today is
+    // in the visible window (the day she's actually looking at), else the first
+    // visible day's, same "day 0 is canonical" choice the old per-column real chip
+    // made implicitly by always rendering day 0 as the non-continuation one. This is
+    // a real behaviour change from "tapping day N's continuation opens day N's own
+    // occurrence" for this specific (every-visible-day) case -- disclosed rather than
+    // silently narrowed, since one banner element can't keep seven independent tap
+    // targets. Genuine dateEnd spans (activeSpans, still dormant) are untouched and
+    // keep the old per-column continuation behaviour even on mobile.
+    const recurBannerHtml = (() => {
+      if (!mobileMulti || !everyDayKeys.size) return "";
+      const todayKey = keyOf(TODAY);
+      const source = perDay.find(p => p.dk === todayKey) || perDay[0];
+      const reps = [];
+      everyDayKeys.forEach(key => {
+        const item = source.others.find(e => seriesKey(e) === key);
+        if (item) reps.push(item);
+      });
+      return reps.length ? `<div class="ad-recur-row">${reps.map(e => alldayChipHtml(e, false)).join("")}</div>` : "";
+    })();
+    const cols = perDay.map(({ d, dk, bdays, others }, i) => {
       const continuing = activeSpans.filter(s => s.dateEnd >= dk);
       // 2026-08-15 fix (A7): same never-let-a-ghost-clobber-a-real guard as the
       // single-day seeding site (search isGhostItem) — applied at every seeding site so
@@ -34841,10 +34889,15 @@
       // alldayChipHtml regardless of cont) still carries THIS day's own real
       // occurrence id, so tapping a blank continuation opens that day's own
       // occurrence exactly as a full chip would.
+      // mobileMulti: an every-day series no longer gets ANY per-column segment here
+      // (real or continuation) -- it prints once, above the columns, via
+      // recurBannerHtml -- so it's filtered out of `others` before the entries below
+      // ever see it, rather than filtered per-entry after the fact.
+      const othersForCol = mobileMulti ? others.filter(e => !everyDayKeys.has(seriesKey(e))) : others;
       const entries = [
         ...continuing.map(e => ({ e, cont: true })),
         ...bdays.map(e => ({ e, cont: false })),
-        ...others.map(e => ({ e, cont: everyDayKeys.has(seriesKey(e)) ? i > 0 : false })),
+        ...othersForCol.map(e => ({ e, cont: everyDayKeys.has(seriesKey(e)) ? i > 0 : false })),
       ];
       // 2026-08-26 (COMMIT 3, STEP 3): three chips deep measured 148px of header —
       // capped at 2, then a tappable "+N more" that expands the column IN PLACE, same
@@ -34863,6 +34916,7 @@
       // no new calculation; the CSS (#mdAlldayRow .ad-col[data-fasting]) paints it.
       return `<div class="ad-col" data-day-key="${esc(dk)}" data-fasting="${fastedHoursOn(d) > 0}">${chips}</div>`;
     }).join("");
+    return { cols, banner: recurBannerHtml };
   }
   // called from renderMultiDayGrid() once per visible window, same call pattern as
   // mdColHeadHtml()/mdColumnHtml() just above it. dayList is the SAME array
@@ -34877,8 +34931,9 @@
       const a = alldayItemsFor(d);
       return { d, dk: keyOf(d), bdays: a.bdays, others: a.others };
     });
+    const { cols, banner } = mdAlldayColsHtml(perDay);
     alldayRowMount("mdAlldayRow", document.getElementById("mdTimelineScroll"), () =>
-      `<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${mdAlldayColsHtml(perDay)}</div>`);
+      `${banner}<div class="ad-gutter" aria-hidden="true">ALL DAY</div><div class="ad-cols">${cols}</div>`);
     mdAlldayNarrowPass();
   }
   // 2026-08-27 ("one layout law for every day-count", COMMIT 3): a full birthday
