@@ -256,3 +256,53 @@ existing category colour.
 own render function, data and routes; `B33_ICONS` entries for unpinned pages (still
 shown inside Chapters); the Chapters row and Settings footer row, both untouched
 including their separators.
+
+## 9. Mobile Day-view header rows — retired 2026-08-27
+
+Measured live at 412×915, mobile Day view, drawer open: `.nav-tiers`' "August ▾"
+control, `#dayRow2`'s big date, and `.day-step-row`'s `‹ Thursday 27 August › ⚙` row
+printed the same date **three times** and cost 138px of drawer content before this
+change. Linh: "it should be at the top row, that information is redundant." Replaced
+by a 7-day strip in the top bar itself (`#navDayStrip`, `renderNavDayStrip()`) — tap a
+day to jump to it, swipe to step the window (reuses `bindSwipe()`, the same function
+the calendar grid's own swipe already used).
+
+**Removed (hidden, not deleted — CSS `display: none`, mobile-only, ≤640px):**
+- `#navMonthBtn` / `#navMonthPop` (the "August ▾" control) — its month-name label and
+  its own 1/3/5/7 day-count picker (a 4th redundant copy) both retire outright.
+- `.day-step-row` (`#dayStepToday` / `#dayStepPrev` / `#dayStepDate` / `#dayStepNext`)
+  — subsumed by tapping a day in the strip (jump anywhere, including today) or
+  swiping it (step the window).
+- `#dayRow2 .date-row` (`#dateBig`, and the `#dateTrigger` dropdown holding
+  `#prevDay`/`#todayPill`/`#nextDay`/`#patientsNudge`) — same reason. `#patientsNudge`
+  ("🩺 Today's Patients") was already `display:none` on mobile before this change
+  (an unrelated, pre-existing rule, confirmed live) — nothing reachable on phone was
+  lost by retiring the row around it.
+- `#weekday`'s weekday-NAME text ("Thursday"/"Thu") — the strip's own weekday letter
+  replaces it. Its planet-ruler glyph+popover did **not** retire — see below.
+
+**Moved, not retired — real facts that needed a new home:**
+- `#udBadge` (UD9) and `#weekday`'s planet-ruler glyph (e.g. "♃ Jupiter" for
+  Thursday) both physically moved into `#numGroupStrip`, as its first two children —
+  Linh's own instruction for UD9 ("move it into #numGroupStrip with the other
+  numerology chips"), extended to the planet glyph on the same reasoning: it was
+  never a date duplicate, just co-located with one.
+- `#dayNavGear` (⚙) physically moved into `.topbar-right`, same id, same handlers
+  (`gearAnchorEl()`/`renderDdtGearPop()` — zero JS changes needed).
+- `#navMonthPop`'s "Week view" jump (`state.view = "week"`) had no other entry point
+  anywhere in the file — moved into the ⚙ gear sheet as `#ddtGearWeekView`.
+  "Month view" did **not** move — already reachable via the ☰ menu's own "Calendar"
+  row (`NAV_ITEMS`), confirmed before dropping it.
+
+**Confirmed separate, untouched:** `#mdColHeads` (the multi-day grid's own per-column
+day headers) — a different, necessary element, not a duplicate of the new strip.
+`.mini-cal-wrap` (the mini month grid) — already lived in the ☰ drawer on mobile
+Day view before this change, never inside the rows retired here.
+
+**Desktop/tablet:** none of the CSS above applies past 640px — `.day-step-row`
+already had its own, older, unrelated desktop hide rule (`#dayPage .day-main >
+.section-head .day-step-row { display: none }`, "too many arrows"); `#navMonthBtn`/
+`#dayNavGear`/`.nav-day-strip` all share one base rule (`display: none` outside the
+mobile media query, same list `.nav-search-btn`/`.nav-mode-badge`/`.day-fab` already
+use) so nothing new renders above 640px. `#ddtGear` (desktop's own separate gear) is
+untouched.
