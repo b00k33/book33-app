@@ -10835,6 +10835,15 @@
        .day-nav-gear" above (now hidden along with its old row) -- this is that same
        enabling rule for its new home. */
     .topbar-right .day-nav-gear { display: inline-flex; }
+    /* 2026-08-27 (COMMIT 2 STEP 1, found while confirming the drawer's own content):
+       #dayRow2 still gets reparented into the drawer (placeDayDrawers() -- #numGroupStrip
+       is pulled OUT of it into its own drawer slot separately, but #dayRow2 itself still
+       rides along, now empty of any visible content). Its own margin (.day-row2, several
+       contexts) was still contributing ~30px of pure whitespace with nothing left inside
+       to justify it -- collapsed to 0 here rather than touching placeDayDrawers() itself
+       (every other reparented element still needs its own spacing; this is the one that
+       became genuinely empty). */
+    #dayTopDrawerBody #dayRow2 { margin: 0; min-height: 0; }
   }
 
   /* ============================================================
@@ -12182,7 +12191,7 @@
      (641-1023px) is unchanged, keeps the -16px overlap above. */
   .dd-grab {
     display: none; width: 100%; border: none; background: none; cursor: grab;
-    touch-action: none; padding: 20px 0; margin: -16px 0 0;
+    touch-action: none; padding: 20px 0; margin: -16px 0 0; gap: 6px;
     align-items: center; justify-content: center;
   }
   body.dd-drawers-active .dd-grab { display: flex; }
@@ -12195,6 +12204,23 @@
     transition: background 0.15s ease;
   }
   .dd-grab:active::before { background: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
+  /* 2026-08-27 (COMMIT 2 STEP 2): the pill alone doesn't read as a control -- Linh had
+     it open once and concluded three commits hadn't shipped, because nothing indicated
+     a drawer existed or could be closed. A text label ("Pull down") was tried and
+     explicitly removed on 2026-08-18 pt.4 ("shrink the fixed space... drop the word") --
+     re-adding one would undo that instruction, so this is a chevron instead: the SAME
+     ▾ idiom .nav-month-caret/.tile-chev already use elsewhere in this file for
+     expand/collapse, flipping via aria-expanded (already toggled in JS, no new wiring).
+     A second glyph beside the existing pill, not a second row -- the button's height is
+     still set entirely by its own padding above, so this doesn't regrow "the fixed
+     space at the top" her 2026-08-18 instruction shrank. */
+  .dd-grab::after {
+    content: "▾"; font-size: 11px; line-height: 1;
+    color: color-mix(in oklab, var(--margin-rule) 65%, transparent);
+    transition: transform 0.15s ease, color 0.15s ease;
+  }
+  .dd-grab[aria-expanded="true"]::after { transform: rotate(180deg); }
+  .dd-grab:active::after { color: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
   /* bottom-edge flick-up confirmation toast (JS: bottom-edge gesture block) -- fixed
      just above the safe area, faded in/out via .on, never intercepts touches itself. */
   .dd-flash {
@@ -34345,6 +34371,10 @@
     // Default true ("what am I doing right now" is a Day-view question -- 3/5/7-day
     // and Month are for planning, so a Thursday-evening flight shouldn't hide Monday).
     modeFilterDayOnly: true,
+    // 2026-08-27 (mobile Day-view mock, COMMIT 2 STEP 3): "it resets on reload but
+    // stays open during use -- the worst of both." Defaults closed (her explicit ask),
+    // persisted from here on.
+    dayTopDrawerOpen: false,
   };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
@@ -43998,11 +44028,24 @@
   // #ddGrab's own aria-expanded doubles as the only "is it open" indicator (pt.4
   // dropped the visible text label -- see #ddGrab's own markup comment).
   function dayTopZoneIsOpen() { return document.getElementById("dayTopDrawer").classList.contains("open"); }
+  // 2026-08-27 (COMMIT 2 STEP 3, "persist the open state... stays open during use"):
+  // every real caller of these two (Escape, drag, tap, the bottom-edge flick-up gesture
+  // -- search each) is a deliberate user action, so persisting here covers all of them
+  // in one place. The ONE caller that must NOT persist -- placeDayDrawers()'s own
+  // structural tidy-up when LEAVING mobile-Day drawer mode (resize to desktop, or
+  // navigating off the page) -- calls setDayTopZoneClosedSilently() instead, a few
+  // lines down, so a resize/navigation can never overwrite what she actually chose.
   function openDayTopZone() {
     document.getElementById("dayTopDrawer").classList.add("open");
     document.getElementById("ddGrab").setAttribute("aria-expanded", "true");
+    PREFS.dayTopDrawerOpen = true; savePrefs();
   }
   function closeDayTopZone() {
+    document.getElementById("dayTopDrawer").classList.remove("open");
+    document.getElementById("ddGrab").setAttribute("aria-expanded", "false");
+    PREFS.dayTopDrawerOpen = false; savePrefs();
+  }
+  function setDayTopZoneClosedSilently() {
     document.getElementById("dayTopDrawer").classList.remove("open");
     document.getElementById("ddGrab").setAttribute("aria-expanded", "false");
   }
@@ -46147,6 +46190,12 @@
     const ambRailHome = document.getElementById("modeAmbientRailHome");
     const rightBody = document.getElementById("dayRightDrawerBody");
     if (active) {
+      // 2026-08-27 (COMMIT 2 STEP 3): restores her last choice on every entry into
+      // drawer-active mode (first load, reload, resize back down, navigating back to
+      // Day view) -- openDayTopZone() is a harmless no-op if it's already open (idempotent
+      // class/attribute set), and does NOT re-fire when PREFS.dayTopDrawerOpen is false,
+      // so a deliberate close earlier this same render pass is never undone by this line.
+      if (PREFS.dayTopDrawerOpen && !dayTopZoneIsOpen()) openDayTopZone();
       // #deskSidebar moves as ONE unit (not picked apart into its mini-cal/numerology/
       // Parts-of-life children) because its click delegate is scoped to the container
       // itself (document.getElementById("deskSidebar").addEventListener) -- see that
@@ -46246,7 +46295,11 @@
       // mid-browse on another page with the nav menu open must not slam it shut.
       // The 1024px-crossing case that genuinely should close it is already handled
       // by the navMobileMq change listener a few hundred lines up (closeAllDayDrawers).
-      closeDayTopZone(); closeDayRightDrawer();
+      // 2026-08-27 (COMMIT 2 STEP 3): setDayTopZoneClosedSilently(), not closeDayTopZone()
+      // -- this is the structural tidy-up, not a real user action, so it must not
+      // overwrite PREFS.dayTopDrawerOpen (a resize past 1024px, or navigating off the
+      // page, would otherwise silently forget she left it open).
+      setDayTopZoneClosedSilently(); closeDayRightDrawer();
     }
     mdAlldayNarrowPass();
     dayLayoutAboveCalendarGuard();
