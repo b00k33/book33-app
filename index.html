@@ -42116,7 +42116,34 @@
     syncModeReveal(am);
     applyModeFocusClass(am);
   }
+  // 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 3, STEP 2): her own
+  // reasoning, verbatim -- "what am I doing right now" is a Day-view question; 3/5/7
+  // -day and Month are for planning, so hiding Monday because of a Thursday-evening
+  // flight is wrong. Honoured HERE, as the very first check, and nowhere else --
+  // grepped every modeVisible() call site before writing this (renderTimeline()'s
+  // item filter, renderDay()'s all-day-item filter; that's the two, and both are
+  // Day-page-only already) rather than gating each one separately. calDaysActive()
+  // is the app's one existing accessor for "which day-count is active" (search it),
+  // not a second read of PREFS.calDays. Month never reaches this function at all --
+  // state.view!=="day" means renderDay()/renderTimeline() never run, so Month's own
+  // "never filters" is structural, unchanged by this line, not newly fixed by it.
+  // The multi-day GRID's own items (renderMultiDayGrid()/mdColumnHtml()) never called
+  // modeVisible() before this commit either -- confirmed via grep, not assumed -- so
+  // "3/5/7-day doesn't filter" was already true for what's actually ON SCREEN there;
+  // what this line actually fixes is renderTimeline()'s OWN today-only computation,
+  // which used to run (and feed the badge) regardless of the visible day-count, so
+  // the badge could claim "N hidden" while the multi-day grid it sat above was
+  // already showing everything, unfiltered. With this line, that computation goes
+  // empty outside 1-day, so renderModeBadge()'s own !hidden.length check (search it)
+  // hides the badge for free -- her STEP 3 ("the badge follows the same rule") needs
+  // no code of its own; it falls out of this one line.
+  // Deliberately does NOT touch applyModeFocusClass()/.mode-focus (the numerology/
+  // astrology widget-hiding mechanism) -- her STEP 2 names modeVisible() specifically,
+  // and that's a genuinely separate mechanism (see its own comment above). Flagged,
+  // not silently left ambiguous: widgets still hide on 3/5/7-day under an active
+  // Mode after this commit, same as before it.
   function modeVisible(e, am) {
+    if (PREFS.modeFilterDayOnly !== false && calDaysActive() !== 1) return true;
     if (state.modeRevealAll) return true;
     if (am.id === "home" || !am.shows) return true;
     if (modeOf(e) === am.id) return true;
@@ -42232,12 +42259,20 @@
       return;
     }
     if (e.target.closest("[data-mfs-daypref]")) {
-      // COMMIT 3 is what makes this pref actually change what modeVisible() does on
-      // 3/5/7-day and Month -- until it ships, this saves the real, persisted choice
-      // (loadPrefs()'s deep-merge means it's never undefined once set) but nothing
-      // reads it yet outside this row's own On/Off label.
       PREFS.modeFilterDayOnly = !PREFS.modeFilterDayOnly;
       savePrefs();
+      // 2026-08-27 (COMMIT 3, STEP 2 shipped): this pref is now read inside
+      // modeVisible() itself, so flipping it can change whether ANYTHING is
+      // filtered at the current day-count -- renderDay() first, so #navModeBadge
+      // (which lives outside this sheet, in the top bar) picks up the new answer
+      // immediately rather than staying stale until some unrelated re-render.
+      // Found live, not assumed: without this line, toggling off while looking at
+      // this sheet from a multi-day view left the badge claiming "N hidden" a beat
+      // after she'd just told it to stop. The sheet itself stays open regardless
+      // of what the badge does -- renderDay() never touches #mfsOverlay -- so
+      // re-rendering the sheet's own row after is what keeps ITS On/Off label and
+      // cost numbers in step with the same fresh data the badge just got.
+      renderDay();
       renderModeFilterSheet();
       return;
     }
