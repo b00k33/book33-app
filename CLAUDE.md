@@ -111,6 +111,65 @@ mode-hidden pill may sit between the top of the page and the calendar. Everythin
 goes in a drawer. (Enforced live, not just stated — see `dayLayoutAboveCalendarGuard()`
 in index.html, and the mobile report below.)
 
+### The mobile report — required on every commit that touches layout
+A rule nobody measures is a wish. Run this at 412×915 in a mobile context, in both
+themes, and paste the results into the commit report:
+
+1. **A screenshot.** Not a description of one.
+2. **Horizontal overflow** — `document.body.scrollWidth <= innerWidth` must be true.
+3. **Where the content starts** — for calendar pages, the top of `#timelineScroll` /
+   `#mdTimelineScroll` as a px value and as a % of the viewport. Above 40% is a fail.
+4. **Tap targets** — every interactive element ≥44px on its short side, or a stated
+   reason.
+5. **The tower check** (below). Any element failing it is a bug, not a layout quirk.
+
+If a number got worse than the previous commit, say so rather than shipping it quietly.
+
+**Tower check.** Measure the same element at 1440px and at 412px. If it is more than
+twice as tall on the phone, a desktop-tuned rule is misfiring — almost always a
+`min-width` bigger than the container it now sits in, forcing a permanent flex-wrap.
+Find the rule and give the narrow case its own shape; do not shrink the type.
+
+Trigger the narrow shape on **container width, not viewport width** — a container
+query or a measured JS class, never another `@media`. Viewport-width media queries are
+what caused this: a 7-day column is narrow at every viewport, and 5/7-day columns on a
+phone are narrower still. (`mdAlldayNarrowPass()` in index.html is the reference
+implementation — it measures each birthday chip's own rendered height and stamps
+`data-narrow`, rather than guessing a column-width cutoff; see its own comment for why
+width alone wasn't enough.)
+
+**Copy-paste console check** (verified runnable against this build — the version Linh
+pasted compared a rounded top against an unrounded one and falsely flagged the
+calendar's own wrapper as sitting "above" itself; fixed here by excluding the
+calendar element and its ancestors, not just an exact id match):
+```js
+(() => {
+  const tl = [...document.querySelectorAll('#mdTimelineScroll,#timelineScroll')]
+    .find(e => e.getBoundingClientRect().height > 0);
+  const top = tl ? Math.round(tl.getBoundingClientRect().top + scrollY) : null;
+  const main = document.querySelector('.day-main');
+  const above = [...(main ? main.children : [])].filter(e => {
+    if (e === tl || (tl && e.contains(tl))) return false;
+    const s = getComputedStyle(e), b = e.getBoundingClientRect();
+    return s.display !== 'none' && !e.hidden && b.height > 0 && (b.top + scrollY) < top;
+  }).map(e => ({ id: e.id || '.' + String(e.className).split(' ')[0],
+                 h: Math.round(e.getBoundingClientRect().height) }));
+  console.table(above);
+  console.log('calendar top:', top, '=', Math.round(top / innerHeight * 100) + '% of viewport',
+              '| overflow:', document.body.scrollWidth > innerWidth,
+              '| drawers:', document.body.classList.contains('dd-drawers-active'));
+})()
+```
+
+**Baseline, as of `b9cf32b`** (412×915, mobile Day view, 0 all-day items) — beat these,
+don't just match them:
+| Day-count | Calendar top | % of viewport | Elements above it |
+|---|---|---|---|
+| 1 | 150px | 16% | `ddGrab` (44px), `dayAlldayRow` (37px) |
+| 3 | 211px | 23% | `ddGrab` (44px) |
+| 5 | 211px | 23% | `ddGrab` (44px) |
+| 7 | 238px | 26% | `ddGrab` (44px) |
+
 ### 9. Every code change (workflow)
 Commit and push to main automatically (no waiting for approval), EXCEPT confirm before
 deleting existing data. After each change, report what changed + the one-line undo command.
