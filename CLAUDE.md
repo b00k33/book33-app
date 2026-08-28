@@ -122,6 +122,15 @@ on a distant ancestor, silently closing the rail out from under its own expand p
 Second trap of exactly this shape, after the to-do panel — worth a standing rule rather
 than a one-off fix each time.)
 
+**This applies to states, not just panels.** Any control that turns something off must
+also turn it back on. If tapping a control changes a state, the control stays reachable
+in the new state and reverses it. A control that hides itself once used is a one-way
+door — three shipped in this app before this rule existed. (2026-08-28: the Day-view
+Mode badge hid itself the moment `state.modeRevealAll` was set, leaving no way to
+re-enable Mode filtering for the rest of that Mode's run except the Mode changing or a
+full reload. Third one-way door of this shape, after the to-do panel and the Calendar
+flyout.)
+
 ### The mobile report — required on every commit that touches layout
 A rule nobody measures is a wish. Run this at 412×915 in a mobile context, in both
 themes, and paste the results into the commit report:
