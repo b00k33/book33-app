@@ -953,7 +953,17 @@
      classic grid/flex "nowrap content blows out an auto-min-width item" gotcha --
      matches the same reasoning as .day-main > *'s own min-width:0 just below, one level up. */
   .day-main > * { flex: 1 1 100%; min-width: 0; }
-  @media (max-width: 900px) {
+  /* 2026-08-29 mobile audit Stage 2 (Day view bug 2/3, "timeline uses only two thirds
+     of the width"): this was still 900px while every other part of "mobile Day view"
+     (drawers, --rail-w/--gutter tokens, deskGridMq itself) migrated to 1023px/1024px
+     as its own mobile boundary. In the un-migrated 901-1023px band -- a real width,
+     tablet or a wide phone in landscape -- .day-layout stayed a 2-column grid,
+     squeezing the timeline into whatever's left after a fixed 340px+32px side column:
+     close to two thirds at ~1000px, matching the report almost exactly. Widened to
+     match the rest of the system; this is also the most likely source of the
+     "event blocks overflow" report, since block sizing is tuned for a full-width
+     column, not this artificially narrow leftover one. */
+  @media (max-width: 1023px) {
     .day-layout { grid-template-columns: 1fr; }
     /* 2026-07-26 (Linh): "put 2 tiles side by side" on mobile — the Day-page side cards go
        2-up instead of one stacked column (wide items like the shopping box span full width). */
@@ -1088,7 +1098,7 @@
      the numerology card's cosmic-gold colour tokens (not whatever theme colour happened
      to be active) so the two cards match in TONE without being merged into one shape. */
   .day-row2 { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; margin: 4px 0 12px; }
-  @media (max-width: 900px) { .day-row2 { grid-template-columns: 1fr; } }
+  @media (max-width: 1023px) { .day-row2 { grid-template-columns: 1fr; } }   /* 2026-08-29: matched to .day-layout's own breakpoint fix above, same root cause */
   .day-row2 #tilesDate { margin: 0; }
   /* 2026-08-05 (desktop declutter): .day-side joined these selectors — placeMiniCalDesk()
      reparents the mini calendar into the rail on wide screens, and it must keep the same
@@ -5964,6 +5974,38 @@
     .lm-stage { flex-direction: column; }
     .lm-strip { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
     .lm-sw-sep { width: 1px; height: 18px; margin: 0 2px; }
+    /* 2026-08-29 mobile audit Stage 2 (Life Map bug 2/3): the plain wrap-to-row shape
+       just above measured several full ~34px rows tall (11 Modes + eraser/gear/sticker
+       at ~92-34px each, 360px wide) -- the actual "consumes a third of the screen"
+       cause. renderLmStrip() now renders THIS shape instead whenever isMobile, replacing
+       the wrap-to-row rule above for those two states specifically (the plain rule
+       stays as the harmless fallback for any render path that doesn't set either class).
+       Row height follows the 2026-08-28 sizing standards (one-line row 32-40px). */
+    .lm-strip.lm-collapsed, .lm-strip.lm-expanded-grid {
+      flex-wrap: nowrap; align-items: center; justify-content: flex-start;
+      padding: 4px 6px; gap: 6px; min-height: 36px;
+    }
+    .lm-strip.lm-expanded-grid { flex-direction: column; align-items: stretch; }
+    .lm-current-chip {
+      flex: 1; min-width: 0; height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+      background: var(--field-bg); color: var(--ink-soft); font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .lm-modes-btn {
+      flex: none; height: 28px; padding: 0 10px; border-radius: var(--radius-sm); border: none;
+      background: var(--field-bg); color: var(--ink); font-size: 11px; font-weight: 700;
+      font-family: inherit; cursor: pointer;
+    }
+    .lm-sw-tools { flex: none; display: flex; align-items: center; gap: 4px; }
+    .lm-strip.lm-expanded-grid .lm-sw-topbar { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    /* 4-wide grid of the same .lm-sw-mode chips, just re-flowed -- ~44px tall per
+       design44 7's "primary control she uses one-handed" preferred size (the desktop
+       34px .lm-sw-mode height above is the mouse-driven side-strip case, not this one). */
+    .lm-strip.lm-expanded-grid .lm-sw-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; margin-top: 6px;
+    }
+    .lm-strip.lm-expanded-grid .lm-sw-mode { width: auto; height: 44px; padding: 0 4px; }
   }
   /* 2026-08-22 ("grid fills the page" -- STEP 4): overflow-y:auto is the scroll-
      inside-the-wrap fallback for the minimum-row-height case (see
@@ -6015,6 +6057,18 @@
      bridge. pointer-events:none so it never steals a paint/erase/tap click from the
      cells it passes over. */
   .lm-sleep-moon { position: absolute; font-size: 11px; line-height: 1; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 0 2px rgba(0,0,0,.6)); }
+  /* 2026-08-29 mobile audit Stage 2: the non-scrolling "current time" anchor -- see
+     lmDrawNowLine()'s own comment for why this replaces a literal scroll-to-now on a
+     page that never scrolls. A thin bright-gold line across today's column only (not
+     the full week -- a week-wide line would misread as "this time applies to every
+     day", which isn't a real signal). A small round cap on the left edge (::before)
+     matches the look of a calendar app's own "now" marker without needing a second
+     absolutely-positioned element. */
+  .lm-now-line { position: absolute; height: 2px; background: var(--gold-bright); pointer-events: none; z-index: 3; transform: translateY(-1px); }
+  .lm-now-line::before {
+    content: ""; position: absolute; left: -3px; top: 50%; width: 6px; height: 6px;
+    border-radius: 999px; background: var(--gold-bright); transform: translateY(-50%);
+  }
   /* 2026-08-24 (Stickers on Life Map): free-placed decoration layer, siblings of
      #lmGrid inside .lm-grid-wrap (see that rule's own comment for why). The layer
      itself never blocks a tap from reaching the grid underneath (pointer-events:none)
@@ -6471,6 +6525,14 @@
     .evl-pat-grid { grid-template-columns: minmax(128px, 1fr) repeat(7, minmax(18px, 30px)); }
     .evl-pat-cell { font-size: 0; }
     .evl-pat-times { display: block; }
+    /* 2026-08-29 mobile audit Stage 2 ("compact yearly rows to ~36px"): live-measured
+       at 44px before this change (not the ~130px CLAUDE.md's 2026-08-28 mobile-sizing
+       note flags -- that note is stale for THIS row; disclosed in the commit report
+       rather than silently left contradicting a live measurement). 44px is still
+       *correct* under design44 7's preferred-size rule, so this is a mobile-only
+       trim to her stated number, inside the standing "one-line row 32-40px" band --
+       desktop keeps the base 44px rule above untouched. */
+    .evl-year-row { min-height: 36px; padding: 2px 8px; }
   }
   .evl-rpt-list { display: flex; flex-direction: column; }
   .evl-rpt-row {
@@ -18201,7 +18263,14 @@
        rather than repeating its number — same 32px, one source. */
     /* 2026-08-25 (mobile GCal rebuild, §3): "bigger and lighter" -- her reference has
        the hour labels read like GCal's, not shout like a header. Was 9px/700. */
-    #dayTimelineWrap .hour-row .hour-label { width: var(--rail-w); font-size: 12px; font-weight: 400; color: var(--ink-soft); }
+    /* 2026-08-29 mobile audit Stage 2 (Day view bug 1/3, "hour labels collide with grid
+       lines"): the base .hour-row .hour-label rule's top:-8px was tuned for the OLD
+       9px/700 label this comment describes replacing; growing to 12px/400 here without
+       its own top adjustment left the label sitting on the inherited offset, now wrong
+       for its own taller line-box. line-height:1 makes the box exactly as tall as the
+       font so top can be set precisely (roughly half the line-box, centering the label
+       on the gridline) instead of guessing. */
+    #dayTimelineWrap .hour-row .hour-label { width: var(--rail-w); font-size: 12px; font-weight: 400; color: var(--ink-soft); line-height: 1; top: -6px; }
 
     /* ---- .blk -> .tl-item inside the day grid ---- */
     #dayTimelineWrap .tl-item, #dayTimelineWrap .tl-item[data-kind="event"] {
@@ -22712,6 +22781,10 @@
   // persisted (a plain top-level var, no localStorage) -- an armed tool is transient
   // per-visit UI state, not data worth remembering across a reload.
   let lmArmedMode = null;
+  // 2026-08-29 mobile audit Stage 2: collapsed-by-default state for the mobile Mode
+  // palette (see renderLmStrip) -- also a plain top-level var, not persisted, same
+  // reasoning as lmArmedMode above (transient per-visit UI state).
+  let lmPaletteExpanded = false;
   // 2026-08-24 (Stickers): a SECOND, separate arming state -- which sheet sticker (a
   // real sticker id) is loaded and ready to drop on a tap, or null. Mutually exclusive
   // with lmArmedMode -- arming one clears the other everywhere either is set, so a tap
@@ -23007,15 +23080,20 @@
   // wins over a class rule -- the gold RING (its box-shadow) is what still shows
   // "armed", unchanged; eraser/gear keep the plain .lm-sw path (no inline
   // background), so .lm-sw-on's tint still applies there exactly as before.
+  // 2026-08-29 mobile audit Stage 2 (Life Map bug 2/3): the un-collapsed strip wraps
+  // to ~3-per-row at ~92px each on mobile -- 11 Modes plus eraser/gear/sticker takes
+  // several full rows above the grid, the actual "consumes a third of the screen"
+  // cause. Collapsed by default on mobile only (desktop's own layout, below, is
+  // untouched): a single compact bar shows the armed Mode + a "Modes" toggle,
+  // eraser/gear/sticker stay visible in the bar exactly as before. Tapping "Modes"
+  // expands to a 4-wide grid of the same .lm-sw-mode chips, just re-flowed --
+  // tapping it again (▴/▾ on the same button) collapses back.
   function renderLmStrip() {
     const host = document.getElementById("lmStrip");
     if (!host) return;
     const modes = MODES.slice().sort((a, b) => a.order - b.order);
-    host.innerHTML = modes.map(m => `
-      <button type="button" class="lm-sw lm-sw-mode${lmArmedMode === m.id ? " lm-sw-on" : ""}" data-lm-mode="${m.id}" title="${esc(m.name)}" style="background:${m.accent};color:${accentOnFor(m.accent)}">
-        <span class="lm-sw-name">${esc(m.name)}</span>
-      </button>`).join("")
-      + `<div class="lm-sw-sep"></div>
+    const isMobile = window.matchMedia("(max-width: 640px)").matches;
+    const tools = `<div class="lm-sw-sep"></div>
       <button type="button" class="lm-sw${lmArmedMode === "eraser" ? " lm-sw-on" : ""}" data-lm-mode="eraser" title="Eraser" style="color:var(--ink-faint)">
         ${lmSvgIcon("eraser")}
       </button>
@@ -23027,6 +23105,34 @@
       <button type="button" class="lm-sw${lmStickerTrayOpen || lmArmedSticker ? " lm-sw-on" : ""}" data-lm-stickers-toggle title="Stickers" style="color:var(--ink-faint)">
         ${lmSvgIcon("sticker")}
       </button>`;
+    if (!isMobile) {
+      host.classList.remove("lm-collapsed", "lm-expanded-grid");
+      host.innerHTML = modes.map(m => `
+        <button type="button" class="lm-sw lm-sw-mode${lmArmedMode === m.id ? " lm-sw-on" : ""}" data-lm-mode="${m.id}" title="${esc(m.name)}" style="background:${m.accent};color:${accentOnFor(m.accent)}">
+          <span class="lm-sw-name">${esc(m.name)}</span>
+        </button>`).join("") + tools;
+      return;
+    }
+    if (!lmPaletteExpanded) {
+      const current = modes.find(m => m.id === lmArmedMode) || null;
+      host.classList.add("lm-collapsed"); host.classList.remove("lm-expanded-grid");
+      host.innerHTML = `
+        <span class="lm-current-chip"${current ? ` style="background:${current.accent};color:${accentOnFor(current.accent)}"` : ""}>${current ? esc(current.name) : "No Mode armed"}</span>
+        <button type="button" class="lm-modes-btn" data-lm-palette-toggle>Modes ▾</button>
+        <div class="lm-sw-tools">${tools}</div>`;
+    } else {
+      host.classList.add("lm-expanded-grid"); host.classList.remove("lm-collapsed");
+      host.innerHTML = `
+        <div class="lm-sw-topbar">
+          <button type="button" class="lm-modes-btn" data-lm-palette-toggle>Modes ▴</button>
+          <div class="lm-sw-tools">${tools}</div>
+        </div>
+        <div class="lm-sw-grid">${modes.map(m => `
+          <button type="button" class="lm-sw lm-sw-mode${lmArmedMode === m.id ? " lm-sw-on" : ""}" data-lm-mode="${m.id}" title="${esc(m.name)}" style="background:${m.accent};color:${accentOnFor(m.accent)}">
+            <span class="lm-sw-name">${esc(m.name)}</span>
+          </button>`).join("")}
+        </div>`;
+    }
   }
   // 2026-08-21 (Modes editor): a small dedicated flyout placer, not a retrofit of
   // clampPopoverToViewport (that helper assumes the popover is already a CSS-
@@ -23487,6 +23593,7 @@
     lmComputeRowHeight();
     lmEnsureRowHeightObserver();
     lmDrawSleepConnectors(lmMidnightBridges, lastSlotIdx);
+    lmDrawNowLine();
     renderLmStickers();   // 2026-08-24 (Stickers): #lmGrid.innerHTML above is unchanged; the sticker layer is a sibling, redrawn fresh every render
   }
   // 2026-08-22 (Linh: "connect Sleep across midnight"): the bridgeDays list is which
@@ -23502,6 +23609,41 @@
   // shorter path that still touches both actual cells. .lm-grid keeps its own
   // innerHTML rebuild every render (top of this function), so previous bridges are
   // already gone by the time this runs -- nothing to clean up going in.
+  // 2026-08-29 mobile audit Stage 2 ("default the timeline scroll to current time,
+  // not 12am"): Life Map has no scroll position to default anywhere -- the whole
+  // week is always fully visible at once by the 2026-08-22 "no scrolling on this
+  // page whatsoever" rule (LM_ROW_ABS_MIN floor, no scrollbar ever). Resolved as a
+  // non-scrolling visual anchor instead: a thin gold line across TODAY's own column
+  // at the real current time -- same idiom as lmDrawSleepConnectors's moons just
+  // below (absolutely positioned inside #lmGrid, measured from a real rendered
+  // cell's rect rather than recomputing row-height math independently, so it stays
+  // correct however lmComputeRowHeight() sized this render's rows). Only draws when
+  // the visible week actually contains today -- a past/future week has no "now" to
+  // anchor to.
+  function lmDrawNowLine() {
+    const gridEl = document.getElementById("lmGrid");
+    const old = gridEl && gridEl.querySelector(".lm-now-line");
+    if (old) old.remove();
+    const page = document.getElementById("lifeMapPage");
+    if (!page || page.hidden || !gridEl) return;
+    const start = lmWeekStart || startOfWeek(TODAY);
+    const dOffset = Math.round((TODAY - start) / 86400000);
+    if (dOffset < 0 || dOffset > 6) return;   // viewing a week that isn't this one
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const si = Math.min(LM_SLOTS.length - 1, Math.floor(mins / LM_SLOT_MIN));
+    const frac = (mins - si * LM_SLOT_MIN) / LM_SLOT_MIN;
+    const cell = gridEl.querySelector(`[data-lm-day="${dOffset}"][data-lm-slot="${si}"]`);
+    if (!cell) return;
+    const gridRect = gridEl.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    const line = document.createElement("div");
+    line.className = "lm-now-line";
+    line.style.top = `${Math.round(cellRect.top - gridRect.top + cellRect.height * frac)}px`;
+    line.style.left = `${Math.round(cellRect.left - gridRect.left)}px`;
+    line.style.width = `${Math.round(cellRect.width)}px`;
+    gridEl.appendChild(line);
+  }
   function lmDrawSleepConnectors(bridgeDays, lastSlotIdx) {
     const page = document.getElementById("lifeMapPage");
     const gridEl = document.getElementById("lmGrid");
@@ -23629,6 +23771,7 @@
     lmRowHeightRO = new ResizeObserver(() => {
       if (state.view !== "lifeMap") return;
       lmComputeRowHeight();
+      lmDrawNowLine();   // row geometry just changed -- the line's y would be stale otherwise
     });
     lmRowHeightRO.observe(gridWrap);
   }
@@ -23989,11 +24132,18 @@
       renderLmStrip();
       renderLmStickerTray();
     }
+    const paletteToggle = e.target.closest("[data-lm-palette-toggle]");
+    if (paletteToggle) {
+      lmPaletteExpanded = !lmPaletteExpanded;
+      renderLmStrip();
+      return;
+    }
     const swBtn = e.target.closest("[data-lm-mode]");
     if (swBtn) {
       const id = swBtn.dataset.lmMode;
       lmArmedMode = lmArmedMode === id ? null : id;
       lmArmedSticker = null;   // mutual exclusion, see lmArmedSticker's own comment
+      lmPaletteExpanded = false;   // picking a Mode from the expanded grid is "done choosing" -- collapse back to the compact bar
       renderLmStrip();
       return;
     }
@@ -45287,11 +45437,18 @@
     e.preventDefault(); openJump();
   });
   // keep the "now" line and elapsed fade live — nudge them every 30s so the line visibly moves
-  setInterval(() => { if (state.view === "day") { renderElapsedFade(); orderDayRail(); } }, 30000);
+  // 2026-08-29: Life Map's own now-line (lmDrawNowLine, mobile audit Stage 2) joins the
+  // same 30s cadence rather than a second timer -- same reasoning as wmTick below.
+  setInterval(() => {
+    if (state.view === "day") { renderElapsedFade(); orderDayRail(); }
+    else if (state.view === "lifeMap") { lmDrawNowLine(); }
+  }, 30000);
   // …and immediately on refocus: a backgrounded tab's timers are throttled, so without
   // this the line sits wherever it was when the app was last visible until the next tick
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && state.view === "day") { renderElapsedFade(); orderDayRail(); }
+    if (document.hidden) return;
+    if (state.view === "day") { renderElapsedFade(); orderDayRail(); }
+    else if (state.view === "lifeMap") { lmDrawNowLine(); }
   });
   // 2026-08-23 (retire the manual Work/Personal banner): the chrome/theme-flip and
   // Day-page re-render this used to also do are both covered generically now --
@@ -52805,6 +52962,14 @@
       if (!groups.has(c.time)) groups.set(c.time, []);
       groups.get(c.time).push(wd);
     });
+    // 2026-08-29 mobile audit Stage 2 (redundancy rule): a single shared time needs no
+    // day names -- the row of filled/empty cells directly above already shows WHICH
+    // days (this function's own header comment says exactly that), so the old
+    // unconditional "Mon Tue Wed ... 10:30pm" for a plain every-day time was restating
+    // the visual for no reason. Day names only earn their place when two-plus distinct
+    // times need telling apart -- WHICH days get WHICH time is real information the
+    // (blank-on-phone) cells alone can't carry, so that case is unchanged.
+    if (groups.size === 1) return [...groups.keys()][0];
     return [...groups.entries()]
       .map(([time, days]) => `${days.map(d => WD_FULL[d].slice(0, 3)).join(" ")} ${time}`)
       .join(" · ");
