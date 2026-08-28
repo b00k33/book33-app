@@ -22775,7 +22775,7 @@
     host.innerHTML = `
       <button type="button" class="lm-untimed-toggle" data-lm-untimed-toggle aria-expanded="${lmUntimedOpen}">+ ${list.length} more this week without a set time ${lmUntimedOpen ? "▾" : "›"}</button>
       ${lmUntimedOpen ? `<div class="lm-untimed-list">${list.map(u => `
-        <div class="lm-untimed-item"><span class="lm-dot" style="background:${u.mode.accent || "var(--ink-faint)"}"></span>${u.mode.emoji || ""} ${esc(u.title)} — ${WD_FULL[u.dayIdx].slice(0, 3)}</div>`).join("")}</div>` : ""}`;
+        <div class="lm-untimed-item"><span class="lm-dot" style="background:${u.mode.accent || "var(--ink-faint)"}"></span>${modeEmojiHtml(u.mode)} ${esc(u.title)} — ${WD_FULL[u.dayIdx].slice(0, 3)}</div>`).join("")}</div>` : ""}`;
   }
   // Which real editor a filled cell's item should jump to, if any -- a plain one-off
   // event and a recurring-event occurrence both edit through the normal #addForm
@@ -22841,11 +22841,11 @@
       <div class="lm-panel-title">${WD_FULL[day]} · ${timeTxt}</div>
       <div class="lm-cell-panel-row">
         <div class="lm-cell-panel-title">${item.title ? esc(item.title) : "(untitled)"}</div>
-        <div class="lm-cell-panel-meta"><span class="lm-dot" style="background:${mode.accent || "var(--ink-faint)"}"></span>${mode.emoji ? mode.emoji + " " : ""}${esc(mode.name)}${mode.id === "home" ? " (no Mode set)" : ""}</div>
+        <div class="lm-cell-panel-meta"><span class="lm-dot" style="background:${mode.accent || "var(--ink-faint)"}"></span>${mode.emoji ? modeEmojiHtml(mode) + " " : ""}${esc(mode.name)}${mode.id === "home" ? " (no Mode set)" : ""}</div>
         ${showModePicker && MODES.length ? `<div class="lm-chip-row">
           ${MODES.slice().sort((a, b) => a.order - b.order).map(m => `
             <button type="button" class="lm-chip" data-lm-pick-mode="${m.id}">
-              <span class="lm-dot" style="background:${m.accent}"></span>${m.emoji ? m.emoji + " " : ""}${esc(m.name)}
+              <span class="lm-dot" style="background:${m.accent}"></span>${m.emoji ? modeEmojiHtml(m) + " " : ""}${esc(m.name)}
             </button>`).join("")}
         </div>` : ""}
         <div class="lm-cell-panel-actions">
@@ -31340,7 +31340,7 @@
     const showStartNow = !!startNowMode && e.date === keyOf(TODAY) && !currentSession();
     if (showStartNow) {
       const m = modeById(startNowMode);
-      extraRows.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, m.emoji || "▶", true));
+      extraRows.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, modeEmojiHtml(m) || "▶", true));
     }
     if (e.rtTaskId === HAIR_ROUTINE_ID) {
       // hair-wash gets one extra action the generic routine branch below doesn't offer:
@@ -31943,7 +31943,7 @@
     const deskStartNowMode = modeOf(e);
     const deskShowStartNow = !!deskStartNowMode && e.date === keyOf(TODAY) && !currentSession();
     const deskStartNowHtml = deskShowStartNow
-      ? `<button type="button" class="tl-desk-btn tl-desk-start-mode" data-tl-start-mode="${e.id}">${modeById(deskStartNowMode).emoji || "▶"} Start ${esc(modeById(deskStartNowMode).name)} now</button>`
+      ? `<button type="button" class="tl-desk-btn tl-desk-start-mode" data-tl-start-mode="${e.id}">${modeEmojiHtml(modeById(deskStartNowMode)) || "▶"} Start ${esc(modeById(deskStartNowMode).name)} now</button>`
       : "";
     const deskActionsHtml = `<div class="tl-desk-actions">
         ${deskStartNowHtml}
@@ -42494,6 +42494,20 @@
     if (!id || id === "home") return MODE_HOME;
     return MODES.find(m => m.id === id) || MODE_HOME;
   }
+  // 2026-08-28 (file 3, "the variation-selector bug"): a Mode's own emoji sometimes
+  // lacks U+FE0F, the emoji-presentation selector -- Work's built-in "⚕" is the one
+  // case today (Unicode gives it TEXT presentation by default, which on Windows
+  // renders as a hairline outline rather than a solid glyph; her "box with a 1" for
+  // 🗓 elsewhere is the same root cause). MODES[].emoji is her own data -- do not
+  // rewrite what's stored (same rule VS16 above follows) -- this appends the
+  // selector at RENDER time only, and only when it isn't already there, so a Mode
+  // whose emoji already carries one (Travel's "✈️") is a safe no-op. Every site
+  // that draws a Mode's emoji routes through this rather than reading m.emoji raw.
+  function modeEmojiHtml(m) {
+    const e = (m && m.emoji) || "";
+    if (!e) return "";
+    return e.endsWith(VS16) ? e : e + VS16;
+  }
   // THE one resolver for "what mode does this item carry": a plain event carries
   // its own, a routine occurrence normally reads its TEMPLATE (a routine's mode is
   // a property of the routine, one value for every day it repeats) UNLESS this
@@ -42572,7 +42586,7 @@
     rows.push({ m: MODE_HOME, n: today.filter(e => !modeOf(e)).length, untagged: true });
     return rows.map(({ m, n, untagged }) => `<div class="nt-row">
       <i class="nt-mode-swatch" style="background:${esc(m.accent || "var(--ink-faint)")}"></i>
-      <span class="nt-lbl">${m.emoji || ""} ${esc(m.name)} — ${n} block${n === 1 ? "" : "s"}${untagged ? " untagged" : ""} today</span>
+      <span class="nt-lbl">${modeEmojiHtml(m)} ${esc(m.name)} — ${n} block${n === 1 ? "" : "s"}${untagged ? " untagged" : ""} today</span>
     </div>`).join("");
   }
   // §2 "Filtering the day" (2026-08-20, stage 2). ONE predicate, reused by both
@@ -42719,7 +42733,7 @@
       badge.style.color = `var(--mode-${am.id})`;
       badge.setAttribute("aria-pressed", "true");
       badge.setAttribute("aria-label", `${am.name} filter is off — showing everything today. Open Mode filter.`);
-      badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span>`;
+      badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${modeEmojiHtml(am)}</span>`;
       return;
     }
     badge.classList.remove("mb-off");
@@ -42731,7 +42745,7 @@
     const n = hidden.length > 99 ? "99+" : String(hidden.length);
     badge.setAttribute("aria-pressed", "false");
     badge.setAttribute("aria-label", `${am.name} is filtering — ${hidden.length} item${hidden.length === 1 ? "" : "s"} hidden. Open Mode filter.`);
-    badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span><span class="nmb-count" aria-hidden="true">${n}</span>`;
+    badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${modeEmojiHtml(am)}</span><span class="nmb-count" aria-hidden="true">${n}</span>`;
   }
   // 2026-08-27 (COMMIT 2, "the sheet"): replaces COMMIT 1's interim one-directional
   // reveal (badge tap = state.modeRevealAll = true, no way to see WHY first) with
@@ -42774,7 +42788,7 @@
     const dayOnly = PREFS.modeFilterDayOnly !== false;
     host.innerHTML = `
       <div class="mfs-head">
-        <span class="mfs-emoji" aria-hidden="true">${am.emoji || ""}</span>
+        <span class="mfs-emoji" aria-hidden="true">${modeEmojiHtml(am)}</span>
         <div class="mfs-head-t">
           <div class="mfs-name" id="mfsTitle">${esc(am.name)} is filtering your day</div>
           <div class="mfs-cause">${esc(item.title)} — ${timeLabel}</div>
@@ -42869,7 +42883,7 @@
     // --mode-accent: same treatment as #fModePicker's own modeBtn (search "Mode
     // colour should be prominent") -- same component, same colour source.
     host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true" style="--mode-accent:var(--ink-faint)">None</button>` +
-      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${m.emoji || ""} ${esc(m.name)}</button>`).join("");
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("");
   }
   renderTodoModePicker();
   document.getElementById("todoModePicker").addEventListener("click", e => {
@@ -43134,7 +43148,7 @@
       <div class="sc-move-sep"></div>
       <div class="track-picker">
         ${MODES.filter(m => m.id !== s.modeId).map(m =>
-          `<button type="button" class="track-opt" data-sc-move-to="${esc(m.id)}" aria-pressed="false">${m.emoji || ""} ${esc(m.name)}</button>`).join("")}
+          `<button type="button" class="track-opt" data-sc-move-to="${esc(m.id)}" aria-pressed="false">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("")}
       </div>
       <button type="button" class="sc-move-cancel" data-sc-move-cancel>Cancel</button>
     </div>`;
@@ -43194,7 +43208,7 @@
     const timeUp = sessionRemainingMs(s) === 0;
     host.innerHTML = `
       <div class="sc-head">
-        <span class="sc-mode-pill" style="background:${lightAccent};color:${mode.accent || "var(--margin-rule)"}">${mode.emoji || ""} ${esc(mode.name)}</span>
+        <span class="sc-mode-pill" style="background:${lightAccent};color:${mode.accent || "var(--margin-rule)"}">${modeEmojiHtml(mode)} ${esc(mode.name)}</span>
         <span class="sc-countdown">${sessionCountdownText(s)}</span>
       </div>
       ${goal ? `<div class="sc-goal">🎯 ${esc(goal)}</div>` : ""}
@@ -47754,7 +47768,7 @@
       const railModeChip = t => {
         const tm = MODES.find(m => m.id === t.mode) || null;
         const style = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
-        return `<button type="button" class="wr-pile-mode-chip${tm ? " is-tagged" : ""}" data-todopanel-modechip="${t.id}"${style} aria-haspopup="dialog" aria-expanded="${String(todoModeSheetFor === t.id)}" aria-label="${tm ? esc(tm.name) : "Set mode"}">${tm ? (tm.emoji || "") : "🏷"}</button>`;
+        return `<button type="button" class="wr-pile-mode-chip${tm ? " is-tagged" : ""}" data-todopanel-modechip="${t.id}"${style} aria-haspopup="dialog" aria-expanded="${String(todoModeSheetFor === t.id)}" aria-label="${tm ? esc(tm.name) : "Set mode"}">${tm ? modeEmojiHtml(tm) : "🏷"}</button>`;
       };
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">To-do · ${pending.length}</span>
@@ -47957,7 +47971,7 @@
         <span class="wr-label">To-do, by Mode</span>
         ${rows.length ? rows.map(r => `<div class="wr-pat-row">
             <span class="wr-sun-dot" style="background:${r.mode && r.mode.accent ? esc(r.mode.accent) : "var(--ink-faint)"}"></span>
-            <span class="wr-pat-name">${r.mode ? esc(`${r.mode.emoji ? r.mode.emoji + " " : ""}${r.mode.name}`) : "No mode"}</span>
+            <span class="wr-pat-name">${r.mode ? esc(`${r.mode.emoji ? modeEmojiHtml(r.mode) + " " : ""}${r.mode.name}`) : "No mode"}</span>
             <span class="wr-pat-state">${r.count}</span>
           </div>`).join("") : `<div class="wr-pat-empty">Nothing on your to-do list.</div>`}
         <button type="button" class="wr-pile-more" data-jump-view="todo">Open To-do →</button>
@@ -50666,7 +50680,7 @@
       // must not skip -- only the DOM write below is conditional, never the call.
       const body = document.getElementById("modeTakeoverQueueBody");
       if (body) {
-        const queueHtml = `<div class="mt-queue-label">${am.emoji || ""} ${esc(am.name)}'s queue</div>` + mtQueueBodyHtml();
+        const queueHtml = `<div class="mt-queue-label">${modeEmojiHtml(am)} ${esc(am.name)}'s queue</div>` + mtQueueBodyHtml();
         if (queueHtml !== mtLastQueueHtml) { body.innerHTML = queueHtml; mtLastQueueHtml = queueHtml; }
       }
       // 2026-08-23 (retire the manual Work/Personal banner): the exact tile markup
@@ -50731,7 +50745,7 @@
       const showReentry = MT_AUTO_MODES.includes(am.id) && sessionIsActive() && state.modeRevealAll;
       if (reentry) {
         reentry.hidden = !showReentry;
-        if (showReentry) reentry.textContent = `${am.emoji || ""} Back into ${am.name} focus`;
+        if (showReentry) reentry.textContent = `${modeEmojiHtml(am)} Back into ${am.name} focus`;
       }
     }
   }
@@ -50824,7 +50838,7 @@
         ${upcoming.map(u => `
           <div class="mar-next-row">
             <span class="mar-next-time">${esc(fmtTime(u.start))}</span>
-            <span class="mar-next-mode"><span class="em">${u.mode.emoji || ""}</span><span>${esc(u.mode.name)}</span></span>
+            <span class="mar-next-mode"><span class="em">${modeEmojiHtml(u.mode)}</span><span>${esc(u.mode.name)}</span></span>
             <button type="button" class="mar-next-add" data-mar-next-add="${u.id}" aria-expanded="${marQuickAddFor === u.id}" aria-label="Add a task for ${esc(u.mode.name)}">${marQuickAddFor === u.id ? "×" : "+"}</button>
           </div>
           ${marQuickAddFor === u.id ? `<form class="mar-quickadd" data-mar-quickadd="${u.id}">
@@ -50833,7 +50847,7 @@
       </div>` : "";
     const html = `
       <div class="mar-head">
-        <span class="mar-title">${am.emoji || ""} ${esc(am.name)} · ${doneN} of ${total}</span>
+        <span class="mar-title">${modeEmojiHtml(am)} ${esc(am.name)} · ${doneN} of ${total}</span>
         ${focusBtn}
       </div>
       <div class="mar-strip">${stripHtml}</div>
@@ -50973,7 +50987,7 @@
     const optionHtml = m => {
       const active = m ? t.mode === m.id : !t.mode;
       const accent = m ? m.accent : "var(--ink-faint)";
-      const icon = m ? (m.emoji || "") : "🏷";
+      const icon = m ? modeEmojiHtml(m) : "🏷";
       return `<button type="button" class="tms-opt${active ? " is-active" : ""}" data-tms-set="${m ? esc(m.id) : ""}" aria-pressed="${String(active)}" style="--tms-accent:${esc(accent)}">
         <span class="tms-opt-icon" aria-hidden="true">${icon}</span>
         <span class="tms-opt-name">${m ? esc(m.name) : "No mode"}</span>
@@ -51090,7 +51104,7 @@
         const label = tm ? tm.name : "Set mode";
         const style = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
         return `<button type="button" class="todo-panel-mode-chip${tm ? " is-tagged" : ""}" data-todopanel-modechip="${t.id}"${style} aria-haspopup="dialog" aria-expanded="${String(open)}" aria-label="${esc(label)}">
-          <span class="todo-panel-mode-chip-icon" aria-hidden="true">${tm ? (tm.emoji || "") : "🏷"}</span>
+          <span class="todo-panel-mode-chip-icon" aria-hidden="true">${tm ? modeEmojiHtml(tm) : "🏷"}</span>
           <span class="todo-panel-mode-chip-caret" aria-hidden="true">▾</span>
         </button>`;
       })();
@@ -51124,7 +51138,7 @@
     };
     return todoModeSections().map(sec => {
       const dot = sec.mode && sec.mode.accent ? esc(sec.mode.accent) : "var(--ink-faint)";
-      const label = sec.mode ? `${sec.mode.emoji ? sec.mode.emoji + " " : ""}${esc(sec.mode.name)}` : "No mode";
+      const label = sec.mode ? `${sec.mode.emoji ? modeEmojiHtml(sec.mode) + " " : ""}${esc(sec.mode.name)}` : "No mode";
       return `<div class="todo-mode-section">
         <div class="todo-mode-section-head">
           <i class="todo-mode-dot" style="background:${dot}"></i>
@@ -51228,7 +51242,7 @@
   function modeTagSuggestionRowHtml(s) {
     const m = s.mode;
     return `<div class="modesug-row">
-      <span class="modesug-mode" style="color:${m.accent || "var(--margin-rule)"}">${m.emoji || ""} ${esc(m.name)}</span>
+      <span class="modesug-mode" style="color:${m.accent || "var(--margin-rule)"}">${modeEmojiHtml(m)} ${esc(m.name)}</span>
       <span class="modesug-title">${esc(s.routine.title)}</span>
       <div class="modesug-actions">
         <button type="button" class="upk-btn upk-accept" data-modesug-accept="${esc(s.key)}" data-modesug-rt="${esc(s.routine.id)}" data-modesug-mode="${esc(m.id)}" aria-label="Tag ${esc(s.routine.title)} as ${esc(m.name)}">✓</button>
@@ -51331,7 +51345,7 @@
     return items.map(e => {
       const m = modeById(modeOf(e));
       return `<div class="plantmrw-row">
-        <div class="plantmrw-head"><span class="plantmrw-mode" style="color:${m.accent || "var(--margin-rule)"}">${m.emoji || ""} ${esc(m.name)}</span><span class="plantmrw-title">${esc(e.title)}</span></div>
+        <div class="plantmrw-head"><span class="plantmrw-mode" style="color:${m.accent || "var(--margin-rule)"}">${modeEmojiHtml(m)} ${esc(m.name)}</span><span class="plantmrw-title">${esc(e.title)}</span></div>
         <input type="text" class="field-bare plantmrw-goal" data-plantmrw-goal="${e.id}" data-plantmrw-rt="${e.rtTaskId || ""}" value="${esc(planTomorrowGoalOf(e))}" placeholder="Set a goal for this block">
       </div>`;
     }).join("");
@@ -53933,7 +53947,7 @@
     const shown = showAll ? MODES : MODES.filter(m => topSet.has(m.id));
     // --mode-accent feeds the CSS soft-wash/dot treatment (search "Mode colour should
     // be prominent") -- read straight off m.accent, no hardcoded palette.
-    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${m.emoji || ""} ${esc(m.name)}</button>`;
+    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`;
     host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}" style="--mode-accent:var(--ink-faint)">None</button>` +
       shown.map(modeBtn).join("") +
       (showAll || shown.length >= MODES.length ? "" : `<button type="button" class="track-opt" id="fModeMoreBtn">More ›</button>`);
@@ -60334,7 +60348,7 @@
       const bits = [t.category, TRACK_LABEL[t.track] || t.track].filter(Boolean);
       const tm = MODES.find(m => m.id === t.mode) || null;
       const tagStyle = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
-      const tagLabel = tm ? `🏷 ${tm.emoji || ""} ${esc(tm.name)}` : "🏷 set mode";
+      const tagLabel = tm ? `🏷 ${modeEmojiHtml(tm)} ${esc(tm.name)}` : "🏷 set mode";
       const popoverOpen = todoTagPopoverFor === t.id;
       return `<div class="shop-lux-item todo-row${t.done ? " bought" : ""}">
         <input type="checkbox" class="tick" data-todo-tick="${t.id}" ${t.done ? "checked" : ""} aria-label="Mark ${esc(t.title)} done">
@@ -60347,7 +60361,7 @@
           </div>
           ${popoverOpen ? `<div class="todo-tag-popover" role="group" aria-label="Set mode">
             <button type="button" class="track-opt" data-todo-tag-set="" aria-pressed="${String(!tm)}">None</button>
-            ${MODES.map(m => `<button type="button" class="track-opt" data-todo-tag-set="${esc(m.id)}" aria-pressed="${String(t.mode === m.id)}">${m.emoji || ""} ${esc(m.name)}</button>`).join("")}
+            ${MODES.map(m => `<button type="button" class="track-opt" data-todo-tag-set="${esc(m.id)}" aria-pressed="${String(t.mode === m.id)}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("")}
           </div>` : ""}
         </div>
         <button class="shop-del" data-todo-del="${t.id}" aria-label="Remove ${esc(t.title)}">×</button>
@@ -60355,7 +60369,7 @@
     };
     host.innerHTML = TODOS.length ? sections.map(sec => {
       const dot = sec.mode && sec.mode.accent ? esc(sec.mode.accent) : "var(--ink-faint)";
-      const label = sec.mode ? `${sec.mode.emoji ? sec.mode.emoji + " " : ""}${esc(sec.mode.name)}` : "No mode";
+      const label = sec.mode ? `${sec.mode.emoji ? modeEmojiHtml(sec.mode) + " " : ""}${esc(sec.mode.name)}` : "No mode";
       return `<div class="todo-mode-section">
         <div class="todo-mode-section-head">
           <i class="todo-mode-dot" style="background:${dot}"></i>
