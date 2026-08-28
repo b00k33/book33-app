@@ -131,8 +131,52 @@ re-enable Mode filtering for the rest of that Mode's run except the Mode changin
 full reload. Third one-way door of this shape, after the to-do panel and the Calendar
 flyout.)
 
+### Linh's phone — the reference device
+
+Measured 2026-08-28 from the **installed app** (`display-mode: standalone`), which is how
+Book33 is actually used. Every mobile check runs at these numbers. Don't substitute a
+device-preset from a browser's device list — this is the real thing.
+
+| | |
+|---|---|
+| **CSS viewport** | **360 × 697** — what media queries see |
+| `visualViewport` | 360 × 697.67 |
+| `devicePixelRatio` | 3 |
+| `screen` (CSS px) | 360 × 780 |
+| Real device pixels | 1080 × 2340 |
+| `100vh` = `100dvh` = `100svh` = `100lvh` | 697.67px — **all four identical** |
+| URL-bar collapse delta | **0px** |
+| Safe-area insets | **0px on all four sides** |
+| Orientation | portrait-primary |
+| Pointer | coarse (touch) |
+| `prefers-color-scheme` | **dark** |
+| `prefers-reduced-motion` | no-preference |
+| Browser | Chrome 151, Android (Samsung, 3-button navigation) |
+
+**What follows from this:**
+
+- **360 CSS px wide.** With the standard 16px side padding, a full-width row has **328px** of
+  usable width. Any horizontal arrangement must survive that.
+- **697 px tall, not 780.** ~83px goes to the status bar and Android's navigation bar even in
+  the installed app. Never design against `screen.height`.
+- **The viewport-height units are all the same number, and the collapse delta is 0.** A PWA
+  has no collapsing URL bar, so `dvh`/`svh`/`lvh` gymnastics buy nothing here. Prefer `dvh`
+  anyway — it costs nothing and stays correct if the app is ever opened in a browser tab,
+  where the delta is real.
+- **DPR 3.** Hairlines: a 1px CSS border is 3 device pixels. Nothing needs sub-pixel tricks.
+- **All safe-area insets are 0.** No notch cutout, and the Android navigation bar sits
+  outside the viewport — it's already accounted for in the 697. So `env(safe-area-inset-*)`
+  padding buys nothing on this device. Keep it where it exists (it costs nothing and is
+  correct on a notched phone), but never rely on it to clear the bottom bar here.
+- **My phone is in dark mode.** The dark theme is what I see on mobile by default, so it is
+  the first one to check, not the afterthought.
+- **Reduced motion is off**, so animations do run — but they run on a phone, so keep them
+  cheap.
+- Landscape and the browser-tab case are not the reference. If a layout only breaks there,
+  say so and leave it.
+
 ### The mobile report — required on every commit that touches layout
-A rule nobody measures is a wish. Run this at 412×915 in a mobile context, in both
+A rule nobody measures is a wish. Run this at 360×697 (the reference device above), in both
 themes, and paste the results into the commit report:
 
 1. **A screenshot.** Not a description of one.
