@@ -43081,6 +43081,15 @@
              // selector); Zanda's Pending/Confirmed both map to "booked", No Show maps to "dnd".
              // Cancelled/Late Cancellation/Rescheduled are never included -- they're not "today's
              // patients" at all, same exclusion /patients already applies to its own markdown table.
+           focus: "…",                    // optional, one short line -- presenting focus.
+           goal:  "…",                    // optional, one short line -- treatment goal.
+             // 2026-08-28 ("the clinic briefing on the board"): /patients' own step 5 already
+             // writes exactly this pair for its markdown table's "Presenting focus"/"Treatment
+             // goal" columns, sourced from the patient's real Zanda/Cliniko notes -- these two
+             // fields carry the SAME text through into the import, nothing new for Linh to type.
+             // Both optional so clinicPatientsIn()'s fallback (STEP 4: untouched, still has no
+             // clinical fields at all) and any older/hand-written import keep rendering exactly
+             // as before -- wmbPatientList() below defaults both to "" like `type` already does.
          }],
        }
      ============================================================ */
@@ -43113,15 +43122,19 @@
   function wmbPatientList() {
     const clinicDay = loadClinicDay();
     if (clinicDay) {
-      return { items: clinicDay.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked" })), fromImport: true };
+      return { items: clinicDay.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked", focus: a.focus || "", goal: a.goal || "" })), fromImport: true };
     }
     let raw = [];
     try { raw = clinicPatientsIn(dayEventsRawFor(TODAY)); } catch (e) {}
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
     return {
+      // STEP 4 (her spec): the calendar fallback has no clinical fields at all --
+      // focus/goal stay "" here, same as every other import-only field already does
+      // (see `type` just below), so a briefing card for one of these renders with
+      // no rule and no labels, exactly like today.
       items: raw.map(o => {
         const em = itemEndMin(o);
-        return { start: o.start, end: em != null ? minToTime(em) : o.start, name: o.title, type: o.category || "", status: em != null && em <= nowMin ? "completed" : "booked" };
+        return { start: o.start, end: em != null ? minToTime(em) : o.start, name: o.title, type: o.category || "", status: em != null && em <= nowMin ? "completed" : "booked", focus: "", goal: "" };
       }),
       fromImport: false,
     };
