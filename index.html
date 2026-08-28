@@ -6751,7 +6751,17 @@
      missing from these two selectors the whole time (never noticed since nothing had
      looked closely at #fSubList's own rows before now). Added alongside rather than
      swapped in, matching the file's own "stale, not deleted" convention for the old id. */
-  #rtnSubList .rtn-sub-row .rtn-sub-text, #fSubList .rtn-sub-row .rtn-sub-text { flex: 1; min-width: 0; width: auto; font: inherit; font-size: 13px; padding: 0; border: none; background: none; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 2026-08-28 ("no ellipsis, every name fully readable"): an <input> can't wrap --
+     it's a replaced element, always exactly one line, whatever white-space says -- so
+     truncating with an ellipsis used to be the only option once a name outgrew the
+     box. Swapped for a <textarea rows="1"> that grows to fit (autoGrowRtnSubText(),
+     search that name) instead of hiding anything; .value still reads/writes the same
+     for readRtnSubs()/addRtnSubRow(), so no data-layer change. */
+  #rtnSubList .rtn-sub-row .rtn-sub-text, #fSubList .rtn-sub-row .rtn-sub-text {
+    display: block; flex: 1; min-width: 0; width: auto; font: inherit; font-size: 13px; line-height: 1.35;
+    padding: 0; border: none; background: none; color: var(--ink);
+    resize: none; overflow: hidden; white-space: pre-wrap; word-break: break-word;
+  }
   .rtn-sub-min-wrap { flex: none; display: flex; align-items: center; gap: 4px; }
   #rtnSubList .rtn-sub-row .rtn-sub-min, #fSubList .rtn-sub-row .rtn-sub-min { width: 34px; flex: none; font: inherit; font-size: 13px; padding: 4px 4px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
   .rtn-sub-min-suffix { font-size: 11px; color: var(--ink-soft); }
@@ -6798,6 +6808,40 @@
   .efp-subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
   .efp-subhead .rtn-sub-total { margin-top: 0; }
   .rtn-sub-total { margin-top: 8px; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 600; }
+  /* 2026-08-28 ("say who the sub-tasks belong to"): one quiet line, pill + sentence --
+     not a warning box (no tinted background block, no border). Own row under the
+     Sub-tasks/total header rather than crammed into that same flex row -- "EVERY
+     DINNER · steps run back-to-back on the calendar" is too long to share space with
+     a right-aligned total without wrapping badly in a ~400px panel. */
+  .rtn-sub-scope { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .rtn-sub-scope-pill {
+    flex: none; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 999px;
+    background: color-mix(in oklab, var(--ink) 10%, transparent); color: var(--ink-soft);
+  }
+  .rtn-sub-scope-note { font-size: 12px; color: var(--ink-faint); }
+  /* the OLD "Total N min · start–end" projection, moved out of #fSubTotal (now an
+     honest step/minute count only, see updateFSubTotal()) into its own clearly-
+     labelled line -- "never as the steps' total." */
+  .rtn-sub-finish { font-size: 12px; color: var(--ink-faint); margin-bottom: 8px; }
+  /* 2026-08-28 ("one step per row"): #fSubList is a ~400px form panel, half the width
+     the 2026-08-06 "tessellate, two per row" call (search that date above) was made
+     for -- the old, now-retired, full-width standalone Routines page. Checked live:
+     .rtn-sub-group-grid's base 2-up rule has no OTHER live consumer any more --
+     #rtnSubTasksField/#editPanelBody's own overrides just below/above this reference
+     ids (#rtnSubTasksField, #rtnAddForm's own #rtnSubList) that no longer exist
+     anywhere in the HTML, retired 2026-08-25 along with the whole Routines page --
+     dead, harmless CSS. Scoped to #fSubList anyway rather than editing the base rule,
+     in case a future surface reuses this grid at full width. Flat hairline rows
+     instead of individually-boxed tiles, per design44's flat-design rule: the tile's
+     own background/border/radius are dropped, a bottom hairline separates rows
+     instead -- "not a bordered tile each." */
+  #fSubList .rtn-sub-group-grid { grid-template-columns: 1fr; gap: 0; }
+  #fSubList .rtn-sub-row {
+    background: none; border: none; border-radius: 0; border-bottom: 1px solid var(--note-line);
+    height: auto; min-height: 36px; padding: 6px 8px;
+  }
+  #fSubList .rtn-sub-row:last-child { border-bottom: none; }
   @media (max-width: 640px) { .rtn-sub-group-grid { grid-template-columns: 1fr; } }
   /* 2026-08-19 (Linh, "reduce the vertical gaps... similar to how tight we made
      the edit sidebar and Today checklist"): 12px->8px between blocks, and inside
@@ -9033,8 +9077,22 @@
      app-wide ALL-CAPS .field label rule for just these fields, scoped narrowly rather
      than changing that rule everywhere else in the app. */
   #addForm #fCatField label, #addForm #fGoalField label, #addForm #fNoteField label,
+  #addForm #fLocField label, #addForm #fFillCalField label, #addForm #fStagesField label,
   #addForm .efp-subhead label {
     text-transform: none; letter-spacing: normal; font-size: 13px; color: var(--ink-soft);
+  }
+  /* 2026-08-28 ("finish the sentence-case pass... check the whole form"): Where and
+     Fill-my-calendar-automatically were missed by the rule above -- added to its
+     selector list rather than a second rule, same scope reasoning. Also: the
+     2026-08-26 pass fixed text-transform/size/colour but never actually put a hint
+     BESIDE its label -- .field-hint's own base rule (search "block; text-transform:
+     none;") is display:block, so even an already-sentence-cased hint (Goal, Where)
+     still wrapped onto its own standalone line. Scoped to this same field set, not
+     the base .field-hint rule -- other pages still rely on its block/standalone
+     layout in their own, narrower contexts. */
+  #addForm #fCatField .field-hint, #addForm #fGoalField .field-hint, #addForm #fNoteField .field-hint,
+  #addForm #fLocField .field-hint, #addForm #fStagesField .field-hint {
+    display: inline; margin-top: 0; margin-left: 6px;
   }
   /* STEP 3 (2026-08-09): permanent Archived/Recently-deleted routines list --
      same ghost-row-toggle-into-body language as Follow-ups above, one flat row
@@ -21820,6 +21878,9 @@
                      see the note at the top of .efp-body. -->
                 <div class="field" id="fLocField">
                   <label for="fLoc">Where <span class="field-hint">use &gt; to nest</span></label>
+                  <!-- 2026-08-28: sentence-case + inline hint now covers this field too --
+                       see the scoped override next to #fCatField/#fGoalField/#fNoteField's
+                       own (search "finish the sentence-case pass"). -->
                   <input type="text" id="fLoc" class="field-bare" placeholder="e.g. Home > Master Bedroom Bathroom" list="locList" autocomplete="off">
                   <!-- filled by refreshLocList(): standing places + every location she's used, newest first -->
                   <datalist id="locList"></datalist>
@@ -21871,7 +21932,11 @@
                      shown once a repeat pattern is actually chosen -- a one-off event has
                      nothing to auto-fill. -->
                 <div class="field full" id="fFillCalField" hidden>
-                  <label for="fFillCalToggle">Fill my calendar automatically<span class="field-hint" id="fFillCalHint"> — on</span></label>
+                  <!-- 2026-08-28 ("a switch already shows its own state"): the old
+                       " — on"/" — off" hint (syncFFillCalToggle()) repeated exactly what
+                       the switch's own position and colour already say -- dropped rather
+                       than just re-styled. -->
+                  <label for="fFillCalToggle">Fill my calendar automatically</label>
                   <button type="button" class="rtg-auto-switch on" id="fFillCalToggle" role="switch" aria-checked="true" aria-label="Fill my calendar automatically on this schedule"></button>
                 </div>
                 <!-- legacy weekly-layers recurring-EVENT system (2026-08-04, "add that to
@@ -21993,11 +22058,25 @@
                (retired 2026-08-25 along with the whole Routines page) -- fSubList is the
                ONLY live consumer of every function above now; nothing here can touch a
                second surface. -->
+          <!-- 2026-08-28 ("say who the sub-tasks belong to"): the old field-hint just said
+               "back-to-back on the calendar" -- true, but silent on the one thing she
+               couldn't tell from the screen: these steps are the ROUTINE's (task.subtasks),
+               true for every occurrence, not just the day she has open. #fSubScopePill
+               (updateFSubScopeLabel(), search that name) states it plainly using the
+               title she's already typing. #fSubFinish is the OLD "Total N min · start–end"
+               projection, moved OUT of #fSubTotal (which now only ever counts what's
+               actually in the boxes -- see updateFSubTotal()) into its own clearly-labelled
+               line, so a real step count is never read as if it were a calendar span. -->
           <div class="field full" id="fSubTasksField" hidden>
             <div class="efp-subhead">
-              <label>Sub-tasks <span class="field-hint">back-to-back on the calendar</span></label>
+              <label>Sub-tasks</label>
               <span id="fSubTotal" class="rtn-sub-total" hidden></span>
             </div>
+            <div class="rtn-sub-scope">
+              <span id="fSubScopePill" class="rtn-sub-scope-pill">Every occurrence</span>
+              <span class="rtn-sub-scope-note">steps run back-to-back on the calendar</span>
+            </div>
+            <div id="fSubFinish" class="rtn-sub-finish" hidden></div>
             <div id="fSubList" class="rtn-sub-list"></div>
             <div class="rtn-sub-actions">
               <button type="button" class="add-btn rtn-sub-add" id="fSubAdd">+ Add sub-task</button>
@@ -49947,35 +50026,91 @@
   // comment for why), just "Total N min" off the SAME readRtnSubs() reader, same
   // "+Nd" overnight-spill handling as updateRtnSubTotal() above, keyed off fStart
   // instead of rtnStart.
+  // 2026-08-28 ("the heading total is lying"): used to read "Total 120 min · 8pm–10pm"
+  // with every step's minutes box empty -- 120 was #fDur, the EVENT's own length, not
+  // the steps' (readRtnSubs()'s min defaults to 0 per empty box, so the real sum was
+  // always 0). Now #fSubTotal only ever counts what's actually in the boxes: "3 steps
+  // · 0 min set" / "3 steps · 45 min". The old start–end projection moved to its own
+  // #fSubFinish line below, clearly labelled as a projection, never presented as the
+  // steps' own total.
   function updateFSubTotal() {
     rtnRefreshGroupTotals(fSubList);
     const subs = readRtnSubs(fSubList);
     const el = document.getElementById("fSubTotal");
-    if (!subs.length) { el.hidden = true; el.textContent = ""; return; }
+    const finEl = document.getElementById("fSubFinish");
+    if (!subs.length) {
+      el.hidden = true; el.textContent = "";
+      finEl.hidden = true; finEl.textContent = "";
+      return;
+    }
     el.hidden = false;
     const tot = subs.reduce((a, s) => a + s.min, 0);
-    if (!tot) { el.textContent = "Add minutes to see the finish time"; return; }
-    let txt = `Total ${tot} min`;
+    const n = subs.length;
+    el.textContent = `${n} step${n === 1 ? "" : "s"} · ${tot ? `${tot} min` : "0 min set"}`;
     const startV = fStart.value;
-    if (startV) {
+    if (tot && startV) {
       const s = toMinLocal(startV), rawEnd = s + tot, spill = Math.floor(rawEnd / 1440);
-      txt += ` · ${fmtTime(minToTime(s))}–${fmtTime(minToTime(rawEnd))}${spill ? ` +${spill}d` : ""}`;
+      finEl.hidden = false;
+      finEl.textContent = `Finishes ${fmtTime(minToTime(rawEnd))}${spill ? ` +${spill}d` : ""} at this pace`;
+    } else {
+      finEl.hidden = true; finEl.textContent = "";
     }
-    el.textContent = txt;
+  }
+  // 2026-08-28 ("say who the sub-tasks belong to"): #fSubTasksField only ever shows on
+  // a routine (syncFRepeatChoice() hides it whenever fRepeatChoice === "none") and its
+  // steps live on the ROUTINE record (task.subtasks) -- true for every occurrence,
+  // never just the one day she has open. There's no per-occurrence override (setRtnOvr
+  // stores only start/end/dur/movedTo/skipped). All of that was already correct, just
+  // invisible -- this states it, using the title she's already typing. Called from the
+  // form's shared input/change delegate (search "updateFSubScopeLabel();") so the pill
+  // stays live as she types, same shape updateMoreDetailsSummary() already uses; and
+  // from syncFRepeatChoice() so it's painted correctly the moment the field itself
+  // first becomes visible (repeat chosen, or an existing routine loaded).
+  function updateFSubScopeLabel() {
+    const pill = document.getElementById("fSubScopePill");
+    if (!pill) return;
+    const title = fTitle.value.trim();
+    pill.textContent = title ? `Every ${title}` : "Every occurrence";
+  }
+  // grows to fit its own text instead of clipping it -- an <input> can't wrap (it's a
+  // replaced element, always one line, no matter what white-space says), so "no
+  // ellipsis, every name fully readable" (2026-08-28 brief) needs a real multi-line
+  // control. Called after any programmatic .value set (population doesn't fire
+  // "input") and from the form's shared input delegate (search "rtn-sub-text") for
+  // live typing.
+  function autoGrowRtnSubText(el) {
+    el.style.height = "auto";
+    // +2px: measured live, scrollHeight/clientHeight round to 1-2px apart at some
+    // font sizes -- a bare scrollHeight match left the last line's descenders a
+    // hair short of the box on a couple of test strings. Cheap insurance, invisible
+    // either way against the row's own border-bottom separator.
+    el.style.height = (el.scrollHeight + 2) + "px";
+  }
+  // every open-for-edit path (openEventFormForRoutine/openFormForEdit) populates
+  // #fSubList's rows BEFORE syncFRepeatChoice() un-hides #fSubTasksField (search
+  // "sub-tasks: same load order" for the exact call order) -- scrollHeight reads 0
+  // on a hidden element, so each row's own populate-time autoGrowRtnSubText() call
+  // grows to 0px and never gets a second chance. Re-runs every row once the field is
+  // actually visible; called from syncFRepeatChoice() itself, right where that
+  // visibility is decided, rather than hunting down every open-form call site.
+  function regrowAllRtnSubText(root = fSubList) {
+    root.querySelectorAll(".rtn-sub-text").forEach(autoGrowRtnSubText);
   }
   function addRtnSubRow(text = "", min = "", group = "", root = rtnSubList) {
     const row = document.createElement("div");
     row.className = "rtn-sub-row";
     row.innerHTML = `<span class="rtn-sub-grip" aria-hidden="true">⋮⋮</span>
       <span class="rtn-sub-num" aria-hidden="true"></span>
-      <input type="text" class="rtn-sub-text" placeholder="Step — e.g. Cleanse" autocomplete="off">
+      <textarea class="rtn-sub-text" placeholder="Step — e.g. Cleanse" autocomplete="off" rows="1"></textarea>
       <span class="rtn-sub-min-wrap"><input type="number" class="rtn-sub-min" min="1" step="1" placeholder="0"><span class="rtn-sub-min-suffix">min</span></span>
       <button type="button" class="rtn-sub-del" aria-label="Remove sub-task">×</button>`;
-    row.querySelector(".rtn-sub-text").value = text;
+    const textEl = row.querySelector(".rtn-sub-text");
+    textEl.value = text;
     row.querySelector(".rtn-sub-min").value = min;
     const grid = rtnGroupGridFor((group || "").trim(), root);
     const addTile = grid.querySelector(".rtn-sub-add-ingroup");
     if (addTile) grid.insertBefore(row, addTile); else grid.appendChild(row);
+    autoGrowRtnSubText(textEl);
     subUpdateTotal(root);
     return row;
   }
@@ -53794,6 +53929,8 @@
     // the additional-schedule layer only makes sense alongside a weekday pattern,
     // same as the Routine editor's own #rtnSchedExtraField.
     document.getElementById("fSubTasksField").hidden = fRepeatChoice === "none";
+    updateFSubScopeLabel();
+    regrowAllRtnSubText();
     document.getElementById("fRptSchedExtraField").hidden = fRepeatChoice !== "weekly";
     const LABELS = {
       none: "Doesn't repeat", daily: "Every day", weekdays: "Weekdays (Mon–Fri)",
@@ -54009,7 +54146,6 @@
   });
   function syncFFillCalToggle() {
     const btn = document.getElementById("fFillCalToggle");
-    const hint = document.getElementById("fFillCalHint");
     // 2026-08-26 (bug fix): the "on" class was missing here -- .rtg-auto-switch's
     // visual state (background colour, knob position) is driven by that class, not
     // aria-checked, so the switch updated its accessible state on every tap but never
@@ -54017,7 +54153,6 @@
     // routine-editor copies of this switch, since retired -- see the 2026-08-25
     // "Retiring Routines" comments a few thousand lines down -- did this correctly).
     if (btn) { btn.setAttribute("aria-checked", String(fFillCalOn)); btn.classList.toggle("on", fFillCalOn); }
-    if (hint) hint.textContent = fFillCalOn ? " — on" : " — off";
   }
   document.getElementById("fFillCalToggle").addEventListener("click", () => {
     fFillCalOn = !fFillCalOn;
@@ -58034,8 +58169,11 @@
   // 2026-08-26 ("tidy up the lower half"): keeps the More details summary live as she
   // types Category/Goal/Notes while the section is open -- cheap enough to run on every
   // keystroke in the whole form rather than binding three separate field listeners.
-  form.addEventListener("input", () => { formDirty = true; updateMoreDetailsSummary(); });
-  form.addEventListener("change", () => { formDirty = true; updateMoreDetailsSummary(); });
+  form.addEventListener("input", e => {
+    formDirty = true; updateMoreDetailsSummary(); updateFSubScopeLabel();
+    if (e.target.classList.contains("rtn-sub-text")) autoGrowRtnSubText(e.target);
+  });
+  form.addEventListener("change", () => { formDirty = true; updateMoreDetailsSummary(); updateFSubScopeLabel(); });
   // Track/Type/Whose-job are custom .track-picker buttons, not real <input>s — they
   // never fire a native input/change event, so they need their own catch here.
   form.addEventListener("click", e => { if (e.target.closest(".track-picker")) formDirty = true; });
@@ -58795,7 +58933,15 @@
     if (dateVal !== keyOf(state.anchor)) { state.anchor = parseKey(dateVal); render(); }
     else renderDay();
   });
-  form.addEventListener("keydown", e => { if (e.key === "Escape") closeForm(); });
+  form.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeForm();
+    // 2026-08-28 (rtn-sub-text input -> textarea, for wrap-not-truncate): a step name
+    // is still one logical line, just allowed to WRAP visually -- a real newline from
+    // Enter would corrupt the value everywhere it's rendered as a single line (chips,
+    // pills). Textareas don't submit their form on Enter the way inputs do, so this
+    // isn't replacing a submit -- it's blocking the one new failure mode the swap adds.
+    if (e.key === "Enter" && e.target.classList.contains("rtn-sub-text")) e.preventDefault();
+  });
 
 
   /* ============================================================
