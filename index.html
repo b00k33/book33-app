@@ -44009,6 +44009,33 @@
     }
   });
 
+  // 2026-08-29 (six-chapter split, Stage 0 -- ships alone, before any splitting):
+  // the storage event fires in every OTHER tab/app on this origin when one of them
+  // writes localStorage -- never in the tab that made the write. Six independent
+  // apps will soon share book33-* keys with no other sync; without this, a chapter
+  // holding a stale in-memory copy of EVENTS/HEALTH/etc. silently clobbers another
+  // chapter's edit on its own next save (saveEvents() et al. always write the WHOLE
+  // array). Table covers the stores Chapter 22's Day page reads across chapter
+  // boundaries (the reference-count audit: EVENTS, HEALTH, PEOPLE, HAIRD, FIT_LOG,
+  // MODES, ROUTINE_TASKS/ROUTINE_ARCHIVE) -- adding a store later is one line here.
+  var STORAGE_SYNC = [
+    { key: STORE_KEY,           reload: function () { EVENTS = loadEvents(); } },
+    { key: HEALTH_KEY,          reload: function () { HEALTH = loadHealth(); } },
+    { key: PEOPLE_KEY,          reload: function () { PEOPLE = loadPeople(); } },
+    { key: HAIR_DATA_KEY,       reload: function () { HAIRD = migrateHairProducts(loadHairData()); } },
+    { key: FIT_LOG_KEY,         reload: function () { FIT_LOG = loadFitLog(); } },
+    { key: MODES_KEY,           reload: function () { MODES = loadModes(); applyModeColours(); } },
+    { key: ROUTINE_KEY,         reload: function () { ROUTINE_TASKS = loadRoutines(); } },
+    { key: ROUTINE_ARCHIVE_KEY, reload: function () { ROUTINE_ARCHIVE = loadRoutineArchive(); } },
+  ];
+  window.addEventListener("storage", function (e) {
+    if (!e.key) return; // localStorage.clear() fires with key=null -- not a single-store change
+    const hit = STORAGE_SYNC.find(function (s) { return s.key === e.key; });
+    if (!hit) return;
+    hit.reload();
+    render();
+  });
+
   /* ============================================================
      Render + events
      ============================================================ */
