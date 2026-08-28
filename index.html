@@ -14254,6 +14254,19 @@
       font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center;
       font-variant-numeric: tabular-nums; border: 2px solid var(--paper);
     }
+    /* 2026-08-28 ("the Mode badge is a one-way door" fix): the badge's REVEALED
+       state -- same 44x44 circle, visibly OFF. Colour alone isn't enough (her
+       STEP 2: the two states are otherwise identical in shape), so this swaps
+       fill for an outline: border replaces background, using currentColor so it
+       picks up whatever var(--mode-<id>) renderModeBadge() sets as `color` inline
+       -- no second colour source to keep in sync with applyModeColours(). Overrides
+       the base rule's `border: none` and the inline `background` renderModeBadge()
+       sets for the filled state (JS adds/removes this class, never both style
+       branches at once). */
+    .nav-mode-badge.mb-off {
+      background: var(--paper) !important;
+      border: 2px solid currentColor;
+    }
     /* 2026-08-27 (COMMIT 1 STEP 3): belt-and-braces, same reasoning and same pattern
        as the OLD pill's own #wrap[data-view]:not([data-view="day"]) rule (search it,
        just below -- being deleted from THAT selector's old target but the shape is
@@ -30473,7 +30486,18 @@
     // the day that could show" is the honest denominator, not the raw unfiltered feed.
     MODE_HIDDEN_TODAY = modeHidden;
     MODE_HIDDEN_TOTAL = items.length + modeHidden.length;
-    renderModeBadge(modeHidden, activeM);
+    // 2026-08-28 (badge one-way-door fix): modeHidden above is built from
+    // modeVisible(), which returns true for everything -- so modeHidden is
+    // always empty -- while state.modeRevealAll is on (correct for
+    // MODE_HIDDEN_TODAY's own "hidden RIGHT NOW" meaning, untouched). The
+    // badge's own "is there anything to reveal or re-filter" visibility check
+    // can't reuse that same always-empty-while-revealed array without the
+    // badge going permanently invisible in its own new revealed state --
+    // modeWouldHide() (ignores reveal-all, still honours the day-only pref)
+    // run over items+modeHidden (MODE_HIDDEN_TOTAL's own "everything today")
+    // answers that honestly regardless of reveal state.
+    const modeWouldHideAnything = items.concat(modeHidden).some(e => modeWouldHide(e, activeM));
+    renderModeBadge(modeHidden, activeM, modeWouldHideAnything);
     items.forEach(e => {
       const s = toMin(e.start);
       if (s === null) return;
@@ -42329,15 +42353,30 @@
   // and that's a genuinely separate mechanism (see its own comment above). Flagged,
   // not silently left ambiguous: widgets still hide on 3/5/7-day under an active
   // Mode after this commit, same as before it.
+  // 2026-08-28 ("the Mode badge is a one-way door" fix): split the old single
+  // function into the GATES (day-only pref, reveal-all) and the actual tag/
+  // category exclusion rule. Reason: the badge's revealed state needs to answer
+  // "would this Mode be hiding anything right now" WITHOUT the reveal-all short
+  // circuit baked in -- modeVisible() itself is used to decide what's actually
+  // ON SCREEN (so it must keep honouring reveal-all), but nothing before this
+  // fix could ask the tag/category question on its own. modeVisible()'s
+  // observable behaviour is unchanged -- same eight branches, same order of
+  // effect -- this is a refactor, not a rule change.
+  function modeFilterActive() {
+    return PREFS.modeFilterDayOnly === false || calDaysActive() === 1;
+  }
+  function modeWouldHide(e, am) {
+    if (!modeFilterActive()) return false;
+    if (am.id === "home" || !am.shows) return false;
+    if (modeOf(e) === am.id) return false;
+    if (routineShowAlways(e)) return false;
+    if (e.track && am.shows.tracks && am.shows.tracks.indexOf(e.track) !== -1) return false;
+    if (e.category && am.shows.categories && am.shows.categories.indexOf(e.category) !== -1) return false;
+    return true;
+  }
   function modeVisible(e, am) {
-    if (PREFS.modeFilterDayOnly !== false && calDaysActive() !== 1) return true;
     if (state.modeRevealAll) return true;
-    if (am.id === "home" || !am.shows) return true;
-    if (modeOf(e) === am.id) return true;
-    if (routineShowAlways(e)) return true;
-    if (e.track && am.shows.tracks && am.shows.tracks.indexOf(e.track) !== -1) return true;
-    if (e.category && am.shows.categories && am.shows.categories.indexOf(e.category) !== -1) return true;
-    return false;
+    return !modeWouldHide(e, am);
   }
   // 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEPS 3-4):
   // REPLACES renderModeHiddenPill() (the 2026-08-20/22/24 in-flow gold pill --
@@ -42365,17 +42404,44 @@
   // exactly as it always has -- just with no badge announcing it any more. Flagged
   // in the commit report, not fixed here: this is what her spec's own count-driven
   // design implies, not a bug found along the way.
-  function renderModeBadge(hidden, am) {
+  // 2026-08-28 ("the Mode badge is a one-way door" fix): `wouldHide` is the
+  // honest "is this Mode hiding anything, ignoring whether it's currently
+  // revealed" answer (computed at the call site via modeWouldHide() over
+  // EVERY item that could show today) -- `hidden` alone can't decide the
+  // badge's own visibility any more, because `hidden` (modeVisible()'s real
+  // excluded-items list) is always empty while state.modeRevealAll is on, and
+  // gating visibility on that would make the badge disappear the instant she
+  // reveals -- the exact one-way-door bug this fix removes. STEP 4 (her spec):
+  // only the modeRevealAll branch changes -- Home / genuinely-nothing-to-
+  // reveal-or-refilter still means no badge at all, same as before.
+  function renderModeBadge(hidden, am, wouldHide) {
     const badge = document.getElementById("navModeBadge");
     if (!badge) return;
-    if (am.id === "home" || state.modeRevealAll || !hidden.length) { badge.hidden = true; return; }
+    if (am.id === "home" || !wouldHide) { badge.hidden = true; return; }
     badge.hidden = false;
+    if (state.modeRevealAll) {
+      // Revealed -- same badge, visibly OFF. Fill becomes outline (.mb-off,
+      // CSS) rather than relying on colour alone to carry the state (her
+      // STEP 2). No count bubble: nothing IS hidden right now, so there is
+      // nothing honest to count -- MODE_HIDDEN_TODAY (the sheet's own cost
+      // line) stays 0 in this state for the same reason, untouched by this
+      // fix. aria-pressed="true" -- her STEP 2, verbatim.
+      badge.classList.add("mb-off");
+      badge.style.background = "var(--paper)";
+      badge.style.color = `var(--mode-${am.id})`;
+      badge.setAttribute("aria-pressed", "true");
+      badge.setAttribute("aria-label", `${am.name} filter is off — showing everything today. Open Mode filter.`);
+      badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span>`;
+      return;
+    }
+    badge.classList.remove("mb-off");
     // var(--mode-<id>) / var(--mode-<id>-on): the SAME two custom properties
     // applyModeColours() already maintains for every other Mode-coloured surface
     // (search it) -- reused, not a second accentOnFor() call for this one badge.
     badge.style.background = `var(--mode-${am.id})`;
     badge.style.color = `var(--mode-${am.id}-on)`;
     const n = hidden.length > 99 ? "99+" : String(hidden.length);
+    badge.setAttribute("aria-pressed", "false");
     badge.setAttribute("aria-label", `${am.name} is filtering — ${hidden.length} item${hidden.length === 1 ? "" : "s"} hidden. Open Mode filter.`);
     badge.innerHTML = `<span class="nmb-emoji" aria-hidden="true">${am.emoji || ""}</span><span class="nmb-count" aria-hidden="true">${n}</span>`;
   }
@@ -42428,7 +42494,11 @@
         <button type="button" class="tl-detail-close" data-mfs-close aria-label="Close">×</button>
       </div>
       <div class="mfs-cost"><b>${hiddenN}</b> of your <b>${MODE_HIDDEN_TOTAL}</b> event${MODE_HIDDEN_TOTAL === 1 ? "" : "s"} ${hiddenN === 1 ? "is" : "are"} hidden right now.</div>
-      <button type="button" class="btn-save" data-mfs-reveal>Show everything today</button>
+      <!-- 2026-08-28 (badge one-way-door fix, STEP 3): same button, same slot,
+           opposite action -- the label and what data-mfs-reveal's own handler
+           does both switch on state.modeRevealAll, so this is never a second
+           button, just the one the badge already opens into a different state. -->
+      <button type="button" class="btn-save" data-mfs-reveal>${state.modeRevealAll ? `Filter to ${esc(am.name)} again` : "Show everything today"}</button>
       <div class="ddt-gear-row">
         <span>Never filter the week view</span>
         <button type="button" class="ddt-gear-toggle" data-mfs-daypref aria-pressed="${dayOnly}">${dayOnly ? "On" : "Off"}</button>
@@ -42437,7 +42507,10 @@
   document.getElementById("mfsOverlay").addEventListener("click", e => {
     if (e.target === e.currentTarget || e.target.closest("[data-mfs-close]")) { closeModeFilterSheet(); return; }
     if (e.target.closest("[data-mfs-reveal]")) {
-      state.modeRevealAll = true;
+      // 2026-08-28 (badge one-way-door fix): toggles both directions now --
+      // this was a one-way `= true` before, which is exactly what left
+      // state.modeRevealAll with no route back to false (see her STEP 1).
+      state.modeRevealAll = !state.modeRevealAll;
       closeModeFilterSheet();
       // renderDay() -> renderTimeline() refreshes .mode-focus itself
       // (applyModeFocusClass above), so numerology/astrology comes back the
