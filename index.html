@@ -18634,6 +18634,58 @@
   #workBoardPage .wmb-duty label { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 44px; }
   #workBoardPage .wmb-duty .wmb-duty-min { margin-left: auto; font-size: 11px; color: var(--wmb-ink-soft); }
   #workBoardPage .wmb-empty { font-size: 13px; color: var(--ink-faint); font-style: italic; padding: 24px; text-align: center; }
+  /* 2026-08-28 ("the clinic briefing on the board"): STEP 4's one named fix -- the
+     status pill sat below name/type at margin-top:6px, which a 30-min card's 48px
+     (overflow:hidden) has no room left for after time+name (~46px already used).
+     Inline with the time row fixes every slot size at once, not just the clipped
+     ones -- a container-query-free conditional fix isn't reliably expressible here
+     since card height comes from an inline style per instance, not a breakpoint. */
+  #workBoardPage .wmb-trow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #workBoardPage .wmb-trow .wmb-status { margin-top: 0; }
+  /* ---- Briefing mode (COMMIT 2 STEP 2/3): same toggle shape as #evlYearSortToggle,
+     re-tinted to this page's own Cliniko palette rather than the app's global accent
+     (every other control on this page already does the same -- see the #workBoardPage
+     id-prefix note above .bd-head). Briefing cards below reuse .wmb-card's own
+     border/radius/spacing tokens where the shape matches, but are NOT .wmb-card itself
+     -- .wmb-card is absolute-positioned by every other consumer (posStyle()), and a
+     flat-flow card must never accidentally inherit that. */
+  #workBoardPage .wmb-view-toggle { display: flex; gap: 4px; margin-bottom: 8px; }
+  #workBoardPage .wmb-view-toggle .evl-view-opt { color: var(--wmb-ink-soft); }
+  #workBoardPage .wmb-view-toggle .evl-view-opt[aria-pressed="true"] { background: var(--wmb-panel-head-bg); color: var(--wmb-panel-head-ink); }
+  #workBoardPage .wmb-bcard { background: var(--wmb-paper); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; border-left: 4px solid var(--wmb-chrome); }
+  #workBoardPage .wmb-bcard.current { border-left-color: var(--wmb-action); box-shadow: 0 0 0 1px var(--wmb-action); }
+  #workBoardPage .wmb-btop { display: flex; align-items: center; gap: 8px; }
+  #workBoardPage .wmb-btop .wmb-time { flex: 1; }
+  #workBoardPage .wmb-bnow {
+    font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+    color: #FFFFFF; background: var(--wmb-action); padding: 2px 7px; border-radius: 999px;
+  }
+  #workBoardPage .wmb-bcard .wmb-name { font-size: 16px; margin-top: 3px; }
+  #workBoardPage .wmb-bcard .wmb-type { margin-top: 1px; }
+  /* neither focus nor goal present -> briefRows() returns "" and this dl never renders
+     at all -- no rule, no labels, per her spec's own explicit case. */
+  #workBoardPage .wmb-brief {
+    margin: 9px 0 0; padding-top: 9px; border-top: 1px solid var(--wmb-line);
+    display: grid; grid-template-columns: 44px 1fr; gap: 4px 8px;
+  }
+  #workBoardPage .wmb-brief dt {
+    margin: 0; padding-top: 2px; font-size: 9.5px; font-weight: 800;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--wmb-panel-head-ink);
+  }
+  #workBoardPage .wmb-brief dd { margin: 0; font-size: 13px; line-height: 1.45; color: var(--wmb-ink); }
+  #workBoardPage .wmb-bcard.seen { opacity: .55; }
+  #workBoardPage .wmb-bcard.seen .wmb-brief { display: none; }
+  #workBoardPage .wmb-bcard.seen.revealed .wmb-brief { display: grid; }
+  #workBoardPage .wmb-breveal {
+    display: block; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: var(--wmb-panel-head-ink);
+    background: none; border: 0; padding: 0; min-height: 24px; cursor: pointer; text-decoration: underline;
+  }
+  #workBoardPage .wmb-bcard.seen.revealed .wmb-breveal { display: none; }
+  #workBoardPage .wmb-bgap {
+    display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--wmb-ink-soft);
+    font-style: italic; padding: 7px 14px; margin-bottom: 8px; border-left: 4px dashed var(--wmb-line);
+  }
+  #workBoardPage .wmb-bgap b { color: var(--wmb-ink); font-style: normal; }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -19896,6 +19948,15 @@
       <div class="wmb-fallback-note" id="wmbFallbackNote" hidden></div>
       <div class="wmb-lanes">
         <div>
+          <!-- 2026-08-28 ("the clinic briefing on the board" COMMIT 2 STEP 2): Briefing/
+               Timeline toggle, same #evlYearSortToggle shape (search it) -- not a new
+               control pattern. Affects only how THIS lane (patients) renders; the
+               duties lane on the right keeps its timeline layout regardless -- a
+               briefing has no equivalent concept for a checklist item. -->
+          <span class="wmb-view-toggle" id="wmbViewToggle" role="group" aria-label="Patients view">
+            <button type="button" class="evl-view-opt" data-wmb-view="briefing">Briefing</button>
+            <button type="button" class="evl-view-opt" data-wmb-view="timeline">Timeline</button>
+          </span>
           <div class="wmb-lane-head">Patients</div>
           <div id="wmbPatients"></div>
         </div>
@@ -43117,6 +43178,12 @@
   // --- the board itself: two lanes on one time axis, positioned proportionally
   // within the CBD Work block's own span (its own small scale, not the main
   // calendar's HOUR_H -- a shift is a much shorter, simpler span to lay out). ---
+  // 2026-08-28 ("the clinic briefing on the board" COMMIT 2 STEP 3): session-only,
+  // keyed by name+start (stable across a day's re-renders) -- NOT a DOM class alone,
+  // because wmTick()'s 30s refresh and the duty-tick-change handler both replace
+  // #wmbPatients.innerHTML wholesale, which would silently re-collapse a briefing
+  // she just tapped "Show" on. Cleared on reload only, same lifetime as PREFS.
+  const wmbRevealedKeys = new Set();
   const WMB_PX_PER_MIN = 1.6;
   const WMB_MIN_CARD_H = 46;   // floor so a short appointment/duty stays readable
   function wmbPatientList() {
@@ -43139,7 +43206,24 @@
       fromImport: false,
     };
   }
-  function renderWorkBoard() {
+  // 2026-08-28 ("the clinic briefing on the board" COMMIT 2 STEP 2): Briefing below
+  // 800px, Timeline at/above it, UNTIL she taps a button -- then her pick wins at
+  // both widths. Distinguishing "never chosen" from "chosen": PREFS.wmbBoardView is
+  // absent from PREFS' own defaults object (search "evlFilter: \"all\"") on purpose,
+  // so undefined IS "never chosen, follow the viewport" -- any real string value
+  // ("briefing"/"timeline") is a made choice, sticky regardless of width thereafter.
+  function wmbBoardViewMode() {
+    if (PREFS.wmbBoardView === "briefing" || PREFS.wmbBoardView === "timeline") return PREFS.wmbBoardView;
+    return window.innerWidth < 800 ? "briefing" : "timeline";
+  }
+  // Briefing mode's FOCUS/GOAL rows -- "" for either means that dt/dd pair is
+  // skipped; neither present means this whole dl never renders (no rule, no
+  // labels), same as a patient with no `type` renders no .wmb-type div today.
+  function wmbBriefRows(p) {
+    if (!p.focus && !p.goal) return "";
+    return `<dl class="wmb-brief">${p.focus ? `<dt>Focus</dt><dd>${esc(p.focus)}</dd>` : ""}${p.goal ? `<dt>Goal</dt><dd>${esc(p.goal)}</dd>` : ""}</dl>`;
+  }
+  function renderWorkBoard(justEntered) {
     const emptyEl = document.getElementById("wmbEmpty");
     const bodyEl = document.getElementById("wmbBody");
     const cbd = todayCbdBlock();
@@ -43157,6 +43241,9 @@
     fallbackNote.hidden = fromImport;
     if (!fromImport) fallbackNote.textContent = "Showing Book33 events — run /patients to pull today's real list.";
 
+    const viewMode = wmbBoardViewMode();
+    document.querySelectorAll("#wmbViewToggle .evl-view-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.wmbView === viewMode)));
+
     const lanesH = Math.max(1, shiftEnd - shiftStart) * WMB_PX_PER_MIN;
     // natural=true (gap cards): exact slot height, no floor, clipped -- a floored
     // 46px card in a 24px slot would overlap the next patient. Found live during
@@ -43172,42 +43259,93 @@
     // stacked a 5-min duty's card on top of its 10-min neighbour's floor.
     const renderedMin = min => Math.max(min, Math.ceil(WMB_MIN_CARD_H / WMB_PX_PER_MIN));
 
-    // patients lane, plus gaps between them rendered as free-time offers -- short
-    // gaps read as a quick call ("phone"), longer ones as room for a duty ("desk").
+    // seenCount/currentFound/biggestGap -- needed for wmbStats and the duties lane's
+    // duringAnchor regardless of viewMode, so computed once here rather than inside
+    // whichever branch happens to build patientsHtml below (STEP 4: keeps timeline
+    // mode's own HTML-building code byte-for-byte reusable, not forked in two).
     let seenCount = 0, currentFound = false;
-    let patientsHtml = patients.map(p => {
+    patients.forEach(p => {
       const s = toMin(p.start), e2 = toMin(p.end) || s + 30;
-      const isCurrent = nowMin >= s && nowMin < e2;
-      const isSeen = e2 <= nowMin || p.status === "completed";
-      if (isSeen) seenCount++;
-      if (isCurrent) currentFound = true;
-      return `<div class="wmb-card wmb-patient${isSeen ? " seen" : ""}${isCurrent ? " current" : ""}" style="${posStyle(p.start, p.end)}">
-        <div class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</div>
-        <div class="wmb-name">${esc(p.name || "Patient")}</div>
-        ${p.type ? `<div class="wmb-type">${esc(p.type)}</div>` : ""}
-        <span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span>
-      </div>`;
-    }).join("");
+      if (e2 <= nowMin || p.status === "completed") seenCount++;
+      if (nowMin >= s && nowMin < e2) currentFound = true;
+    });
     let biggestGap = null;
+    const gaps = [];   // >=15min only -- the rest are tracked for biggestGap but "too short to draw legibly" (both modes)
     if (patients.length) {
-      const gapCard = (from, to) => {
+      const noteGap = (from, to) => {
         const min = to - from;
         if (min < 10) return;
         if (!biggestGap || min > biggestGap.min) biggestGap = { start: from, end: to, min };
-        if (min < 15) return;   // tracked in stats, but too short to draw legibly
-        const ctx = min >= 20 ? "desk time" : "quick calls";
-        patientsHtml += `<div class="wmb-card wmb-gap" style="${posStyle(minToTime(from), minToTime(to), true)}"><b>${min}min free</b> — ${ctx}, ${esc(fmtTime(minToTime(from)))}–${esc(fmtTime(minToTime(to)))}</div>`;
+        if (min < 15) return;
+        gaps.push({ start: from, end: to, min });
       };
       let cur = shiftStart;
       patients.forEach(p => {
         const s = toMin(p.start);
-        gapCard(cur, s);
+        noteGap(cur, s);
         cur = Math.max(cur, toMin(p.end) || s + 30);
       });
-      gapCard(cur, shiftEnd);
+      noteGap(cur, shiftEnd);
     } else {
-      patientsHtml = `<div class="wmb-empty">No patients ${fromImport ? "imported for" : "found on the calendar for"} today.</div>`;
       biggestGap = { start: shiftStart, end: shiftEnd, min: shiftEnd - shiftStart };
+    }
+
+    let patientsHtml, scrollToId = null;
+    if (viewMode === "timeline") {
+      // STEP 4: byte-for-byte the layout that ships today, with ONE named fix --
+      // the status pill (used to sit below name/type at margin-top:6px) now sits
+      // inline with the time row (.wmb-trow, CSS) so it never clips out of a
+      // 30-min/48px card the way it was on a real Friday. Applied at every slot
+      // size, not just the clipped ones -- see that CSS rule's own comment for why
+      // a size-conditional fix isn't reliably expressible here.
+      patientsHtml = patients.length ? patients.map(p => {
+        const s = toMin(p.start), e2 = toMin(p.end) || s + 30;
+        const isCurrent = nowMin >= s && nowMin < e2;
+        const isSeen = e2 <= nowMin || p.status === "completed";
+        return `<div class="wmb-card wmb-patient${isSeen ? " seen" : ""}${isCurrent ? " current" : ""}" style="${posStyle(p.start, p.end)}">
+        <div class="wmb-trow"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span><span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
+        <div class="wmb-name">${esc(p.name || "Patient")}</div>
+        ${p.type ? `<div class="wmb-type">${esc(p.type)}</div>` : ""}
+      </div>`;
+      }).join("") : `<div class="wmb-empty">No patients ${fromImport ? "imported for" : "found on the calendar for"} today.</div>`;
+      gaps.forEach(g => {
+        const ctx = g.min >= 20 ? "desk time" : "quick calls";
+        patientsHtml += `<div class="wmb-card wmb-gap" style="${posStyle(minToTime(g.start), minToTime(g.end), true)}"><b>${g.min}min free</b> — ${ctx}, ${esc(fmtTime(minToTime(g.start)))}–${esc(fmtTime(minToTime(g.end)))}</div>`;
+      });
+    } else {
+      // Briefing mode (STEP 3): flat cards in normal flow, chronologically
+      // interleaved with gap rows -- unlike timeline mode, DOM order IS visual
+      // order here (nothing is position:absolute), so patients and gaps are
+      // walked together in one pass rather than patients-then-gaps.
+      if (!patients.length) {
+        patientsHtml = `<div class="wmb-empty">No patients ${fromImport ? "imported for" : "found on the calendar for"} today.</div>`;
+      } else {
+        const gapHtml = g => `<div class="wmb-bgap"><b>${g.min}min free</b> — ${g.min >= 20 ? "desk time" : "quick calls"}, ${esc(fmtTime(minToTime(g.start)))}–${esc(fmtTime(minToTime(g.end)))}</div>`;
+        let cur = shiftStart, out = "";
+        patients.forEach((p, i) => {
+          const s = toMin(p.start), e2 = toMin(p.end) || s + 30;
+          const g = gaps.find(x => x.start === cur && x.end === s);
+          if (g) out += gapHtml(g);
+          cur = Math.max(cur, e2);
+          const isCurrent = nowMin >= s && nowMin < e2;
+          const isSeen = e2 <= nowMin || p.status === "completed";
+          const cardId = `wmb-bc-${i}`;
+          if (isCurrent && justEntered) scrollToId = cardId;
+          const brief = wmbBriefRows(p);
+          const revealKey = `${p.name || ""}@${p.start}`;
+          const isRevealed = wmbRevealedKeys.has(revealKey);
+          out += `<div class="wmb-bcard${isSeen ? " seen" : ""}${isCurrent ? " current" : ""}${isRevealed ? " revealed" : ""}" id="${cardId}">
+        <div class="wmb-btop"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span>${isCurrent ? `<span class="wmb-bnow">Now</span>` : ""}<span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
+        <div class="wmb-name">${esc(p.name || "Patient")}</div>
+        ${p.type ? `<div class="wmb-type">${esc(p.type)}${p.end ? ` · ${e2 - s} min` : ""}</div>` : ""}
+        ${brief}
+        ${isSeen && brief && !isRevealed ? `<button type="button" class="wmb-breveal" data-wmb-reveal="${esc(revealKey)}">Show briefing</button>` : ""}
+      </div>`;
+        });
+        const lastGap = gaps.find(x => x.start === cur && x.end === shiftEnd);
+        if (lastGap) out += gapHtml(lastGap);
+        patientsHtml = out;
+      }
     }
 
     // duties lane -- reads the SAME CBD Work routine/subtasks the CBD Work page
@@ -43244,8 +43382,21 @@
       dutiesHtml = `<div class="wmb-empty">No CBD Work routine on this device yet.</div>`;
     }
 
-    document.getElementById("wmbPatients").innerHTML = `<div style="position:relative; height:${lanesH}px;">${patientsHtml}</div>`;
+    // Briefing mode: no position:relative/height wrapper -- normal flow, height
+    // comes from content (STEP 3: "no posStyle, no lane height"). Timeline mode's
+    // wrapper is unchanged.
+    document.getElementById("wmbPatients").innerHTML = viewMode === "timeline"
+      ? `<div style="position:relative; height:${lanesH}px;">${patientsHtml}</div>`
+      : patientsHtml;
     document.getElementById("wmbDuties").innerHTML = `<div style="position:relative; height:${lanesH}px;">${dutiesHtml}</div>`;
+    // scrolls the current patient into view once per visit -- justEntered is only
+    // true on the render() call that actually navigated onto this page (see
+    // render()'s own lastPushedView comparison), never on wmTick()'s 30s refresh
+    // or the duty-tick-change re-render, so it can't fight her scrolling mid-visit.
+    if (scrollToId) {
+      const el = document.getElementById(scrollToId);
+      if (el) el.scrollIntoView({ block: "center" });
+    }
 
     const outBy = fmtTime(minToTime(shiftEnd));
     document.getElementById("wmbStats").innerHTML = [
@@ -43259,6 +43410,18 @@
   document.getElementById("workBoardPage").addEventListener("click", e => {
     const tickBox = e.target.closest("[data-wmb-duty-tick]");
     if (tickBox) return;   // handled on "change" below, same as every .tick elsewhere
+    // 2026-08-28 (COMMIT 2 STEP 2): remembered exactly the way every other
+    // view-toggle in this file already is (PREFS + savePrefs() + re-render) --
+    // see #evlRepeatsToggle's own click handler, the shape this borrows.
+    const viewBtn = e.target.closest("[data-wmb-view]");
+    if (viewBtn) { PREFS.wmbBoardView = viewBtn.dataset.wmbView; savePrefs(); renderWorkBoard(); return; }
+    // Briefing mode's "Show briefing" link (STEP 3): a seen patient's briefing is
+    // dimmed+hidden by default -- this un-hides just THIS card via a class (no full
+    // re-render, so it can't re-trigger the once-per-visit scroll above) AND records
+    // the key in wmbRevealedKeys so wmTick()'s 30s refresh renders it pre-revealed
+    // instead of silently re-collapsing what she just chose to look at.
+    const reveal = e.target.closest("[data-wmb-reveal]");
+    if (reveal) { wmbRevealedKeys.add(reveal.dataset.wmbReveal); reveal.closest(".wmb-bcard").classList.add("revealed"); return; }
   });
   document.getElementById("workBoardPage").addEventListener("change", e => {
     const tickBox = e.target.closest("[data-wmb-duty-tick]");
@@ -43505,6 +43668,15 @@
      Render + events
      ============================================================ */
   function render() {
+    // 2026-08-28 ("the clinic briefing on the board" COMMIT 2 STEP 3): reuses
+    // lastPushedView (below, already this render's "previous state.view" the back-
+    // guard needs) rather than a second tracker -- true only on the ONE render()
+    // call that actually navigates onto Work Day Board, never on wmTick()'s 30s
+    // refresh or the duty-tick-change re-render (both call renderWorkBoard()
+    // directly, bypassing render() entirely, while state.view is already
+    // "workBoard"), so the current-patient scroll-into-view can't fight her
+    // scrolling mid-visit. Computed before lastPushedView is overwritten below.
+    const wmbJustEntered = state.view === "workBoard" && lastPushedView !== "workBoard";
     // Android back-button: a view change (Day -> Week, etc) counts as a step to
     // record, same as opening a popup — see armBackGuard/viewBackStack above.
     if (!suppressViewBackPush && state.view !== lastPushedView) {
@@ -43599,7 +43771,7 @@
     else if (state.view === "medical") renderMedical();
     else if (state.view === "presets") renderPresetsPage();
     else if (state.view === "cbdWork") renderCbdWork();
-    else if (state.view === "workBoard") renderWorkBoard();
+    else if (state.view === "workBoard") renderWorkBoard(wmbJustEntered);
     else if (state.view === "workManual") renderWorkManual();
     else if (state.view === "cpd") renderCpd();
     else if (state.view === "shopping") renderShoppingPage();
