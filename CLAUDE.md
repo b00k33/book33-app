@@ -975,6 +975,74 @@ not just the property (here, `width`) the toggle is actually about --
 a leftover box-model property can keep a "hidden" element visually present
 even at zero content width.
 
+## Mobile sizing standards (adopted 2026-08-28 — numbers, not process)
+Linh: this section is deliberately about numbers, not process. It extends "Fit the
+screen" / "Spacing & size" above with concrete defaults for how TALL and how DENSE
+mobile components are — the gap those rules left open. These are defaults, not
+suggestions: a component may exceed them only with a stated reason in the commit
+report, same standard as every other numeric rule in this file.
+
+### Row and cell heights (≤640px)
+- List row, one line of content: 32–40px total, including padding.
+- List row, two lines: 48–56px.
+- Grid/pattern cell: 28–32px tall. Never square, never >36px.
+- Day or section heading: 24–28px, small uppercase, tight.
+- Nothing holding a single line of text exceeds 56px. Today's yearly birthday
+  rows at ~130px for one line are exactly the failure this rule exists to
+  prevent — not fixed by this commit, flagged for later prioritization.
+- `.dp-t-row`'s existing 33px exception (Spacing & size, above) already sits
+  inside this band — nothing to reconcile there.
+
+### Section gaps
+- Between rows in a list: 0–4px. Use tone (colour/weight), not space, to
+  separate rows.
+- Between sections: 16px. Never 24px+ on mobile.
+- The 4/8/12/16/24/32 scale (Spacing & size, above) still governs which
+  numbers are legal — on mobile, default to the LOWER half of that scale
+  (4/8/12) rather than the upper half.
+
+### Tap targets
+- The existing 44px minimum (Spacing & size, above) is unchanged and still
+  absolute. It is NOT satisfied by row height alone — a 32px row is fine if
+  the tappable area extends to 44px via padding, or the whole row is the
+  target.
+- Where a compact row conflicts with 44px, the WHOLE ROW becomes the target
+  rather than the row growing to fit the target.
+
+### Where content starts
+- The primary content of a page (calendar grid, list, timeline) must begin
+  within the first 40% of the 915px viewport. Tool palettes, filters, help
+  text and admin controls collapse by default on mobile until they do.
+- This generalizes the mobile report's existing Day-view-specific "calendar
+  top ... above 40% is a fail" check (see "The mobile report," below) into
+  the standing default for every page, not just Day.
+
+### Redundancy rule — the one that matters most today
+- If a visual already states a fact, the text beside it must not repeat it.
+  A row of coloured weekday cells already shows WHICH days; the caption
+  beneath it must carry only what the cells cannot — the times. Writing
+  "Mon Tue Wed Thu Fri Sat Sun 10:30pm" under seven filled cells is exactly
+  the error this rule forbids.
+- Before adding a caption to any visual, state what it adds that the visual
+  doesn't. If the answer is nothing, don't add it.
+
+### Text
+- Never truncate mid-word, at any width. Cut at a word boundary with an
+  ellipsis, or drop one type-scale step, or wrap. This has recurred across
+  the event blocks, the pattern grid and the yearly list — fix it in shared
+  text-truncation logic, not per component, the next time it's touched.
+- Labels and headings must never render outside their container. A heading
+  clipped at a screen edge is a layout bug, not a styling choice.
+
+### Responsive columns
+- Any repeating set of columns (week strips, day grids, month strips) uses
+  equal fractional widths of the available space (`flex: 1 1 0` or grid
+  fractions). Fixed pixel widths and absolute positioning are banned for
+  these — they're what causes dates to print on top of each other at 360px
+  (see the 2026-08-28 mobile Day-view week-strip fix, and the existing "a
+  7-day column is ~180px on desktop and ~42px on a phone" warning under
+  design44 §8, above).
+
 ## Alignment & symmetry
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
@@ -1182,3 +1250,8 @@ active. The active Mode reshapes the whole app.**
 - Mobile report required (see §8 and "The mobile report" below) — screenshots at
   412×915 in both themes, plus the four measured numbers. A commit touching layout
   without one is not finished.
+- Mobile sizing standards (adopted 2026-08-28, above) — check all six: row/cell
+  heights within the stated bands; content starts within 40% of viewport; no
+  caption repeating what a visual already shows; no text truncated mid-word; no
+  label/heading clipped at a screen edge; every repeating column set uses
+  fractional widths, not fixed px or absolute positioning.
