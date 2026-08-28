@@ -2760,6 +2760,33 @@
   .mar-chip.mar-done { color: var(--ink-faint); text-decoration: line-through; opacity: .7; }
   .mar-chip.mar-current { border-color: var(--margin-rule); color: var(--ink); font-weight: 700; background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); }
   .mar-empty { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
+  /* 2026-08-28 (Mode widget "Coming up"): a plain in-flow list under the strip, same
+     shape as .sc-row-wrap above -- no popover, this panel is already a narrow column. */
+  .mar-next { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--note-line); }
+  .mar-next-lbl { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .mar-next-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .mar-next-time { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink-faint); flex: none; width: 52px; }
+  .mar-next-mode { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-size: 13px; color: var(--ink); }
+  .mar-next-mode .em { flex: none; }
+  .mar-next-mode span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mar-next-add {
+    flex: none; position: relative; width: 28px; height: 28px; padding: 0;
+    border: 1px solid var(--note-line); background: var(--paper); color: var(--ink-faint);
+    font-size: 15px; line-height: 1; cursor: pointer; border-radius: var(--radius-sm);
+  }
+  /* same invisible-pad-to-44px trick as .sc-move above (design44 §7) -- the visible
+     glyph stays a compact 28px so the row doesn't grow, the real tap target doesn't. */
+  .mar-next-add::after { content: ""; position: absolute; inset: -8px; }
+  .mar-next-add:hover { color: var(--margin-rule); border-color: var(--margin-rule); }
+  .mar-next-add[aria-expanded="true"] { background: var(--margin-rule); color: var(--accent-on); border-color: transparent; }
+  .mar-quickadd { margin: 4px 0 4px 60px; }
+  .mar-quickadd-input {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 12.5px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--margin-rule); border-radius: var(--radius-sm);
+    padding: 8px 12px;
+  }
+  .mar-quickadd-input::placeholder { color: var(--ink-faint); }
+  .mar-quickadd-input:focus { outline: none; }
 
   .mode-takeover-overlay {
     position: fixed; inset: 0; z-index: 300; background: var(--paper);
@@ -47900,6 +47927,17 @@
         const scEl = document.getElementById("daySessionCard");
         if (!scEl || scEl.hidden) return;
       }
+      // same "no icon when there's nothing to show" contract -- but computed directly
+      // (not read off #modeAmbientRail's own .hidden) because placeDeskGrid() calls
+      // renderDeskWidgetRail() -> here BEFORE renderModeAmbientRail() runs later in
+      // the same renderDay() pass (search "renderModeTakeover(); renderModeAmbientRail();"),
+      // so the DOM attribute would still be reporting last pass's state. Same condition
+      // renderModeAmbientRail() itself gates on, just evaluated here too rather than
+      // trusting call order.
+      if (id === "modeAmbientRail") {
+        const am = activeMode();
+        if (am.id === MODE_HOME.id || mtActiveTakeoverModeId()) return;
+      }
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
     html += `<div class="wr-ic-sep" aria-hidden="true"></div>`;
@@ -48015,6 +48053,23 @@
       // sunWeekAhead's own dowIndex check reads here.
       const scEl = document.getElementById("daySessionCard");
       if (!scEl || scEl.hidden) wrOpenId = null;
+    }
+    // 2026-08-28: unlike daySessionCard just above (deliberately left alone under a
+    // takeover so it resumes showing once the takeover ends -- a DIFFERENT node than
+    // the takeover overlay, so leaving wrOpenId pointed at it is harmless), an open
+    // modeAmbientRail panel must actually CLOSE the instant a takeover starts or the
+    // Mode reaches Home -- Commit 2's own "a pinned widget whose node is hidden must
+    // not open an empty panel." Written as its own unconditional check (not chained
+    // onto the if/else-if above) because the takeover branch above returns early on
+    // its own condition -- an else-if here would never run while a takeover is
+    // active, which is exactly the case this needs to catch. Computed directly
+    // rather than read off #modeAmbientRail's own .hidden -- same stale-render-order
+    // reason as the renderWrIconRail() guard above (search "renderModeTakeover();
+    // renderModeAmbientRail();"): this function runs, via placeDeskGrid(), BEFORE
+    // renderModeAmbientRail() updates that attribute for the current pass.
+    if (wrOpenId === "modeAmbientRail") {
+      const am = activeMode();
+      if (am.id === MODE_HOME.id || mtActiveTakeoverModeId()) wrOpenId = null;
     }
     // auto-close if the open id's content has gone empty for the CURRENTLY
     // viewed day (a Sunday-only widget, left open while paging to another
@@ -48240,6 +48295,26 @@
     TODOS.push({ id: uid(), title, track: "personal", category: "", note: "", done: false, createdAt: keyOf(TODAY) });
     saveTodos(TODOS);
     renderDeskWidgetRail();
+  });
+  // 2026-08-28 (Mode widget "Coming up" quick-add): the + next to an upcoming Mode
+  // row tags a new to-do to THAT Mode via the same top-level .mode field modeOf()
+  // already reads for every other tagged item -- not a new data model, the existing
+  // one reached from a new place. renderDay() (not renderModeAmbientRail() directly)
+  // because the Mode widget exists in more than one mount (desktop pinned rail,
+  // mobile inline home position) and renderDay() is what keeps both in sync,
+  // same reason [data-mar-focus] above calls it rather than a narrower render.
+  document.addEventListener("submit", e => {
+    const form = e.target.closest("[data-mar-quickadd]");
+    if (!form) return;
+    e.preventDefault();
+    const mId = form.dataset.marQuickadd;
+    const input = form.querySelector(".mar-quickadd-input");
+    const title = input.value.trim();
+    if (!title) return;
+    TODOS.push({ id: uid(), title, track: "personal", category: "", mode: mId, note: "", done: false, createdAt: keyOf(TODAY) });
+    saveTodos(TODOS);
+    marQuickAddFor = null;
+    renderDay();
   });
   document.addEventListener("click", e => {
     if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn, #wrArrangeBtnM")) {
@@ -50204,7 +50279,13 @@
   // full takeover open the moment a Work-tagged block starts, exactly like Study/
   // Cleaning already do -- no separate schedule/time-of-day system to build.
   const MT_AUTO_MODES = ["study", "clean", "work"];
-  const MT_MANUAL_MODES = ["morning", "night"];
+  // 2026-08-28 ("show the Mode widget for every Mode, not just two"): was a
+  // hardcoded ["morning","night"] pair (MT_MANUAL_MODES) -- a Mode enters via the
+  // Focus button rather than an automatic session-triggered takeover whenever it's
+  // neither Home (not a real Mode) nor one of the three MT_AUTO_MODES above, which
+  // already auto-takeover on their own. A test, not a second list to keep in sync
+  // with MODES -- a Mode she adds or renames just works.
+  function mtManualEligible(id) { return id !== MODE_HOME.id && !MT_AUTO_MODES.includes(id); }
   let mtQueue = [], mtQueuePos = 0, mtQueueForId = null;
   // 2026-08-24 (flicker fix): renderModeTakeover()/renderModeAmbientRail() both run
   // every second from sessionTick() (Modes law rule 4, "a session ending mid-
@@ -50216,6 +50297,13 @@
   // to null on the matching hide-transition so reopening always paints fresh rather
   // than trusting a stale cache against DOM that's been sitting untouched.
   let mtLastQueueHtml = null, mtLastToolkitHtml = null, marLastHtml = null;
+  // 2026-08-28 (Mode widget: "Coming up" + add-a-task): which upcoming Mode's
+  // quick-add row is open (null = none), and the active Mode id renderModeAmbientRail()
+  // last rendered for -- resets marQuickAddFor the instant the active Mode itself
+  // changes, same "reset on the thing that actually changed" shape mtSyncFocusEngageGuard
+  // already uses just below, so a quick-add left open into a new Mode doesn't linger
+  // pointed at a Mode that's no longer "coming up" (it's now either current or past).
+  let marQuickAddFor = null, marLastActiveModeId = null;
   // guards state.modeFocusEngaged the same shape syncModeReveal() guards
   // modeRevealAll (line ~39349) -- resets the instant the active mode id itself
   // changes, so a Focus session left open into Morning never silently carries
@@ -50230,7 +50318,7 @@
   function mtActiveTakeoverModeId() {
     const am = activeMode();
     if (MT_AUTO_MODES.includes(am.id) && sessionIsActive() && !state.modeRevealAll) return am.id;
-    if (MT_MANUAL_MODES.includes(am.id) && state.modeFocusEngaged) return am.id;
+    if (mtManualEligible(am.id) && state.modeFocusEngaged) return am.id;
     return null;
   }
   // her spec, precisely: TODOS not done + today's ROUTINE_TASKS occurrences, both
@@ -50420,17 +50508,57 @@
       }
     }
   }
+  // "Coming up": walks the rest of today's tagged calendar blocks forward from now,
+  // collapsed to Mode CHANGES only -- a second block in the same Mode right after
+  // the first doesn't add a second entry, so this reads as "what changes next", not
+  // a full timeline. Same dayEventsRawFor(TODAY)/modeOf() pair activeModeItem()
+  // already scans for "what's active right now" (search that function), just
+  // filtered to start times after now instead of ones that contain it. Gaps
+  // (untagged time between blocks) are skipped rather than surfaced as a "change to
+  // Home" -- there's no real Mode there to add a task to, and Modes law's own "a gap
+  // is a real signal" is about the Day view's own ambient state, not this list.
+  // Capped at 2 -- same "don't force content" rule as the empty-strip state below;
+  // if nothing's tagged for the rest of today this returns [] and the section just
+  // doesn't render.
+  function mtUpcomingModes() {
+    const n = new Date();
+    const nowMin = n.getHours() * 60 + n.getMinutes();
+    const items = dayEventsRawFor(n).filter(o => {
+      if (o.allDay || !o.start) return false;
+      const cs = toMin(o.start);
+      return cs != null && cs > nowMin && !!modeOf(o);
+    }).sort((a, b) => toMin(a.start) - toMin(b.start));
+    const out = [];
+    let prevId = activeMode(n).id;
+    for (const it of items) {
+      const mId = modeOf(it);
+      if (mId === prevId) continue;
+      out.push({ id: mId, mode: modeById(mId), start: it.start });
+      prevId = mId;
+      if (out.length >= 2) break;
+    }
+    return out;
+  }
   // Morning/Night's own default state (her named exception to rule 4's
   // "automatic, not a button" -- see CLAUDE.md rule 4): visible, recoloured (free,
   // via applyModeAccent()'s existing --margin-rule/--accent-on), a small pinned
   // progress card instead of the full takeover. Same mtBuildQueue() data source
   // as the takeover queue -- no separate mechanism to invent.
+  // 2026-08-28 ("show it for every Mode"): the old gate only ever let Morning/Night
+  // through (MT_MANUAL_MODES). Now visible for any real Mode, hidden only on Home
+  // (not a Mode) or while a takeover is actually on screen (mtActiveTakeoverModeId())
+  // -- exactly what Commit 2 Option A asked for: "the rail would hide only while a
+  // takeover is actually on screen." The Focus button itself stays scoped to
+  // mtManualEligible() Modes -- an AUTO mode already gets its takeover automatically
+  // the moment a session starts, so a Focus button that couldn't do anything for it
+  // would be exactly the dead-control class CLAUDE.md's one-way-door rule bans.
   function renderModeAmbientRail() {
     const host = document.getElementById("modeAmbientRail");
     if (!host) return;
     const am = activeMode();
     mtSyncFocusEngageGuard(am);
-    if (!MT_MANUAL_MODES.includes(am.id) || state.modeFocusEngaged) {
+    if (am.id !== marLastActiveModeId) { marQuickAddFor = null; marLastActiveModeId = am.id; }
+    if (am.id === MODE_HOME.id || mtActiveTakeoverModeId()) {
       host.hidden = true;
       // reads the real DOM rather than the marLastHtml cache for this one check --
       // only clears once per hide-transition (every subsequent tick this stays
@@ -50461,12 +50589,28 @@
       else if (!markedCurrent) { cls = "mar-current"; markedCurrent = true; }
       return `<span class="mar-chip ${cls}">${x.done ? "✓ " : ""}${esc(x.title)}</span>`;
     }).join("") : `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>`;
+    const focusBtn = mtManualEligible(am.id) ? `<button type="button" class="mar-focus-btn" data-mar-focus>Focus</button>` : "";
+    const upcoming = mtUpcomingModes();
+    const nextHtml = upcoming.length ? `
+      <div class="mar-next">
+        <div class="mar-next-lbl">Coming up</div>
+        ${upcoming.map(u => `
+          <div class="mar-next-row">
+            <span class="mar-next-time">${esc(fmtTime(u.start))}</span>
+            <span class="mar-next-mode"><span class="em">${u.mode.emoji || ""}</span><span>${esc(u.mode.name)}</span></span>
+            <button type="button" class="mar-next-add" data-mar-next-add="${u.id}" aria-expanded="${marQuickAddFor === u.id}" aria-label="Add a task for ${esc(u.mode.name)}">${marQuickAddFor === u.id ? "×" : "+"}</button>
+          </div>
+          ${marQuickAddFor === u.id ? `<form class="mar-quickadd" data-mar-quickadd="${u.id}">
+            <input type="text" class="mar-quickadd-input" placeholder="Add a task for ${esc(u.mode.name)}…" aria-label="Task for ${esc(u.mode.name)}">
+          </form>` : ""}`).join("")}
+      </div>` : "";
     const html = `
       <div class="mar-head">
         <span class="mar-title">${am.emoji || ""} ${esc(am.name)} · ${doneN} of ${total}</span>
-        <button type="button" class="mar-focus-btn" data-mar-focus>Focus</button>
+        ${focusBtn}
       </div>
-      <div class="mar-strip">${stripHtml}</div>`;
+      <div class="mar-strip">${stripHtml}</div>
+      ${nextHtml}`;
     if (html !== marLastHtml) { host.innerHTML = html; marLastHtml = html; }
   }
   document.addEventListener("click", e => {
@@ -50487,6 +50631,20 @@
       const am = activeMode();
       state.modeFocusEngaged = true; state.modeFocusEngagedFor = am.id;
       renderDay();
+      return;
+    }
+    // 2026-08-28 (Mode widget "Coming up"): toggles which upcoming row's quick-add
+    // is open -- a second tap on the same row's now-"×" button closes it again,
+    // matching the mockup's open/close pair rather than only ever opening.
+    const marNextAdd = e.target.closest("[data-mar-next-add]");
+    if (marNextAdd) {
+      const mId = marNextAdd.dataset.marNextAdd;
+      marQuickAddFor = marQuickAddFor === mId ? null : mId;
+      renderDay();
+      if (marQuickAddFor) {
+        const input = document.querySelector(`[data-mar-quickadd="${marQuickAddFor}"] .mar-quickadd-input`);
+        if (input) input.focus();
+      }
       return;
     }
     const mtAct = e.target.closest("[data-mt-act]");
