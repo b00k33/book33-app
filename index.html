@@ -17158,6 +17158,17 @@
      card stays quiet, but it keeps its box at all times (opacity, not display) so the
      row never reflows on hover and the control is still focusable by keyboard. */
   .wr-pile-tick { flex: none; margin: 0; }
+  /* 2026-08-28 (panel Mode chip, Commit 3): the rail card's compact take on the
+     to-do panel's own 44px chip -- same tagged (filled+icon)/untagged
+     (bordered+🏷) language, sized to sit in this row's 11px-font, ~20px-tall
+     grammar instead. Always visible (not hover-revealed like .wr-pile-edit) --
+     it shows a STATE at a glance, not an action you'd only want on hover. */
+  .wr-pile-mode-chip {
+    flex: none; width: 18px; height: 18px; padding: 0; border-radius: 5px;
+    border: 1px solid var(--note-line); background: var(--paper); color: var(--ink-faint);
+    display: inline-grid; place-content: center; font-size: 10px; line-height: 1; cursor: pointer;
+  }
+  .wr-pile-mode-chip.is-tagged { border: none; }
   .wr-pile-edit {
     flex: none; border: none; background: none; color: var(--ink-faint);
     font: inherit; font-size: 11px; padding: 0 4px; cursor: pointer;
@@ -47733,10 +47744,23 @@
       // .wr-pile-row/.wr-pile-tick/.wr-pile-name/.wr-pile-edit reused verbatim from
       // Piling up right below — same row grammar (tick, name, hover-revealed action),
       // not a new one-off pattern.
+      // 2026-08-28 (panel Mode chip, Commit 3, "the rail card gets it too"): the
+      // SAME control as the to-do panel's own chip, scaled down to this card's
+      // compact .wr-pile-row grammar rather than the panel's 44px -- nothing here
+      // asked for a 44px floor, and one would blow this 320px rail's width budget
+      // at 11px-font density. data-todopanel-modechip is the identical attribute
+      // the panel's chip uses, so it reaches openTodoModeSheet() through that same
+      // already-global (document-level) delegate with no second listener to wire.
+      const railModeChip = t => {
+        const tm = MODES.find(m => m.id === t.mode) || null;
+        const style = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
+        return `<button type="button" class="wr-pile-mode-chip${tm ? " is-tagged" : ""}" data-todopanel-modechip="${t.id}"${style} aria-haspopup="dialog" aria-expanded="${String(todoModeSheetFor === t.id)}" aria-label="${tm ? esc(tm.name) : "Set mode"}">${tm ? (tm.emoji || "") : "🏷"}</button>`;
+      };
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">To-do · ${pending.length}</span>
         ${pending.length ? shown.map(t => `<div class="wr-pile-row">
             <input type="checkbox" class="wr-pile-tick" data-wr-todo-tick="${t.id}" aria-label="Mark ${esc(t.title)} done">
+            ${railModeChip(t)}
             <span class="wr-pile-name">${esc(t.title)}</span>
             <button type="button" class="wr-pile-edit" data-wr-todo-event="${t.id}" title="Convert to event" aria-label="Convert ${esc(t.title)} to an event">→</button>
           </div>`).join("") : `<div class="wr-pat-empty">Nothing on your to-do list.</div>`}
@@ -50933,12 +50957,14 @@
     todoModeSheetFor = id;
     renderTodoModeSheet();
     document.getElementById("tmsOverlay").hidden = false;
-    renderTodoPanel();   // updates this row's chip aria-expanded/is-open styling
+    renderTodoPanel();       // updates this row's chip aria-expanded/is-open styling
+    renderDeskWidgetRail();  // ...and the rail card's own chip (Commit 3), same to-do either surface
   }
   function closeTodoModeSheet() {
     document.getElementById("tmsOverlay").hidden = true;
     todoModeSheetFor = null;
     renderTodoPanel();
+    renderDeskWidgetRail();
   }
   function renderTodoModeSheet() {
     const t = TODOS.find(x => x.id === todoModeSheetFor);
