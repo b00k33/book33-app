@@ -3199,6 +3199,21 @@
   .todo-panel-sched-btn:hover, .todo-panel-sched-btn:focus-visible, .todo-panel-sched-btn.on {
     color: var(--gold-bright); background: var(--desk-btn-bg);
   }
+  /* 2026-08-28 (panel Mode chip, option A -- decided, not the one-⋯-menu B):
+     her accepted trade -- a 44px chip between the tick and the title costs
+     ~112px of title width, so long to-dos truncate sooner than before. Untagged
+     is a plain white/bordered square (not filled), so a row full of untagged
+     chips doesn't read as nine identical coloured blobs. */
+  .todo-panel-mode-chip {
+    flex: none; width: 44px; height: 44px; padding: 0; position: relative;
+    border: 1.5px solid var(--note-line); border-radius: var(--radius-sm);
+    background: var(--paper); color: var(--ink-faint); cursor: pointer;
+    display: inline-grid; place-content: center; font-size: 16px; line-height: 1;
+  }
+  .todo-panel-mode-chip.is-tagged { border: none; }
+  .todo-panel-mode-chip-caret {
+    position: absolute; right: 2px; bottom: 0; font-size: 8px; line-height: 1; opacity: .8;
+  }
   .todo-panel-qs { display: flex; align-items: center; gap: 5px; margin: 2px 2px 0; padding: 7px 8px; background: var(--raised); border-radius: var(--radius-sm); }
   .todo-panel-qs[hidden] { display: none; }
   .todo-panel-qs-date, .todo-panel-qs-time {
@@ -5459,6 +5474,33 @@
   .mfs-head .tl-detail-close { margin-left: auto; flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   .mfs-cost { font-size: 13px; color: var(--ink); }
   .mfs-cost b { font-variant-numeric: tabular-nums; }
+  /* ---- "Move to a Mode" sheet (2026-08-28, to-do panel Mode chip, Commit 2) --
+     same .tl-detail-overlay/.tl-detail-sheet chrome as .mfs-sheet just above, its
+     own direct template (find an existing sheet, reuse it). Two columns at
+     412px -- measured live, they fit at that width with the longest Mode name
+     ("Birthdays") on one line; this would need a 1-column fallback below some
+     narrower width if the app ever supported one, but it doesn't today. ---- */
+  .tms-sheet { width: min(400px, 100vw); padding: 16px; gap: 14px; overflow: visible; }
+  .tms-head { display: flex; align-items: flex-start; gap: 10px; }
+  .tms-head-t { min-width: 0; flex: 1; }
+  .tms-title { font-size: 15px; font-weight: 800; color: var(--ink); line-height: var(--lh-tight); }
+  .tms-subject { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+  /* explicit 44px, not inherited -- same reason as .mfs-head .tl-detail-close above */
+  .tms-head .tl-detail-close { margin-left: auto; flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .tms-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .tms-opt {
+    display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px;
+    border: 1.5px solid var(--note-line); border-radius: var(--radius-sm); background: var(--paper);
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  .tms-opt:hover, .tms-opt:focus-visible { border-color: var(--tms-accent, var(--gold)); }
+  .tms-opt.is-active {
+    border-color: var(--tms-accent, var(--gold));
+    background: color-mix(in oklab, var(--tms-accent, var(--gold)) 14%, var(--paper));
+  }
+  .tms-opt-icon { flex: none; font-size: 15px; line-height: 1; }
+  .tms-opt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* 2026-08-06 (Linh: "a little confetti burst or a springy check with a soft colour
      pop"): celebrateTickAt() (JS, near toggleDone) appends one of these per tick-to-
      done, positioned via inline left/top rather than any ancestor -- fixed, so it reads
@@ -19162,6 +19204,15 @@
        .tl-detail-head's media-query override, which this sheet doesn't use. -->
   <div class="tl-detail-overlay mfs-overlay" id="mfsOverlay" hidden>
     <div class="tl-detail-sheet mfs-sheet" id="mfsSheet" role="dialog" aria-modal="true" aria-labelledby="mfsTitle"></div>
+  </div>
+
+  <!-- 2026-08-28 (to-do panel Mode chip, Commit 2): "Move to a Mode" -- same
+       .tl-detail-overlay/.tl-detail-sheet chrome as #mfsOverlay just above (find
+       an existing sheet, reuse it, don't write a third/fourth one). Rendered by
+       renderTodoModeSheet(), opened from the panel's Mode chip
+       (data-todopanel-modechip) via openTodoModeSheet(id). -->
+  <div class="tl-detail-overlay tms-overlay" id="tmsOverlay" hidden>
+    <div class="tl-detail-sheet tms-sheet" id="tmsSheet" role="dialog" aria-modal="true" aria-labelledby="tmsTitle"></div>
   </div>
 
   <!-- person profile sheet (2026-08-05, Linh's Book44 mock): one person's family,
@@ -33199,6 +33250,14 @@
   // (backdrop tap and the ✕ are in its own click delegate, near renderModeFilterSheet).
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && !document.getElementById("mfsOverlay").hidden) closeModeFilterSheet();
+  });
+  // 2026-08-28 (to-do panel Mode chip, Commit 2): a desktop-keyboard bonus, same
+  // shape as #mfsOverlay's own line just above -- NOT one of the panel's three
+  // required phone exits (CLAUDE.md: "Escape is not an exit on a phone"). Those
+  // three -- backdrop tap, the close control, and re-tapping the chip -- are
+  // proved live in #tmsOverlay's own click delegate, near renderTodoModeSheet().
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && !document.getElementById("tmsOverlay").hidden) closeTodoModeSheet();
   });
 
   /* 2026-08-10 (build brief, "↻ linked badge + edit-at-source jump"): the shared
@@ -50854,6 +50913,71 @@
     return sections;
   }
   function todoDoneSink(arr) { return arr.slice().sort((a, b) => (a.done === b.done ? 0 : a.done ? 1 : -1)); }
+  // 2026-08-28 (panel Mode chip): the one write path for t.mode -- #todoPage's
+  // inline tag popover and the panel's "Move to a Mode" sheet both call this
+  // rather than each carrying their own if/else+saveTodos copy. The sheet can't
+  // literally share the popover's DOM click listener (it's a separate overlay
+  // outside #todoList's subtree, so clicks there never bubble through it) --
+  // this is what "reuse the handler" becomes once the control lives off-page.
+  function todoSetMode(t, mode) {
+    if (mode) t.mode = mode; else delete t.mode;
+    saveTodos(TODOS);
+  }
+  // 2026-08-28 (panel Mode chip, Commit 2, option A): "Move to a Mode" -- id of the
+  // to-do the sheet is open for, or null when closed. One sheet, not one per row
+  // (same module-level-state shape as todoTagPopoverFor/todoChecklistOpenId
+  // elsewhere in this file), so the chip's own aria-expanded reads this rather
+  // than each row tracking its own open flag.
+  let todoModeSheetFor = null;
+  function openTodoModeSheet(id) {
+    todoModeSheetFor = id;
+    renderTodoModeSheet();
+    document.getElementById("tmsOverlay").hidden = false;
+    renderTodoPanel();   // updates this row's chip aria-expanded/is-open styling
+  }
+  function closeTodoModeSheet() {
+    document.getElementById("tmsOverlay").hidden = true;
+    todoModeSheetFor = null;
+    renderTodoPanel();
+  }
+  function renderTodoModeSheet() {
+    const t = TODOS.find(x => x.id === todoModeSheetFor);
+    const host = document.getElementById("tmsSheet");
+    if (!t || !host) { closeTodoModeSheet(); return; }
+    const optionHtml = m => {
+      const active = m ? t.mode === m.id : !t.mode;
+      const accent = m ? m.accent : "var(--ink-faint)";
+      const icon = m ? (m.emoji || "") : "🏷";
+      return `<button type="button" class="tms-opt${active ? " is-active" : ""}" data-tms-set="${m ? esc(m.id) : ""}" aria-pressed="${String(active)}" style="--tms-accent:${esc(accent)}">
+        <span class="tms-opt-icon" aria-hidden="true">${icon}</span>
+        <span class="tms-opt-name">${m ? esc(m.name) : "No mode"}</span>
+      </button>`;
+    };
+    host.innerHTML = `
+      <div class="tms-head">
+        <div class="tms-head-t">
+          <div class="tms-title" id="tmsTitle">Move to a Mode</div>
+          <div class="tms-subject">${esc(t.title)}</div>
+        </div>
+        <button type="button" class="tl-detail-close" data-tms-close aria-label="Close">×</button>
+      </div>
+      <div class="tms-grid">
+        ${optionHtml(null)}
+        ${MODES.slice().sort((a, b) => a.order - b.order).map(optionHtml).join("")}
+      </div>`;
+  }
+  document.getElementById("tmsOverlay").addEventListener("click", e => {
+    if (e.target === e.currentTarget || e.target.closest("[data-tms-close]")) { closeTodoModeSheet(); return; }
+    const opt = e.target.closest("[data-tms-set]");
+    if (opt) {
+      const t = TODOS.find(x => x.id === todoModeSheetFor);
+      if (t) todoSetMode(t, opt.dataset.tmsSet);
+      closeTodoModeSheet();
+      renderTodoPage();   // #todoPage's own grouping/tag popover must agree immediately too
+      renderDeskWidgetRail();
+      return;
+    }
+  });
   // done items sink to the bottom, same as renderTodoPage() -- "the full to-do list",
   // not just the rail card's pending-only cap of 5.
   // a to-do's steps/photos default to empty -- every to-do made before this feature
@@ -50927,9 +51051,27 @@
       const photosHtml = photos.length
         ? `<div class="tdchk-photo-strip">${photos.map(p => `<img class="tdchk-photo-thumb" src="${p.dataUrl}" data-tdchk-photo-view="${t.id}::${p.id}" alt="">`).join("")}</div>`
         : `<div class="tdchk-empty-hint">No photos yet</div>`;
+      // 2026-08-28 (panel Mode chip, option A -- decided, not B): 44px between
+      // the tick and the title, filled+icon+accentOnFor() when tagged, white+
+      // border+the "set mode" tag icon when not. book33-todo-icons-instruction.md/
+      // book33-mode-icons-instruction.md's drawn icons haven't shipped yet, so this
+      // uses the existing emoji (the Mode's own .emoji, or 🏷 untagged -- the same
+      // fallback #todoPage's own tag button already uses) rather than a third icon
+      // source.
+      const modeChip = (() => {
+        const tm = MODES.find(m => m.id === t.mode) || null;
+        const open = todoModeSheetFor === t.id;
+        const label = tm ? tm.name : "Set mode";
+        const style = tm ? ` style="background:${esc(tm.accent)};border-color:${esc(tm.accent)};color:${esc(accentOnFor(tm.accent))}"` : "";
+        return `<button type="button" class="todo-panel-mode-chip${tm ? " is-tagged" : ""}" data-todopanel-modechip="${t.id}"${style} aria-haspopup="dialog" aria-expanded="${String(open)}" aria-label="${esc(label)}">
+          <span class="todo-panel-mode-chip-icon" aria-hidden="true">${tm ? (tm.emoji || "") : "🏷"}</span>
+          <span class="todo-panel-mode-chip-caret" aria-hidden="true">▾</span>
+        </button>`;
+      })();
       return `<div class="todo-panel-item">
       <div class="todo-panel-row${t.done ? " done" : ""}" data-todopanel-row="${t.id}" style="background:color-mix(in oklab, ${todoPanelColor(t)} 7%, var(--paper))">
         ${tickHtml}
+        ${modeChip}
         <span class="todo-panel-name">${esc(t.title)}${photoBadge}</span>
         <button type="button" class="todo-panel-sched-btn" data-todopanel-qs-toggle="${t.id}" title="Schedule a day & time" aria-label="Schedule ${esc(t.title)}">🗓${VS16}</button>
         <button type="button" class="todo-panel-convert" data-todopanel-event="${t.id}" title="Convert to event" aria-label="Convert ${esc(t.title)} to an event">→</button>
@@ -51224,6 +51366,17 @@
     }
     const mk = e.target.closest("[data-todopanel-event]");
     if (mk) { closeTodoPanel(); openFormFromTodo(mk.dataset.todopanelEvent); return; }
+    // 2026-08-28 (panel Mode chip, option A): same "return before the row-tap-
+    // opens-drawer handler" discipline as the tick/🗓/→ just above -- tapping the
+    // chip must never also open the steps drawer. Re-tapping the SAME row's own
+    // open chip is CLAUDE.md's third required exit (tap the thing that opened
+    // it) -- toggles closed rather than re-opening a no-op.
+    const modeChip = e.target.closest("[data-todopanel-modechip]");
+    if (modeChip) {
+      const id = modeChip.dataset.todopanelModechip;
+      if (todoModeSheetFor === id) closeTodoModeSheet(); else openTodoModeSheet(id);
+      return;
+    }
 
     // 2026-08-19 (Linh, checklist steps + photos): tap anywhere on a row's own bar
     // (not its tick/icons, which already returned above) to expand/collapse its
@@ -60221,11 +60374,7 @@
     const chip = e.target.closest("[data-todo-tag-set]");
     if (chip) {
       const t = TODOS.find(x => x.id === todoTagPopoverFor);
-      if (t) {
-        const mode = chip.dataset.todoTagSet;
-        if (mode) t.mode = mode; else delete t.mode;
-        saveTodos(TODOS);
-      }
+      if (t) todoSetMode(t, chip.dataset.todoTagSet);
       todoTagPopoverFor = null;
       renderTodoPage();
       return;
