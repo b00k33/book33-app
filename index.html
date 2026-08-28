@@ -14205,15 +14205,32 @@
        each column's full 44px-tall box is still the real hit target (width doesn't
        need to hit 44px when height already does), and 11px is the type floor CLAUDE.md
        sets elsewhere in this file, not shrunk below it here. */
-    .nav-day-strip { display: flex; width: 100%; gap: 1px; }
+    /* 2026-08-28 ("fix broken mobile day view: responsive week strip"): at 360px this
+       row's own 7 columns were already the tight ~27px/col the comment above accepts
+       at 412px -- but #navDateSlot itself only gets whatever's left after the
+       hamburger + the topbar-right icon cluster (measured live: 114px of 360px, 74px
+       of 320px), so each column landed at ~16px (360px) / ~10px (320px), well under
+       what a bold 2-digit date needs. Neither the column nor its text had a floor, so
+       a number wider than its column simply painted outward into its neighbour --
+       exactly the "digits reading as one garbled run" Linh described, not literally
+       "no mobile breakpoint" (the column-level flex was already correct, the
+       CONTAINER's own budget wasn't). min-width on .nds-day plus overflow-x here is
+       the floor + safety net: at >=~200px available (~412px+ screens) all 7 still
+       divide evenly with room to spare, nothing changes there; below that, the strip
+       scrolls horizontally instead of crushing -- same idiom #numGroupStrip already
+       uses on this exact row (see its own comment, "already scrolls"), not a new
+       pattern. Scrollbar hidden since every other horizontal strip in this file hides
+       its own. */
+    .nav-day-strip { display: flex; width: 100%; gap: 1px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .nav-day-strip::-webkit-scrollbar { display: none; }
     .nds-day {
-      flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
+      flex: 1 1 0; min-width: 24px; display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 1px; min-height: 44px; padding: 2px 0;
       border: none; background: none; border-radius: var(--radius-sm);
       font: inherit; cursor: pointer; color: var(--ink);
     }
-    .nds-wd { font-size: 11px; font-weight: 700; color: var(--ink-faint); line-height: 1; }
-    .nds-n { font-size: 13px; font-weight: 700; line-height: 1.2; }
+    .nds-wd { font-size: 11px; font-weight: 700; color: var(--ink-faint); line-height: 1; overflow: hidden; white-space: nowrap; max-width: 100%; }
+    .nds-n { font-size: 13px; font-weight: 700; line-height: 1.2; overflow: hidden; white-space: nowrap; max-width: 100%; }
     .nds-day.today { box-shadow: inset 0 0 0 1.5px var(--margin-rule); }
     .nds-day.sel { background: var(--margin-rule); }
     .nds-day.sel .nds-wd, .nds-day.sel .nds-n { color: var(--accent-on); }
@@ -14355,15 +14372,32 @@
       display: flex; align-items: center; justify-content: center;
     }
     .day-fab:hover { background: color-mix(in oklab, var(--fab-graphite) 80%, white); }
-    /* clears the FAB so it never sits over a busy day's last block -- 52px button +
-       its own bottom offset + a little breathing room, rounded up.
-       2026-08-27 (COMMIT 3 STEP 1): padding-right added, same reasoning, same rounding
-       convention, for the FAB's horizontal footprint -- 52px button + 24px right offset
-       + a little breathing room. Shared with #timelineScroll (1-day) as well as
-       #mdTimelineScroll (3/5/7-day, week-aligned or not): confirmed live at every
-       day-count that a block in the last column/the single day's own right edge no
-       longer renders under the FAB's fixed x-range. */
-    #timelineScroll, #mdTimelineScroll { padding-bottom: 84px; padding-right: 84px; }
+    /* clears the FAB so it never sits over the day's last block -- 52px button +
+       its own bottom offset + a little breathing room, rounded up. Real content
+       always stops 84px of empty space above the container's true bottom, so at
+       rest (scrolled to the end) nothing ever paints under the FAB's fixed y-range.
+       2026-08-27 (COMMIT 3 STEP 1) paired this with a matching padding-right (52px
+       button + 24px offset + breathing room = 84px) so no block could render under
+       the FAB's x-range at any scroll position either.
+       2026-08-28 ("fix broken mobile day view", fault 5, Linh: "timeline should use
+       full available width minus the time gutter"): tried dropping padding-right
+       to 0 first -- it does reclaim the width, but blocks then stretch to the
+       container's true right edge, and a block CAN land in the FAB's fixed x/y
+       box at rest (confirmed live: "Lunch break" sat directly under the FAB on a
+       plain, unscrolled load, not just mid-scroll -- exactly the "permanently
+       obscuring" Linh named, just relocated rather than fixed). A real, unresolved
+       tension: a nonzero fixed-corner button and "zero width reserved for it" can't
+       both be true at once. Landed on the smallest reservation that still
+       guarantees ZERO overlap at every scroll position, not just rest -- 68px is
+       the container's un-padded right edge (346 at 360px) minus the FAB's actual
+       left edge (284), plus a few px of clearance, no extra "breathing room" beyond
+       that. Recovers 16px of the 84px this used to cost every row (row content
+       209px -> 225px+ at 360px) -- a real but partial win on "wasted space,"
+       disclosed as partial rather than claimed as full: the FAB's own 52+24px
+       footprint is not reclaimable without either shrinking/repositioning it (a
+       separate, undiscussed decision) or accepting the at-rest overlap this
+       replaces. */
+    #timelineScroll, #mdTimelineScroll { padding-bottom: 84px; padding-right: 68px; }
   }
   /* 2026-08-02 (Linh, three rounds in, still "ugly": "why are you ignoring my request
      to use google cal ui design for calendar vs everything else" -- the last three
