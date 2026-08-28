@@ -1,7 +1,7 @@
 ﻿// Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260828-todo-drawn-icons";
+var CACHE_VERSION = "b33-20260828-metrics-diagnostic-page";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -123,11 +123,24 @@ self.addEventListener("fetch", function (e) {
   }
   if (req.method !== "GET") return;
   if (req.mode === "navigate") {
+    // Every navigation used to get cached under the fixed key "./" -- correct for
+    // this single-page app's own routes (always really index.html), but 2026-08-28's
+    // metrics.html is a SECOND real page: navigating to it would have overwritten the
+    // app-shell's own "./" cache entry with metrics.html's content, so the next
+    // offline/stale load of the app itself would have served the wrong page. Only the
+    // actual shell path (root or index.html) writes to "./" now; any other real page
+    // -- metrics.html included -- is always network-first with nothing cached, which
+    // is also exactly "don't trap it in a stale copy" for a page meant to be deleted.
+    var navPath = new URL(req.url).pathname;
+    var isShellNav = /\/(index\.html)?$/.test(navPath);
     e.respondWith(
       timeoutFetch(req, 4000).then(function (res) {
-        caches.open(CACHE_VERSION).then(function (c) { c.put("./", res.clone()); });
+        if (isShellNav) caches.open(CACHE_VERSION).then(function (c) { c.put("./", res.clone()); });
         return res;
-      }).catch(function () { return caches.match(req).then(function (c) { return c || caches.match("./"); }); })
+      }).catch(function (err) {
+        if (isShellNav) return caches.match(req).then(function (c) { return c || caches.match("./"); });
+        throw err; // never cached, never faked offline -- a real network error is correct here
+      })
     );
     return;
   }

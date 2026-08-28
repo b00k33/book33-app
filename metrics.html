@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Book33 — Phone metrics (temporary)</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: #0b0b0d; color: #f0f0f0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  body { padding: 16px 16px 48px; }
+  h1 {
+    font-size: 15px; text-transform: uppercase; letter-spacing: .06em;
+    color: #8a8a92; margin: 0 0 12px; font-weight: 700;
+  }
+  .badge {
+    display: block; text-align: center; font-size: 22px; font-weight: 800;
+    letter-spacing: .03em; padding: 16px; border-radius: 12px; margin-bottom: 18px;
+  }
+  .badge.installed { background: #163a1e; color: #7EE787; border: 2px solid #2ea043; }
+  .badge.browser { background: #3a2a16; color: #ffb454; border: 2px solid #a96a1c; }
+  .hero {
+    font-size: 44px; font-weight: 800; text-align: center; line-height: 1.15;
+    padding: 18px 8px; margin-bottom: 4px; background: #17171c; border-radius: 12px;
+    border: 2px solid #33333c;
+  }
+  .hero-label {
+    text-align: center; font-size: 12px; color: #8a8a92; text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 18px;
+  }
+  .grp { margin-bottom: 18px; }
+  .grp-t {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: #8a8a92; font-weight: 700; margin: 0 0 8px; border-bottom: 1px solid #2a2a30; padding-bottom: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 0; font-size: 15px; vertical-align: top; }
+  td.k { color: #a8a8b2; width: 56%; padding-right: 8px; }
+  td.v { color: #f0f0f0; font-weight: 700; text-align: right; }
+  .flag { background: #3a1e1e; color: #ff9a9a; border: 1px solid #a83a3a; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 18px; }
+  .ua {
+    font-size: 11px; color: #8a8a92; word-break: break-all; line-height: 1.5;
+    background: #17171c; border: 1px solid #2a2a30; border-radius: 8px; padding: 10px;
+  }
+  .note { font-size: 11px; color: #6a6a72; margin-top: 24px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>Book33 — phone metrics (temporary, delete after use)</h1>
+
+  <div id="dispModeBadge" class="badge">…</div>
+
+  <div class="hero" id="innerWH">…</div>
+  <div class="hero-label">window.innerWidth × innerHeight — the CSS viewport (what media queries see)</div>
+
+  <div class="grp">
+    <div class="grp-t">Viewport &amp; pixels</div>
+    <table>
+      <tr><td class="k">visualViewport.width × height</td><td class="v" id="vv">…</td></tr>
+      <tr><td class="k">devicePixelRatio</td><td class="v" id="dpr">…</td></tr>
+      <tr><td class="k">screen.width × height</td><td class="v" id="scr">…</td></tr>
+      <tr><td class="k">screen × DPR (real pixels)</td><td class="v" id="scrDpr">…</td></tr>
+    </table>
+  </div>
+
+  <div class="grp">
+    <div class="grp-t">Viewport-height units (measured, not computed)</div>
+    <table>
+      <tr><td class="k">100vh</td><td class="v" id="u-vh">…</td></tr>
+      <tr><td class="k">100dvh</td><td class="v" id="u-dvh">…</td></tr>
+      <tr><td class="k">100svh</td><td class="v" id="u-svh">…</td></tr>
+      <tr><td class="k">100lvh</td><td class="v" id="u-lvh">…</td></tr>
+    </table>
+  </div>
+
+  <div class="flag" id="urlbarDelta">URL-bar collapse delta (100lvh − 100svh): …</div>
+
+  <div class="grp">
+    <div class="grp-t">Safe-area insets (measured via probe div)</div>
+    <table>
+      <tr><td class="k">top</td><td class="v" id="sa-top">…</td></tr>
+      <tr><td class="k">bottom</td><td class="v" id="sa-bottom">…</td></tr>
+      <tr><td class="k">left</td><td class="v" id="sa-left">…</td></tr>
+      <tr><td class="k">right</td><td class="v" id="sa-right">…</td></tr>
+    </table>
+  </div>
+
+  <div class="grp">
+    <div class="grp-t">Environment</div>
+    <table>
+      <tr><td class="k">Orientation</td><td class="v" id="orient">…</td></tr>
+      <tr><td class="k">(pointer: coarse)</td><td class="v" id="pointer">…</td></tr>
+      <tr><td class="k">prefers-color-scheme</td><td class="v" id="colorScheme">…</td></tr>
+      <tr><td class="k">prefers-reduced-motion</td><td class="v" id="reducedMotion">…</td></tr>
+    </table>
+  </div>
+
+  <div class="grp">
+    <div class="grp-t">User agent</div>
+    <div class="ua" id="ua">…</div>
+  </div>
+
+  <div class="note">Re-measures on resize / orientationchange. Scaffolding — delete metrics.html, its sw.js exclusion, and the Settings row once you have your numbers.</div>
+
+<script>
+(function () {
+  "use strict";
+
+  function measureCssHeight(cssHeightValue) {
+    var div = document.createElement("div");
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.pointerEvents = "none";
+    div.style.top = "0";
+    div.style.left = "0";
+    div.style.width = "0";
+    div.style.height = cssHeightValue;
+    document.body.appendChild(div);
+    var h = div.getBoundingClientRect().height;
+    document.body.removeChild(div);
+    return h;
+  }
+
+  function fmt(n) {
+    return Math.round(n * 100) / 100;
+  }
+
+  function render() {
+    // Display mode — the first thing to check, since it tells you which of
+    // the two runs (installed app vs. browser tab) the rest of the page describes.
+    var installed = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+    var badge = document.getElementById("dispModeBadge");
+    badge.textContent = installed ? "INSTALLED APP" : "IN BROWSER";
+    badge.className = "badge " + (installed ? "installed" : "browser");
+
+    document.getElementById("innerWH").textContent = window.innerWidth + " × " + window.innerHeight;
+
+    var vv = window.visualViewport;
+    document.getElementById("vv").textContent = vv ? (fmt(vv.width) + " × " + fmt(vv.height)) : "unsupported";
+
+    document.getElementById("dpr").textContent = window.devicePixelRatio;
+
+    document.getElementById("scr").textContent = screen.width + " × " + screen.height;
+    document.getElementById("scrDpr").textContent =
+      Math.round(screen.width * window.devicePixelRatio) + " × " + Math.round(screen.height * window.devicePixelRatio);
+
+    var vh = measureCssHeight("100vh");
+    var dvh = measureCssHeight("100dvh");
+    var svh = measureCssHeight("100svh");
+    var lvh = measureCssHeight("100lvh");
+    document.getElementById("u-vh").textContent = fmt(vh) + "px";
+    document.getElementById("u-dvh").textContent = fmt(dvh) + "px";
+    document.getElementById("u-svh").textContent = fmt(svh) + "px";
+    document.getElementById("u-lvh").textContent = fmt(lvh) + "px";
+
+    var delta = lvh - svh;
+    document.getElementById("urlbarDelta").textContent =
+      "URL-bar collapse delta (100lvh − 100svh): " + fmt(delta) + "px" +
+      (delta === 0 ? " — no collapsing chrome on this run" : "");
+
+    ["top", "bottom", "left", "right"].forEach(function (side) {
+      var h = measureCssHeight("env(safe-area-inset-" + side + ", 0px)");
+      document.getElementById("sa-" + side).textContent = fmt(h) + "px";
+    });
+
+    var orientType = (screen.orientation && screen.orientation.type) ||
+      (window.matchMedia("(orientation: portrait)").matches ? "portrait (media query)" : "landscape (media query)");
+    document.getElementById("orient").textContent = orientType;
+
+    document.getElementById("pointer").textContent =
+      window.matchMedia("(pointer: coarse)").matches ? "coarse" : "fine";
+
+    document.getElementById("colorScheme").textContent =
+      window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+
+    document.getElementById("reducedMotion").textContent =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduce" : "no-preference";
+
+    document.getElementById("ua").textContent = navigator.userAgent;
+  }
+
+  render();
+  window.addEventListener("resize", render);
+  // Orientation-change values (safe-area, screen.width/height) read wrong if
+  // measured immediately -- the browser is still mid-rotation.
+  window.addEventListener("orientationchange", function () {
+    setTimeout(render, 300);
+  });
+})();
+</script>
+</body>
+</html>
