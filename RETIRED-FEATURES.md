@@ -267,6 +267,26 @@ by a 7-day strip in the top bar itself (`#navDayStrip`, `renderNavDayStrip()`) �
 day to jump to it, swipe to step the window (reuses `bindSwipe()`, the same function
 the calendar grid's own swipe already used).
 
+## 10. All Events "Every year" Date order / A–Z toggle — retired 2026-08-29
+
+The `#evlYearSortToggle` control (`Date order` / `A–Z` buttons) on the All Events
+page's Repeats → Pattern → Every year section, and the month-grouped list it
+controlled (`.evl-year-months` / `.evl-year-month-block` / `.evl-year-month-head`).
+
+**Why:** the All Events rebuild (Commit 3) replaced the whole "Every year" list with
+twelve always-present month rails (`renderYearRails()`), inherently date-ordered —
+January to December, always. A-Z has no meaning on a twelve-month axis, so the
+toggle's second option stopped being a real choice.
+
+**Removed:** the toggle markup and its click handler (search "evlYearSortToggle" in
+git history if you need the old code). `.evl-year-row` / `.evl-year-row-name` /
+`.evl-year-row-freq` / `.evl-year-row-date` were **not** removed — they're still live
+for the "Everything else" bucket (monthly/interval/sinceLastDone/numMoney), which
+Commit 3 explicitly left untouched.
+
+**Kept, deliberately:** the stored `PREFS.evlYearlySort` key — nothing reads it any
+more, but leaving it in place means an old saved value on her device never throws.
+
 **Removed (hidden, not deleted — CSS `display: none`, mobile-only, ≤640px):**
 - `#navMonthBtn` / `#navMonthPop` (the "August ▾" control) — its month-name label and
   its own 1/3/5/7 day-count picker (a 4th redundant copy) both retire outright.
