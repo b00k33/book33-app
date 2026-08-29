@@ -89,7 +89,7 @@ mobile to be *built*, only not *wrecked*. The "don't wreck a working mobile layo
 protection is kept — it was never the problem — the part that permitted ignoring mobile
 entirely is gone.
 
-The phone is the real device. A change is not finished until it works at 412×915.
+The phone is the real device. A change is not finished until it works at 360×697.
 Desktop is the second target, not the first.
 
 Every change that touches layout ships both widths in the same commit. There is no such
@@ -114,7 +114,7 @@ in index.html, and the mobile report below.)
 **Every panel, sheet and drawer needs a working exit on a phone — and more than one.**
 Tapping outside must close it, and there must be a visible close control that is not
 covered, not offscreen, and not sitting where another control used to be. Escape is not
-an exit on a phone. Before shipping any panel, open it at 412×915 and try to leave: tap
+an exit on a phone. Before shipping any panel, open it at 360×697 and try to leave: tap
 outside, tap the close control, tap the thing that opened it. **All three must work.**
 (2026-08-27: the nav-panel Calendar/Chapters flyouts trapped this exact way — a
 `closest("[data-view]")` delegate with no lower bound matched a page-scoping attribute
@@ -189,7 +189,7 @@ themes, and paste the results into the commit report:
 
 If a number got worse than the previous commit, say so rather than shipping it quietly.
 
-**Tower check.** Measure the same element at 1440px and at 412px. If it is more than
+**Tower check.** Measure the same element at 1440px and at 360px. If it is more than
 twice as tall on the phone, a desktop-tuned rule is misfiring — almost always a
 `min-width` bigger than the container it now sits in, forcing a permanent flex-wrap.
 Find the rule and give the narrow case its own shape; do not shrink the type.
@@ -225,14 +225,25 @@ calendar element and its ancestors, not just an exact id match):
 })()
 ```
 
-**Baseline, as of `b9cf32b`** (412×915, mobile Day view, 0 all-day items) — beat these,
-don't just match them:
+**Baseline, as of `223e356`** (360×697, mobile Day view) — beat these, don't just
+match them. Re-measured 2026-08-29 for the 412×915→360×697 correction (see the
+"Linh's phone" section above); the old `b9cf32b` figures were genuinely taken at
+412×915 and are retired, not just relabeled. Two things changed since that baseline
+besides the width: `#nowGlanceStrip` is a new, disclosed 4th permanent element above
+the calendar (the Now-screen job, `1067ed2`), and this account's real data no longer
+has a day with 0 all-day items to measure against — every day carries at least one
+recurring all-day routine now, so "0 all-day items" from the old table couldn't be
+reproduced. These numbers are today's real all-day content, not an empty day:
 | Day-count | Calendar top | % of viewport | Elements above it |
 |---|---|---|---|
-| 1 | 150px | 16% | `ddGrab` (44px), `dayAlldayRow` (37px) |
-| 3 | 211px | 23% | `ddGrab` (44px) |
-| 5 | 211px | 23% | `ddGrab` (44px) |
-| 7 | 238px | 26% | `ddGrab` (44px) |
+| 1 | 279px | 40% | `ddGrab` (51px), `nowGlanceStrip` (73px), `dayAlldayRow` (86px) |
+| 3 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
+| 5 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
+| 7 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
+1-day sits right at the 40% ceiling — worth a look, not touched by this commit. 3/5/7
+render 1-day underneath (360px is below the multi-day flip point) but without
+`dayAlldayRow` in this pass's reading — that asymmetry wasn't chased down here since
+it's outside Commit 0's scope; flagging it rather than filing it away silently.
 
 ### 9. Every code change (workflow)
 Commit and push to main automatically (no waiting for approval), EXCEPT confirm before
@@ -1055,7 +1066,7 @@ report, same standard as every other numeric rule in this file.
 
 ### Where content starts
 - The primary content of a page (calendar grid, list, timeline) must begin
-  within the first 40% of the 915px viewport. Tool palettes, filters, help
+  within the first 40% of the 697px viewport. Tool palettes, filters, help
   text and admin controls collapse by default on mobile until they do.
 - This generalizes the mobile report's existing Day-view-specific "calendar
   top ... above 40% is a fail" check (see "The mobile report," below) into
@@ -1292,7 +1303,7 @@ active. The active Mode reshapes the whole app.**
 ## Before finishing
 - Confirm every rule is met; check dark AND light.
 - Mobile report required (see §8 and "The mobile report" below) — screenshots at
-  412×915 in both themes, plus the four measured numbers. A commit touching layout
+  360×697 in both themes, plus the four measured numbers. A commit touching layout
   without one is not finished.
 - Mobile sizing standards (adopted 2026-08-28, above) — check all six: row/cell
   heights within the stated bands; content starts within 40% of viewport; no
