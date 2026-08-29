@@ -36575,7 +36575,27 @@
       html += `<button type="button" class="nds-day${sel ? " sel" : ""}${isToday ? " today" : ""}" data-nds-date="${k}" aria-pressed="${sel}" aria-label="${WD_FULL[i]} ${day.getDate()} ${MON_SHORT[day.getMonth()]}${isToday ? ", today" : ""}"><span class="nds-wd">${WD_MIN[i]}</span><span class="nds-n">${day.getDate()}</span></button>`;
     }
     strip.innerHTML = html;
+    navDayStripNarrowPass();
   }
+  // 2026-08-29 (real bug, not a stale-cache read — confirmed live on her phone after I'd
+  // wrongly told her the morning's fix already covered this): .topbar-right grew a 4th
+  // 44px icon (#navModeBadge) sometime after that fix's "114px of 360px" measurement was
+  // taken, so #navDateSlot now gets closer to ~106px there — under the ~16-17px a bold
+  // 2-digit date actually needs per column, and .nds-n's max-width:100%/overflow:hidden
+  // clips the second digit rather than shrinking, so "24" reads as "2". Same fix pattern
+  // as mdAlldayNarrowPass() elsewhere in this file: measure the REAL rendered gap instead
+  // of assuming a px budget, and shrink only as far as actually needed -- self-correcting
+  // if .topbar-right's icon count changes again, which is exactly what broke the old fix.
+  function navDayStripNarrowPass() {
+    document.querySelectorAll("#navDayStrip .nds-n").forEach(n => {
+      n.style.fontSize = "";
+      const gap = n.scrollWidth - n.clientWidth;
+      if (gap <= 0.5) return;
+      const fit = Math.max(9, Math.floor(13 * n.clientWidth / n.scrollWidth));
+      n.style.fontSize = fit + "px";
+    });
+  }
+  window.addEventListener("resize", navDayStripNarrowPass);
   document.addEventListener("click", e => {
     const btn = e.target.closest("[data-nds-date]");
     if (!btn) return;
