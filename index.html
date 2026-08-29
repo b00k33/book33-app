@@ -6492,7 +6492,21 @@
      equal-share 1fr, so a wide desktop no longer stretches single-digit cells while
      starving the column that actually holds long text (Bug 2's "month columns have
      space to spare"). */
-  .evl-pat-grid { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(7, minmax(34px, 56px)); gap: 2px; align-items: stretch; }
+  .evl-pat-grid { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(7, minmax(34px, 56px)) 46px; gap: 2px; align-items: stretch; }
+  /* 2026-08-29 (All Events rebuild, Commit 1c): weekly-hours total per series, read
+     straight off the same fill.min this grid's cells already carry -- no second
+     source of truth. A series with no stored time renders this cell empty, not "0h"
+     (evlWeeklyHoursLabel's own contract). */
+  .evl-pat-hrs {
+    display: flex; align-items: center; justify-content: flex-end;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: var(--margin-rule);
+  }
+  /* 2026-08-29 (All Events rebuild, Commit 1c): live-measured 2.07:1, same failure
+     already documented on .nav-arrow.day-step above -- --margin-rule's gold reads
+     fine on Night's near-black page background but not on Day's near-white one.
+     Same --ink swap as that fix, not a new pairing. */
+  :root[data-theme="light"] .evl-pat-hrs { color: var(--ink); }
   .evl-pat-head { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; text-align: center; padding: 2px 0; }
   .evl-pat-head:first-child { text-align: left; }
   /* height:32px/white-space:nowrap/ellipsis (pre-2026-08-26) truncated names MID-WORD
@@ -6580,9 +6594,16 @@
     .evl-year-months { display: block; column-width: 260px; column-gap: 24px; }
   }
   @media (max-width: 640px) {
-    .evl-pat-grid { grid-template-columns: minmax(128px, 1fr) repeat(7, minmax(18px, 30px)); }
-    .evl-pat-cell { font-size: 0; }
-    .evl-pat-times { display: block; }
+    .evl-pat-grid { grid-template-columns: 96px repeat(7, 1fr) 30px; gap: 3px; }
+    .evl-pat-cell { font-size: 0; height: 34px; cursor: pointer; }
+    .evl-pat-hrs { font-size: 10.5px; }
+    /* 2026-08-29 (All Events rebuild, Commit 1d): SUPERSEDES the old unconditional
+       "always show times on the phone" rule -- that was five permanent extra lines.
+       Now a disclosure: hidden until its row's data-evl-times-toggle cell is tapped
+       (evlRowClickHandler above), one row at a time, nothing forced open on load.
+       Desktop is untouched -- .evl-pat-times' base rule above still hides it there
+       regardless of this class, times stay in the cells as they always have. */
+    .evl-pat-times.evl-pat-times-open { display: block; }
     /* 2026-08-29 mobile audit Stage 2 ("compact yearly rows to ~36px"): live-measured
        at 44px before this change (not the ~130px CLAUDE.md's 2026-08-28 mobile-sizing
        note flags -- that note is stale for THIS row; disclosed in the commit report
@@ -53287,14 +53308,27 @@
   // the desktop cells and the phone's times sub-line (evlFillTimesSummary reads
   // these same objects) can never disagree about a time.
   function evlWeeklyFillFromSchedules(schedules, task) {
-    const fill = Array.from({ length: 7 }, () => ({ on: false, time: "" }));
+    const fill = Array.from({ length: 7 }, () => ({ on: false, time: "", min: 0 }));
     (schedules || []).forEach(l => {
       let label = "";
       if (l.start) {
         const end = l.end || (task && task.durationMin ? minToTime(Math.min(timeToMin(l.start) + task.durationMin, 1439)) : "");
         label = end ? `${fmtTime(l.start)} – ${fmtTime(end)}` : fmtTime(l.start);
       }
-      (l.weekdays || []).forEach(wd => { fill[wd] = { on: true, time: label }; });
+      // 2026-08-29 (All Events rebuild, Commit 1a): minutes stored alongside the
+      // printed label, from the SAME start/end this label already resolved -- never
+      // a second source of truth. Sleep (10:30pm -> next morning) needs the wrap:
+      // endMin < startMin means the span crossed midnight, so the real length is
+      // what's left of today plus however far into tomorrow endMin reaches, not a
+      // negative subtraction.
+      const startMin = l.start ? timeToMin(l.start) : null;
+      const endMin = l.start ? (l.end ? timeToMin(l.end)
+                     : (task && task.durationMin
+                        ? Math.min(timeToMin(l.start) + task.durationMin, 1439) : null)) : null;
+      const min = (startMin != null && endMin != null)
+                ? (endMin >= startMin ? endMin - startMin : (1440 - startMin) + endMin)
+                : 0;
+      (l.weekdays || []).forEach(wd => { fill[wd] = { on: true, time: label, min }; });
     });
     return fill;
   }
@@ -53303,13 +53337,21 @@
     if (kind === "routine" && task.freq === "daily") {
       // same end resolution as generatedFor()'s own daily branch: durationMin or nothing
       let t = "";
+      const startMin = task.start ? timeToMin(task.start) : null;
+      let endMin = null;
       if (task.start) {
         const end = task.durationMin ? minToTime(Math.min(timeToMin(task.start) + task.durationMin, 1439)) : "";
         t = end ? `${fmtTime(task.start)} – ${fmtTime(end)}` : fmtTime(task.start);
+        endMin = end ? timeToMin(end) : null;
       }
-      return Array.from({ length: 7 }, () => ({ on: true, time: t }));
+      // same overnight wrap as evlWeeklyFillFromSchedules above -- a daily rule can
+      // cross midnight exactly the same way a weekly one can.
+      const min = (startMin != null && endMin != null)
+                ? (endMin >= startMin ? endMin - startMin : (1440 - startMin) + endMin)
+                : 0;
+      return Array.from({ length: 7 }, () => ({ on: true, time: t, min }));
     }
-    if (kind === "fam" && task.freq === "weekly") return Array.from({ length: 7 }, (_, i) => ({ on: i === task.weekday, time: "" }));
+    if (kind === "fam" && task.freq === "weekly") return Array.from({ length: 7 }, (_, i) => ({ on: i === task.weekday, time: "", min: 0 }));
     // 2026-08-26 ("the right grid per repeat"): the 40-day forward walk that used to
     // run here for everything else is GONE, and with it the all-blank rows it
     // produced (its own comment admitted a yearly date months out came back empty --
@@ -53318,7 +53360,7 @@
     // evlSeriesSection() below -- yearly kinds read month/day straight off their own
     // record (evlYearlyDate), everything else renders as an evlFreqWords() sentence
     // list. A weekly/daily/fam-weekly rule is still read directly above, unchanged.
-    return Array.from({ length: 7 }, () => ({ on: false, time: "" }));
+    return Array.from({ length: 7 }, () => ({ on: false, time: "", min: 0 }));
   }
   // 2026-08-26 ("the right grid per repeat"): the real month/day of an annual
   // series, straight off the record -- NO occurrence walk. Confirmed all three
@@ -53375,6 +53417,19 @@
     return [...groups.entries()]
       .map(([time, days]) => `${days.map(d => WD_FULL[d].slice(0, 3)).join(" ")} ${time}`)
       .join(" · ");
+  }
+  // 2026-08-29 (All Events rebuild, Commit 1b): summed straight off the SAME fill
+  // objects the grid cells and evlFillTimesSummary already read -- no second walk.
+  // A series with no stored start time has every cell's min at 0, which sums to 0 --
+  // but 0 stored minutes is not the same claim as "this really takes no time," so it
+  // renders as nothing rather than a false "0h".
+  function evlHoursFmt(mins) {
+    if (!mins) return "";
+    const h = mins / 60;
+    return (h < 10 ? h.toFixed(1).replace(/\.0$/, "") : Math.round(h)) + "h";
+  }
+  function evlWeeklyHoursLabel(fill) {
+    return evlHoursFmt(fill.reduce((s, c) => s + (c.on ? (c.min || 0) : 0), 0));
   }
   // next occurrence on/after today, and the count within the visible date range --
   // both walk the same real evlSeriesOccursOn() test, never a formula, so a
@@ -53464,14 +53519,20 @@
           || (a.fill.find(c => c.on && c.time) || { time: "￿" }).time.localeCompare((b.fill.find(c => c.on && c.time) || { time: "￿" }).time)
           || a.s.title.localeCompare(b.s.title);
       });
-      html += `<div class="evl-pat-sec-head">Every week</div>`;
-      html += `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("");
+      // 2026-08-29 (All Events rebuild, Commit 1c): section-head total is the SAME
+      // per-row minutes evlWeeklyHoursLabel sums, just summed again across every
+      // row -- one real number, not a re-derivation.
+      const totalMin = rows.reduce((s, { fill }) => s + fill.reduce((s2, c) => s2 + (c.on ? (c.min || 0) : 0), 0), 0);
+      const totalHrs = evlHoursFmt(totalMin);
+      html += `<div class="evl-pat-sec-head">Every week · ${rows.length}${totalHrs ? ` · ${totalHrs}` : ""}</div>`;
+      html += `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("") + `<div class="evl-pat-head"></div>`;
       rows.forEach(({ s, fill }) => {
         const mode = evlSeriesMode(s);
         html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span class="evl-pat-name-text">${esc(s.title)}</span></div>`;
-        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-mode="${mode || ""}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
+        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-mode="${mode || ""}" data-evl-times-toggle="${esc(s.id)}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
+        html += `<div class="evl-pat-hrs">${esc(evlWeeklyHoursLabel(fill))}</div>`;
         const times = evlFillTimesSummary(fill);
-        if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}">${esc(times)}</div>`;
+        if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}" data-evl-times-row="${esc(s.id)}">${esc(times)}</div>`;
       });
       html += `</div>`;
     }
@@ -53621,6 +53682,19 @@
   // #evlRepeatsBody (Pattern grid names + List rows) -- same data-evl-kind/
   // data-evl-id contract everywhere, one delegate handles both.
   function evlRowClickHandler(e) {
+    // 2026-08-29 (All Events rebuild, Commit 1d): a weekly-grid fill cell has no
+    // data-evl-kind of its own and no ancestor carries one either, so this never
+    // actually reaches the data-evl-kind branch below as things stand today -- but
+    // checked and returned early anyway, explicitly, rather than relying on that
+    // structural accident staying true. Phone-only in effect (the times line this
+    // toggles is desktop-hidden regardless, see .evl-pat-times CSS).
+    const timesCell = e.target.closest("[data-evl-times-toggle]");
+    if (timesCell) {
+      const id = timesCell.dataset.evlTimesToggle;
+      const row = document.querySelector(`.evl-pat-times[data-evl-times-row="${CSS.escape(id)}"]`);
+      if (row) row.classList.toggle("evl-pat-times-open");
+      return;
+    }
     const row = e.target.closest("[data-evl-kind]");
     if (!row) return;
     const id = row.dataset.evlId, kind = row.dataset.evlKind;
