@@ -12691,21 +12691,38 @@
      real bar there now (hamburger/month/search/date-badge/to-do) with nothing left to
      overlap without colliding -- margin drops to 0 at that width only. Tablet
      (641-1023px) is unchanged, keeps the -16px overlap above. */
+  /* 2026-08-29 (Linh: "put the chips in a good place"): #numGroupStrip's new always-
+     visible home (see its own HTML comment) -- empty and 0-height everywhere it isn't
+     populated (desktop, or mobile before placeDayDrawers() has run once), same "cheap
+     and safe" convention #dayTopDrawer/#wrMobile already use. padding matches
+     #nowGlanceStrip's own 0 16px directly below it in the DOM, for one shared left
+     edge running down the page instead of each strip picking its own inset. */
+  .day-chips-row { padding: 0 16px; }
   .dd-grab {
     display: none; width: 100%; border: none; background: none; cursor: grab;
-    touch-action: none; padding: 20px 0; margin: -16px 0 0; gap: 6px;
-    align-items: center; justify-content: center;
+    touch-action: none; padding: 12px 4px; margin: 0; gap: 6px;
+    align-items: center; justify-content: flex-end;
   }
   body.dd-drawers-active .dd-grab { display: flex; }
   @media (max-width: 640px) {
     .dd-grab { margin-top: 0; }
   }
-  .dd-grab::before {
-    content: ""; width: 52px; height: 4px; border-radius: 999px;
+  /* 2026-08-29 (Linh: "move the grab completely"): was a big centred pill spanning
+     the full width, floating above a gap that's #dayChipsRow's real content now --
+     shrunk to a small trailing tab (right-aligned, own rounded ground) so it reads
+     as attached to the chips above it rather than its own dead-feeling row. Padding
+     dropped from 20px to 12px (was compensating for having nothing else around it;
+     it no longer needs to) but the dot+chevron+their own padding still clear 44px. */
+  .grab-tab {
+    display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+    border-radius: 999px; background: var(--field-bg); pointer-events: none;
+  }
+  .grab-tab::before {
+    content: ""; width: 22px; height: 4px; border-radius: 999px;
     background: color-mix(in oklab, var(--margin-rule) 55%, transparent);
     transition: background 0.15s ease;
   }
-  .dd-grab:active::before { background: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
+  .dd-grab:active .grab-tab::before { background: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
   /* 2026-08-27 (COMMIT 2 STEP 2): the pill alone doesn't read as a control -- Linh had
      it open once and concluded three commits hadn't shipped, because nothing indicated
      a drawer existed or could be closed. A text label ("Pull down") was tried and
@@ -12713,16 +12730,16 @@
      re-adding one would undo that instruction, so this is a chevron instead: the SAME
      ▾ idiom .nav-month-caret/.tile-chev already use elsewhere in this file for
      expand/collapse, flipping via aria-expanded (already toggled in JS, no new wiring).
-     A second glyph beside the existing pill, not a second row -- the button's height is
-     still set entirely by its own padding above, so this doesn't regrow "the fixed
-     space at the top" her 2026-08-18 instruction shrank. */
-  .dd-grab::after {
+     2026-08-29: dash+chevron moved from the button's own ::before/::after onto this
+     .grab-tab child's, so a small rounded background (above) can hug just the two
+     glyphs instead of covering the button's full-width, invisible tap area. */
+  .grab-tab::after {
     content: "▾"; font-size: 11px; line-height: 1;
     color: color-mix(in oklab, var(--margin-rule) 65%, transparent);
     transition: transform 0.15s ease, color 0.15s ease;
   }
-  .dd-grab[aria-expanded="true"]::after { transform: rotate(180deg); }
-  .dd-grab:active::after { color: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
+  .dd-grab[aria-expanded="true"] .grab-tab::after { transform: rotate(180deg); }
+  .dd-grab:active .grab-tab::after { color: color-mix(in oklab, var(--margin-rule) 85%, transparent); }
   /* bottom-edge flick-up confirmation toast (JS: bottom-edge gesture block) -- fixed
      just above the safe area, faded in/out via .on, never intercepts touches itself. */
   .dd-flash {
@@ -21488,16 +21505,33 @@
              same "cheap and safe" reasoning as #wrMobile's own note. #ddGrab (the
              pull handle) is a separate, ALWAYS-in-flow sibling right after it -- drag
              or tap to toggle, or flick up from the bottom edge; see that JS block. -->
-        <div class="day-top-drawer" id="dayTopDrawer">
-          <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
-        </div>
+        <!-- 2026-08-29 (Linh: "move the grab completely and use your intelligence to
+             put the chips in a good place"): #numGroupStrip (UD/ruler/moon/PM/etc)
+             used to be reparented INTO #dayTopDrawerBody below when the mobile drawer
+             system is active -- hidden by default, floating a big empty gap above the
+             bare grab handle whenever collapsed (her "tiny week at top... widget looks
+             horrible" complaint, plus her own earlier ask40 answer: she reads the CD
+             chip for practical cycle info, not decoration -- it shouldn't need a tap).
+             placeDayDrawers() now sends it here instead, unconditionally visible, same
+             "home marker" pattern as everywhere else in that function -- see its own
+             comment. #ddGrab moves to sit right after it (was: after #dayTopDrawer,
+             its own big centred row floating above what used to be an empty gap) --
+             restyled compact/trailing instead of full-width, so it reads as a tab
+             attached to the chips rather than a standalone row. It still immediately
+             precedes #dayTopDrawer/aria-controls its body, unchanged relationship, so
+             the existing drag/flick gesture JS (position-relative-to-drawer math) is
+             untouched by the move. -->
+        <div class="day-chips-row" id="dayChipsRow"></div>
         <!-- 2026-08-18 pt.4 (Linh: "drop the word 'Pull down' from the grab handle
              itself... shrink the fixed space at the top to the smallest it can be"):
              no visible text label any more -- just the drag-pill (::before). State is
              still conveyed to assistive tech via aria-expanded (toggled in JS), so
              nothing is lost for screen-reader users, only the always-on printed word
              for everyone else. -->
-        <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header"></button>
+        <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header"><span class="grab-tab"></span></button>
+        <div class="day-top-drawer" id="dayTopDrawer">
+          <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
+        </div>
         <!-- 2026-08-29 (Now screen, COMMIT 3 STEP 3): two plain-language lines, always
              visible (not gated behind the drawer above) -- "a calendar that opens at
              the hour you're in with every block named" needs the same two facts the
@@ -47820,6 +47854,11 @@
     const calDaysRow = document.getElementById("calDaysRow");
     const numGroupStrip = document.getElementById("numGroupStrip");
     const numGroupStripHome = document.getElementById("numGroupStripHome");
+    // 2026-08-29 (Linh: "put the chips in a good place"): NOT dayTopDrawerBody any
+    // more -- see #dayChipsRow's own HTML comment for why (always visible now,
+    // never hidden behind the grab). Desktop/tablet-not-active still returns it to
+    // numGroupStripHome unchanged below, same as before this change.
+    const dayChipsRow = document.getElementById("dayChipsRow");
     const topBody = document.getElementById("dayTopDrawerBody");
     // 2026-08-18 pt.3 (Linh's grab-handle demo folded #qaSlotDay's exact content into
     // its collapsing zone) -- placeDeskGrid()'s own "on" branch already gives this
@@ -47904,7 +47943,7 @@
       if (dayRow2 && topBody && dayRow2.parentElement !== topBody) topBody.appendChild(dayRow2);
       if (dayStepRow && topBody && dayStepRow.parentElement !== topBody) topBody.appendChild(dayStepRow);
       if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
-      if (numGroupStrip && topBody && numGroupStrip.parentElement !== topBody) topBody.appendChild(numGroupStrip);
+      if (numGroupStrip && dayChipsRow && numGroupStrip.parentElement !== dayChipsRow) dayChipsRow.appendChild(numGroupStrip);
       if (qa && topBody && qa.parentElement !== topBody) topBody.appendChild(qa);
       // dayHeaderRow/bodyCard/sessionCard/ctxWrap, in that order (her own table's
       // order), ahead of #wrMobile -- each keeps its own existing renderer untouched;
