@@ -1445,8 +1445,22 @@
     .num-group-strip {
       justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
       background: none; border: none; padding: 0; margin: 8px 0 0; gap: 8px; scrollbar-width: none;
+      /* 2026-08-29 (ask40 interview, "Same strip, honest about scrolling" -- option A of
+         3 mockups, chosen over a collapse-to-essentials or move-off-top-bar rewrite):
+         the strip used to cut a chip off mid-word at the right edge with nothing telling
+         her it scrolls. Right-edge-only fade -- the strip always starts scrolled to 0, so
+         there's never truly hidden content on the left to fade too. */
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent 100%);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent 100%);
     }
     .num-group-strip::-webkit-scrollbar { display: none; }
+    /* companion scroll-position indicator for the fade above -- see #ngsScrollbar's JS
+       (a MutationObserver + scroll listener, self-contained) for why it's a continuous
+       thumb rather than fixed dots: the chip count varies day to day (birthday/imprint
+       chips are conditional), so nothing here maps cleanly to discrete pages. */
+    .ngs-scrollbar { height: 3px; margin: 6px 2px 0; border-radius: 999px; background: var(--raised); position: relative; overflow: hidden; }
+    .ngs-scrollbar[hidden] { display: none; }
+    .ngs-scrollbar span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; background: var(--cosmic-gold); }
     .num-group-strip > * { flex: none; }
     .num-group-strip .moon-badge, .num-group-strip .date-pm, .num-group-strip .day-astro-bits,
     .num-group-strip .date-mini-badge, .num-group-strip .num-grp-fast, .num-group-strip .mini-cal-mascot {
@@ -21342,6 +21356,7 @@
                   <span class="date-mini-badge num-hover-trigger" id="imprintHover" hidden tabindex="0"></span>
                   <span class="num-grp-fast" id="numGrpFast"></span>
                 </div>
+                <div class="ngs-scrollbar" id="ngsScrollbar" aria-hidden="true" hidden><span></span></div>
               </div>
             </div>
             <!-- 2026-08-27 (mobile Day-view mock, COMMIT 1, RETIRED-FEATURES.md #9):
@@ -36567,6 +36582,31 @@
     state.anchor = parseKey(btn.dataset.ndsDate);
     render();
   });
+
+  // 2026-08-29 (ask40 interview, chip-strip option A -- "same strip, honest about
+  // scrolling"): #numGroupStrip's chips are set individually (#dayRulerChip.innerHTML =
+  // ..., etc, scattered across renderDay()), not one wholesale innerHTML replace, so a
+  // MutationObserver here is simpler and more robust than finding every call site that
+  // could change its content -- this fires once no matter which chip changed.
+  (function () {
+    const strip = document.getElementById("numGroupStrip");
+    const bar = document.getElementById("ngsScrollbar");
+    if (!strip || !bar) return;
+    const thumb = bar.firstElementChild;
+    function updateNgsScrollbar() {
+      const over = strip.scrollWidth - strip.clientWidth;
+      if (over <= 4) { bar.hidden = true; return; }
+      bar.hidden = false;
+      const trackPct = Math.max(12, strip.clientWidth / strip.scrollWidth * 100);
+      const pos = Math.max(0, Math.min(1, strip.scrollLeft / over));
+      thumb.style.width = trackPct + "%";
+      thumb.style.left = (pos * (100 - trackPct)) + "%";
+    }
+    strip.addEventListener("scroll", updateNgsScrollbar, { passive: true });
+    window.addEventListener("resize", updateNgsScrollbar);
+    new MutationObserver(updateNgsScrollbar).observe(strip, { childList: true, subtree: true, characterData: true });
+    updateNgsScrollbar();
+  })();
 
   // 2026-08-02 (Linh: "the day time view shows 6am-10pm ... expandable button"): tracks
   // whether the timeline's scroll position has been set to 6am yet — see renderDay().
