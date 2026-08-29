@@ -119,12 +119,26 @@ Nothing else, at any width. A section label stays quieter than a name because of
 and colour**, not size — which is what makes three sizes enough.
 
 #### R11. Heights & radius
-| | Height | | Radius |
-|---|---|---|---|
-| Number capsule | 20px | Pill / segmented | 999 |
-| Month rail | 26px | Card | 14 |
-| Compact row (phone) | 34px | Row | 10 |
-| Standard row / button | 44px | Grid cell | 6 |
+Radius follows **shape**, not the individual component — that's the whole rule. Get the
+shape right and the radius is never a judgment call.
+
+| Shape | Radius | Heights in use |
+|---|---|---|
+| Row (rectangular, filled) | **10** (`--radius-sm`) | 34 compact · 44 standard · 52 data · 64 rich |
+| Circle (icon / avatar / mode chip tap target) | **999** | 20 capsule · 44 standard |
+| Card / standalone button (sits alone on the page, not in a list) | **14** | 26 month rail · 44–60 button |
+
+A row is never 6, 14, or 999 — those belong to buttons and circles. If a component needs
+a radius R11 doesn't name, it's the wrong shape for the job, not a new radius.
+
+Four row heights, each doing a distinct job — adding a fifth needs a fifth job, not a
+fifth number:
+| Row | Height | When |
+|---|---|---|
+| Compact | 34 | Phone, list-dense contexts (see R12) |
+| Standard | 44 | The base row — one line, meta right-aligned, nothing else |
+| Data | 52 | Standard + 2–3 of the row's own controls (a tick, a Mode chip, an action) |
+| Rich | 64 | Standard + a second content line under the name (an answer and its detail) |
 
 #### R12. The row — the most important component in the app
 ```
@@ -134,7 +148,11 @@ and colour**, not size — which is what makes three sizes enough.
 - Name flexes, `min-width: 0`, left-aligned, at the left edge of the row.
 - Meta right-aligned, so meta forms a readable column down the edge.
 - Filled ground one step off the page (`#161616` on `#0D0D0D`). **No border.**
-- 44px standard, 34px compact. 3–4px between rows.
+- Radius and heights: see R11. This diagram is the standard row — data and rich rows
+  keep the same skeleton (dot · name · meta) and only add what their extra height is for.
+  A divided list (hairline `border-bottom`, no fill, no radius) is a legitimate row
+  variant too — used where rows sit inside their own scrollable sheet rather than
+  stacked on the page.
 
 #### R13. The section header
 Small uppercase label · count · optional control, right-aligned.
