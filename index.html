@@ -42897,6 +42897,83 @@
     const item = activeModeItem(now);
     return item ? modeById(modeOf(item)) : MODE_HOME;
   }
+  // 2026-08-29 (Now screen, COMMIT 1): four small facts for the "Right now" landing
+  // screen. Kept deliberately separate from activeModeItem() just above rather than
+  // reusing it -- activeModeItem() requires a Mode (`if (!mId ...) return;`), so it
+  // goes blank the instant the covering block is untagged, which is most of her
+  // events. currentItem() is the same scan shape (same dayEventsRawFor(), same
+  // "latest start wins" tie-break) with that one line removed -- activeModeItem()
+  // itself is untouched, Modes still depend on it exactly as before.
+  function currentItem(now) {
+    const n = now instanceof Date ? now : new Date();
+    const nowMin = n.getHours() * 60 + n.getMinutes();
+    let best = null, bestStart = -1;
+    dayEventsRawFor(n).forEach(o => {
+      if (o.allDay || !o.start) return;
+      const cs = toMin(o.start), ce = itemEndMin(o);
+      if (cs == null || ce == null) return;
+      if (nowMin >= cs && nowMin < ce && cs > bestStart) { best = o; bestStart = cs; }
+    });
+    return best;
+  }
+  // the next timed block starting strictly AFTER now, today -- earliest start wins.
+  // null once the day's last timed item has already started.
+  function nextItem(now) {
+    const n = now instanceof Date ? now : new Date();
+    const nowMin = n.getHours() * 60 + n.getMinutes();
+    let best = null, bestStart = Infinity;
+    dayEventsRawFor(n).forEach(o => {
+      if (o.allDay || !o.start) return;
+      const cs = toMin(o.start);
+      if (cs == null) return;
+      if (cs > nowMin && cs < bestStart) { best = o; bestStart = cs; }
+    });
+    return best;
+  }
+  // TODOS and "today's not-done tickable items" (dayProgress()'s own denominator --
+  // generated routine occurrences + plain events, the same "N left for today" count
+  // the Today-page recap already shows) are reported SEPARATELY, per spec, so Linh
+  // can decide whether routine steps belong folded into the Now screen's number.
+  function openTodoCount() {
+    const todos = TODOS.filter(t => !t.done).length;
+    const prog = dayProgress(TODAY);
+    const routineSteps = prog.total - prog.done;
+    return { todos, routineSteps, total: todos + routineSteps };
+  }
+  // No "end of day" concept (bedtime/wake) exists anywhere in the app yet -- disclosed
+  // rather than invented here. Midnight (1440min) is the boundary until she says
+  // otherwise; the calendar/Life Map already treat a day as 00:00-24:00 the same way.
+  const NOW_DAY_END_MIN = 1440;
+  // Deliberately NOT a call into renderWorkBoard()'s inline gap walk (~43842-43861):
+  // that logic (a) isn't its own function -- it's inlined directly in the render body,
+  // nothing to import -- (b) scans wmbPatientList()'s patients within one CBD Work
+  // shift's [shiftStart,shiftEnd] window, not the whole day's real items, and (c)
+  // finds the BIGGEST gap in the shift, where this needs the NEXT gap from now
+  // onward in the whole day -- three different questions, not one reusable one. Same
+  // shape (walk sorted items, note a gap when the next start is later than the
+  // cursor) reused on purpose; the item source and the "biggest vs next" tie-break
+  // are both genuinely different.
+  function nextFreeGap(now) {
+    const n = now instanceof Date ? now : new Date();
+    const nowMin = n.getHours() * 60 + n.getMinutes();
+    const items = dayItemsFor(n)
+      .map(e => ({ s: toMin(e.start), e: itemEndMin(e) }))
+      .filter(x => x.s != null && x.e != null && x.e > nowMin)
+      .sort((a, b) => a.s - b.s);
+    let cursor = nowMin;
+    for (const it of items) {
+      if (it.s > cursor) {
+        const gapMin = it.s - cursor;
+        if (gapMin >= 15) return { start: cursor, end: it.s, min: gapMin };
+      }
+      cursor = Math.max(cursor, it.e);
+    }
+    if (NOW_DAY_END_MIN > cursor) {
+      const gapMin = NOW_DAY_END_MIN - cursor;
+      if (gapMin >= 15) return { start: cursor, end: NOW_DAY_END_MIN, min: gapMin };
+    }
+    return null;
+  }
   // 2026-08-20 ("a place to actually SEE all your Modes"): the Settings/Notifications
   // page's read-only summary list -- every real mode (in .order) + Home last, each
   // with its own accent swatch (a neutral dot for Home, which has none) and today's
