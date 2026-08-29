@@ -45203,27 +45203,27 @@
   // && item.group`) would otherwise draw a hairline before every item, since each
   // one's group would always differ from the last. null keeps all six in one block
   // -- the separators before Chapters and before Settings are untouched.
+  // 2026-08-29 (Calendar-first nav rebuild, Commit 1 STEP 2): trimmed from 7 to 5 --
+  // Life Map, People, Body left the top level per her approved mock; they're still
+  // fully routable (no id removed, no page deleted), just reachable through the
+  // "Everything else" door (NAV_DOORS, below) instead of a pinned row here. Every
+  // surface that reads this array (icon rail, tab strip, desktop rail, launcher
+  // popover) shrinks with it -- each still has ITS OWN existing Chapters mechanism
+  // untouched until Commit 3 unifies all five surfaces, so nothing here goes
+  // unreachable in the meantime (rule 1).
   const NAV_ITEMS = [
     { viewId: "day",     label: "Today",     icon: "☀",  group: null },
     // "Calendar" here means the month-grid overview, distinct from "Today" (the day
     // timeline) above -- the two are complementary views of the same data, same
     // distinction Google Calendar itself makes between its own "Today" and "Month".
-    { viewId: "month",   label: "Calendar",  icon: "🗓",  group: null },
-    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: null },
-    // 2026-08-26: new to this rail -- Events already had a real page and a real
-    // CATEGORIES entry (calendar chapter, "Plan" group) but no rail row of its own
-    // until now. b33IconSvg("events") (B33_ICONS, below) draws it on the desktop
-    // rail; "🗂" is the navIconHtml() emoji fallback every OTHER surface (mobile
-    // drawer, mobile icon rail, tab strip, desktop launcher popover) renders
-    // unconditionally -- none of those four ever call b33IconSvg, so this fallback
-    // is the primary rendering on most surfaces, not a rare edge case.
-    { viewId: "events",  label: "Events",    icon: "🗂",  group: null },
-    { viewId: "people",  label: "People",    icon: "☺",  group: null },
-    // CATEGORIES' real id for this page is "health" (nav label "Fasting" there)
-    // though the page's own <h1> says "Body" -- "Body" is the more accurate
-    // umbrella label for a standalone nav item, so used here instead of either
-    // existing label.
-    { viewId: "health",  label: "Body",      icon: "◐",  group: null },
+    { viewId: "month",   label: "Month",     icon: "🗓",  group: null },
+    { viewId: "todo",    label: "To-do",     icon: "☑",  group: null },
+    // 2026-08-29: label covers two CATEGORIES ids (events + the standalone
+    // birthdays page) -- a nav row can only carry one data-view, so this routes to
+    // "events" (the All Events rebuild already surfaces birthdays as gold capsules
+    // on its yearly rails); the standalone Birthdays page isn't deleted, it moves
+    // into the Planning door (Commit 2 STEP 3) rather than staying pinned here.
+    { viewId: "events",  label: "Events & birthdays", icon: "🗂",  group: null },
     // no "settings" view exists -- CATEGORIES' real "notify" view is the closest
     // analog to a general preferences home, and is where the Drawer/Tabs toggle
     // itself lives (renderNotifyPage's Global group), so routing here is self-
@@ -45231,6 +45231,39 @@
     // (hairline-separated last row), not a group label that gets printed anywhere.
     { viewId: "notify",  label: "Settings",  icon: "⚙",  group: "_footer" },
   ];
+  // 2026-08-29 (Calendar-first nav rebuild): the five approved chapter doors behind
+  // "Everything else" -- Commit 2 STEP 3 adds a sixth (Planning, for CH22's own
+  // leftover pages). `views` lists real CATEGORIES view ids verbatim; labels/routing
+  // stay CATEGORIES' job (navDoorViewLabel() below looks them up live, no second
+  // copy of a label to drift). Doesn't touch CATEGORIES itself, generatedFor(), or
+  // any routing key (rule 2) -- this is purely which door a page sits behind.
+  const NAV_DOORS = [
+    { id: "work", label: "Work", icon: "🩺",
+      preview: "Day board · CPD · Manual · CBD Work",
+      views: ["workBoard", "cpd", "workManual", "cbdWork"] },
+    { id: "wellness", label: "Wellness", icon: "🌸",
+      preview: "Habits · Cycle · Fasting · Growth · Medical · Nutrition · Supplements · Hair · Skin & Nails · Today",
+      views: ["habits", "cycle", "health", "growth", "medical", "nutrition", "supplements", "hair", "skinNails", "today"] },
+    { id: "family", label: "Home & Family", icon: "👥",
+      preview: "People · Family Dinh · Us · Pregnancies · Shopping · Food · Home admin",
+      views: ["people", "family", "us", "pregnancies", "shopping", "food", "homeAdmin"] },
+    { id: "money", label: "Money", icon: "💰",
+      preview: "Expenses & bills",
+      views: ["money"] },
+    { id: "cosmos", label: "Cosmos", icon: "🔮",
+      preview: "Numerology",
+      views: ["eightDays"] },
+  ];
+  // computed, not hardcoded (her explicit STEP 2 requirement) -- the "Everything
+  // else" row's badge always matches NAV_DOORS' real contents, even as Commit 2
+  // adds the Planning door.
+  const navDoorsPageCount = () => NAV_DOORS.reduce((n, d) => n + d.views.length, 0);
+  // one label lookup so a door's page rows never duplicate/drift from CATEGORIES'
+  // own labels -- scans every chapter's views, same shape as categoryOf() above it.
+  const navDoorViewLabel = viewId => {
+    for (const c of CATEGORIES) { const v = c.views.find(v => v.id === viewId); if (v) return v.label; }
+    return viewId;
+  };
   // 2026-08-15 fix: the CSS property alone (font-variant-emoji:text) isn't reliable
   // enough on its own -- the master build spec's §8 (icon language) explicitly warns
   // "this WILL bite otherwise" and pairs that CSS with a literal U+FE0E (VS15,
@@ -45260,6 +45293,18 @@
       + navIconHtml(item)
       + `<span class="nav-panel-lbl">${esc(item.label)}</span>`
       + badge
+      + `</button>`;
+  }
+  // 2026-08-29 (Calendar-first nav rebuild, Commit 1 STEP 2): the "More" group's
+  // one row -- opens the Everything-else door sheet (openEverythingElseSheet(),
+  // Commit 2) rather than navigating, same "expand, don't navigate" shape
+  // data-cal-toggle/data-chapters-toggle already use elsewhere in this panel.
+  // Same .nav-panel-row/.nav-panel-count language as every pinned row above it.
+  function navPanelEverythingElseRowHtml() {
+    return `<button type="button" class="nav-panel-row" data-nav-everything-else aria-haspopup="dialog">`
+      + `<span class="nav-ic" aria-hidden="true">▤</span>`
+      + `<span class="nav-panel-lbl">Everything else</span>`
+      + `<span class="nav-panel-count">${navDoorsPageCount()}</span>`
       + `</button>`;
   }
   // 2026-08-20 (nav unification, "every page gets a route"): the Chapters accordion
@@ -45424,8 +45469,11 @@
     const host = document.getElementById("navPanelRows");
     if (!host) return;
     let html = "", lastGroup;
-    // 2026-08-20 (nav unification): TOP = today's NAV_ITEMS unchanged, minus
-    // _footer (Settings moves below Chapters, per her spec's 3-section order).
+    // 2026-08-29 (Calendar-first nav rebuild, Commit 1 STEP 2): TOP = the 4 pinned
+    // NAV_ITEMS (minus _footer), then a "More" group holding the single Everything-
+    // else door row -- SUPERSEDES the old "Chapters" accordion here (navPanelChaptersHtml()
+    // itself isn't deleted, see its own comment -- renderNavChaptersExtras() still
+    // calls it for the icon rail's flyout, until Commit 3 unifies that surface too).
     const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && item.group) {
@@ -45434,7 +45482,7 @@
       lastGroup = item.group;
       html += navPanelRowHtml(item);
     });
-    html += `<div class="nav-panel-group-lbl">Chapters</div>` + navPanelChaptersHtml();
+    html += `<div class="nav-panel-group-lbl">More</div>` + navPanelEverythingElseRowHtml();
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) html += navPanelRowHtml(footerItem);
     host.innerHTML = html;
