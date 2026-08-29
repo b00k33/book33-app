@@ -6607,10 +6607,31 @@
      the phone media query overrides each one to its own smaller number. */
   .evl-year-rails { display: flex; flex-direction: column; }
   .evl-year-busiest { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink-faint); }
+  /* 2026-08-29 (All Events rebuild, Commit 4): search + Dots/Numbers, both living
+     in this section head per her spec. .evl-view-opt-group reuses the exact same
+     .evl-view-opt component Pattern/List and the (now-retired) yearly sort toggle
+     already used -- filled-brass aria-pressed state, no outlined pills invented. */
+  .evl-year-tools { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
+  .evl-year-tool-btn {
+    flex: none; border: none; background: none; padding: 0; min-width: 24px; min-height: 24px;
+    font-size: 13px; color: var(--ink-faint); cursor: pointer; font-family: var(--font-body);
+  }
+  .evl-year-tool-btn:hover { color: var(--margin-rule); }
+  .evl-year-search-box { display: flex; align-items: center; gap: 4px; }
+  #evlYearSearchInput {
+    width: 84px; border: none; border-bottom: 1px solid var(--margin-rule); background: transparent;
+    color: var(--ink); font-size: 11px; font-family: var(--font-body); padding: 2px 0;
+  }
+  .evl-view-opt-group { display: flex; gap: 4px; }
   .evl-month-row { display: flex; align-items: center; gap: 8px; min-height: 36px; cursor: pointer; }
   /* still opens (its own "+ add to <Month>" line is exactly for a month with
      nothing in it yet) -- quieter look, same cursor, not a dead row. */
   .evl-month-row.evl-month-empty { min-height: 24px; opacity: .5; }
+  /* search-no-match, NOT the same as .evl-month-empty above -- deliberately keeps
+     the row's normal (populated) height. Shrinking it while she's mid-keystroke is
+     exactly the reflow her brief rules out; only a genuinely empty month (true at
+     every search state, nothing changing under her thumb) gets the shorter shape. */
+  .evl-month-row.evl-month-nomatch { opacity: .4; }
   .evl-month-row.evl-year-axis { cursor: default; opacity: 1; }
   .evl-month-chevron { flex: none; width: 14px; font-size: 11px; color: var(--ink-faint); text-align: center; }
   .evl-month-label { flex: none; width: 34px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
@@ -6645,6 +6666,17 @@
      then the real ring colour) so the ring reads against the capsule regardless of
      which fill it's sitting on, not just against the page behind it. */
   .evl-bub-today { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ic-green); }
+  /* 2026-08-29 (All Events rebuild, Commit 4): Dots mode -- true positions, no
+     merge, no label. Same fixed #6B6B6B/gold pairing as the Numbers-mode capsule
+     (same reasoning: a filled shape's contrast pair is itself, not the page). Size
+     alone signals "2+ here" once the number is gone -- her own rule. */
+  .evl-dot {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 9px; height: 9px; border-radius: 50%; background: #6B6B6B;
+  }
+  .evl-dot-gold { background: var(--margin-rule); }
+  .evl-dot-multi { width: 12px; height: 12px; filter: brightness(.78); }
+  .evl-dot-today { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ic-green); }
   .evl-month-count { flex: none; width: 24px; text-align: right; font-size: 11px; font-weight: 700; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .evl-month-panel { background: color-mix(in oklab, var(--ink) 5%, transparent); border-radius: 10px; padding: 6px 8px; margin: 2px 0 6px; }
   .evl-month-pill {
@@ -29870,6 +29902,10 @@
                   // as modeRevealAll above -- "nothing is open when the page loads" is the
                   // whole point of the rails being short, so this can never be PREFS.
                   evlOpenMonth: null,
+                  // Commit 4: transient, same reasoning -- typing a search term is
+                  // this session's business, not a lasting preference, and must not
+                  // survive a reload (her explicit rule).
+                  evlYearSearch: "", evlYearSearchOpen: false,
                   // (tlOriginHidden lived here until 2026-08-24 -- filter row removed)
                   // Modes stage 2 (2026-08-20): "reveal everything" for the active mode's
                   // filter -- session-only by design (never PREFS; a mode's filtering is
@@ -35192,6 +35228,11 @@
     // applies to the landing screen itself, so this is a real, reachable Settings
     // toggle from day one, not a one-way door.
     landOn: "now",
+    // 2026-08-29 (All Events rebuild, Commit 4): Numbers is the default -- the
+    // exact date is the more useful fact than an exact position for most of what's
+    // on this page, so the mode that trades numbers for position-only dots is the
+    // one she opts INTO, not the default she'd have to opt out of.
+    evlYearDots: false,
   };
   // deep-merged under defaults via the SAME ntMerge() helper the Notifications panel
   // already uses (defined further down as `function ntMerge`, hoisted — same
@@ -53615,12 +53656,29 @@
       return `<span class="evl-bub${gold ? " evl-bub-gold" : ""}${isToday ? " evl-bub-today" : ""}" style="left:${evlRailPct(mid)}%">${label}</span>`;
     }).join("");
   }
+  // 2026-08-29 (All Events rebuild, Commit 4): Dots mode -- one plain circle per
+  // REAL day (never grouped: "this is the mode that trades the exact numbers for
+  // exact positions... it must not merge"), so no evlGroup() call at all here. Size
+  // is the only signal for "2+ things here" once the number itself is gone; the
+  // gold/grey birthday read stays -- nothing in her brief says Dots should also
+  // drop which dates are birthdays, only that it trades numbers for position.
+  function evlCapsulesDots(monthIndex, dayEntries) {
+    const isCurMonth = monthIndex === TODAY.getMonth();
+    return dayEntries.map(d => {
+      const gold = d.hasBirthday;
+      const isToday = isCurMonth && d.day === TODAY.getDate();
+      const multi = d.count > 1;
+      return `<span class="evl-dot${gold ? " evl-dot-gold" : ""}${multi ? " evl-dot-multi" : ""}${isToday ? " evl-dot-today" : ""}" style="left:${evlRailPct(d.day)}%"></span>`;
+    }).join("");
+  }
   // Live-measured merge pass (design44: position is approximate, the numbers are
   // exact, nothing hidden behind anything). Starts at the gap=2 grouping already in
   // the DOM from the initial render, widens until no two capsules' real rendered
   // boxes overlap (+3px clearance), caps at 12 passes. Stamps data-evl-passes on
   // each rail for the commit report's own "how many passes did each month need."
+  // Dots mode skips this entirely -- true positions, no merge pass, per her rule.
   function evlRunRailMerges() {
+    if (PREFS.evlYearDots) return;
     document.querySelectorAll(".evl-rail").forEach(rail => {
       const days = JSON.parse(rail.dataset.days || "[]");
       if (!days.length) return;
@@ -53674,7 +53732,36 @@
     const total = counts.reduce((s, c) => s + c, 0);
     const busiestIdx = counts.indexOf(Math.max(...counts));
     const busiestLabel = counts[busiestIdx] > 0 ? ` · busiest ${EVL_MON_FULL[busiestIdx]}` : "";
-    let html = `<div class="evl-pat-sec-head">THE YEAR · ${total}<span class="evl-year-busiest">${esc(busiestLabel)}</span></div>`;
+    // 2026-08-29 (All Events rebuild, Commit 4): search filters by title, 2+ chars,
+    // case-insensitive. Every month keeps rendering below regardless (design44:
+    // "the year must not reflow under my thumb while I'm typing") -- a month with
+    // zero matches stays the SAME height as a populated row, just quieter
+    // (.evl-month-nomatch), never the shorter .evl-month-empty shape a genuinely
+    // empty month gets, since that shape changing mid-type would be exactly the
+    // reflow she ruled out.
+    const q = state.evlYearSearch.trim().toLowerCase();
+    const searchActive = q.length >= 2;
+    const filteredMonths = searchActive
+      ? months.map(mo => new Map([...mo].map(([day, arr]) => [day, arr.filter(s => s.title.toLowerCase().includes(q))]).filter(([, arr]) => arr.length)))
+      : months;
+    const matchCounts = searchActive ? filteredMonths.map(mo => [...mo.values()].reduce((s, arr) => s + arr.length, 0)) : counts;
+    const matchTotal = searchActive ? matchCounts.reduce((s, c) => s + c, 0) : total;
+    const firstMatchIdx = searchActive ? matchCounts.findIndex(c => c > 0) : -1;
+    const dotsMode = !!PREFS.evlYearDots;
+    const searchOpen = state.evlYearSearchOpen || !!state.evlYearSearch;
+    let html = `<div class="evl-pat-sec-head">THE YEAR · ${searchActive ? `${matchTotal} of ${total}` : total}`;
+    if (!searchActive) html += `<span class="evl-year-busiest">${esc(busiestLabel)}</span>`;
+    html += `<span class="evl-year-tools">
+      <button type="button" class="evl-year-tool-btn" id="evlYearSearchBtn" aria-label="Search the year" aria-expanded="${String(searchOpen)}">⌕</button>
+      <span class="evl-year-search-box"${searchOpen ? "" : " hidden"}>
+        <input type="text" id="evlYearSearchInput" placeholder="Search" value="${esc(state.evlYearSearch)}" aria-label="Search the year by title">
+        ${state.evlYearSearch ? `<button type="button" class="evl-year-tool-btn" id="evlYearSearchClear" aria-label="Clear search">✕</button>` : ""}
+      </span>
+      <span class="evl-view-opt-group" id="evlYearDotsToggle" role="group" aria-label="Year date display">
+        <button type="button" class="evl-view-opt" data-evl-year-dots="false" aria-pressed="${String(!dotsMode)}">Numbers</button>
+        <button type="button" class="evl-view-opt" data-evl-year-dots="true" aria-pressed="${String(dotsMode)}">Dots</button>
+      </span>
+    </span></div>`;
     html += `<div class="evl-year-rails">`;
     // axis row: same column shape as a month row (blank chevron+label, then a rail
     // holding just the four axis numbers) so "1 · 10 · 20 · 31" lines up with the
@@ -53685,21 +53772,24 @@
       <span class="evl-month-count"></span>
     </div>`;
     months.forEach((mo, i) => {
-      const dayEntries = [...mo.keys()].sort((a, b) => a - b).map(day => ({
-        day, count: mo.get(day).length, hasBirthday: mo.get(day).some(s => s.kind === "person"),
+      const fullEmpty = !mo.size;
+      const activeMo = searchActive ? filteredMonths[i] : mo;
+      const dayEntries = [...activeMo.keys()].sort((a, b) => a - b).map(day => ({
+        day, count: activeMo.get(day).length, hasBirthday: activeMo.get(day).some(s => s.kind === "person"),
       }));
-      const isOpen = state.evlOpenMonth === i;
-      const empty = !dayEntries.length;
-      html += `<div class="evl-month-row${empty ? " evl-month-empty" : ""}${isOpen ? " evl-month-open" : ""}" data-evl-month="${i}">
+      const noMatch = searchActive && !fullEmpty && !dayEntries.length;
+      const openIdx = searchActive ? (state.evlOpenMonth !== null ? state.evlOpenMonth : firstMatchIdx) : state.evlOpenMonth;
+      const isOpen = openIdx === i;
+      html += `<div class="evl-month-row${fullEmpty ? " evl-month-empty" : ""}${noMatch ? " evl-month-nomatch" : ""}${isOpen ? " evl-month-open" : ""}" data-evl-month="${i}">
         <span class="evl-month-chevron" aria-hidden="true">${isOpen ? "⌄" : "›"}</span>
         <span class="evl-month-label">${MON_SHORT[i]}</span>
         <div class="evl-rail" data-month="${i}" data-days='${esc(JSON.stringify(dayEntries))}'>
           ${[10, 20, 30].map(d => `<span class="evl-rail-grid" style="left:${evlRailPct(d)}%"></span>`).join("")}
-          ${evlCapsules(i, evlGroup(dayEntries, 2))}
+          ${dotsMode ? evlCapsulesDots(i, dayEntries) : evlCapsules(i, evlGroup(dayEntries, 2))}
         </div>
-        <span class="evl-month-count">${counts[i] || "–"}</span>
+        <span class="evl-month-count">${matchCounts[i] || "–"}</span>
       </div>`;
-      if (isOpen) html += renderYearMonthPanel(i, mo);
+      if (isOpen) html += renderYearMonthPanel(i, activeMo);
     });
     html += `</div>`;
     return html;
@@ -53996,12 +54086,46 @@
   // different one moves the open panel there. Delegated on the body, same reason
   // the retired ysort handler above was -- re-rendered with the section.
   document.getElementById("evlRepeatsBody").addEventListener("click", e => {
+    // Commit 4: search + Dots/Numbers, checked first (neither sits inside a
+    // .evl-month-row, but kept ahead of it for the same "specific case before the
+    // generic delegate" shape every other branch here already follows).
+    if (e.target.closest("#evlYearSearchBtn")) {
+      state.evlYearSearchOpen = true; renderEventsPage();
+      document.getElementById("evlYearSearchInput")?.focus();
+      return;
+    }
+    if (e.target.closest("#evlYearSearchClear")) {
+      state.evlYearSearch = ""; state.evlYearSearchOpen = false; state.evlOpenMonth = null;
+      renderEventsPage();
+      return;
+    }
+    const dotsBtn = e.target.closest("[data-evl-year-dots]");
+    if (dotsBtn) {
+      PREFS.evlYearDots = dotsBtn.dataset.evlYearDots === "true"; savePrefs();
+      renderEventsPage();
+      return;
+    }
     const addBtn = e.target.closest("[data-evl-add-month]");
     if (addBtn) { openForm(); return; }
     const row = e.target.closest(".evl-month-row"); if (!row || row.classList.contains("evl-year-axis")) return;
     const idx = parseInt(row.dataset.evlMonth, 10);
     state.evlOpenMonth = state.evlOpenMonth === idx ? null : idx;
     renderEventsPage();
+  });
+  // 2026-08-29 (All Events rebuild, Commit 4): a full renderEventsPage() on every
+  // keystroke would normally steal focus from the input it just rebuilt (a fresh
+  // DOM node each time) -- same fix #jumpInput's own live-filter doesn't need
+  // (that one never replaces #jumpInput itself, only #jumpList), but this input
+  // DOES live inside the regenerated section head, so focus + cursor position are
+  // restored by hand right after the rebuild instead.
+  document.getElementById("evlRepeatsBody").addEventListener("input", e => {
+    if (e.target.id !== "evlYearSearchInput") return;
+    const cursor = e.target.selectionStart;
+    state.evlYearSearch = e.target.value;
+    state.evlOpenMonth = null;
+    renderEventsPage();
+    const fresh = document.getElementById("evlYearSearchInput");
+    if (fresh) { fresh.focus(); fresh.setSelectionRange(cursor, cursor); }
   });
   /* ---- .ics export: your real events, respecting the filters above, PLUS any
      routine that's on the calendar (see the Routines table's Cal column --
