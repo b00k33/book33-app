@@ -6,248 +6,239 @@ come back unasked. Where anything in THIS file conflicts with it, that file wins
 removals are newer); flag the conflict rather than quietly reinstating the feature.
 Book33 is a single-file mobile web app (index.html). It must always look clean,
 symmetrical, aligned and organized. Follow every rule, then re-check your work.
-## design44 — the standing design system (Linh's own words, 2026-08-16)
-Book33's standing design system — the design requests Linh keeps making. When she says
-"design44" (e.g. "apply design44"), follow ALL rules below. Claude Code reads this on
-every change and applies it by DEFAULT to every new screen and edit (desktop AND mobile
-unless a rule says otherwise). Before 2026-08-16 this existed only as 23 scattered
-inline citations in index.html with no written definition — this section is now the
-single source; cite it, don't re-derive it from a code comment.
+## design44 — Book33's design system
+Rewritten 2026-08-29 from a full audit + a 20-question pass with Linh. Replaces the
+2026-08-16 version, which had grown to 2,235 words by being appended to and never edited.
+What was removed is listed at the bottom under **What moved out**, so nothing is lost.
+Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
+back), `MEASURING.md` (the commit-time checks — mandatory, see R9).
 
-### 1. Compact & dense
-Tight, dense layouts by default — short rows, small section gaps, small uppercase labels,
-no tall pills with empty middles. Spacing scale only: 4/8/12/16/24/32px. "Tessellate":
-pack related controls together as tiles in a 12-column grid, not a full-width vertical
-stack. Narrow items (sub-tasks, chips) go two+ per row.
+### THE WHOLE THING IN ONE SCREEN
+**Look**
+- Flat. Separate with colour and space — never boxes, borders or nested boxes.
+- Night palette: bg `#000`, surface `#0D0D0D`, raised `#161616`, recessed `#0A0A0A`.
+  Ink `#efe7d6`, muted `#9c8f79`, faint `#5f5645`. Gold `#d8b979`, bright `#EAC24E`.
+- Gold is the one signature colour. Used sparingly, for emphasis. No fixed list — but if
+  four gold things are visible at once, it has stopped being a signal.
+- **Three type sizes: 20 / 13 / 11.** Nothing else.
+- Both themes are equal. Every change is checked in Night *and* Day, every time.
 
-### 2. Not too wide — cap & center
-Nothing edge-to-edge. Centered columns: `--content-max:720px` (forms/reading),
-`--wide-max:1040–1160px` (tables/dashboards). Container `max-width; width:100%; margin:0
-auto`. Form fields must not stretch full screen. Any "too wide" → add max-width + margin
-auto.
+**Shape**
+- Dense and tessellated. Short rows, small gaps, related controls packed as tiles.
+- Gaps and padding: `4 / 8 / 12 / 16 / 24 / 32` — plus `2–3px` for cells inside a
+  tessellated grid, and nothing else.
+- Heights: `20` capsule · `26` rail · `34` compact row · `44` standard row or button.
+- Radius: `999` pill · `14` card · `10` row · `6` cell.
 
-### 3. Succinct, not cluttered — scannable at a glance
-Aligned grids/tables over scattered full-width rows (trackers = one grid, rows=trackers,
-cols=days, small marks). Light not loud: colour dot + text on subtle bg, not big saturated
-pills. Dim/strike done items. Cap visible items then "+N more". Today tinted gold as an
-anchor in every view.
+**Behaviour**
+- **One signal per row.** A row stands out by colour *or* weight *or* size — never two.
+- **A name is never abbreviated by the layout. Everything beside it may be.**
+- Empty things: hidden in a list, kept in a sequence.
+- Every state that can be turned off can be turned back on, from the same place.
 
-### 4. Flat design + Black & Brass
-Separate with colour + space, not boxes/borders/nested boxes. Night palette (2026-08-16,
-supersedes the old "Ink & Brass" browns — Linh: "change the brown to black, dark black"):
-bg #000000, surface #0D0D0D, raised #161616, recessed #0A0A0A — a flat NEUTRAL (R=G=B, no
-warm mix) staircase, not a dark tint. ink #efe7d6, muted #9c8f79, faint #5f5645 (unchanged
-— only the surfaces under them went black). gold #d8b979, bright gold #EAC24E stay the
-app's one signature colour ("Brass" survives; only "Ink" the brown did not). Stars are
-plain white (#FFFFFF), not the old blue-grey/gold mix. Day mode is untouched — see its own
-palette map further down. Gold for numbers/accents; colour = category.
+**Mobile is the real device.** 360 × 697, dark, coarse pointer. Density wins over the
+44px tap minimum — deliberately, see R7.
 
-### 5. Proportional & aligned
-Calendar: one fixed SCALE (--hour-h) — blocks are always sized to real duration and
-snapped to hour lines off that one scale, overlaps split into side-by-side columns, and
-everything aligns to a shared grid/column edge. Row HEIGHT **is uniform** (2026-08-26,
-"make every hour row the same height" — SUPERSEDES 2026-08-24/25's "three preset
-heights", which itself superseded the older two-layered-floor wording; see
-RETIRED-FEATURES.md §6 for the full retirement): `hourRowH(h)` is two branches only —
-outside the "Hours shown" range → 0, otherwise `HOUR_H()`. Every shown hour is the same
-height regardless of content or power-hour status, so a 2-hour block is always exactly
-twice a 1-hour block's height, "the way Google Calendar does it." `--hour-h`: 54px
-desktop / 53 light / 77 base / 74 phone+tablet — `compactH()`/`POWER_HOUR_TYPE_H`/
-`powerHourH()` still exist but are unreferenced (retired, not deleted, per this file's
-own convention). A real event's block height still comes only from its own duration
-(`topForMin()` diffs over these same rows), floored at 26px desktop / 14px elsewhere so
-a very short block stays legible.
-Power hours (`POWER_HOURS` — Best/2nd Best/💰 Money = good/good/money, Worst/2nd Worst =
-bad) keep their meaning; the mark moved off the ROW and onto the EVENT booked in it. An
-event qualifies when MORE than half of its own real duration overlaps one window (not
-"starts inside") — `powerMarkFor(start, end)`, stamped `data-power="good|bad|money"` in
-`renderTimeline()`/`mdColumnHtml()`. A marked block keeps its normal Mode fill and gains
-a coloured `outline`/`outline-offset` ring (NOT `box-shadow` — `.tl-block[data-track]`/
-`.tl-item.done` both force `box-shadow:none`) plus a `filter:drop-shadow()` bloom (NOT a
-`::after` overlay — `.tl-item.done`'s Day-mode checkmark and
-`.tl-item[data-origin="repeat"]`'s stripe both already claim one), strongest for Money.
-The gutter `.power-marker` dot–line–dot (including its Money glow) is unchanged and
-sits alongside this, not replaced by it. Multi-day (`.md-item`/`.md-line`/`.md-bar`)
-keeps the ring, drops the bloom — the columns are too narrow for it to read cleanly.
+### PART 1 — THE RULES
 
-### 6. Consistency
-One component identical everywhere (button, chip, card, dropdown, toggle). Reuse existing
-components/variables; no one-offs.
+#### R1. Compact & dense
+Short rows, small gaps, small uppercase labels, no tall pills with empty middles.
+**Tessellate** — pack related controls as tiles in a grid, not a full-width stack. Narrow
+items (sub-tasks, chips) go two or more per row.
+Gaps and padding: **4 / 8 / 12 / 16 / 24 / 32**, plus **2–3px between cells inside a
+tessellated grid**, where 4px reads as separation rather than texture. Measured 2026-08-29:
+these already cover 89% of every `gap` in the app — a description, not a wish.
+Heights are not on this scale and never were — see R11.
 
-### 7. Interaction
-Anything representing a page (fasting bar, summary strip) is tappable → navigates there.
-Whole element is the tap target; cursor:pointer + hover/press; keyboard accessible. Mobile
-tap targets ≥ ~24px.
+#### R2. Not too wide — cap & centre
+Forms and reading `--content-max: 720px`; tables and dashboards `--wide-max: 1040–1160px`.
+Form fields never stretch the full screen.
+**Exception:** every *page* is full-bleed edge-to-edge (Linh, 2026-08-16: "make EVERY page
+drop the floating framed-card look"). The caps apply to content inside a page, not the page.
 
-### 8. Mobile is the primary format (rewritten 2026-08-27 — Linh's own words)
-Supersedes the old "§8 Mobile vs desktop," which read as *"leave mobile alone when the
-ask is about desktop"* and licensed exactly that: three separate mobile-layout failures
-(nothing-above-the-calendar shipped desktop-only first; `#mdAlldayRow`'s chip rules
-tuned only at 5/7-day desktop's 150–200px columns towering at a phone's 42px; the whole
-mobile drawer system gated to 1-day) all passed the old rule because it never required
-mobile to be *built*, only not *wrecked*. The "don't wreck a working mobile layout"
-protection is kept — it was never the problem — the part that permitted ignoring mobile
-entirely is gone.
+#### R3. Succinct — scannable at a glance
+Aligned grids over scattered full-width rows: a tracker is one grid — rows are things,
+columns are days, marks are small. Light not loud: a colour dot plus text on a subtle
+ground, never a big saturated pill. Dim done items. Cap visible items, then "+N more".
+Today is tinted gold as an anchor in every view.
 
-The phone is the real device. A change is not finished until it works at 360×697.
-Desktop is the second target, not the first.
+#### R4. Flat, Black & Brass
+Separate with **colour and space**. No boxes, borders, nested boxes or outlined pills
+(banned by name). A hairline under every row is the classic failure of this rule — 3px of
+space and a change of tone does it better.
+Gold for numbers and accents; **colour means category** (Mode), never decoration.
 
-Every change that touches layout ships both widths in the same commit. There is no such
-thing as a desktop-only UI change here. If a request only describes desktop, the mobile
-behaviour still has to be decided, built and stated — ask if it isn't obvious; never
-default to "leave mobile as it is."
+#### R5. Proportional & aligned
+One fixed calendar scale (`--hour-h`). Every shown hour is the same height, so a 2-hour
+block is exactly twice a 1-hour block. Blocks are sized from real duration and snapped to
+that scale; overlaps split into side-by-side columns; everything aligns to a shared column
+edge. *(Power-hour ring/bloom CSS mechanics moved out — see the end.)*
 
-A number tuned at one width is a bug at the other. Any `min-width`, `max-width`, fixed
-px or "measured live" value must say which width it was measured at, and must be
-checked at the other. Column widths are the usual trap: a 7-day column is ~180px on
-desktop and ~42px on a phone.
+#### R6. Consistency — the four components
+One definition each, reused everywhere. These four are 80% of every screen:
+see PART 2 for their specs. No one-offs, no variants without a written reason.
 
-Density/tessellation is still a desktop gain; mobile still collapses to a clean single
-column; still never wreck a working mobile layout to serve a desktop request. But
-"don't wreck it" never means "don't build it."
+#### R7. Interaction — and the density trade
+Anything representing a page is tappable and navigates there. The whole element is the
+target; `cursor: pointer`, hover/press state, keyboard reachable.
+**Tap targets: 44px standard; 34px allowed for a full-width single-purpose row separated by
+space.** This is a deliberate choice to be denser than Apple's 44pt and Google's 48dp, both
+of which assume targets packed edge to edge. Linh has chosen density and knows the trade —
+**stop arguing for 44 on full-width rows.** Anything packed *beside* another target stays 44.
 
-Mobile Day view, every day-count: only the drawer grab handle, the all-day row, and the
-mode-hidden pill may sit between the top of the page and the calendar. Everything else
-goes in a drawer. (Enforced live, not just stated — see `dayLayoutAboveCalendarGuard()`
-in index.html, and the mobile report below.)
+#### R8. Mobile is the primary format
+The phone is the real device: **360 × 697**, dark (see `MEASURING.md`). A change is not
+finished until it works there.
+Every layout change ships both widths in the same commit. There is no desktop-only UI
+change here. If a request only describes desktop, the mobile behaviour still has to be
+decided, built and stated — ask if it isn't obvious; never default to "leave mobile as it is."
+A number tuned at one width is a bug at the other. Every `min-width`, `max-width` or
+measured px value must say **which width it was measured at**.
+**Desktop is for the heavy work** — editing, bulk changes, setting things up; the phone is
+for reading and quick capture. Desktop may **show more, never something different**: times
+in cells the phone hides, five Up-next rows instead of three, wider rails. Not a different
+arrangement.
+**Mobile Day view:** only the grab handle, the all-day row and the mode-hidden pill may sit
+above the calendar. Everything else goes in a drawer. (Enforced by
+`dayLayoutAboveCalendarGuard()`.)
 
-**Every panel, sheet and drawer needs a working exit on a phone — and more than one.**
-Tapping outside must close it, and there must be a visible close control that is not
-covered, not offscreen, and not sitting where another control used to be. Escape is not
-an exit on a phone. Before shipping any panel, open it at 360×697 and try to leave: tap
-outside, tap the close control, tap the thing that opened it. **All three must work.**
-(2026-08-27: the nav-panel Calendar/Chapters flyouts trapped this exact way — a
-`closest("[data-view]")` delegate with no lower bound matched a page-scoping attribute
-on a distant ancestor, silently closing the rail out from under its own expand panel.
-Second trap of exactly this shape, after the to-do panel — worth a standing rule rather
-than a one-off fix each time.)
+#### R9. Every commit
+Commit and push to main automatically — except confirm before deleting data. Report what
+changed plus the one-line undo. **Any commit that touches layout runs the mobile report in
+`MEASURING.md` and pastes the results.** A rule nobody measures is a wish.
 
-**This applies to states, not just panels.** Any control that turns something off must
-also turn it back on. If tapping a control changes a state, the control stays reachable
-in the new state and reverses it. A control that hides itself once used is a one-way
-door — three shipped in this app before this rule existed. (2026-08-28: the Day-view
-Mode badge hid itself the moment `state.modeRevealAll` was set, leaving no way to
-re-enable Mode filtering for the rest of that Mode's run except the Mode changing or a
-full reload. Third one-way door of this shape, after the to-do panel and the Calendar
-flyout.)
+### PART 2 — TOKENS & COMPONENTS
 
-### Linh's phone — the reference device
-
-Measured 2026-08-28 from the **installed app** (`display-mode: standalone`), which is how
-Book33 is actually used. Every mobile check runs at these numbers. Don't substitute a
-device-preset from a browser's device list — this is the real thing.
-
-| | |
+#### R10. Type — three sizes
+| px | Role |
 |---|---|
-| **CSS viewport** | **360 × 697** — what media queries see |
-| `visualViewport` | 360 × 697.67 |
-| `devicePixelRatio` | 3 |
-| `screen` (CSS px) | 360 × 780 |
-| Real device pixels | 1080 × 2340 |
-| `100vh` = `100dvh` = `100svh` = `100lvh` | 697.67px — **all four identical** |
-| URL-bar collapse delta | **0px** |
-| Safe-area insets | **0px on all four sides** |
-| Orientation | portrait-primary |
-| Pointer | coarse (touch) |
-| `prefers-color-scheme` | **dark** |
-| `prefers-reduced-motion` | no-preference |
-| Browser | Chrome 151, Android (Samsung, 3-button navigation) |
+| **20** | Page title |
+| **13** | Names, body, sub-headings (sub-headings are 13/800, not a bigger size) |
+| **11** | Meta, dates, counts, and section labels (uppercase, `letter-spacing: .07em`, faint) |
+Nothing else, at any width. A section label stays quieter than a name because of **case
+and colour**, not size — which is what makes three sizes enough.
 
-**What follows from this:**
-
-- **360 CSS px wide.** With the standard 16px side padding, a full-width row has **328px** of
-  usable width. Any horizontal arrangement must survive that.
-- **697 px tall, not 780.** ~83px goes to the status bar and Android's navigation bar even in
-  the installed app. Never design against `screen.height`.
-- **The viewport-height units are all the same number, and the collapse delta is 0.** A PWA
-  has no collapsing URL bar, so `dvh`/`svh`/`lvh` gymnastics buy nothing here. Prefer `dvh`
-  anyway — it costs nothing and stays correct if the app is ever opened in a browser tab,
-  where the delta is real.
-- **DPR 3.** Hairlines: a 1px CSS border is 3 device pixels. Nothing needs sub-pixel tricks.
-- **All safe-area insets are 0.** No notch cutout, and the Android navigation bar sits
-  outside the viewport — it's already accounted for in the 697. So `env(safe-area-inset-*)`
-  padding buys nothing on this device. Keep it where it exists (it costs nothing and is
-  correct on a notched phone), but never rely on it to clear the bottom bar here.
-- **My phone is in dark mode.** The dark theme is what I see on mobile by default, so it is
-  the first one to check, not the afterthought.
-- **Reduced motion is off**, so animations do run — but they run on a phone, so keep them
-  cheap.
-- Landscape and the browser-tab case are not the reference. If a layout only breaks there,
-  say so and leave it.
-
-### The mobile report — required on every commit that touches layout
-A rule nobody measures is a wish. Run this at 360×697 (the reference device above), in both
-themes, and paste the results into the commit report:
-
-1. **A screenshot.** Not a description of one.
-2. **Horizontal overflow** — `document.body.scrollWidth <= innerWidth` must be true.
-3. **Where the content starts** — for calendar pages, the top of `#timelineScroll` /
-   `#mdTimelineScroll` as a px value and as a % of the viewport. Above 40% is a fail.
-4. **Tap targets** — every interactive element ≥44px on its short side, or a stated
-   reason.
-5. **The tower check** (below). Any element failing it is a bug, not a layout quirk.
-
-If a number got worse than the previous commit, say so rather than shipping it quietly.
-
-**Tower check.** Measure the same element at 1440px and at 360px. If it is more than
-twice as tall on the phone, a desktop-tuned rule is misfiring — almost always a
-`min-width` bigger than the container it now sits in, forcing a permanent flex-wrap.
-Find the rule and give the narrow case its own shape; do not shrink the type.
-
-Trigger the narrow shape on **container width, not viewport width** — a container
-query or a measured JS class, never another `@media`. Viewport-width media queries are
-what caused this: a 7-day column is narrow at every viewport, and 5/7-day columns on a
-phone are narrower still. (`mdAlldayNarrowPass()` in index.html is the reference
-implementation — it measures each birthday chip's own rendered height and stamps
-`data-narrow`, rather than guessing a column-width cutoff; see its own comment for why
-width alone wasn't enough.)
-
-**Copy-paste console check** (verified runnable against this build — the version Linh
-pasted compared a rounded top against an unrounded one and falsely flagged the
-calendar's own wrapper as sitting "above" itself; fixed here by excluding the
-calendar element and its ancestors, not just an exact id match):
-```js
-(() => {
-  const tl = [...document.querySelectorAll('#mdTimelineScroll,#timelineScroll')]
-    .find(e => e.getBoundingClientRect().height > 0);
-  const top = tl ? Math.round(tl.getBoundingClientRect().top + scrollY) : null;
-  const main = document.querySelector('.day-main');
-  const above = [...(main ? main.children : [])].filter(e => {
-    if (e === tl || (tl && e.contains(tl))) return false;
-    const s = getComputedStyle(e), b = e.getBoundingClientRect();
-    return s.display !== 'none' && !e.hidden && b.height > 0 && (b.top + scrollY) < top;
-  }).map(e => ({ id: e.id || '.' + String(e.className).split(' ')[0],
-                 h: Math.round(e.getBoundingClientRect().height) }));
-  console.table(above);
-  console.log('calendar top:', top, '=', Math.round(top / innerHeight * 100) + '% of viewport',
-              '| overflow:', document.body.scrollWidth > innerWidth,
-              '| drawers:', document.body.classList.contains('dd-drawers-active'));
-})()
-```
-
-**Baseline, as of `223e356`** (360×697, mobile Day view) — beat these, don't just
-match them. Re-measured 2026-08-29 for the 412×915→360×697 correction (see the
-"Linh's phone" section above); the old `b9cf32b` figures were genuinely taken at
-412×915 and are retired, not just relabeled. Two things changed since that baseline
-besides the width: `#nowGlanceStrip` is a new, disclosed 4th permanent element above
-the calendar (the Now-screen job, `1067ed2`), and this account's real data no longer
-has a day with 0 all-day items to measure against — every day carries at least one
-recurring all-day routine now, so "0 all-day items" from the old table couldn't be
-reproduced. These numbers are today's real all-day content, not an empty day:
-| Day-count | Calendar top | % of viewport | Elements above it |
+#### R11. Heights & radius
+| | Height | | Radius |
 |---|---|---|---|
-| 1 | 279px | 40% | `ddGrab` (51px), `nowGlanceStrip` (73px), `dayAlldayRow` (86px) |
-| 3 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
-| 5 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
-| 7 | 189px | 27% | `ddGrab` (51px), `nowGlanceStrip` (73px) |
-1-day sits right at the 40% ceiling — worth a look, not touched by this commit. 3/5/7
-render 1-day underneath (360px is below the multi-day flip point) but without
-`dayAlldayRow` in this pass's reading — that asymmetry wasn't chased down here since
-it's outside Commit 0's scope; flagging it rather than filing it away silently.
+| Number capsule | 20px | Pill / segmented | 999 |
+| Month rail | 26px | Card | 14 |
+| Compact row (phone) | 34px | Row | 10 |
+| Standard row / button | 44px | Grid cell | 6 |
 
-### 9. Every code change (workflow)
-Commit and push to main automatically (no waiting for approval), EXCEPT confirm before
-deleting existing data. After each change, report what changed + the one-line undo command.
+#### R12. The row — the most important component in the app
+```
+[mode dot]  Name……………………………………  meta · number
+```
+- Colour dot, `data-mode`, from the one Mode resolver. Never a second colour source.
+- Name flexes, `min-width: 0`, left-aligned, at the left edge of the row.
+- Meta right-aligned, so meta forms a readable column down the edge.
+- Filled ground one step off the page (`#161616` on `#0D0D0D`). **No border.**
+- 44px standard, 34px compact. 3–4px between rows.
+
+#### R13. The section header
+Small uppercase label · count · optional control, right-aligned.
+`11px / 800 / letter-spacing .07em / --ink-faint`. The count is part of the label, not a
+badge. Never a box.
+
+#### R14. The toggle
+One segmented control for every either/or — Pattern/List, Dots/Numbers, All/Repeats/One-offs.
+Filled brass on the active option, plain text on the rest, `aria-pressed`. **Outlined pills
+are banned** and this is the component that replaces them.
+
+#### R15. The capsule and the dot
+The gold number capsule (20px, tabular numerals, `999` radius) says *how many* or *which
+day*. The 7–8px Mode dot says *what kind*. Both read their colour from the same Mode
+resolver as everything else.
+
+#### R16. Emphasis — one signal per row
+A row stands out by **colour or weight or size — never two.** Names carry weight; numbers
+carry colour; nothing carries both. When a row is urgent, **the name goes gold**, so the eye
+lands on *what* is urgent rather than on a number it then has to read leftward from.
+The failure this replaces: a gold title, gold labels, bold names and bold gold numbers all
+at once — six things shouting, so the page has no first thing.
+
+#### R17. Text that doesn't fit
+**A name is never abbreviated by the layout. Everything beside it may be.**
+In order: meta sheds detail first ("Sat 1 Aug · 2d" → "1 Aug · 2d" → "2d"); then the name
+column takes width from the cells; then, and only then, the name wraps to two lines. It is
+never clipped, at any width.
+Why: every other string on a row comes from a set you already know — a date, a countdown, a
+weekday. A name is the one string whose job is to be *the specific one*, and a clipped name
+doesn't fail loudly, it quietly becomes a different plausible name. ("Work Ac…",
+"Kylie Roche's birth" — both shipped.)
+
+#### R18. Empty and zero states
+**Hidden in a list, kept in a sequence.** A list of events drops what isn't there. Anything
+with a fixed sequence — twelve months, seven weekdays, twenty-four hours — keeps every slot,
+quieted, so "nothing here" is visible and the layout never jumps.
+Show a dash, not a zero. Never write a sentence about emptiness.
+
+#### R19. Motion
+Short and responsive — motion should make a tap feel answered, never make it wait. Nothing
+may delay an interaction. Reduced-motion is off on the reference device, so animations do
+run, on a phone: keep them cheap.
+
+### PART 3 — KNOWN TRAPS
+These have each shipped at least once. Check them by name.
+1. **The one-way door.** A control that turns something off must turn it back on, from the
+   same place, and must not hide itself once used. *Three shipped before this rule existed:
+   the to-do panel, the Calendar flyout, the Day-view Mode badge.*
+2. **No exit on a phone.** Every panel, sheet and drawer needs **more than one** way out:
+   tapping outside, and a visible close control that is not covered, offscreen, or sitting
+   where another control used to be. Escape is not an exit on a phone. Test all three.
+3. **The tower.** An element more than twice as tall on the phone as at 1440px means a
+   desktop-tuned rule is misfiring — nearly always a `min-width` larger than the container
+   it now sits in, forcing a permanent flex-wrap. Fix the rule; never shrink the type.
+   Trigger narrow shapes on **container width, not viewport width**.
+4. **The clipped name.** See R17.
+5. **The invisible chart.** A bar strip with no labels and no tap targets answers nothing.
+   If a visual can't be read *and* acted on, it is decoration.
+6. **The duplicated section.** Auto-expanding a month that Up-next already lists. Nothing
+   auto-expands.
+7. **Gold inflation.** See R16.
+
+### PART 4 — HOW CLAUDE WORKS ON THIS APP
+Linh's standing rulesets, written down here so a session with no memory of her still has them.
+
+#### code3 — mobile UI expert
+You are the mobile UI expert for this app. Audit proactively; don't wait to be asked. If a
+number in a brief is wrong at 360 × 697, say so **before** building it, not after.
+
+#### code11 — visual information expert
+Show information visually — grids, tables, diagrams, charts. Minimise text; let the picture
+do the work. This applies to audits, plans and status reports, not only to UI mockups.
+
+#### code44 — ask first
+Ask clarifying questions before starting, through the question picker, with multi-select on
+by default.
+
+#### Showing work
+- **Always show a mock. Never describe a design in prose alone.** This is absolute.
+- **Always show a before and an after**, with the measured difference between them.
+- Always use her real data — real names, real routines, real birthdays, including the
+  awkward long ones. Never "Event 1".
+- Always name what an option is **bad** at, not only what it is good at.
+- **Keep the words short.** A picture and three numbers beat three paragraphs.
+
+#### When a rule here blocks what she asked for
+**Show both** — one version following the rule, one following her ask, side by side, with
+the trade named. Don't silently override the rule, and don't refuse the ask.
+
+#### Keeping this file true
+- A rule broken twice, with both breaks approved, **is a wrong rule** — rewrite it rather
+  than apologise a third time.
+- Superseded rules are **deleted**, not annotated. `RETIRED-FEATURES.md` holds the history.
+- Audit this file on request. This version came from one.
+
+### What moved out (2026-08-29)
+Nothing lost; all still in the repo.
+- **Measurement protocol, reference-device table, tower-check snippet, performance
+  baseline** → `MEASURING.md`, made mandatory by R9.
+- **Power-hour ring/bloom CSS mechanics** → the component reference below in `CLAUDE.md`.
+  It's a fact about the codebase, not a design rule, and it goes stale silently up here.
+- **The precedence block** stays below. R2 and R7 now state their exceptions inline, so two
+  of its four adjudications are redundant — check it before relying on it.
 
 ### Where design44 and the older rules below disagree — precedence
 design44 is the general standard. The rules further down are the detailed component
@@ -1111,6 +1102,21 @@ report, same standard as every other numeric rule in this file.
 Written 2026-08-13 from an audit of what the codebase already does BEST, not
 invented fresh — most of these values already exist as the majority pattern
 somewhere in the file. The point is picking ONE and applying it everywhere.
+- **Power-hour ring/bloom** (moved out of design44 R5, 2026-08-29 — a fact about the
+  codebase, not a design rule, and it goes stale silently if left in a rules document):
+  `POWER_HOURS` (Best/2nd Best/💰 Money = good/good/money, Worst/2nd Worst = bad) keep
+  their meaning; the mark sits on the EVENT booked in a power hour, not the row. An
+  event qualifies when MORE than half of its own real duration overlaps one window (not
+  "starts inside") — `powerMarkFor(start, end)`, stamped `data-power="good|bad|money"`
+  in `renderTimeline()`/`mdColumnHtml()`. A marked block keeps its normal Mode fill and
+  gains a coloured `outline`/`outline-offset` ring (NOT `box-shadow` —
+  `.tl-block[data-track]`/`.tl-item.done` both force `box-shadow:none`) plus a
+  `filter:drop-shadow()` bloom (NOT a `::after` overlay — `.tl-item.done`'s Day-mode
+  checkmark and `.tl-item[data-origin="repeat"]`'s stripe both already claim one),
+  strongest for Money. The gutter `.power-marker` dot–line–dot (including its Money
+  glow) is unchanged and sits alongside this, not replaced by it. Multi-day
+  (`.md-item`/`.md-line`/`.md-bar`) keeps the ring, drops the bloom — the columns are
+  too narrow for it to read cleanly.
 - **Card / box / panel radius**: `var(--radius-md)` (16px) — the standard for any
   card, row, or tappable container (an existing comment on the calendar-block CSS
   calls this "card language as every other tappable row in the app," which is
