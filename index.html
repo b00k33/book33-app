@@ -6379,7 +6379,35 @@
   .order-detail-btns { display: flex; gap: 8px; }
 
   /* --- routines & events list rows --- */
+  /* 2026-08-29 (All Events rebuild, Commit 2): the only .bd-head on the app that
+     carries a second control -- scoped here rather than touching the shared
+     .bd-head rule (every other page's single <h1> stays exactly as it renders now). */
+  #eventsPage .bd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #evlAddBtn { flex: none; min-height: 44px; display: inline-flex; align-items: center; }
   .evl-filters { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  /* 2026-08-29 (All Events rebuild, Commit 2): "Up next" -- a fixed 30-day rolling
+     window, visible in All/Repeats/One-offs alike, sitting above whichever of
+     #evlRepeatsView/#evlList that filter shows. .evl-pat-dot/.evl-pat-sec-head are
+     reused, not reinvented -- same dot, same section-head language as the week grid. */
+  .evl-up-list { display: flex; flex-direction: column; margin-bottom: 4px; }
+  .evl-up-row {
+    display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 11px;
+    border-radius: 10px; background: var(--field-bg); margin-bottom: 4px; cursor: pointer;
+  }
+  .evl-up-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink);
+    display: flex; align-items: center; gap: 7px; }
+  .evl-up-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evl-up-when { flex: none; font-size: 11px; color: var(--ink-faint); font-weight: 600;
+    font-variant-numeric: tabular-nums; }
+  .evl-up-when b { color: var(--margin-rule); font-weight: 800; }
+  /* same gold-on-Day-mode failure Commit 1 caught on .evl-pat-hrs (2.07:1 measured
+     there) -- .evl-up-when b sits on the SAME --field-bg background, so pre-empting
+     it here rather than waiting to catch it live a second time. */
+  :root[data-theme="light"] .evl-up-when b { color: var(--ink); }
+  .evl-up-more { font-size: 11px; color: var(--ink-faint); padding: 2px 11px 8px; }
+  @media (max-width: 640px) {
+    .evl-up-row { height: 34px; padding: 0 10px; margin-bottom: 3px; }
+  }
   /* 2026-08-26 (Rebuild the All Events page, STEP 1): the single line that
      replaced five stacked admin-tool rows -- range text, This month, the
      Import/Export/Backup disclosure trigger, all in one flex row that wraps
@@ -20619,6 +20647,7 @@
   <div class="page" id="eventsPage" hidden>
     <div class="bd-head">
       <h1>All Events</h1>
+      <button type="button" class="btn-save" id="evlAddBtn">+ Add</button>
     </div>
     <!-- "Filter by life area" retired 2026-08-24 (see the retired-features doc) --
          state.evlTrack now stays permanently undefined; renderEventsPage() and the
@@ -20679,6 +20708,11 @@
         <button type="button" class="evl-kind-opt" data-evl-filter="oneoff">One-offs</button>
       </div>
     </div>
+    <!-- 2026-08-29 (All Events rebuild, Commit 2): "Up next" -- a fixed 30-day
+         window from today, deliberately independent of the range picker above
+         (see renderUpNext()'s own comment for why). Visible in all three filter
+         modes, above whichever of #evlRepeatsView/#evlList is showing. -->
+    <div id="evlUpNext"></div>
     <!-- 2026-08-26 (STEP 3): Repeats view -- one row per SERIES, not per occurrence.
          Pattern (grid, default) and List (maintenance) share the same series data,
          picked with a small toggle. Hidden unless PREFS.evlFilter === "repeats". -->
@@ -53610,7 +53644,48 @@
     const f = `${from.getDate()} ${MON_SHORT[from.getMonth()]}` + (sameYear ? "" : ` ${from.getFullYear()}`);
     return `${f} – ${to.getDate()} ${MON_SHORT[to.getMonth()]} ${to.getFullYear()}`;
   }
+  // 2026-08-29 (All Events rebuild, Commit 2): SAME generatedFor()/EVENTS walk
+  // renderEventsPage()'s own flat-list branch already does below -- just over a
+  // fixed TODAY..+30 window instead of whatever the range picker happens to be
+  // set to. Deliberately not tied to that picker: "what's coming up" and "what
+  // I'm currently browsing/exporting" are different questions, and wiring this to
+  // the picker would make it silently lie whenever she's looking at a past month.
+  function renderUpNext() {
+    const el = document.getElementById("evlUpNext");
+    if (!el) return;
+    const to = addDays(TODAY, 30);
+    const rows = [];
+    for (let d = new Date(TODAY); dayDiff(d, to) <= 0; d = addDays(d, 1)) {
+      const k = keyOf(d);
+      const evs = [...generatedFor(d).filter(e => !e.preview), ...EVENTS.filter(e => e.date === k)];
+      evs.forEach(e => rows.push({ ...e, _date: new Date(d) }));
+    }
+    rows.sort((a, z) => dayDiff(a._date, z._date)
+      || (a.allDay ? "0" : "1" + (a.start || "")).localeCompare(z.allDay ? "0" : "1" + (z.start || "")));
+    let html = `<div class="evl-pat-sec-head">UP NEXT · 30 days</div>`;
+    if (!rows.length) {
+      el.innerHTML = html + `<div class="fam-empty">Nothing in the next 30 days.</div>`;
+      return;
+    }
+    const max = mobileDayMq.matches ? 3 : 5;
+    const shown = rows.slice(0, max);
+    const rest = rows.length - shown.length;
+    html += `<div class="evl-up-list">` + shown.map(e => {
+      const disp = evlDispatchFor(e);
+      const mode = modeOf(e);
+      const diff = dayDiff(e._date, TODAY);
+      const whenLbl = diff === 0 ? "today" : diff === 1 ? "tomorrow" : `${diff}d`;
+      const dateLbl = `${WD_FULL[dowIndex(e._date)].slice(0, 3)} ${e._date.getDate()} ${MON_SHORT[e._date.getMonth()]}`;
+      return `<div class="evl-up-row"${disp ? ` data-evl-kind="${disp.kind}" data-evl-id="${esc(disp.id)}"` : ""}>
+        <span class="evl-up-name"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span>${e.icon ? `${e.icon} ` : ""}${esc(e.title)}</span></span>
+        <span class="evl-up-when">${dateLbl} · <b>${whenLbl}</b></span>
+      </div>`;
+    }).join("") + `</div>`;
+    if (rest > 0) html += `<div class="evl-up-more">and ${rest} more in the next 30 days</div>`;
+    el.innerHTML = html;
+  }
   function renderEventsPage() {
+    renderUpNext();
     const fromEl = document.getElementById("evlFrom"), toEl = document.getElementById("evlTo");
     if (!fromEl.value) fromEl.value = keyOf(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
     if (!toEl.value) toEl.value = keyOf(new Date(TODAY.getFullYear(), TODAY.getMonth() + 1, 0));
@@ -53717,6 +53792,8 @@
   }
   document.getElementById("evlList").addEventListener("click", evlRowClickHandler);
   document.getElementById("evlRepeatsBody").addEventListener("click", evlRowClickHandler);
+  document.getElementById("evlUpNext").addEventListener("click", evlRowClickHandler);
+  document.getElementById("evlAddBtn").addEventListener("click", () => openForm());
   // (the #tlOriginFilter / #tlOriginHiddenPill click handlers lived here until
   // 2026-08-24, when that filter row was removed -- see the markup note)
   document.getElementById("evlFrom").addEventListener("change", renderEventsPage);
