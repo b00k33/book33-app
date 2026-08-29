@@ -6421,6 +6421,17 @@
   .evl-kind-opt:hover { color: var(--ink); }
   .evl-kind-opt[aria-pressed="true"] { background: var(--margin-rule); color: var(--accent-on); font-weight: 600; }
   .evl-kind-opt:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
+  /* 2026-08-29 (Now screen, COMMIT 3 STEP 3): the two plain-language lines above the
+     mobile single-day grid -- see #nowGlanceStrip's own HTML comment for why it's a
+     named fourth exception to the "only these sit above the calendar" rule. */
+  .now-glance-strip { display: flex; flex-direction: column; gap: 0; padding: 0 16px; }
+  .ngs-row {
+    display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 4px 0;
+    border: none; background: none; font-family: var(--font-body); font-size: 13px;
+    color: var(--ink-soft); text-align: left; cursor: pointer; width: 100%;
+  }
+  .ngs-row:hover, .ngs-row:focus-visible { color: var(--ink); }
+  .ngs-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
   /* --- Now screen (2026-08-29, COMMIT 2) -- the new landing view. No page-header
      chrome: the RIGHT NOW eyebrow IS the page's identity. The approved 412x915 mock
      opens straight on the RIGHT NOW card with nothing above it, so .astro (the "BOOK
@@ -21280,6 +21291,14 @@
              nothing is lost for screen-reader users, only the always-on printed word
              for everyone else. -->
         <button type="button" class="dd-grab" id="ddGrab" aria-expanded="false" aria-controls="dayTopDrawerBody" aria-label="Show day header"></button>
+        <!-- 2026-08-29 (Now screen, COMMIT 3 STEP 3): two plain-language lines, always
+             visible (not gated behind the drawer above) -- "a calendar that opens at
+             the hour you're in with every block named" needs the same two facts the
+             Now screen just showed to still be readable the instant she lands here.
+             Extends the standing "only the grab handle, all-day row, and mode-hidden
+             pill may sit above the calendar" rule (CLAUDE.md) with this strip as a
+             fourth named exception -- disclosed in the commit report, not silent. -->
+        <div class="now-glance-strip" id="nowGlanceStrip"></div>
         <!-- brief confirmation toast for the bottom-edge flick-up gesture (its own JS
              block) -- fades in/out via the .on class, auto-hidden after 850ms. -->
         <div class="dd-flash" id="ddBackToTopFlash" aria-hidden="true">↑ back to the top</div>
@@ -35929,8 +35948,12 @@
     // scroll to 6am once (same one-time-only rule tlScrollInit follows below, for
     // the same reason — never yank the view mid-use on a later re-render)
     if (!mdScrollInit) {
+      // 2026-08-29 (Now screen, COMMIT 3 STEP 2): same "opens at the hour you're in"
+      // change as the single-day scroll-init just above -- see its comment.
       const scroller = document.getElementById("mdTimelineScroll");
-      if (scroller) scroller.scrollTop = topForMin(6 * 60);
+      const now = new Date();
+      const scrollMin = now.getHours() * 60 + now.getMinutes();
+      if (scroller) scroller.scrollTop = topForMin(scrollMin);
       mdScrollInit = true;
     }
     mdRendering = false;
@@ -35940,6 +35963,29 @@
   // Called at the end of renderDay() and again on window resize (see the resize
   // handler further down) so crossing the 1024px mobile/desktop gate mid-session
   // (a rotated tablet, a resized window) never leaves both grids hidden at once.
+  // 2026-08-29 (Now screen, COMMIT 3 STEP 1): PREFS.calDays (calDaysActive()) is what
+  // she picked and stays untouched -- this decides what actually RENDERS. A phone too
+  // narrow to give PREFS.calDays columns their 90px label threshold (same math
+  // renderMultiDayGrid() already uses for labelable, reused here rather than a second
+  // formula) renders 1 day instead, regardless of the stored value. Not a hardcoded
+  // 412px/3-day cutoff -- derived live from the real container.
+  // #mdCols must be genuinely visible to measure honestly; if a prior render left
+  // #multiDayWrap hidden, unhide it just long enough to read the width, then restore
+  // -- all inside this one synchronous pass, so nothing paints in between.
+  function calDaysRenderCount() {
+    const stored = calDaysActive();
+    if (stored <= 1) return stored;
+    const multi = document.getElementById("multiDayWrap");
+    const mdCols = document.getElementById("mdCols");
+    if (!multi || !mdCols) return stored;
+    const wasHidden = multi.hidden;
+    if (wasHidden) multi.hidden = false;
+    const w = mdCols.getBoundingClientRect().width;
+    if (wasHidden) multi.hidden = true;
+    if (!w) return stored;   // unmeasurable (e.g. the whole page currently hidden) -- don't force a false narrow
+    const colWidth = (w - (stored - 1) * 4) / stored;
+    return colWidth >= 90 ? stored : 1;
+  }
   function renderCalDaysUI() {
     document.querySelectorAll(".cal-days-btn").forEach(b => {
       b.setAttribute("aria-pressed", String(+b.dataset.calDays === (PREFS.calDays || 1)));
@@ -35947,7 +35993,7 @@
     const single = document.getElementById("timelineScroll");
     const multi = document.getElementById("multiDayWrap");
     if (!single || !multi) return;
-    const active = calDaysActive();
+    const active = calDaysRenderCount();
     // 2026-08-15 (§2 REVISION, "what hides at 3+ days"): one attribute drives the whole
     // single-day-only collapse — the merged progress component, "Routines today"
     // (#chainChips) and "Piling up" (#pileupBox). CSS does the hiding (see
@@ -36491,8 +36537,36 @@
     // not on every renderDay() call (adding an event, ticking a task, etc. all call this
     // too, and re-scrolling every time would yank the view out from under her mid-use).
     if (!tlScrollInit) {
+      // 2026-08-29 (Now screen, COMMIT 3 STEP 2): "opens at the hour you're in" --
+      // was a fixed 6am. Only when viewing TODAY (a past/future date has no real
+      // "now" of its own; 6am stays the sensible default there). Past-dimming is
+      // already live (.tl-item.tl-past, see its own CSS comment) -- nothing to add
+      // for that half of this step.
       const scroller = document.getElementById("timelineScroll");
-      if (scroller) scroller.scrollTop = topForMin(6 * 60);
+      const now = new Date();
+      const scrollMin = keyOf(state.anchor) === keyOf(TODAY) ? now.getHours() * 60 + now.getMinutes() : 6 * 60;
+      if (scroller) {
+        const target = topForMin(scrollMin);
+        scroller.scrollTop = target;   // real scroll container at some widths/layouts
+        // At mobile 1-day, #timelineScroll grows to its full content height instead
+        // (found live -- scrollHeight===clientHeight there) and the PAGE scrolls to
+        // reach an hour, not this element -- so also bring that same point into view
+        // within the page itself. Harmless no-op when the element above already did
+        // the job (scrollerRect.top stays ~0 either way).
+        // A wall-clock setTimeout, not requestAnimationFrame -- rAF does not fire in
+        // a hidden/non-compositing tab (this file's own reward-leaf animation already
+        // documents and works around the same trap with its own wall-clock safety
+        // net, search "does not fire in a hidden/non-compositing tab"). Confirmed
+        // live here too: an rAF version of this exact fix never ran in a backgrounded
+        // test pane.
+        setTimeout(() => {
+          const r = scroller.getBoundingClientRect();
+          if (r.height > window.innerHeight) {
+            const pageY = window.scrollY + r.top + target - 12;
+            window.scrollTo(0, Math.max(0, pageY));
+          }
+        }, 0);
+      }
       tlScrollInit = true;
     }
     renderImprint();
@@ -36796,6 +36870,7 @@
     // its own comment for why this has to run after the single-day body above,
     // not interleaved with it.
     renderCalDaysUI();
+    renderNowGlanceStrip();
     // 2026-08-16 (item 4): the widget rail's only caller was placeDeskGrid()'s
     // DESKTOP branch, which never runs on a phone — so the mobile "Today's widgets"
     // block needs its own once-per-render call. Width-gated rather than unconditional
@@ -43153,6 +43228,35 @@
     renderNowCurrentCard(now);
     renderNowFacts(now);
   }
+  // 2026-08-29 (Now screen, COMMIT 3 STEP 3): the same two facts, one line each,
+  // above the single-day grid -- reads currentItem()/nextItem()/openTodoCount(),
+  // same commit-1 functions, no new data source. Only when viewing TODAY at 1-day
+  // mobile (calDaysRenderCount()===1) -- a past/future date or a wider screen with
+  // real multi-day context doesn't need this second summary.
+  function renderNowGlanceStrip() {
+    const el = document.getElementById("nowGlanceStrip");
+    if (!el) return;
+    if (!mobileDayDrawersActive() || calDaysRenderCount() !== 1 || keyOf(state.anchor) !== keyOf(TODAY)) {
+      el.innerHTML = ""; el.hidden = true; return;
+    }
+    el.hidden = false;
+    const now = new Date();
+    const cur = currentItem(now), nx = nextItem(now), todo = openTodoCount();
+    const e = cur ? itemEndMin(cur) : null;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowLine = cur
+      ? `<span class="ngs-dot" style="background:${nowAccentFor(cur).edge}"></span>Now · ${esc(cur.title)} — ${fmtDurMin(Math.max(0, e - nowMin))} left`
+      : nx ? `<span class="ngs-dot" style="background:var(--track-neutral-bar)"></span>Nothing on now · next: ${esc(nx.title)} at ${esc(fmtTime(nx.start))}`
+           : `<span class="ngs-dot" style="background:var(--track-neutral-bar)"></span>Nothing on right now`;
+    const todoLine = `<span class="ngs-dot" style="background:var(--track-neutral-bar)"></span>${todo.total ? `${todo.total} thing${todo.total === 1 ? "" : "s"} still to do` : "Nothing left to do"}`;
+    el.innerHTML = `
+      <button type="button" class="ngs-row" id="ngsNowRow">${nowLine}</button>
+      <button type="button" class="ngs-row" id="ngsTodoRow">${todoLine}</button>`;
+    const nowRow = document.getElementById("ngsNowRow");
+    if (nowRow) nowRow.onclick = () => { const item = cur || nx; if (item) nowJumpToEvent(item); };
+    const todoRow = document.getElementById("ngsTodoRow");
+    if (todoRow) todoRow.onclick = () => openTodoPanel();
+  }
   // 2026-08-20 ("a place to actually SEE all your Modes"): the Settings/Notifications
   // page's read-only summary list -- every real mode (in .order) + Home last, each
   // with its own accent swatch (a neutral dot for Home, which has none) and today's
@@ -45716,15 +45820,17 @@
   // 2026-08-29: Life Map's own now-line (lmDrawNowLine, mobile audit Stage 2) joins the
   // same 30s cadence rather than a second timer -- same reasoning as wmTick below.
   setInterval(() => {
-    if (state.view === "day") { renderElapsedFade(); orderDayRail(); }
+    if (state.view === "day") { renderElapsedFade(); orderDayRail(); renderNowGlanceStrip(); }
     else if (state.view === "lifeMap") { lmDrawNowLine(); }
+    else if (state.view === "now") { renderNow(); }
   }, 30000);
   // …and immediately on refocus: a backgrounded tab's timers are throttled, so without
   // this the line sits wherever it was when the app was last visible until the next tick
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) return;
-    if (state.view === "day") { renderElapsedFade(); orderDayRail(); }
+    if (state.view === "day") { renderElapsedFade(); orderDayRail(); renderNowGlanceStrip(); }
     else if (state.view === "lifeMap") { lmDrawNowLine(); }
+    else if (state.view === "now") { renderNow(); }
   });
   // 2026-08-23 (retire the manual Work/Personal banner): the chrome/theme-flip and
   // Day-page re-render this used to also do are both covered generically now --
