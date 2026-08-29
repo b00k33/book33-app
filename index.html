@@ -45533,19 +45533,15 @@
     return `<button type="button" class="nir-row${active ? " on" : ""}${sep}" data-view="${item.viewId}" title="${esc(item.label)}" aria-current="${active ? "page" : "false"}">`
       + navIconHtml(item) + badge + `</button>`;
   }
-  // 2026-08-20 (nav unification, "every page gets a route"): the collapsed rail has
-  // no room for 6 chapter icons plus 11 pinned ones without either cramming or
-  // scrolling a rail that was never designed to scroll -- her own spec asked for
-  // "tapping it expands the panel rather than trying to nest inside a 44px rail" and
-  // to be told what actually fits, not guessed at. ONE icon stands for "Chapters" as
-  // a whole, same expand-not-navigate shape as the 🗓 Calendar row just above --
-  // data-chapters-toggle instead of data-view, opens a NEW sibling flyout
-  // (#navChaptersExtras) showing the same accordion the full drawer already renders
-  // (navPanelChaptersHtml, reused verbatim rather than a third copy). Reported to
-  // her in the WHEN-DONE writeup as a judgment call, per her instruction.
+  // 2026-08-20 (nav unification, "every page gets a route"), repointed 2026-08-29
+  // (Calendar-first nav rebuild, Commit 3): was a Chapters flyout (#navChaptersExtras,
+  // still defined -- not deleted, see its own comment) listing all 36 pages, which
+  // would have defeated the whole job ("a surface that still lists 35 pages defeats
+  // the job" -- her STEP 1). Now opens the SAME Everything-else sheet every other
+  // surface uses -- reuses #navPanelBody's existing [data-nav-everything-else]
+  // delegate (this rail is a descendant of that host), no second wiring needed.
   function navIconRailChaptersRowHtml() {
-    const open = document.getElementById("navPanel")?.classList.contains("chapters-open");
-    return `<button type="button" class="nir-row expand${open ? " chapters-active" : ""}" data-chapters-toggle="1" title="Chapters" aria-label="Browse chapters" aria-expanded="${open ? "true" : "false"}" aria-controls="navChaptersExtras">`
+    return `<button type="button" class="nir-row" data-nav-everything-else title="Everything else" aria-label="Everything else" aria-haspopup="dialog">`
       + `<span class="nav-ic" aria-hidden="true">▤</span></button>`;
   }
   function renderNavIconRail() {
@@ -45640,10 +45636,22 @@
     footer.textContent = label;
     footer.hidden = !label;
   }
+  // 2026-08-29 (Calendar-first nav rebuild, Commit 3): same "Everything else"
+  // trigger as every other surface -- this tab strip never had a Chapters
+  // mechanism of its own before today (it only ever showed NAV_ITEMS' pinned
+  // rows), so this is the first time all 36 pages are reachable from here, not
+  // a regression from a wider set it used to show.
+  function navTabEverythingElseHtml() {
+    return `<button type="button" class="nav-tab-item" data-nav-everything-else role="tab" aria-haspopup="dialog">`
+      + `<span class="nav-ic" aria-hidden="true">▤</span><span class="nav-tab-lbl">More</span></button>`;
+  }
   function renderNavTabStrip() {
     const host = document.getElementById("navTabStrip");
     if (!host) return;
-    host.innerHTML = NAV_ITEMS.map(navTabRowHtml).join("");
+    const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
+    const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
+    host.innerHTML = pinnedItems.map(navTabRowHtml).join("") + navTabEverythingElseHtml()
+      + (footerItem ? navTabRowHtml(footerItem) : "");
   }
   function navPanelIsOpen() { return document.getElementById("navPanel").classList.contains("open"); }
   // 2026-08-18 (mobile Day-view drawers): #navPanelBackdrop is shared by these TWO
@@ -45975,6 +45983,7 @@
     closeNavPanel();
   });
   document.getElementById("navTabStrip").addEventListener("click", e => {
+    if (e.target.closest("[data-nav-everything-else]")) { openEverythingElseSheet(); return; }
     const btn = e.target.closest("[data-view]");
     if (!btn) return;
     state.view = btn.dataset.view;
@@ -48145,6 +48154,12 @@
           + `<span class="dnr-ic dnr-ic-marked">${b33IconSvg("reopenSidebar")}</span></button>`;
       }
     });
+    // 2026-08-29 (Calendar-first nav rebuild, Commit 3): the permanent rail's own
+    // "Everything else" trigger -- expand, don't navigate, same data-action shape
+    // as reopen-sidebar just above (not a real NAV_ITEMS entry, doesn't navigate).
+    html += `<div class="dnr-sep" aria-hidden="true"></div>`
+      + `<button type="button" class="dnr-row" data-action="everything-else" title="Everything else" aria-label="Everything else" aria-haspopup="dialog">`
+      + `<span class="dnr-ic">${b33IconSvg("everythingElse")}</span></button>`;
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) {
       html += `<div class="dnr-sep" aria-hidden="true"></div>` + dnrRailRowHtml(footerItem, footerItem.viewId === state.view);
@@ -48161,6 +48176,7 @@
   document.getElementById("dnrScroll")?.addEventListener("click", e => {
     const reopenSidebar = e.target.closest('[data-action="reopen-sidebar"]');
     if (reopenSidebar) { PREFS.sideOpen = true; savePrefs(); renderDeskSidebar(); renderDeskNavRail(); return; }
+    if (e.target.closest('[data-action="everything-else"]')) { openEverythingElseSheet(); return; }
     const row = e.target.closest("[data-view]");
     if (!row) return;
     state.view = row.dataset.view;
@@ -48264,6 +48280,13 @@
         + `<span class="dnr-ic">${navIconHtml(footerItem)}</span><span class="dnr-lbl">${esc(footerItem.label)}</span></button>`
       : "";
     const syncLbl = navSyncLabel();
+    // 2026-08-29 (Calendar-first nav rebuild, Commit 3): SUPERSEDES the Chapters
+    // accordion (dnrChaptersHtml(), still defined -- see its own comment, not
+    // deleted) -- one row opening the same Everything-else sheet every other
+    // surface now uses, not a 36-page list inline in the popover.
+    const everythingElseRow = `<button type="button" class="dnr-row" data-action="everything-else" aria-haspopup="dialog">`
+      + `<span class="dnr-ic">${navIconHtml({ icon: "▤" })}</span><span class="dnr-lbl">Everything else</span>`
+      + `<span class="dnr-count">${navDoorsPageCount()}</span></button>`;
     const pop = document.createElement("div");
     pop.className = "dnr-launch-pop";
     pop.id = "dnrLauncherPop";
@@ -48271,7 +48294,7 @@
     pop.setAttribute("aria-label", "Navigate");
     pop.innerHTML = `<div class="dnr-launch-grid">${dnrLauncherGridHtml()}</div>`
       + (sidebarRow ? `<div class="dnr-sep" aria-hidden="true"></div>${sidebarRow}` : "")
-      + `<div class="dnr-sep" aria-hidden="true"></div><div class="dnr-launch-chapters">${dnrChaptersHtml()}</div>`
+      + `<div class="dnr-sep" aria-hidden="true"></div>${everythingElseRow}`
       + (footerRow ? `<div class="dnr-sep" aria-hidden="true"></div>${footerRow}` : "")
       + `<div class="dnr-sep" aria-hidden="true"></div><div class="dnr-avatar-row">
           <span class="dnr-avatar-ic"><span class="dnr-avatar-badge">33</span></span>
@@ -48296,6 +48319,11 @@
     if (chToggle) { navToggleChapter(chToggle.dataset.chapterToggle); renderDnrLauncherPop(); return; }
     const reopenSidebar = e.target.closest('[data-action="reopen-sidebar"]');
     if (reopenSidebar) { PREFS.sideOpen = true; savePrefs(); dnrLauncherOpen = false; renderDeskSidebar(); renderDeskNavRail(); return; }
+    if (e.target.closest('[data-action="everything-else"]')) {
+      dnrLauncherOpen = false; renderDnrLauncherPop();
+      openEverythingElseSheet();
+      return;
+    }
     const row = e.target.closest("[data-view]");
     if (!row) return;
     state.view = row.dataset.view;
@@ -48803,6 +48831,12 @@
     events: ["var(--ic-violet)", `<rect class="ic2" x="5.4" y="3.2" width="13.2" height="4" rx="1.6" fill="currentColor"/><rect x="3.2" y="8" width="17.6" height="12.8" rx="2.6" fill="currentColor"/><g class="icx"><rect x="5.6" y="10.6" width="6.4" height="2.4" rx="1.2"/><rect x="5.6" y="15" width="10.4" height="2.4" rx="1.2"/></g>`],
     notify: ["var(--ink-soft)", `<path fill="currentColor" d="M13.6 2.9c.5.1.9.6.9 1.1l.1 1.5c.6.2 1.2.6 1.7 1l1.4-.6c.5-.2 1.1 0 1.4.4l1.6 2.8c.3.5.2 1.1-.3 1.4l-1.2.9a7.3 7.3 0 0 1 0 2l1.2.9c.4.3.5 1 .3 1.4l-1.6 2.8c-.3.5-.9.6-1.4.4l-1.4-.6c-.5.4-1.1.8-1.7 1l-.1 1.5c0 .5-.4 1-.9 1.1a9 9 0 0 1-3.2 0c-.5-.1-.9-.6-.9-1.1l-.1-1.5c-.6-.2-1.2-.6-1.7-1l-1.4.6c-.5.2-1.1 0-1.4-.4l-1.6-2.8c-.3-.5-.2-1.1.3-1.4l1.2-.9a7.3 7.3 0 0 1 0-2l-1.2-.9c-.4-.3-.5-1-.3-1.4l1.6-2.8c.3-.5.9-.6 1.4-.4l1.4.6c.5-.4 1.1-.8 1.7-1l.1-1.5c0-.5.4-1 .9-1.1a9 9 0 0 1 3.2 0z"/><circle class="icx" cx="12" cy="12" r="3.1"/>`],
     reopenSidebar: ["var(--gold-bright)", `<rect x="3" y="4.6" width="18" height="16.6" rx="2.6" fill="currentColor"/><path class="icx" d="M4.6 10.4h14.8v8.2c0 .7-.5 1.2-1.2 1.2H5.8c-.7 0-1.2-.5-1.2-1.2z"/><g stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M8 2.6v2.6M16 2.6v2.6"/></g><path fill="currentColor" d="M10.5 12l4 2.9-4 2.9z"/>`],
+    // 2026-08-29 (Calendar-first nav rebuild, Commit 3): the "Everything else" door
+    // trigger, both desktop rails -- a 3x3 dot grid, the same "app launcher/more"
+    // shape "▤" (the emoji fallback everywhere else this row appears) already reads
+    // as. --ink-soft: chrome the app chose, not a data category with its own hue,
+    // same status as notify/gear/moon above.
+    everythingElse: ["var(--ink-soft)", `<g fill="currentColor"><circle cx="7" cy="7" r="2.1"/><circle cx="12" cy="7" r="2.1" class="ic2"/><circle cx="17" cy="7" r="2.1"/><circle cx="7" cy="12" r="2.1" class="ic2"/><circle cx="12" cy="12" r="2.1"/><circle cx="17" cy="12" r="2.1" class="ic2"/><circle cx="7" cy="17" r="2.1"/><circle cx="12" cy="17" r="2.1" class="ic2"/><circle cx="17" cy="17" r="2.1"/></g>`],
     // ---- right widget rail (keys = WR_PINNED_IDS / WR_WIDGET_IDS) ----
     daySessionCard: ["var(--gold-bright)", `<path fill="currentColor" d="M6.6 3.4h10.8c.9 0 1.4 1 .9 1.7l-4.4 5.6c-.4.5-.4 1.2 0 1.7l4.4 5.6c.55.7 0 1.7-.9 1.7H6.6c-.9 0-1.45-1-.9-1.7l4.4-5.6c.4-.5.4-1.2 0-1.7L5.7 5.1c-.55-.7 0-1.7.9-1.7z"/><path class="icx" d="M9.2 17.6h5.6l-2.8-3.6z"/>`],
     sunWeekAhead: ["var(--ic-blue)", `<circle cx="12" cy="12" r="8.8" fill="currentColor"/><path class="icx" d="M15.9 7.5 13.4 13l-5.3 2.6 2.5-5.5z"/>`],
