@@ -14325,13 +14325,30 @@
        job now belongs to .nav-day-strip.open below, so plain .nav-day-strip needs its
        OWN explicit display:none here or it would inherit nothing and default open). */
     .nav-day-strip { display: none; }
+    /* 2026-08-30 pt.6 (Linh, real screenshot: the inline "Today" pill crowded the
+       closed row enough to wrap the date onto two lines -- "make it more discrete...
+       put it above the week dropdown", her Option A over a bare "T" square): moved
+       from the always-visible closed row into HERE, so it costs nothing on the
+       closed row ever again, at the price of one extra tap (open the dropdown
+       first) -- acceptable since opening this IS how she reorients when lost.
+       Column layout now (was a single flex row of day buttons directly) -- the 7-day
+       row's own flex/scroll properties moved to the new .nds-week child rule right
+       below, freeing this rule to just be "today row, then week row." */
     .nav-day-strip.open {
-      display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+      display: flex; flex-direction: column; gap: 6px;
       position: absolute; top: calc(100% + 6px); left: 8px; right: 8px; z-index: 220;
       background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
       box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 6px;
     }
-    .nav-day-strip::-webkit-scrollbar { display: none; }
+    .nds-today-row {
+      display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 30px;
+      border: none; border-radius: var(--radius-sm); cursor: pointer; font: inherit;
+      font-size: 12px; font-weight: 700; color: var(--accent-seed);
+      background: color-mix(in oklab, var(--accent-seed) 10%, transparent);
+    }
+    .nds-today-row:hover { background: color-mix(in oklab, var(--accent-seed) 16%, transparent); }
+    .nds-week { display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+    .nds-week::-webkit-scrollbar { display: none; }
     /* the trigger row that replaces the old permanent strip: ‹ [date ▾] › always
        visible, tapping (or hovering, real-pointer devices only -- see the
        hover:hover rule below) the date opens the strip above as a dropdown.
@@ -35566,7 +35583,11 @@
       const isToday = k === todayKey;
       html += `<button type="button" class="nds-day${sel ? " sel" : ""}${isToday ? " today" : ""}" data-nds-date="${k}" aria-pressed="${sel}" aria-label="${WD_FULL[i]} ${day.getDate()} ${MON_SHORT[day.getMonth()]}${isToday ? ", today" : ""}"><span class="nds-wd">${WD_MIN[i]}</span><span class="nds-n">${day.getDate()}</span></button>`;
     }
-    strip.innerHTML = html;
+    // 2026-08-30 pt.6: "Jump to Today" lives here now, not the closed row (search
+    // "put it above the week dropdown" a few hundred lines up in the CSS) -- always
+    // rendered, not hidden when already on today, same "harmless no-op" reasoning
+    // #dayStepToday's own click handler already relies on elsewhere in this file.
+    strip.innerHTML = `<button type="button" class="nds-today-row" data-nds-today>↩ Jump to Today</button><div class="nds-week">${html}</div>`;
     navDayStripNarrowPass();
   }
   // 2026-08-29 (real bug, not a stale-cache read — confirmed live on her phone after I'd
@@ -35596,6 +35617,17 @@
     // 2026-08-30 (Linh: "tap a day to jump — closes automatically", her own approved
     // mock): picking a day from the dropdown is done with it, same as any other
     // dismissible panel in the app closing once its one job is finished.
+    toggleNavDateStrip(false);
+  });
+  // 2026-08-30 pt.6 ("Jump to Today", her Option A): same jump #dayStepToday's own
+  // handler makes (search that id) -- state.view = "day" too, since #navDateSlot is
+  // shared chrome visible on every page (search "this is useless in this page" for
+  // the sibling bug that taught me that), not just the Day page itself.
+  document.addEventListener("click", e => {
+    if (!e.target.closest("[data-nds-today]")) return;
+    state.anchor = new Date(TODAY);
+    state.view = "day";
+    render();
     toggleNavDateStrip(false);
   });
 
