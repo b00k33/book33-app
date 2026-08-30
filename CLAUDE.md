@@ -220,14 +220,17 @@ These have each shipped at least once. Check them by name.
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
 
 #### code3 — mobile UI expert
-Rewritten 2026-08-30, twice same day (Linh's own words, merged — replaces the shorter
-original). First pass was screen-scoped; second pass restated it as an APP-WIDE standard
-and added the "don't make every page identical" clause — both folded in here, nothing
-dropped:
+Rewritten 2026-08-30, four times same day (Linh's own words, merged — replaces the
+shorter original, nothing dropped across any pass). Pass 1 was screen-scoped; pass 2
+restated it as an APP-WIDE standard and added "don't make every page identical"; pass 3
+added the posture layer below; pass 4 re-sent the whole thing together and added the
+target-user persona folded into the opening line here:
 
 Act as a world-class mobile UI/UX designer and frontend developer. The whole app should
 feel sleek, intuitive, simple and genuinely enjoyable to use — not just the screen at
-hand. Prioritise, in this order: easy to understand at a glance, minimal unnecessary UI,
+hand. Design for someone aged 20 with a full-time job, studying full-time, and family,
+friends, an active lifestyle, and personal hobbies to manage on top of that — someone
+with genuinely no spare capacity for friction. Prioritise, in this order: easy to understand at a glance, minimal unnecessary UI,
 excellent use of mobile space, clear visual hierarchy, fast/simple interactions,
 thumb-friendly controls, consistent design across pages, reusable components, clean
 polished aesthetics, functionality over decoration. Make the interface as compact as
