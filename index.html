@@ -6133,7 +6133,16 @@
   /* same gold-on-Day-mode contrast failure as .evl-pat-hrs (2.07:1 measured there) --
      .evl-up-when b sits on the SAME --field-bg background. */
   :root[data-theme="light"] .evl-up-when b { color: var(--ink); }
-  .evl-up-more { font-size: 11px; color: var(--ink-faint); padding: 2px 11px 8px; }
+  /* was static text; now a real disclosure toggle (2026-08-30 code6 audit).
+     36px hit-box, not 44 -- this is a dense-list auxiliary control (R7's
+     24-44px band), not a primary one-handed action; a full 44px floor here
+     would open a visible gap under the tight Up Next list for no reason. */
+  .evl-up-more {
+    display: inline-flex; align-items: center; border: none; background: none;
+    font-family: var(--font-body); font-size: 11px; color: var(--ink-faint);
+    padding: 4px 11px; min-height: 36px; cursor: pointer;
+  }
+  .evl-up-more:hover, .evl-up-more:focus-visible { color: var(--margin-rule); }
   @media (max-width: 640px) {
     .evl-up-row { height: 34px; padding: 0 10px; margin-bottom: 3px; }
   }
@@ -28950,6 +28959,10 @@
                   // as modeRevealAll above -- "nothing is open when the page loads" is the
                   // whole point of the rails being short, so this can never be PREFS.
                   evlOpenMonth: null,
+                  // 2026-08-30 (Linh code6 audit: "and N more" was a dead-end label,
+                  // no way to see the rest of the rolling 30-day window anywhere on the
+                  // page). Session-only, same reasoning as evlOpenMonth above.
+                  evlUpNextExpanded: false,
                   // Commit 4: transient, same reasoning -- typing a search term is
                   // this session's business, not a lasting preference, and must not
                   // survive a reload (her explicit rule).
@@ -52744,9 +52757,10 @@
       return;
     }
     const max = mobileDayMq.matches ? 3 : 5;
-    const shown = rows.slice(0, max);
+    const expanded = state.evlUpNextExpanded;
+    const shown = expanded ? rows : rows.slice(0, max);
     const rest = rows.length - shown.length;
-    html += `<div class="evl-up-list">` + shown.map(e => {
+    const rowHtml = e => {
       const disp = evlDispatchFor(e);
       const mode = modeOf(e);
       const diff = dayDiff(e._date, TODAY);
@@ -52756,8 +52770,12 @@
         <span class="evl-up-name"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span>${e.icon ? `${e.icon} ` : ""}${esc(e.title)}</span></span>
         <span class="evl-up-when">${dateLbl} · <b>${whenLbl}</b></span>
       </div>`;
-    }).join("") + `</div>`;
-    if (rest > 0) html += `<div class="evl-up-more">and ${rest} more in the next 30 days</div>`;
+    };
+    html += `<div class="evl-up-list">` + shown.map(rowHtml).join("") + `</div>`;
+    // "and N more" used to be a dead-end label -- same collapsed-by-default
+    // disclosure language #evlToolsToggle already uses above, not a new pattern.
+    if (rest > 0) html += `<button type="button" class="evl-up-more" id="evlUpMoreBtn">and ${rest} more in the next 30 days</button>`;
+    else if (expanded && rows.length > max) html += `<button type="button" class="evl-up-more" id="evlUpMoreBtn">Show fewer</button>`;
     el.innerHTML = html;
   }
   function renderEventsPage() {
@@ -52871,7 +52889,10 @@
   }
   document.getElementById("evlList").addEventListener("click", evlRowClickHandler);
   document.getElementById("evlRepeatsBody").addEventListener("click", evlRowClickHandler);
-  document.getElementById("evlUpNext").addEventListener("click", evlRowClickHandler);
+  document.getElementById("evlUpNext").addEventListener("click", e => {
+    if (e.target.closest("#evlUpMoreBtn")) { state.evlUpNextExpanded = !state.evlUpNextExpanded; renderUpNext(); return; }
+    evlRowClickHandler(e);
+  });
   document.getElementById("evlAddBtn").addEventListener("click", () => openForm());
   document.getElementById("evlFrom").addEventListener("change", renderEventsPage);
   document.getElementById("evlTo").addEventListener("change", renderEventsPage);
