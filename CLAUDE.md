@@ -326,6 +326,33 @@ colour goes mostly monochrome, reserved for real signal (today, overdue, live st
 rather than decoration. code3 above is the base UI/UX standard; code6 is the feeling the
 result should produce — build to code3, check it against code6 before shipping.
 
+**Tessellation & space — how "maximise space" actually behaves (added 2026-08-30).**
+Surfaced answering her own question ("are you able to see what I like in terms of
+tessellation and maximising space") — read back out of this session's corrections, not a
+rule she stated directly, so treat it as inferred and revise it the moment a real case
+contradicts it. Same room-not-machine idea at a smaller scale: a well-built drawer fits
+what's actually in it, nothing wasted, nothing forced. Four parts:
+1. **Never cut data to fit a space.** [[feedback_stat_strips_keep_real_numbers]] — a stat
+   strip that doesn't fit gets a layout that adapts (wrap, tighter cell, smaller type),
+   never a shortened count. The space bends around the real data; the data never shrinks
+   to flatter the space.
+2. **Consolidate, don't amputate.** When two controls do overlapping jobs — a search icon
+   next to a text bar whose own placeholder already says "search" — merge them into one
+   relocated trigger, never just delete the weaker one. This is the move behind the CD
+   chip going inline beside the hamburger and the quick-add row collapsing into a single
+   "+" icon (2026-08-30, Day-view header pass) — the function survives, only its
+   permanent footprint doesn't.
+3. **Chips and tags flex-wrap to fill the row, sized to content** — not a fixed N-per-row
+   grid that leaves dead space on a row that only needed 3 of its 4 slots.
+4. **Nothing counts until it's measured against a real 360–412px screen.** A tessellation
+   claim ("this saves space") is a real `getBoundingClientRect()` before/after number, or
+   it didn't happen — same discipline as R9's `MEASURING.md`, no exceptions for a mock.
+
+Nothing built on this yet: the actual **Tile Organiser** (Work/Home/Other tiles + an
+Arrange panel) is designed and agreed but not shipped — see
+`project_tile_organiser_spec` in memory. When it's built, these four rules are what to
+build it against.
+
 #### code11 — visual information expert
 Show information visually — grids, tables, diagrams, charts. Minimise text; let the picture
 do the work. This applies to audits, plans and status reports, not only to UI mockups.
