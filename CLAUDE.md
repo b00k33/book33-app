@@ -355,6 +355,15 @@ should need less micromanagement from her and produce a better result than the l
   before claiming it, the same way the FAB's own openForm(null) match was confirmed in
   code first, not guessed from position/appearance. Applies app-wide, proactively, not
   only on the page she happens to screenshot.
+- Confirmed 2026-08-30 (day-header dropdown design): a "what about X" question mid-
+  design-conversation is her probing whether the design holds up, not an objection to
+  the direction already recommended. Resolve it with layered/progressive enhancement
+  (baseline behavior works everywhere, a richer behavior is ADDED only where the
+  environment genuinely supports it — e.g. tap always works, hover layers on top of it
+  scoped to `@media (hover: hover) and (pointer: fine)`) or a control that adapts to
+  current state (the day-nav arrows page by day when collapsed, by week when the
+  dropdown they sit next to is open) — not a rigid single behavior or a forced
+  either/or pick.
 
 **Process for every requested change:**
 1. **Understand** what she's actually trying to achieve.
