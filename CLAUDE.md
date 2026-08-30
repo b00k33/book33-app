@@ -465,9 +465,28 @@ logic, inline creation, autosave, undo, empty-state handling), ask whether it sh
 become a reusable system-level pattern rather than a one-off — the same UX problem
 shouldn't get solved differently on different pages.
 
-**What's been learned about her so far, this ruleset specifically:**
-- (populate as real corrections/confirmations land — see her 2026-08-30 code7 answers,
-  captured in cross-session memory, `feedback_code7_priorities` et al.)
+**What's been learned about her so far, this ruleset specifically** (her direct 2026-08-30
+calibration — full detail in cross-session memory `feedback_code7_calibration`):
+- Apply to Book33 first, not LCM Pharmacy, unless a task says otherwise.
+- High-confidence inference: silent pre-fill, no "inferred" badge — should just look
+  already filled in correctly. Genuinely uncertain: ask one focused question, don't
+  guess-and-hope or leave blank.
+- Correcting an inferred default (e.g. Weekly→Fortnightly, keeping her weekday): apply
+  it, but ask before saving the correction as the new standing default — one edit
+  isn't yet a permanent preference.
+- A noticed behavioral pattern: proactively surface it and offer to make it the
+  default ("I noticed you always do X — want this as default?") — don't just apply
+  learned patterns silently in the background.
+- Dosage/quantity fields (LCM Pharmacy) get the SAME silent-pre-fill-when-confident
+  treatment as everything else, not a stricter health-specific carve-out — she said so
+  directly, don't over-guard beyond what she asked.
+- Progressive-disclosure depth has no fixed tap-count rule — judge per feature.
+- "This feels clunky" → fix that one instance fast by default; don't pause to sweep
+  the whole app for the same shape elsewhere unless she asks or the fix is clearly
+  already touching a shared pattern. A deliberate narrowing of this ruleset's own
+  "check elsewhere" instinct — trust her real answer over the written first draft.
+- Named live pain points (real, not hypothetical): Day-page quick-add/recurrence, and
+  the Repeats picker/All Events page.
 
 ### Precedence — where a specific exception overrides the general rule
 - **Full-bleed pages vs. cap-and-centre (R2).** The page canvas itself is full-bleed at
