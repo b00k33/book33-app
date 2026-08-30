@@ -8354,10 +8354,11 @@
   .track-opt[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px currentColor; font-weight: 600; }
   /* Mode chips tessellate as a grid of equal columns (not flex-wrap, which lands
      ragged with "More ›" stranded alone) so it holds up at any picker width.
-     Every chip gets a small solid ::before dot of its own Mode's accent -- colour
-     is how every OTHER surface in this app identifies a Mode, and the dot is a
-     colour marker while the emoji is content she chose -- two different jobs,
-     not a duplicate.
+     2026-08-31 (Linh: minimise icons, compactness pass): the per-Mode emoji was
+     dropped from the chip -- colour (the ::before dot, this Mode's own accent) plus
+     the name is enough to identify a Mode, matching how every other surface in the
+     app already reads Modes by colour first. Narrower minmax below reclaims the
+     width the emoji used to need.
      #rtnModePicker is DEAD -- the standalone Routines editor it belonged to was
      retired; routines edit through #fModePicker now, so it never needs its own
      selector here.
@@ -8376,7 +8377,7 @@
      (applyEfTint(..., formSelectedMode, ...) in renderFModePicker()), so selected
      already reads as the same Mode's colour, just fully saturated instead of washed. */
   #fModePicker.track-picker, #todoModePicker.track-picker {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px;
   }
   #fModePicker .track-opt, #todoModePicker .track-opt {
     border-radius: 12px; padding: 6px 12px; border-color: transparent;
@@ -8654,17 +8655,25 @@
   .rtn-name-row #rtnTitle { flex: 1 1 auto; min-width: 0; }
   /* Repeats/Days-of-week chips have no per-item colour of their own (unlike Part of
      life's work/family/marriage/personal ink) -- the dot next to their label was
-     inheriting a default ink colour with no real meaning, just visual noise. Days of
-     week already carries its own planet-icon identity per button. */
+     inheriting a default ink colour with no real meaning, just visual noise.
+     2026-08-31: the planet-icon-per-weekday glyph (search PLANETS) was dropped from
+     every weekday picker's own markup for the same reason (Linh: minimise icons) --
+     #fRptWeekdayPicker joins this suppression list here since it never had its own
+     dot override and would otherwise be the one weekday picker left with a
+     meaningless dot now that its glyph is gone too. */
   #rtnFreqPicker .track-opt::before, #rtnWeekdayPicker .track-opt::before,
-  #fWeekdayPicker .track-opt::before, .rtn-sched-extra-days .track-opt::before { display: none; }
-  /* The 7-day pickers (Supplements/Family/Routines) use .track-opt{flex:1} inside a
-     wrapping row -- on a phone only 6 pills fit per line, so Sunday wraps alone onto
-     its own line and flex:1 stretches it to the full row width by itself. Same bug
-     on all three since they share this markup. A 4-col grid on mobile keeps every
-     pill the same size across both rows instead. */
+  #fWeekdayPicker .track-opt::before, #fRptWeekdayPicker .track-opt::before,
+  #famWeekdayPicker .track-opt::before, .rtn-sched-extra-days .track-opt::before { display: none; }
+  /* The 7-day pickers (Supplements/Family/Routines/Repeat-on) use .track-opt{flex:1}
+     inside a wrapping row -- on a phone only 6 pills fit per line, so Sunday wraps
+     alone onto its own line and flex:1 stretches it to the full row width by itself.
+     Same bug on all four since they share this markup. A 4-col grid on mobile keeps
+     every pill the same size across both rows instead.
+     2026-08-31: #fRptWeekdayPicker (the live "Repeat on" multi-select) joins this --
+     it was missing before and wrapped unevenly (6+1) instead of the tidy 4+3 its
+     siblings already got. */
   @media (max-width: 640px) {
-    #suppWeekdayPicker, #famWeekdayPicker, #fWeekdayPicker {
+    #suppWeekdayPicker, #famWeekdayPicker, #fWeekdayPicker, #fRptWeekdayPicker {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
     }
   }
@@ -42754,7 +42763,7 @@
     // --mode-accent: same treatment as #fModePicker's own modeBtn (search "Mode
     // colour should be prominent") -- same component, same colour source.
     host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="true" style="--mode-accent:var(--ink-faint)">None</button>` +
-      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("");
+      MODES.map(m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="false" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${esc(m.name)}</button>`).join("");
   }
   renderTodoModePicker();
   document.getElementById("todoModePicker").addEventListener("click", e => {
@@ -43017,7 +43026,7 @@
       <div class="sc-move-sep"></div>
       <div class="track-picker">
         ${MODES.filter(m => m.id !== s.modeId).map(m =>
-          `<button type="button" class="track-opt" data-sc-move-to="${esc(m.id)}" aria-pressed="false">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("")}
+          `<button type="button" class="track-opt" data-sc-move-to="${esc(m.id)}" aria-pressed="false">${esc(m.name)}</button>`).join("")}
       </div>
       <button type="button" class="sc-move-cancel" data-sc-move-cancel>Cancel</button>
     </div>`;
@@ -49389,8 +49398,7 @@
   let famEditId = null;
 
   document.getElementById("famWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
-    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="${i === 0}">
-      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="${i === 0}">${wd.slice(0, 3)}</button>`).join("");
   let famWeekday = 0;
 
   function syncFamFreqFields() {
@@ -54246,7 +54254,7 @@
     const shown = showAll ? MODES : MODES.filter(m => topSet.has(m.id));
     // --mode-accent feeds the CSS soft-wash/dot treatment (search "Mode colour should
     // be prominent") -- read straight off m.accent, no hardcoded palette.
-    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`;
+    const modeBtn = m => `<button type="button" class="track-opt" data-mode="${esc(m.id)}" aria-pressed="${String(m.id === pressedId)}" style="--mode-accent:${esc(m.accent || "var(--ink-faint)")}">${esc(m.name)}</button>`;
     host.innerHTML = `<button type="button" class="track-opt" data-mode="" aria-pressed="${String(!pressedId)}" style="--mode-accent:var(--ink-faint)">None</button>` +
       shown.map(modeBtn).join("") +
       (showAll || shown.length >= MODES.length ? "" : `<button type="button" class="track-opt" id="fModeMoreBtn">More ›</button>`);
@@ -54352,8 +54360,7 @@
   let fRepeatWeekdays = [];
   let fExtraSchedules = [];
   document.getElementById("fWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
-    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">
-      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">${wd.slice(0, 3)}</button>`).join("");
   const syncFWeekdayButtons = () => document.querySelectorAll("#fWeekdayPicker .track-opt")
     .forEach(b => b.setAttribute("aria-pressed", String(fRepeatWeekdays.includes(+b.dataset.weekday))));
   document.getElementById("fWeekdayPicker").addEventListener("click", e => {
@@ -54681,8 +54688,7 @@
   });
   document.getElementById("fRptWeekInterval").addEventListener("input", syncFRepeatChoice);
   document.getElementById("fRptWeekdayPicker").innerHTML = WD_FULL.map((wd, i) =>
-    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">
-      <span class="planet">${PLANETS[i].icon}</span> ${wd.slice(0, 3)}</button>`).join("");
+    `<button type="button" class="track-opt" data-weekday="${i}" aria-pressed="false">${wd.slice(0, 3)}</button>`).join("");
   const syncFRptWeekdayButtons = () => document.querySelectorAll("#fRptWeekdayPicker .track-opt")
     .forEach(b => b.setAttribute("aria-pressed", String(fRptWeekdays.includes(+b.dataset.weekday))));
   document.getElementById("fRptWeekdayPicker").addEventListener("click", e => {
@@ -60732,7 +60738,7 @@
           </div>
           ${popoverOpen ? `<div class="todo-tag-popover" role="group" aria-label="Set mode">
             <button type="button" class="track-opt" data-todo-tag-set="" aria-pressed="${String(!tm)}">None</button>
-            ${MODES.map(m => `<button type="button" class="track-opt" data-todo-tag-set="${esc(m.id)}" aria-pressed="${String(t.mode === m.id)}">${modeEmojiHtml(m)} ${esc(m.name)}</button>`).join("")}
+            ${MODES.map(m => `<button type="button" class="track-opt" data-todo-tag-set="${esc(m.id)}" aria-pressed="${String(t.mode === m.id)}">${esc(m.name)}</button>`).join("")}
           </div>` : ""}
         </div>
         <button class="shop-del" data-todo-del="${t.id}" aria-label="Remove ${esc(t.title)}">×</button>
