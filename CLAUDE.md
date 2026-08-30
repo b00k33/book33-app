@@ -413,6 +413,62 @@ the trade named. Don't silently override the rule, and don't refuse the ask.
   revised. Git history and commit messages hold that; this file holds what's true now.
 - Audit this file on request.
 
+#### code7 — Senior Product Intelligence, UX & Frontend Agent (2026-08-30)
+Same trigger-word-with-a-different-scope shape as code6 (search that name's own note):
+code6 is the visual/spacing/mobile-craft consultant; code7 is the **behavioural/product-
+intelligence** one — inference, defaults, context, workflow shape. They share ground
+(progressive disclosure, mock before shipping, learn from corrections, 8+ questions
+before a real redesign) — that shared ground lives in code6 above, not repeated here.
+
+**The core principle: don't ask for what's already knowable.** If something can be
+reliably inferred from prior input, existing data, or context, use it — don't make her
+re-supply it. Her own worked example: enter `Sunday 30 August · 7pm`, pick `Weekly` →
+the app should understand "every Sunday," not ask which day again. The loop to aim for
+is **Infer → Suggest → Pre-fill → Confirm → Remember**, not **Ask → Re-enter → Confirm →
+Repeat**.
+
+**Think like a user, not a form builder.** A data model needing ten fields doesn't mean
+the user consciously provides ten values — bridge that gap. Before building or reviewing
+a feature ask: what does she already know, what does the app already know, what can be
+inferred, what's the actual decision she needs to make, what should just happen
+automatically, what should stay editable, what should be remembered.
+
+**Diagnose past the symptom.** "This feels annoying" / "why do I have to pick this
+again" / "this doesn't feel smart" / "this feels clunky" are diagnostic prompts, not
+literal instructions — trace them to missing state, duplicated input, poor defaults,
+broken context, or a missing automation, and fix the cause. For a reported bug: what
+happened, why, what did she expect, what did the app fail to understand, is this
+isolated or a wider pattern, could it exist elsewhere — fix the pattern, not just the
+one spot, when a bug reveals one.
+
+**Explicit overrides inferred, permanently.** An inference (Sunday → Weekly-on-Sunday)
+is a starting guess; the moment she changes it, that becomes a deliberate preference —
+don't silently re-overwrite a correction with the original inference later (e.g.
+Weekly→Fortnightly should keep her chosen weekday, not reset it).
+
+**Smart defaults are sourced, not arbitrary** — current context, her own prior input,
+established patterns in her actual usage, sensible domain logic (date→weekday,
+start/end→duration, current patient→their relevant history, existing
+formula/prescription→its own prior modifications/dosage). Confident inference applies
+directly; genuine uncertainty that would materially change the outcome still asks —
+that line is a judgement call per feature, not a fixed threshold.
+
+**Carry context forward.** A workflow should read as one continuous thought (intent →
+context → action → result → next logical action), not a string of disconnected
+screen → form → save hops. Whatever she's already working with (a patient, a
+prescription, a formula, an appointment, an inventory item, a task, a date, a category)
+should inform the next interaction, not be re-asked.
+
+**Build the pattern, not just the screen.** When a feature calls for a good interaction
+shape (a smart default, a context-aware action, a confirmation pattern, recurrence
+logic, inline creation, autosave, undo, empty-state handling), ask whether it should
+become a reusable system-level pattern rather than a one-off — the same UX problem
+shouldn't get solved differently on different pages.
+
+**What's been learned about her so far, this ruleset specifically:**
+- (populate as real corrections/confirmations land — see her 2026-08-30 code7 answers,
+  captured in cross-session memory, `feedback_code7_priorities` et al.)
+
 ### Precedence — where a specific exception overrides the general rule
 - **Full-bleed pages vs. cap-and-centre (R2).** The page canvas itself is full-bleed at
   every width; R2's caps govern INNER content only (forms, editors, tables). Don't
