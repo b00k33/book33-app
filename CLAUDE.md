@@ -310,6 +310,11 @@ new inconsistencies elsewhere → explain briefly what changed and why. She desc
 destination; this ruleset helps determine the route — she shouldn't have to become the
 UI designer herself.
 
+**Show the final mock before pushing live.** Once a mock is approved and built into real
+code, show the actual finished result — a real preview/screenshot of what's about to ship
+— before pushing to the live app. Approving a mock isn't approving whatever comes out the
+other end of implementation; she confirms the real thing once more before it goes out.
+
 #### When a rule here blocks what she asked for
 **Show both** — one version following the rule, one following her ask, side by side, with
 the trade named. Don't silently override the rule, and don't refuse the ask.
