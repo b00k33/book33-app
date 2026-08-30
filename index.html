@@ -12133,7 +12133,35 @@
   .day-chips-row { padding: 0 16px; }
   @media (max-width: 640px) {
     #dayChipsRow { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
-    #dayChipsRow.open { max-height: 120px; overflow-x: auto; }
+    /* 2026-08-30 pt.2 (Linh, real bug: "clicking on horse i cant see the dropdown"):
+       overflow-x:auto here was clipping vertically too -- CSS overflow spec computes
+       a "visible" value on one axis as "auto" the moment the OTHER axis isn't visible,
+       so overflow-y was never actually escaping even though it read as inherited
+       "hidden"/"auto" rather than an explicit clip. Any popover opening downward from
+       a chip in here (#numGroupStrip's own .num-hover-trigger children) got cut off
+       by that, invisibly. #numGroupStrip already has its own flex-wrap:wrap, so
+       dropping the horizontal scroll and letting it wrap to a 2nd line instead (her
+       choice over the alternative -- rearchitecting the shared popover-escape code
+       ~50 other call sites also use) needs no scroll axis at all, so overflow can go
+       fully visible with nothing left to clip. */
+    #dayChipsRow.open { max-height: 120px; overflow: visible; }
+    /* 2026-08-30 (Linh's exact ranking, code6): 1 UD, 2 PM, 3 sign/animal, 4 PY/horse/
+       UY, 5 moon, 6 birthday, 7 medal/imprint. #numGrpMascot (PY/horse/UY) is
+       reparented via JS (placeCosmicMascot()) and always appended LAST regardless --
+       changing that function's insert position risked its desktop/mobile toggle
+       logic, so `order` on the flex container achieves her exact sequence without
+       touching working JS. Scoped to mobile only, same as this whole block -- desktop
+       never reparents the mascot into this strip in the first place. Ruler glyph
+       (unranked) sits with sign/animal, same astrology tier; fasting ring (unranked)
+       goes last -- neither was in her ranked list. */
+    #udBadge { order: 1; }
+    #pmHover { order: 2; }
+    #dayRulerChip, #dayAstroBits { order: 3; }
+    #numGroupStrip .mini-cal-mascot { order: 4; }
+    #moonBadge { order: 5; }
+    #birthdayHover { order: 6; }
+    #imprintHover { order: 7; }
+    #numGrpFast { order: 8; }
   }
   /* 2026-08-30 (code6 header redesign): the topbar's own compact "CD 25 · Luteal"
      chip (#topbarCdChip, next to the hamburger) -- background/text formula copied
@@ -14232,7 +14260,13 @@
        default-visible items, matching the old "UD stays the always-visible summary
        piece" intent). #dayRulerChip reuses glyphHtml()'s own sizing (no .planet
        class -- that class's own override was scoped to its old .weekday parent). */
-    #numGroupStrip #dayRulerChip { font-size: 11px; color: var(--ink-soft); }
+    /* 2026-08-30 (code6 chip audit -- real screenshot, real measurement): this glyph
+       was a bare inline character with no padding, so its tap target was exactly its
+       visual size -- 9x14px measured live, 3-6x smaller than every sibling chip on
+       this same row (22-55px). Padding gives it a real hit target without changing
+       how big the glyph itself LOOKS (still just the small ♍-style character, same
+       visual density as before) -- invisible padding, not a bigger glyph. */
+    #numGroupStrip #dayRulerChip { font-size: 11px; color: var(--ink-soft); padding: 5px 6px; margin: -5px -6px; }
     /* 2026-08-27 ("the Mode filter moves off the calendar", COMMIT 1 STEP 3): a
        GENUINE 44x44 box, not this row's other two icons' 28px-visual/::after-padded
        trick -- her spec asked for it explicitly ("A 44×44 button"), and that padding
@@ -20557,11 +20591,19 @@
                      single-Day-view drawer mode -- same home-marker pattern as
                      everywhere else in this file. -->
                 <div id="numGroupStripHome" hidden></div>
+                <!-- 2026-08-30 (code6, Linh's direct ranking): markup order here is a
+                     rough first pass only -- the mobile CSS's `order` rules (search
+                     "Linh's exact ranking" in the file) are what actually enforce her
+                     precise 1-7 sequence (UD, PM, sign/animal, PY/horse/UY, moon,
+                     birthday, medal), since #numGrpMascot lives outside this element
+                     entirely and gets reparented in via JS, always last. Every
+                     consumer targets these by getElementById, not DOM position, so
+                     this markup order is otherwise inert. -->
                 <div class="num-group-strip" id="numGroupStrip">
                   <span class="ud-badge" id="udBadge"></span>
-                  <span class="num-hover-trigger" id="dayRulerChip" tabindex="0"></span>
-                  <div class="moon-badge" id="moonBadge"></div>
                   <span class="date-pm num-hover-trigger" id="pmHover" tabindex="0"></span>
+                  <div class="moon-badge" id="moonBadge"></div>
+                  <span class="num-hover-trigger" id="dayRulerChip" tabindex="0"></span>
                   <div class="day-astro-bits" id="dayAstroBits"></div>
                   <span class="date-mini-badge num-hover-trigger" id="birthdayHover" hidden tabindex="0"></span>
                   <span class="date-mini-badge num-hover-trigger" id="imprintHover" hidden tabindex="0"></span>
