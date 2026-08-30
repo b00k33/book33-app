@@ -12753,6 +12753,23 @@
   body.dd-drawers-active .dd-flash { display: block; }
   .dd-flash.on { opacity: 1; transform: translate(-50%, 0); }
 
+  /* 2026-08-30 (code3 Day-view redo): quick-add's one-tap-always entry, mobile single-
+     Day drawer only. --nav-active/--nav-active-ink are the app's existing filled-gold-
+     pill pair (.jump-btn:hover, #categoryTabs .nav-menu-item.on) -- reused rather than
+     a new colour, per design44 R6. Sits above the calendar but never in its flow
+     (position:fixed is explicitly exempt from dayLayoutAboveCalendarGuard()). */
+  .dd-qa-fab {
+    display: none; position: fixed; z-index: 200;
+    right: max(16px, calc(env(safe-area-inset-right) + 16px));
+    bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
+    width: 44px; height: 44px; border-radius: 999px; border: none;
+    background: var(--nav-active); color: var(--nav-active-ink);
+    font-size: 22px; line-height: 1; cursor: pointer;
+    box-shadow: 0 6px 18px -4px color-mix(in oklab, var(--nav-active) 70%, transparent);
+  }
+  body.dd-drawers-active .dd-qa-fab { display: flex; align-items: center; justify-content: center; }
+  .dd-qa-fab:active { transform: scale(.94); }
+
   /* ============================================================
      §8 ICON LANGUAGE — 2026-08-15
      ONE shared class for every quiet glyph the app itself hardcodes as UI
@@ -21542,6 +21559,15 @@
         <div class="day-top-drawer" id="dayTopDrawer">
           <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
         </div>
+        <!-- 2026-08-30 (code3 Day-view redo, "quick-add needs to stay one-tap, always
+             reachable" -- her answer, given the existing #qaSlotDay bar/Best-day picker
+             only lives inside the drawer above): a floating trigger, GCal's own pattern
+             for the same job (she named GCal as her reference this same pass). Doesn't
+             duplicate the real add form -- opens the SAME drawer + focuses the SAME
+             #quickAddInput, so there's exactly one quick-add implementation, just a
+             second, always-visible door into it. See the JS block near ddGrab's own
+             gesture IIFEs for the click handler. -->
+        <button type="button" class="dd-qa-fab" id="dayQaFab" aria-label="Quick add">+</button>
         <!-- 2026-08-29 (Now screen, COMMIT 3 STEP 3): two plain-language lines, always
              visible (not gated behind the drawer above) -- "a calendar that opens at
              the hour you're in with every block named" needs the same two facts the
@@ -46129,6 +46155,31 @@
     document.addEventListener("mouseup", end);
     grab.addEventListener("click", () => { if (!dragged) toggleDayTopZone(); dragged = false; });
   })();
+  // 2026-08-30 (code3 Day-view redo): the quick-add FAB opens the SAME drawer +
+  // focuses the SAME #quickAddInput #qaSlotDay already has (see the button's own HTML
+  // comment) -- no second add implementation. Found live (real bug, not assumed):
+  // #quickAddInput sits inside #dayTopDrawer, which is max-height:0 until the
+  // .open class's 0.26s transition (see that rule) actually runs -- an
+  // requestAnimationFrame-deferred focus() fires one paint frame later (~16ms), while
+  // the drawer is still essentially 0px tall, and Chrome silently drops focus on an
+  // element with no real rendered box yet. Waiting for the transition's own end event
+  // (with a timeout fallback in case it was ALREADY open, when no transition fires at
+  // all) is the actual fix -- verified via automated click+focus check, not assumed.
+  (function () {
+    const fab = document.getElementById("dayQaFab");
+    if (!fab) return;
+    fab.addEventListener("click", () => {
+      const wasOpen = dayTopZoneIsOpen();
+      openDayTopZone();
+      const focusInput = () => { const input = document.getElementById("quickAddInput"); if (input) input.focus(); };
+      if (wasOpen) { focusInput(); return; }
+      const drawer = document.getElementById("dayTopDrawer");
+      let done = false;
+      const onEnd = e => { if (e.target === drawer && e.propertyName === "max-height" && !done) { done = true; drawer.removeEventListener("transitionend", onEnd); focusInput(); } };
+      drawer.addEventListener("transitionend", onEnd);
+      setTimeout(() => { if (!done) { done = true; drawer.removeEventListener("transitionend", onEnd); focusInput(); } }, 320);
+    });
+  })();
   // bottom-edge flick-up (Linh's demo): opens the top zone AND scrolls back to the
   // top of the page, since the whole point is jumping back to it from deep in the
   // hour grid -- window is the real scroll container here (the page itself scrolls,
@@ -47862,6 +47913,22 @@
     const dayStepRow = document.querySelector(".day-step-row");
     const dayStepRowHome = document.getElementById("dayStepRowHome");
     const calDaysRow = document.getElementById("calDaysRow");
+    // 2026-08-30 (Linh, code3 Day-view redo: "calendar should be the first thing you
+    // see... I already have 1/3/5/7 day slide options" -- read as "I don't need the
+    // week-strip fighting for space in the top bar every render, I need it when I
+    // actually want to jump to a specific day"): #navDayStrip is the ONLY thing this
+    // pass moves that wasn't already reparented by this function -- it normally just
+    // renders in place inside #navDateSlot (renderNavDayStrip(), plain getElementById,
+    // parent-agnostic) and was measured squishing its own 2-digit dates there once
+    // #navModeBadge ate the last of #navDateSlot's ~106px (see navDayStripNarrowPass()'s
+    // own 2026-08-29 comment). Moving it into the drawer body gives it the SAME width
+    // the drawer already gives dayStepRow/calDaysRow -- the squish this fixed narrowly
+    // on 2026-08-29 stops being possible at all here, not just less likely. Its tap
+    // (document-level delegate on [data-nds-date]) and swipe (bindSwipe(), reads the
+    // element reference directly) are both parent-position-agnostic, same reasoning
+    // already established for every other element this function moves.
+    const navDayStrip = document.getElementById("navDayStrip");
+    const navDateSlot = document.getElementById("navDateSlot");
     const numGroupStrip = document.getElementById("numGroupStrip");
     const numGroupStripHome = document.getElementById("numGroupStripHome");
     // 2026-08-29 (Linh: "put the chips in a good place"): NOT dayTopDrawerBody any
@@ -47953,6 +48020,7 @@
       if (dayRow2 && topBody && dayRow2.parentElement !== topBody) topBody.appendChild(dayRow2);
       if (dayStepRow && topBody && dayStepRow.parentElement !== topBody) topBody.appendChild(dayStepRow);
       if (calDaysRow && topBody && calDaysRow.parentElement !== topBody) topBody.appendChild(calDaysRow);
+      if (navDayStrip && topBody && navDayStrip.parentElement !== topBody) topBody.appendChild(navDayStrip);
       if (numGroupStrip && dayChipsRow && numGroupStrip.parentElement !== dayChipsRow) dayChipsRow.appendChild(numGroupStrip);
       if (qa && topBody && qa.parentElement !== topBody) topBody.appendChild(qa);
       // dayHeaderRow/bodyCard/sessionCard/ctxWrap, in that order (her own table's
@@ -48000,6 +48068,11 @@
       // back to its own real home in one step (2026-08-24: no #navDateSlot
       // intermediate stop any more, see this function's own note on dayRow2 above).
       if (dayRow2Home && dayRow2 && dayRow2Home.nextElementSibling !== dayRow2) dayRow2Home.after(dayRow2);
+      // navDayStrip has no desktop claim either (phone-only .nav-tiers component, same
+      // reasoning as dayRow2 just above) -- goes straight back into #navDateSlot, its
+      // one and only home outside this drawer. renderNavDayStrip() re-fills it by plain
+      // getElementById on its own next call, parent-agnostic like everywhere else here.
+      if (navDateSlot && navDayStrip && navDayStrip.parentElement !== navDateSlot) navDateSlot.insertBefore(navDayStrip, navDateSlot.firstChild);
       // 2026-08-25 FIX (found live, same bug class as dayStepRow's own 2026-08-18 FIX
       // above -- a resize crossing 1024px stranded these two): dayHeaderRow/bodyCard
       // are UNLIKE ctxWrap/sessionCard just below -- placeDeskGrid()'s "on" branch never
