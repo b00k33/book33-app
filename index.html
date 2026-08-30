@@ -12031,6 +12031,19 @@
   body.dd-drawers-active #navIconRail {
     display: flex; flex-direction: column; padding: 4px 0;
   }
+  /* 2026-08-30 (code6+code7, her 8-question calibration -- "keep icons, bigger/
+     faster tooltips" + "auto-show labels first time each session"): rather than
+     inventing a third icon+label hybrid component, this just borrows the SAME
+     labelled #navPanelRows list desktop already renders (navPanelRowHtml(), same
+     NAV_ITEMS array) for a few seconds the first time the rail opens each session
+     -- .rail-teach un-hides it and cancels the 52px override, exactly reversing
+     the two rules just above; openNavPanel() (search "rail-teach" in the JS) adds
+     the class, times it out, and never re-adds it once sessionStorage records she's
+     seen it. No new markup, no new render path -- same content, temporarily wider. */
+  body.dd-drawers-active .nav-panel.rail-teach { width: min(380px, 92vw); }
+  body.dd-drawers-active .nav-panel.rail-teach #navPanelRows,
+  body.dd-drawers-active .nav-panel.rail-teach .nav-panel-footer { display: block; }
+  body.dd-drawers-active .nav-panel.rail-teach #navIconRail { display: none; }
   .nir-row {
     position: relative; display: flex; align-items: center; justify-content: center;
     width: 100%; min-height: 44px; border: none; background: none; cursor: pointer;
@@ -44080,19 +44093,33 @@
   // surface that reads this array (icon rail, tab strip, desktop rail, launcher
   // popover) shrinks with it -- each still has ITS OWN existing Chapters mechanism,
   // so nothing here goes unreachable.
+  // 2026-08-30 (code6+code7, her 8-question calibration): reordered to her own
+  // stated priority -- "today events life map to do everything else" -- Today first,
+  // then her two named most-used pages (Events, Life Map), then To-do. Month drops
+  // OUT of that named priority but stays pinned anyway (her follow-up answer, once
+  // she learned its rail icon isn't just "go to Month" -- it also expands the only
+  // jump-to-any-date calendar panel this rail has, no other button reaches it).
+  // Settings stays last/footer-separated, per her own answer, not grouped with the
+  // top 4. This single array drives BOTH the narrow icon rail (#navIconRail) and the
+  // wider labelled #navPanelRows list (renderNavPanelRowHtml()) -- her "everywhere,
+  // keep them consistent" answer means one reorder here does both.
   const NAV_ITEMS = [
     { viewId: "day",     label: "Today",     icon: "☀",  group: null },
-    // "Calendar" here means the month-grid overview, distinct from "Today" (the day
-    // timeline) above -- the two are complementary views of the same data, same
-    // distinction Google Calendar itself makes between its own "Today" and "Month".
-    { viewId: "month",   label: "Month",     icon: "🗓",  group: null },
-    { viewId: "todo",    label: "To-do",     icon: "☑",  group: null },
     // Label covers two CATEGORIES ids (events + the standalone
     // birthdays page) -- a nav row can only carry one data-view, so this routes to
     // "events" (the All Events rebuild already surfaces birthdays as gold capsules
     // on its yearly rails); the standalone Birthdays page isn't deleted, it moves
     // into the Planning door (Commit 2 STEP 3) rather than staying pinned here.
     { viewId: "events",  label: "Events & birthdays", icon: "🗂",  group: null },
+    // NEW (2026-08-30): was 3 taps deep behind Everything else -> Planning -> Life
+    // Map -- one of her two named most-used pages, now one tap like Events beside
+    // it. Removed from NAV_DOORS' planning door below so it isn't listed twice.
+    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: null },
+    { viewId: "todo",    label: "To-do",     icon: "☑",  group: null },
+    // "Calendar" here means the month-grid overview, distinct from "Today" (the day
+    // timeline) above -- the two are complementary views of the same data, same
+    // distinction Google Calendar itself makes between its own "Today" and "Month".
+    { viewId: "month",   label: "Month",     icon: "🗓",  group: null },
     // no "settings" view exists -- CATEGORIES' real "notify" view is the closest
     // analog to a general preferences home, and is where the Drawer/Tabs toggle
     // itself lives (renderNotifyPage's Global group), so routing here is self-
@@ -44128,9 +44155,11 @@
     // rails, so this is the standalone Birthdays page's home, not a duplicate.
     // "now" is the app's landing screen (PREFS.landOn) and otherwise had no
     // reachable way back from any other screen.
+    // 2026-08-30: "lifeMap" moved out to NAV_ITEMS (search "NEW (2026-08-30)" a
+    // few hundred lines up) -- pinned in the rail now, so it isn't listed here too.
     { id: "planning", label: "Planning", icon: "🗺",
-      preview: "Life Map · Goals · Presets · Birthdays · Right now",
-      views: ["lifeMap", "goals", "presets", "birthdays", "now"] },
+      preview: "Goals · Presets · Birthdays · Right now",
+      views: ["goals", "presets", "birthdays", "now"] },
   ];
   // Computed, not hardcoded -- the "Everything else" row's badge always matches
   // NAV_DOORS' real contents.
@@ -44396,6 +44425,18 @@
   function updateDayDrawersBackdrop() {
     document.getElementById("navPanelBackdrop").hidden = !(navPanelIsOpen() || dayRightDrawerIsOpen());
   }
+  // 2026-08-30 (code6+code7 calibration, "auto-show labels first time each
+  // session"): sessionStorage, not a plain JS flag -- a fresh tab/reload is exactly
+  // what she means by "each session," and sessionStorage already clears itself on
+  // that boundary for free. book33- prefixed per this app's own key-namespace rule
+  // (search "never write another app's keys").
+  const NAV_RAIL_TAUGHT_KEY = "book33-nav-rail-taught";
+  let navRailTeachTimer = null;
+  function endNavRailTeach() {
+    if (navRailTeachTimer) { clearTimeout(navRailTeachTimer); navRailTeachTimer = null; }
+    document.getElementById("navPanel")?.classList.remove("rail-teach");
+    try { sessionStorage.setItem(NAV_RAIL_TAUGHT_KEY, "1"); } catch (e) {}
+  }
   function openNavPanel() {
     armBackGuard();
     const panel = document.getElementById("navPanel");
@@ -44405,6 +44446,14 @@
     panel.setAttribute("aria-hidden", "false");
     updateDayDrawersBackdrop();
     document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "true");
+    // Icon-only rail only exists while dd-drawers-active -- desktop's #navPanel is
+    // already the full labelled list, nothing to "teach" there.
+    let taught = true;
+    try { taught = sessionStorage.getItem(NAV_RAIL_TAUGHT_KEY) === "1"; } catch (e) {}
+    if (!taught && document.body.classList.contains("dd-drawers-active")) {
+      panel.classList.add("rail-teach");
+      navRailTeachTimer = setTimeout(endNavRailTeach, 2500);
+    }
   }
   function closeNavPanel() {
     const panel = document.getElementById("navPanel");
@@ -44416,6 +44465,7 @@
                                                 // reset this sibling state too, or
                                                 // #navChaptersExtras is left stuck expanded
                                                 // after navigating away via one of its rows.
+    if (panel.classList.contains("rail-teach")) endNavRailTeach();   // seen it, however briefly
     panel.setAttribute("aria-hidden", "true");
     updateDayDrawersBackdrop();
     document.getElementById("navDrawerBtn").setAttribute("aria-expanded", "false");
