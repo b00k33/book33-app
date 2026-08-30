@@ -10846,8 +10846,16 @@
        section-head copy, but the class is reused verbatim by the copy that lives
        inside #dayTopDrawerBody -- an unscoped selector was hiding both, a live
        control along with the dead one (same "reused class, no scoped override" trap
-       as .ud-badge .n / .num-group-strip). Re-shown here, scoped to its real home. */
-    #dayTopDrawerBody .day-step-row { display: flex; }
+       as .ud-badge .n / .num-group-strip).
+       2026-08-30 pt.5 (Linh: "sunday august row to the very top... it brings down
+       dropdown of the week" -- superseding pt.4's own "re-shown here" above the same
+       day): #dayStepToday/.patients-above-day/.add-row are ALREADY hidden at this
+       width (10811/10818 above), and #dayStepPrev/#dayStepDate/#dayStepNext -- this
+       row's only other children -- are now redundant with #navDateTrigger's own ‹
+       date › at the top of the page, so display:none rather than :flex leaves
+       nothing behind for this row to show at all. Row/JS/reparenting all stay wired
+       for 641px+, where this is still the real, only date-nav row on the page. */
+    #dayTopDrawerBody .day-step-row { display: none; }
     /* 2026-08-30 pt.3 (Linh, code6 direct answer -- not one of the 3 kept pieces):
        cut from the drawer entirely. Force-hidden rather than un-reparenting it (keeps
        the JS reparent/restore logic in placeDayDrawers() untouched -- it still moves
@@ -14252,12 +14260,7 @@
     #wrap[data-view]:not([data-view="day"]) .nav-num-trigger { display: none !important; }
     .nav-num-trigger[aria-expanded="true"] { color: var(--gold-bright); }
     /* ---- .nav-day-strip -- the 7-day strip itself, #navDayStrip inside #navDateSlot.
-       2026-08-27 fix: this enabling rule MUST come after the shared base-hide list
-       (search ".nav-day-strip { display: none; }") -- same specificity, so source
-       order decides, same reason every sibling in that list (.nav-search-btn etc.) is
-       styled down here and not up where it's first introduced in the HTML comment.
-       Always 7 columns regardless of the active day-count (1/3/5/7): "that is what
-       makes it a replacement for '‹ date ›' rather than an addition" -- the visible
+       Always 7 columns regardless of the active day-count (1/3/5/7) -- the visible
        WINDOW is marked via .sel (mdWindowDays(), 1 column at day-count 1, up to all 7
        at day-count 7 or 5-aligned), literal TODAY via .today (a ring, never a fill --
        same "today never gets a background" idiom .mini-cal-cell/.cyc-cell/.eight-row
@@ -14265,28 +14268,53 @@
        Fill token is var(--margin-rule)/var(--accent-on) -- the SAME pair
        .cal-days-btn[aria-pressed]/.mini-cal-cell[data-selected] already use for
        "filled control," not a new colour treatment, and resolves whatever the
-       current accent actually is (never hardcoded). Column width is intentionally
-       narrower than a 44px tap-target square -- measured at 412px, seven columns
-       plus the hamburger plus three 44px trailing icons leaves ~27px per column;
-       each column's full 44px-tall box is still the real hit target (width doesn't
-       need to hit 44px when height already does), and 11px is the type floor CLAUDE.md
-       sets elsewhere in this file, not shrunk below it here. */
-    /* 2026-08-28 ("fix broken mobile day view: responsive week strip") chose a
-       min-width floor + overflow-x:auto scroll as the fix for this row crushing at
-       360px -- superseded 2026-08-29 (mobile audit, Stage 1 item 1): "any repeating
-       column set... uses equal fractional widths. Fixed pixel widths... are banned,"
-       and a strip you can only see ~5 of 7 days of without a swipe reads as exactly
-       the "digits reading as one garbled run" failure this was meant to fix, not a
-       resolution of it. min-width is gone -- flex:1 1 0 alone now divides whatever
-       #navDateSlot actually has (114px of 360px measured live) into 7 EQUAL columns,
-       always all visible, no scroll. At 114px that's ~16px/col: a single weekday
-       letter (11px font) fits with room to spare; a bold 2-digit date (13px font,
-       ~17px rendered) overhangs its own ~16px column by under 1px, invisible in
-       practice and clipped by max-width:100%/overflow:hidden below if it ever isn't.
-       overflow-x:auto stays only as a defensive floor for a screen even narrower than
-       measured here -- not the primary mechanism any more. */
-    .nav-day-strip { display: flex; width: 100%; gap: 1px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+       current accent actually is (never hardcoded).
+       2026-08-30 (Linh: "make the week calendar become the dropdown for clicking on
+       the date... sunday august row to the very top"): no longer a permanent row --
+       #navDateTrigger (below) is the always-visible piece now, this is its popover
+       content, same position:absolute/box-shadow shape #navMonthPop uses a few rules
+       up (reused, not invented). Base state stays display:none (this rule used to be
+       the ≤640px un-hide for the shared base-hide list a few hundred lines up; that
+       job now belongs to .nav-day-strip.open below, so plain .nav-day-strip needs its
+       OWN explicit display:none here or it would inherit nothing and default open). */
+    .nav-day-strip { display: none; }
+    .nav-day-strip.open {
+      display: flex; gap: 1px; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+      position: absolute; top: calc(100% + 6px); left: 8px; right: 8px; z-index: 220;
+      background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md);
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); padding: 6px;
+    }
     .nav-day-strip::-webkit-scrollbar { display: none; }
+    /* the trigger row that replaces the old permanent strip: ‹ [date ▾] › always
+       visible, tapping (or hovering, real-pointer devices only -- see the
+       hover:hover rule below) the date opens the strip above as a dropdown.
+       #navDatePrev/#navDateNext call the SAME stepDay() the day-step-row's own
+       arrows already use when the strip is shut -- ONE day. Open, they instead page
+       the whole visible week (addDays ±7, same shape the week-aligned swipe gesture
+       already uses -- search "mdWeekAligned() ? 7") without closing the dropdown, so
+       arrow meaning tracks whatever's currently on screen rather than staying fixed
+       regardless of state (2026-08-30, her own worked example of this). */
+    .nav-date-arrow {
+      display: flex; align-items: center; justify-content: center; flex: none;
+      width: 26px; height: 30px; border: none; background: var(--field-bg);
+      border-radius: var(--radius-sm); color: var(--ink-soft); font-size: 13px; cursor: pointer;
+    }
+    .nav-date-trigger {
+      display: flex; align-items: center; justify-content: center; gap: 5px; flex: 1;
+      min-width: 0; min-height: 30px; margin: 0 4px; padding: 3px 8px;
+      border: none; background: none; border-radius: var(--radius-sm);
+      font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer;
+    }
+    .nav-date-trigger-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nav-date-trigger-chev { font-size: 10px; color: var(--ink-faint); flex: none; transition: transform .15s ease, color .15s ease; }
+    .nav-date-trigger[aria-expanded="true"] { background: var(--field-bg); }
+    .nav-date-trigger[aria-expanded="true"] .nav-date-trigger-chev { transform: rotate(180deg); color: var(--accent-seed); }
+    /* progressive enhancement only -- tap/click above already opens it on every
+       device; this ADDS a hover-open on top, scoped so it can only ever fire where a
+       real pointer exists (a touchscreen reports hover:none, never matches this). */
+    @media (hover: hover) and (pointer: fine) {
+      .nav-date-trigger:hover { background: var(--field-bg); }
+    }
     .nds-day {
       flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center;
       justify-content: center; gap: 1px; min-height: 44px; padding: 2px 0;
@@ -18746,12 +18774,17 @@
          level [data-cal-days] delegate pick it up for free, no new state). Tablet/
          desktop: this slot stays empty exactly as before, nothing here shows there. -->
     <div class="nav-date-slot" id="navDateSlot">
-      <!-- the approved-mock replacement for
-           "August ▾" below -- always 7 columns (renderNavDayStrip(), near renderDay()'s
-           other date-label lines), tap a day to jump to it, swipe to step the window
-           (bindSwipe(), reused verbatim -- see its own call site). #navMonthBtn/#navMonthPop
-           retire in place just below (RETIRED-FEATURES.md #9); "Week view" (the one fact in
-           that popover with no other entry point in the file) moved into the ⚙ gear sheet. -->
+      <!-- 2026-08-30 (Linh: "sunday august row to the very top... when clicking on
+           sunday it brings down dropdown of the week"): the always-visible piece is
+           now this trigger row, not the strip itself -- ‹/#navDateTrigger/› replace
+           "August ▾" here. #navDayStrip (just below, unchanged element/renderer --
+           renderNavDayStrip(), tap a day to jump, swipe to step the window) is now
+           its dropdown content, closed by default (see .nav-day-strip's own CSS).
+           #navMonthBtn/#navMonthPop stay retired in place just below
+           (RETIRED-FEATURES.md #9) -- untouched by this change. -->
+      <button type="button" class="nav-date-arrow" id="navDatePrev" aria-label="Previous day">‹</button>
+      <button type="button" class="nav-date-trigger" id="navDateTrigger" aria-haspopup="true" aria-expanded="false" aria-controls="navDayStrip"><span class="nav-date-trigger-text" id="navDateTriggerText"></span><span class="nav-date-trigger-chev" aria-hidden="true">▾</span></button>
+      <button type="button" class="nav-date-arrow" id="navDateNext" aria-label="Next day">›</button>
       <div class="nav-day-strip" id="navDayStrip" role="tablist" aria-label="Day"></div>
       <button type="button" class="nav-month-btn" id="navMonthBtn" aria-haspopup="true" aria-expanded="false" aria-label="Change calendar view"><span class="nav-month-lbl" id="navMonthLbl"></span><span class="nav-month-caret" aria-hidden="true">▾</span></button>
       <div class="nav-month-pop" id="navMonthPop" hidden>
@@ -35512,6 +35545,10 @@
     if (!btn) return;
     state.anchor = parseKey(btn.dataset.ndsDate);
     render();
+    // 2026-08-30 (Linh: "tap a day to jump — closes automatically", her own approved
+    // mock): picking a day from the dropdown is done with it, same as any other
+    // dismissible panel in the app closing once its one job is finished.
+    toggleNavDateStrip(false);
   });
 
   // 2026-08-29 (ask40 interview, chip-strip option A -- "same strip, honest about
@@ -35573,6 +35610,11 @@
     // both rather than a second hand-rolled template string. Hidden ≥641px.
     const stepDateEl = document.getElementById("dayStepDate");
     if (stepDateEl) stepDateEl.textContent = dayDateLabel(d, true);
+    // 2026-08-30 (Linh: "sunday august row to the very top"): #navDateTrigger's own
+    // label -- the SAME formatter/long-month variant as #dayStepDate just above, one
+    // date-formatting function for every centre label on this line, not a third copy.
+    const navDateTriggerText = document.getElementById("navDateTriggerText");
+    if (navDateTriggerText) navDateTriggerText.textContent = dayDateLabel(d, true);
     // 2026-08-27 (mobile Day-view mock, COMMIT 1): the new top-bar day strip -- same
     // "recompute every renderDay()" convention as every other date label on this line.
     renderNavDayStrip();
@@ -46945,6 +46987,53 @@
     toggleNavMonthPop(false);
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && navMonthOpen) toggleNavMonthPop(false); });
+  // 2026-08-30 (Linh: "sunday august row to the very top... when clicking on sunday
+  // it brings down dropdown of the week", her own approved mock): #navDateTrigger/
+  // #navDayStrip, same open/close-popover shape as #navMonthBtn/#navMonthPop just
+  // above (outside-click + Escape close, aria-expanded toggle) -- reused, not a new
+  // idiom. #navDayStrip itself is untouched (still renderNavDayStrip()'s own element,
+  // still the exact markup/renderer); only when it's shown changed.
+  let navDateStripOpen = false;
+  function toggleNavDateStrip(open) {
+    navDateStripOpen = open;
+    const strip = document.getElementById("navDayStrip");
+    const trig = document.getElementById("navDateTrigger");
+    if (strip) strip.classList.toggle("open", open);
+    if (trig) trig.setAttribute("aria-expanded", String(open));
+  }
+  document.getElementById("navDateTrigger")?.addEventListener("click", () => toggleNavDateStrip(!navDateStripOpen));
+  // progressive enhancement (her own worked example, 2026-08-30): tap/click above
+  // already opens it everywhere; this ADDS hover-open on top, gated the same way the
+  // CSS hover rule beside .nav-date-trigger is -- only real-pointer devices ever
+  // register this listener at all, a touchscreen's matchMedia check is false so it's
+  // simply never bound there, not a dead listener that silently never fires.
+  if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    document.getElementById("navDateTrigger")?.addEventListener("mouseenter", () => toggleNavDateStrip(true));
+  }
+  document.addEventListener("click", e => {
+    // #navDatePrev/#navDateNext are siblings of the trigger, not descendants of it or
+    // of the strip -- without listing them too, a week-page tap (which re-opens via
+    // toggleNavDateStrip(true) in its own handler below) bubbles straight into THIS
+    // listener next and immediately undoes it, since neither .closest() matched.
+    // Found live: the date advanced a week correctly but the dropdown closed anyway.
+    if (!navDateStripOpen || e.target.closest("#navDayStrip, #navDateTrigger, #navDatePrev, #navDateNext")) return;
+    toggleNavDateStrip(false);
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && navDateStripOpen) toggleNavDateStrip(false); });
+  // ‹/› either side of the trigger: closed, they step ONE day (stepDay(), the exact
+  // function #dayStepPrev/#dayStepNext/#prevDay/#nextDay already share -- no second
+  // implementation); open, they page the whole visible WEEK instead without closing,
+  // same ±7 shape the week-aligned swipe gesture already uses (search
+  // "mdWeekAligned() ? 7") -- her own worked example: arrow meaning tracks whatever's
+  // currently on screen rather than staying fixed regardless of state.
+  document.getElementById("navDatePrev")?.addEventListener("click", () => {
+    if (navDateStripOpen) { state.anchor = addDays(state.anchor, -7); render(); toggleNavDateStrip(true); }
+    else stepDay(-1);
+  });
+  document.getElementById("navDateNext")?.addEventListener("click", () => {
+    if (navDateStripOpen) { state.anchor = addDays(state.anchor, 7); render(); toggleNavDateStrip(true); }
+    else stepDay(1);
+  });
   // Launcher popover — icon+label grid of NAV_ITEMS (Google-launcher style),
   // then Chapters, then Settings, then the account footer. Created/removed on
   // every toggle, same disposable-popover idiom as .wr-arrange-pop.
