@@ -628,6 +628,10 @@ more than one independent breakdown.
 - One corner radius for cards, one for pills. One type scale (title/body/label) —
   see Component reference below for the actual values.
 - Minimum tap target 44px.
+- **Default every row/strip to one line** (Linh, 2026-08-30, standing): a second line
+  needs its own real purpose — a genuinely separate piece of information — not just
+  "there wasn't room." Compress, reflow, or hide-behind-a-reveal before letting
+  anything wrap to a second line by default.
 
 ### Approved exception — mobile Day view
 Scope: the `MOBILE DAY VIEW — LINH'S APPROVED DESIGN` block in index.html (one
