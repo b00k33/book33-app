@@ -281,6 +281,51 @@ into the four actual instructions inside it:
    me dumb questions" pattern this session — the fix is question QUALITY, not zero
    questions.
 
+#### code6 — the home, not the machine
+Added 2026-08-30, her own words, two messages merged (nothing dropped). Note: `code6`
+is *also* a standing global trigger in her cross-project memory meaning "keep files/
+editing/systems tidy, flag conflicts" — different meaning, same word, both real. Inside
+this file `code6` means the philosophy below; the tidiness sense still applies to how
+this file itself and the codebase are kept.
+
+"Design the app like a beautifully designed home, inspired by the feeling of Hogwarts.
+Each main screen should feel like a simple, calm room — clean, uncluttered and
+immediately understandable. But underneath that simplicity, there should be
+strategically hidden drawers, cupboards, doors, shelves and secret rooms containing
+deeper functionality. Don't show everything to the user at once. Use progressive
+disclosure, contextual actions, expandable sections, swipe gestures, menus, long-press
+actions and secondary screens to reveal more functionality when it is relevant. The
+surface should remain simple. The depth should be available when the user needs it.
+Simple room → discoverable drawer → deeper compartment → specialised room. Avoid hiding
+important functions so well that users can't find them. Hidden functionality should feel
+discoverable and intuitive, not mysterious or frustrating. Maintain the overall design
+system across the app, but allow each 'room' to have its own purpose and layout. The goal
+is for the user to think: 'This is incredibly simple.' Then, as they explore: 'Oh… it can
+do that too?' Every screen should feel spacious and calm on the surface, while containing
+intelligent depth underneath." / "Your job is to make my app feel simple to look at but
+magical to use. I am filled with joy and excitement every time I use it."
+
+**What this means mechanically, not just poetically:**
+1. Every main screen's default state is one calm "room" — the two or three things that
+   actually matter right now, nothing else competing for attention.
+2. Everything else is a drawer, never a deletion — one predictable, discoverable action
+   away (tap to expand, swipe, long-press, a secondary screen), never a dead end. See
+   PART 3's "one-way door" and "no exit on a phone" traps above — a drawer that can't be
+   closed, or that hides something the user actually needed, breaks this on both ends.
+3. A "room" may have its own layout/purpose — a kitchen isn't a library — but built from
+   the same materials throughout: same tokens, same icon language, same reveal gestures,
+   so it still reads as one house, not a theme park. Pairs with code3's "don't make every
+   page identical, but keep one design system."
+4. Ship-check for any screen: does it read as simple on first glance, and does exploring
+   it produce a small "oh, it can do that too"? A busy-looking surface, or a drawer no one
+   would ever find, both fail this.
+
+Directly the mechanism her ask20 answers landed on this same session for the Day view:
+the numerology/astro chip row moves from always-visible to a single tap-to-reveal drawer;
+colour goes mostly monochrome, reserved for real signal (today, overdue, live status)
+rather than decoration. code3 above is the base UI/UX standard; code6 is the feeling the
+result should produce — build to code3, check it against code6 before shipping.
+
 #### code11 — visual information expert
 Show information visually — grids, tables, diagrams, charts. Minimise text; let the picture
 do the work. This applies to audits, plans and status reports, not only to UI mockups.
