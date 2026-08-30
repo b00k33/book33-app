@@ -11293,10 +11293,18 @@
     display: none; align-items: center; justify-content: center; flex: none;
     position: relative;
     width: 28px; height: 28px; padding: 0; border: none; border-radius: var(--radius-sm);
-    background: var(--margin-rule); color: var(--blk-txt); font: inherit; font-size: 13px; cursor: pointer;
+    /* --blk-txt isn't a real global token (only ever defined scoped to
+       #dayTimelineWrap .tl-item) -- referencing it here silently fell back to
+       INHERITED text colour, which is near-black in both themes. That's invisible
+       against Day theme's --margin-rule fill (#111111 near-black, see the --accent-on
+       comment above) -- the gear read as a plain black square with no visible icon.
+       --accent-on is the real "text on the --margin-rule fill" token and already
+       flips white/dark per theme; the hover fill is always gold, so it keeps the
+       codebase's sanctioned dark-ink-on-gold hex (.tl-tick[data-on="true"] precedent). */
+    background: var(--margin-rule); color: var(--accent-on); font: inherit; font-size: 13px; cursor: pointer;
   }
   .day-nav-gear::after { content: ""; position: absolute; inset: -8px; }
-  .day-nav-gear:hover, .day-nav-gear[aria-expanded="true"] { background: var(--gold-bright); color: var(--blk-txt); }
+  .day-nav-gear:hover, .day-nav-gear[aria-expanded="true"] { background: var(--gold-bright); color: #12100c; }
   @media (max-width: 640px) {
     .day-step-row { gap: 4px; }
     .day-step-row .day-step-date {
@@ -12752,28 +12760,6 @@
   }
   body.dd-drawers-active .dd-flash { display: block; }
   .dd-flash.on { opacity: 1; transform: translate(-50%, 0); }
-
-  /* 2026-08-30 (code3 Day-view redo): quick-add's one-tap-always entry, mobile single-
-     Day drawer only. --nav-active/--nav-active-ink are the app's existing filled-gold-
-     pill pair (.jump-btn:hover, #categoryTabs .nav-menu-item.on) -- reused rather than
-     a new colour, per design44 R6. Sits above the calendar but never in its flow
-     (position:fixed is explicitly exempt from dayLayoutAboveCalendarGuard()). */
-  .dd-qa-fab {
-    display: none; position: fixed; z-index: 200;
-    right: max(16px, calc(env(safe-area-inset-right) + 16px));
-    bottom: max(16px, calc(env(safe-area-inset-bottom) + 16px));
-    width: 44px; height: 44px; border-radius: 999px; border: none;
-    background: var(--nav-active); color: var(--nav-active-ink);
-    font-size: 22px; line-height: 1; cursor: pointer;
-    /* plain rgba, not color-mix() -- some Android WebView/Chrome builds paint a
-       fixed-position element as a solid block on its first toggle to visible when
-       its box-shadow uses an unsupported colour function; translateZ forces its own
-       compositing layer up front instead of promoting mid-transition. */
-    box-shadow: 0 6px 18px -4px rgba(255,211,77,0.45);
-    transform: translateZ(0);
-  }
-  body.dd-drawers-active .dd-qa-fab { display: flex; align-items: center; justify-content: center; }
-  .dd-qa-fab:active { transform: scale(.94); }
 
   /* ============================================================
      §8 ICON LANGUAGE — 2026-08-15
@@ -21564,15 +21550,6 @@
         <div class="day-top-drawer" id="dayTopDrawer">
           <div class="day-top-drawer-body" id="dayTopDrawerBody"></div>
         </div>
-        <!-- 2026-08-30 (code3 Day-view redo, "quick-add needs to stay one-tap, always
-             reachable" -- her answer, given the existing #qaSlotDay bar/Best-day picker
-             only lives inside the drawer above): a floating trigger, GCal's own pattern
-             for the same job (she named GCal as her reference this same pass). Doesn't
-             duplicate the real add form -- opens the SAME drawer + focuses the SAME
-             #quickAddInput, so there's exactly one quick-add implementation, just a
-             second, always-visible door into it. See the JS block near ddGrab's own
-             gesture IIFEs for the click handler. -->
-        <button type="button" class="dd-qa-fab" id="dayQaFab" aria-label="Quick add">+</button>
         <!-- 2026-08-29 (Now screen, COMMIT 3 STEP 3): two plain-language lines, always
              visible (not gated behind the drawer above) -- "a calendar that opens at
              the hour you're in with every block named" needs the same two facts the
@@ -46159,31 +46136,6 @@
     document.addEventListener("mousemove", e => { if (tracking) move(e.clientY); });
     document.addEventListener("mouseup", end);
     grab.addEventListener("click", () => { if (!dragged) toggleDayTopZone(); dragged = false; });
-  })();
-  // 2026-08-30 (code3 Day-view redo): the quick-add FAB opens the SAME drawer +
-  // focuses the SAME #quickAddInput #qaSlotDay already has (see the button's own HTML
-  // comment) -- no second add implementation. Found live (real bug, not assumed):
-  // #quickAddInput sits inside #dayTopDrawer, which is max-height:0 until the
-  // .open class's 0.26s transition (see that rule) actually runs -- an
-  // requestAnimationFrame-deferred focus() fires one paint frame later (~16ms), while
-  // the drawer is still essentially 0px tall, and Chrome silently drops focus on an
-  // element with no real rendered box yet. Waiting for the transition's own end event
-  // (with a timeout fallback in case it was ALREADY open, when no transition fires at
-  // all) is the actual fix -- verified via automated click+focus check, not assumed.
-  (function () {
-    const fab = document.getElementById("dayQaFab");
-    if (!fab) return;
-    fab.addEventListener("click", () => {
-      const wasOpen = dayTopZoneIsOpen();
-      openDayTopZone();
-      const focusInput = () => { const input = document.getElementById("quickAddInput"); if (input) input.focus(); };
-      if (wasOpen) { focusInput(); return; }
-      const drawer = document.getElementById("dayTopDrawer");
-      let done = false;
-      const onEnd = e => { if (e.target === drawer && e.propertyName === "max-height" && !done) { done = true; drawer.removeEventListener("transitionend", onEnd); focusInput(); } };
-      drawer.addEventListener("transitionend", onEnd);
-      setTimeout(() => { if (!done) { done = true; drawer.removeEventListener("transitionend", onEnd); focusInput(); } }, 320);
-    });
   })();
   // bottom-edge flick-up (Linh's demo): opens the top zone AND scrolls back to the
   // top of the page, since the whole point is jumping back to it from deep in the
