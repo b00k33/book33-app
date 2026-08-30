@@ -241,8 +241,14 @@ These have each shipped at least once. Check them by name.
     display at every wider width instead of being hidden there.
 14. **The orphaned trigger.** A small control (a grab-handle, a chevron) styled to read as
     "attached to" a specific neighbour breaks the moment that neighbour becomes
-    conditionally hidden — it now floats alone with no visual anchor. Re-anchor it to
-    whatever's actually still there (usually the topbar above it), don't leave it floating.
+    conditionally hidden — it now floats alone with no visual anchor. Tightening its
+    padding/margin does NOT fix this — that was tried once on `#ddGrab` and the exact
+    same complaint came back, because a padding tweak doesn't give an orphaned control
+    an anchor, it just moves where it floats. The real fix is to give the control its
+    OWN visual container (a background shelf/strip, a border, a card) that doesn't
+    depend on a neighbour that might vanish — never assume a spacing change alone
+    resolved a "floating" complaint; re-measure whether it now has something to
+    visually attach to, not just less air around it.
 
 ### PART 4 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
