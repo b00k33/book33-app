@@ -367,7 +367,11 @@ should need less micromanagement from her and produce a better result than the l
 8. **Show her a final mock or preview** of a significant UI change before pushing it
    live — never push a major visual change live before she's had a chance to review it.
    Approving a direction isn't approving whatever comes out the other end of
-   implementation.
+   implementation. Confirmed 2026-08-30: this applies at the OPTIONS stage too, not
+   just the final one — when recommending between more than one real layout/UI
+   direction, build the visual comparison (real tokens/fonts, side by side) in the
+   same turn the options are first presented, not as text bullets she has to
+   picture, deferred to a mock only after she narrows it down.
 9. **Implement the final version only after approval.**
 10. **Check the wider system** for inconsistencies the change created elsewhere.
 
