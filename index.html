@@ -6313,6 +6313,16 @@
     margin: 16px 0 4px; font-weight: 600;
   }
   .evl-pat-sec-head:first-child { margin-top: 4px; }
+  /* Mode sub-header inside the "Every week" grid (Linh: "grouping the repeat
+     events") -- full-width row so the grid's own column lines still carry through;
+     deliberately quieter than .evl-pat-sec-head (plain ink-faint, no colour) since
+     the grouping itself is already legible from each row's own Mode-coloured dot --
+     the label just needs to name the cluster, not add a second colour signal. */
+  .evl-pat-grp-head {
+    grid-column: 1 / -1; font-size: 10px; color: var(--ink-faint); font-weight: 600;
+    padding: 10px 0 3px; border-top: 1px solid var(--note-line);
+  }
+  .evl-pat-grid > .evl-pat-grp-head:first-of-type { border-top: none; padding-top: 2px; }
   .evl-pat-times {
     grid-column: 1 / -1; display: none; font-size: 11px; color: var(--ink-soft);
     font-variant-numeric: tabular-nums; padding: 0 0 6px 16px; cursor: pointer;
@@ -52626,7 +52636,7 @@
 
     if (buckets.week.length) {
       const rows = buckets.week.map(s => ({ s, fill: evlPatternFill(s.kind, s.task) }));
-      rows.sort((a, b) => {
+      const sortRows = arr => arr.sort((a, b) => {
         const fd = f => { const i = f.findIndex(c => c.on); return i === -1 ? 9 : i; };
         return fd(a.fill) - fd(b.fill)
           || (a.fill.find(c => c.on && c.time) || { time: "￿" }).time.localeCompare((b.fill.find(c => c.on && c.time) || { time: "￿" }).time)
@@ -52638,14 +52648,33 @@
       const totalMin = rows.reduce((s, { fill }) => s + fill.reduce((s2, c) => s2 + (c.on ? (c.min || 0) : 0), 0), 0);
       const totalHrs = evlHoursFmt(totalMin);
       html += `<div class="evl-pat-sec-head">Every week · ${rows.length}${totalHrs ? ` · ${totalHrs}` : ""}</div>`;
+      // 2026-08-30 (Linh: "grouping the repeat events"): rows already carry a Mode
+      // (evlSeriesMode -- the SAME id that colours their dot/cells via data-mode), but
+      // used to render interleaved in weekday order -- same-coloured rows scattered
+      // instead of sitting together. Bucket by Mode, in MODES' own display order (the
+      // app's one existing ordering for this, not a new one invented here); rows with
+      // no Mode fall into a trailing "No mode" group instead of vanishing.
+      const groups = new Map();
+      rows.forEach(r => {
+        const mid = evlSeriesMode(r.s) || "";
+        if (!groups.has(mid)) groups.set(mid, []);
+        groups.get(mid).push(r);
+      });
+      groups.forEach(sortRows);
+      const orderedIds = MODES.slice().sort((a, b) => a.order - b.order).map(m => m.id).filter(id => groups.has(id));
+      [...groups.keys()].filter(id => id !== "" && !orderedIds.includes(id)).forEach(id => orderedIds.push(id));
+      if (groups.has("")) orderedIds.push("");
       html += `<div class="evl-pat-grid"><div class="evl-pat-head"></div>` + WD_FULL.map(w => `<div class="evl-pat-head">${w.slice(0, 1)}</div>`).join("") + `<div class="evl-pat-head"></div>`;
-      rows.forEach(({ s, fill }) => {
-        const mode = evlSeriesMode(s);
-        html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span class="evl-pat-name-text">${esc(s.title)}</span></div>`;
-        html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-mode="${mode || ""}" data-evl-times-toggle="${esc(s.id)}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
-        html += `<div class="evl-pat-hrs">${esc(evlWeeklyHoursLabel(fill))}</div>`;
-        const times = evlFillTimesSummary(fill);
-        if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}" data-evl-times-row="${esc(s.id)}">${esc(times)}</div>`;
+      orderedIds.forEach(mid => {
+        const m = MODES.find(x => x.id === mid);
+        html += `<div class="evl-pat-grp-head">${m ? `${m.emoji ? esc(m.emoji) + " " : ""}${esc(m.name)}` : "No mode"}</div>`;
+        groups.get(mid).forEach(({ s, fill }) => {
+          html += `<div class="evl-pat-name" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}"><span class="evl-pat-dot" data-mode="${mid}"></span><span class="evl-pat-name-text">${esc(s.title)}</span></div>`;
+          html += fill.map(c => `<div class="evl-pat-cell${c.on ? " evl-pat-on" : ""}" data-mode="${mid}" data-evl-times-toggle="${esc(s.id)}">${c.on && c.time ? esc(c.time) : ""}</div>`).join("");
+          html += `<div class="evl-pat-hrs">${esc(evlWeeklyHoursLabel(fill))}</div>`;
+          const times = evlFillTimesSummary(fill);
+          if (times) html += `<div class="evl-pat-times" data-evl-kind="${s.kind}" data-evl-id="${esc(s.id)}" data-evl-times-row="${esc(s.id)}">${esc(times)}</div>`;
+        });
       });
       html += `</div>`;
     }
