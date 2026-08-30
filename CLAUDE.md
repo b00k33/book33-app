@@ -347,6 +347,14 @@ should need less micromanagement from her and produce a better result than the l
 - She reverses her own just-given answer often, sometimes within the same message
   exchange, and expects the newest one applied immediately — never relitigate, ask "are
   you sure," or silently keep working toward the answer she just walked back.
+- Confirmed 2026-08-30 (Day-FAB removal, "it makes me happy that you identified the
+  fab and proposed to remove it. do that for the whole app consistently"): when two
+  live, currently-visible controls turn out to call the exact same handler, that's a
+  real removal to propose, not a "partial, honest trade-off" to just disclose and
+  leave in place. Verify redundancy by actually reading both click handlers/call sites
+  before claiming it, the same way the FAB's own openForm(null) match was confirmed in
+  code first, not guessed from position/appearance. Applies app-wide, proactively, not
+  only on the page she happens to screenshot.
 
 **Process for every requested change:**
 1. **Understand** what she's actually trying to achieve.
