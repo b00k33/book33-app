@@ -328,6 +328,26 @@ standing design principle and apply it proactively next time, unasked. Don't rei
 something she previously rejected unless there's a compelling reason. Each iteration
 should need less micromanagement from her and produce a better result than the last.
 
+**What's actually been learned about her so far — apply these by default:**
+- When she names how she really uses a page ("I use this for managing X"), check
+  whether the page's DEFAULT view/filter/tab matches that real usage. If it doesn't,
+  that's a real fix to make — offer or make it, don't just leave the mismatch sitting
+  there as something merely configurable.
+- A fix that changes behaviour without changing appearance (a dead label becomes
+  tappable, a default flips, an order changes only under conditions she doesn't
+  currently have) needs to be flagged as invisible-until-tried, up front — "this looks
+  identical until you tap it" — not just described in prose and left for her to notice.
+  If a screenshot of the resting state can't show the difference, say so explicitly
+  instead of sending it and hoping she spots something that isn't there.
+- When she says "audit" or "improve" (not "redesign" or "start from scratch"), what she
+  wants delivered is a small number of concrete, real, shippable fixes with visible
+  proof — not an exhaustive findings list and not a large question battery. Default to
+  tight scope; only expand into the full 8+ question process when she's actually asked
+  for a ground-up redesign.
+- She reverses her own just-given answer often, sometimes within the same message
+  exchange, and expects the newest one applied immediately — never relitigate, ask "are
+  you sure," or silently keep working toward the answer she just walked back.
+
 **Process for every requested change:**
 1. **Understand** what she's actually trying to achieve.
 2. **Ask** — at least 8 useful questions when the change genuinely needs clarification.
