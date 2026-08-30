@@ -21252,6 +21252,17 @@
              rail. This static marker is the honest anchor. -->
         <div id="shopSlotHome" hidden></div>
         <div id="shopSlot"></div>
+        <!-- 2026-08-30 (Linh, screenshot of the floating Shopping card below the mobile
+             calendar: "it shouldnt exist, page should end with calendar... move it to
+             side panel"): the 2026-08-24 fix above only ever covered the >=1024px
+             desktop rail -- below that, #shopSlot always fell back to its old tile-shelf
+             spot beside the calendar, exactly the card in her screenshot. Below 1024px
+             there already IS a "side panel" -- #dayRightDrawer's icon rail (mobileDayDrawersActive()) -- so #shopSlot now
+             joins it the same way it joined the desktop rail: as a real reparented node,
+             not a rebuilt string. A genuine hidden PARENT (not a sibling marker like
+             shopSlotHome above) so its content is actually display:none while parked,
+             not just visually out of the way -- see renderWrMobileDrawerSelect(). -->
+        <div id="shopSlotOffstage" hidden></div>
         <!-- invisible fixed-position host for the CD-badge cycle-log panel -->
         <div id="dayHealthBody"></div>
       </div>
@@ -33645,9 +33656,12 @@
       // 2026-08-24 (Linh: "move to widget panel on RHS"): on a desktop Day view
       // #shopSlot is owned by placeDeskGrid(), which pins it into the widget rail --
       // leave its DOM alone here so the two don't reparent it back and forth on every
-      // render. Below the desktop breakpoint there is no rail, so this shelf keeps it
-      // exactly as before. Same shape as the railOnly guard directly above.
-      if (def.id === "shopSlot" && deskDayActive()) return;
+      // render. Same shape as the railOnly guard directly above.
+      // 2026-08-30 (Linh: "it shouldnt exist... move it to side panel", same ask as
+      // 2026-08-24 but for the mobile/tablet drawer this time): mobileDayDrawersActive()
+      // now owns #shopSlot too, via renderWrMobileDrawerSelect() -- same reasoning,
+      // same "leave its DOM alone here" guard, just for the OTHER surface that reparents it.
+      if (def.id === "shopSlot" && (deskDayActive() || mobileDayDrawersActive())) return;
       const el = document.getElementById(def.id);
       if (!el) return;
       el.setAttribute("data-tile", def.id);
@@ -48063,6 +48077,14 @@
       ${b33IconSvg(id) || `<span aria-hidden="true">${WR_ICONS[id] || "•"}</span>`}
     </button>`;
   }
+  // 2026-08-30 (Linh: "move it to side panel" -- the mobile/tablet counterpart of
+  // 2026-08-24's desktop shopSlot pin, see applyDayTiles()'s own updated guard):
+  // #shopSlot is a real, interactive DOM node (tick to mark bought, x to remove), not
+  // a wrCardHtml() string like every other id in cardOrdered -- so it can't just join
+  // htmlById below. Reparented in/out exactly the way renderWrPanel() already does for
+  // the desktop rail's own pinned real elements, just with one id and one destination
+  // instead of four and a toggle-in-place panel.
+  const WR_MOBILE_PINNED_IDS = ["shopSlot"];
   function renderWrMobileDrawerSelect(mount, cardOrdered) {
     // every open starts blank: any render pass that finds the drawer closed resets
     // the selection, so the NEXT open (this session or a future one) never shows a
@@ -48077,11 +48099,30 @@
     cardOrdered.forEach(id => { htmlById[id] = wrCardHtml(id); });
     // same auto-close reasoning as renderWrPanel()'s own guard just below -- content
     // that's gone empty (Sunday-only, or hidden via Arrange since it was opened)
-    // shouldn't leave a blank card sitting open.
-    if (wrMobileOpenId && !htmlById[wrMobileOpenId]) wrMobileOpenId = null;
-    const railHtml = cardOrdered.filter(id => htmlById[id]).map(id => wrMobileIconBtnHtml(id, WR_LABELS[id])).join("");
-    const openHtml = wrMobileOpenId ? htmlById[wrMobileOpenId] : `<div class="wr-mobile-ic-empty">Tap a widget to open it</div>`;
-    mount.innerHTML = `<div class="wr-ic-rail">${railHtml}</div><div class="wr-mobile-ic-open">${openHtml}</div>`;
+    // shouldn't leave a blank card sitting open. WR_MOBILE_PINNED_IDS excluded --
+    // those are real elements, never in htmlById (that map is only ever built from
+    // cardOrdered's string ids), so this would otherwise misread "not a string card"
+    // as "gone empty" and close a legitimately-open shopSlot on every single render.
+    if (wrMobileOpenId && !WR_MOBILE_PINNED_IDS.includes(wrMobileOpenId) && !htmlById[wrMobileOpenId]) wrMobileOpenId = null;
+    const shopSlotEl = document.getElementById("shopSlot");
+    const shopOffstage = document.getElementById("shopSlotOffstage");
+    if (wrMobileOpenId === "shopSlot" && !shopSlotEl) wrMobileOpenId = null;
+    const railHtml = WR_MOBILE_PINNED_IDS.map(id => wrMobileIconBtnHtml(id, WR_PINNED_LABELS[id])).join("")
+      + cardOrdered.filter(id => htmlById[id]).map(id => wrMobileIconBtnHtml(id, WR_LABELS[id])).join("");
+    const openIsShop = wrMobileOpenId === "shopSlot";
+    const openHtml = openIsShop ? "" : (wrMobileOpenId ? htmlById[wrMobileOpenId] : `<div class="wr-mobile-ic-empty">Tap a widget to open it</div>`);
+    mount.innerHTML = `<div class="wr-ic-rail">${railHtml}</div><div class="wr-mobile-ic-open"${openIsShop ? ' id="wrMobileOpenShop"' : ""}>${openHtml}</div>`;
+    // shopSlot is a live node, not markup -- move it in after the innerHTML write
+    // above (which would otherwise discard it), same append-after-write order
+    // renderWrPanel() uses for its own pinned elements.
+    if (shopSlotEl) {
+      if (openIsShop) {
+        const openMount = document.getElementById("wrMobileOpenShop");
+        if (openMount && shopSlotEl.parentElement !== openMount) openMount.appendChild(shopSlotEl);
+      } else if (shopOffstage && shopSlotEl.parentElement !== shopOffstage) {
+        shopOffstage.appendChild(shopSlotEl);
+      }
+    }
   }
   // Panel — shows exactly ONE open widget's full content. Real-element ids
   // (WR_PINNED_IDS) get their actual DOM node reparented in (same "the node
