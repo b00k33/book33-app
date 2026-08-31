@@ -6272,6 +6272,42 @@
     #eventsPage .evl-pat-grid { grid-template-columns: minmax(100px, 240px) repeat(7, minmax(36px, 52px)) 34px; }
     #eventsPage #evlRepeatsBody, #eventsPage #evlList { overflow-x: auto; }
   }
+  /* 2026-08-31 (code6+code7, "make this better" -- her diagnosis: "spacing does
+     not look right, it looks irregularly tessellated. text too small"): the
+     >=768px seam above fixed LAYOUT across three rounds today (columns,
+     widths, the name/day-pill gap) but never revisited the actual cell/row
+     TEXT, which still renders at its original mobile-tuned sizes (9-11px)
+     inside a column now 3-4x wider than a phone screen -- small tight text
+     in generous whitespace is exactly what reads as an irregular mosaic.
+     Every selector below is scoped to its own component's real container
+     (never a bare class) -- .evl-month-label in particular is reused by the
+     UNRELATED month-nav header ("‹ September 2026 ›", .evl-month-nav's own
+     child) with a completely different intended size; a bare override here
+     would have silently shrunk that too. Desktop-only, mobile and every
+     other consumer of these class names untouched. Confirmed via mock
+     (_review-allevents-typescale.html, now deleted), "Yes, ship it". */
+  @media (min-width: 768px) {
+    #eventsPage .evl-pat-head { font-size: 12px; }
+    #eventsPage .evl-pat-head-date { font-size: 11px; }
+    #eventsPage .evl-pat-grp-head { font-size: 11px; }
+    #eventsPage .evl-pat-name { font-size: 14px; }
+    #eventsPage .evl-pat-cell { font-size: 12px; }
+    #eventsPage .evl-pat-hrs { font-size: 13px; }
+    #eventsPage .evl-pat-grid { gap: 4px; }
+    #eventsPage #evlUpNext .evl-up-row { gap: 8px; height: 48px; padding: 0 12px; margin-bottom: 8px; }
+    #eventsPage #evlUpNext .evl-up-name { font-size: 14px; }
+    #eventsPage #evlUpNext .evl-up-when { font-size: 13px; }
+    #eventsPage .evl-year-rails .evl-month-row { min-height: 40px; }
+    #eventsPage .evl-year-rails .evl-month-label { width: 40px; font-size: 12px; }
+    #eventsPage .evl-year-rails .evl-rail { height: 30px; }
+    #eventsPage .evl-year-rails .evl-rail-axis { font-size: 11px; }
+    #eventsPage .evl-year-rails .evl-bub { min-width: 24px; height: 24px; font-size: 12px; }
+    #eventsPage .evl-year-rails .evl-month-count { width: 28px; font-size: 13px; }
+    #eventsPage .evl-month-panel .evl-month-pill { min-height: 48px; margin-bottom: 4px; }
+    #eventsPage .evl-month-panel .evl-month-pill-ord { font-size: 12px; }
+    #eventsPage .evl-month-panel .evl-month-pill-name { font-size: 14px; }
+    #eventsPage .evl-month-panel .evl-month-pill-when { font-size: 12px; }
+  }
   .evl-rail-top { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
   /* 2026-08-31 (code3 "create this" redesign, her own two mocks): header subtitle,
      the +Add split-arrow (visual only -- see evlAddBtn's own click handler, still
@@ -6609,7 +6645,16 @@
   .evl-month-row.evl-month-nomatch { opacity: .4; }
   .evl-month-row.evl-year-axis { cursor: default; opacity: 1; }
   .evl-month-chevron { flex: none; width: 14px; font-size: 11px; color: var(--ink-faint); text-align: center; }
-  .evl-month-label { flex: none; width: 34px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+  /* 2026-08-31 (code6+code7 typography pass, found while verifying live):
+     this used to be a BARE .evl-month-label -- the exact same class name
+     .evl-month-nav's own month-nav-header button uses for "‹ September
+     2026 ›" (14px/700/ink, see that rule above) -- same specificity, later
+     source wins, so the header was silently rendering at THIS rule's 10px/
+     ink-soft/uppercase the whole time, not its own intended size. Scoped to
+     .evl-year-rails (the real, only container this row ever renders inside,
+     per renderYearRails()) so the two components stop fighting over one
+     class name; the header rule above is now free to actually apply. */
+  .evl-year-rails .evl-month-label { flex: none; width: 34px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
   .evl-rail { position: relative; flex: 1; min-width: 0; height: 26px; }
   .evl-rail-grid { position: absolute; top: 2px; bottom: 2px; width: 1px; background: var(--margin-rule); opacity: .18; }
   .evl-rail-axis { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 9px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
@@ -6671,7 +6716,7 @@
     .evl-year-busiest { display: none; }
     .evl-month-row { min-height: 26px; }
     .evl-month-row.evl-month-empty { min-height: 18px; }
-    .evl-month-label { width: 24px; font-size: 9.5px; }
+    .evl-year-rails .evl-month-label { width: 24px; font-size: 9.5px; }
     .evl-rail { height: 22px; }
     .evl-bub { min-width: 20px; height: 20px; font-size: 9.5px; }
     .evl-month-pill { min-height: 34px; }
@@ -53449,9 +53494,16 @@
       const diff = dayDiff(e._date, TODAY);
       const whenLbl = diff === 0 ? "today" : diff === 1 ? "tomorrow" : `${diff}d`;
       const dateLbl = `${WD_FULL[dowIndex(e._date)].slice(0, 3)} ${e._date.getDate()} ${MON_SHORT[e._date.getMonth()]}`;
+      // 2026-08-31 (her "Travel x2" report -- investigated, not a duplicate:
+      // one real routine with two separate schedule blocks today, 1-2pm and
+      // 6-7pm): this row never showed a time, so two same-titled "today" rows
+      // were indistinguishable at a glance. Always appending the real start
+      // time (when there is one) fixes that as a side effect of one
+      // consistent rule, rather than special-casing same-title/same-day pairs.
+      const timeLbl = !e.allDay && e.start ? ` · ${esc(fmtTime(e.start))}` : "";
       return `<div class="evl-up-row"${disp ? ` data-evl-kind="${disp.kind}" data-evl-id="${esc(disp.id)}"` : ""}>
         <span class="evl-up-name"><span class="evl-pat-dot" data-mode="${mode || ""}"></span><span>${e.icon ? `${e.icon} ` : ""}${esc(e.title)}</span></span>
-        <span class="evl-up-when">${dateLbl} · <b>${whenLbl}</b></span>
+        <span class="evl-up-when">${dateLbl} · <b>${whenLbl}</b>${timeLbl}</span>
       </div>`;
     };
     html += `<div class="evl-up-list">` + shown.map(rowHtml).join("") + `</div>`;
