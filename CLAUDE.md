@@ -251,6 +251,19 @@ These have each shipped at least once. Check them by name.
     depend on a neighbour that might vanish — never assume a spacing change alone
     resolved a "floating" complaint; re-measure whether it now has something to
     visually attach to, not just less air around it.
+15. **The stale tablet bridge.** This file has several `@media (min-width: 641px) and
+    (max-width: 1023px)` blocks that exist only to duplicate a `<=640px` block's geometry
+    for the phone-nav components that also render in that gap (search "641-1023px" for
+    all of them). A later pass that changes one of those components' FACE at `<=640px`
+    (e.g. 2026-08-16/08-24 swapping `#navDrawerBtn`'s glowing medallion for a wordmark,
+    then a hamburger) is easy to apply only to the `<=640px` block and never check
+    whether a 641-1023px bridge duplicated the property it just changed — the bridge
+    then keeps rendering the OLD face at a completely ordinary desktop browser width
+    (941px is this app's own devtools default), not some rare narrow phone case. Real
+    2026-08-31 incident: exactly this, on `.nav-drawer-logo`, caught only because Linh
+    was looking at the app in a normal-width window. Whenever a `<=640px` block's
+    property changes, grep "641-1023px" and check every bridge block for the same
+    property before calling the change done.
 
 ### PART 4 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
