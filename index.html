@@ -2711,6 +2711,23 @@
      field" there -- and dark's --note-line is a faint warm hairline, not the #c4c7cc
      grey this pass retires, so keeping it costs nothing the brief cares about. */
   [data-desk-day][data-theme="light"] .sc-extra-input { border-color: transparent !important; }
+  /* 2026-08-31 (real weight tracking, a logType:"weight" plan step): same ONE FIELD
+     LANGUAGE inputs as .sc-extra-input, stacked -- weight gets its own row (the
+     number people actually look for first), note/measurements are optional
+     secondary fields, Log is a plain full-width action matching .sc-end-btn's own
+     weight (a real commit, not a quiet aside). */
+  .sc-weight-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+  .sc-weight-label { font-size: 13px; color: var(--ink); font-weight: 700; }
+  .sc-weight-input, .sc-weight-note, .sc-weight-measure { width: 100%; box-sizing: border-box; font-size: 13px; }
+  [data-desk-day][data-theme="light"] .sc-weight-input,
+  [data-desk-day][data-theme="light"] .sc-weight-note,
+  [data-desk-day][data-theme="light"] .sc-weight-measure { border-color: transparent !important; }
+  .sc-weight-log-btn {
+    min-height: 40px; font: inherit; font-size: 12px; font-weight: 700;
+    color: var(--ink); background: var(--raised); border: 1px solid transparent;
+    border-radius: 999px; padding: 0 14px; cursor: pointer;
+  }
+  .sc-weight-log-btn:hover, .sc-weight-log-btn:focus-visible { border-color: var(--margin-rule); color: var(--margin-rule); }
   /* §3.4 the three ending actions -- equal-weight plain buttons, not one gold "primary"
      pick: Extend/Book another/Move to next are three genuinely different next steps,
      not a preferred-vs-alternate pair, so no accent singles one out over the others. */
@@ -17407,6 +17424,16 @@
   .wr-ic-btn .wr-ic-dot[data-timesup="true"] { background: var(--gold-bright); }
   .wr-ic-btn:has(.wr-ic-dot[data-timesup="true"]) { color: var(--gold-bright); }
   .wr-ic-sep { flex: none; width: 28px; height: 1px; background: var(--note-line); margin: 6px 0; }
+  /* 2026-08-31 (code33, "show the priority, don't just list it" -- confirmed with
+     her): rank tier 0 (top of wrRankedIds()) is full weight, unstyled; 1/2 fade and
+     shrink. transform+opacity only, not width/height -- the rail's own gap stays
+     even regardless of tier, so lower-ranked icons read as quieter WITHOUT the row
+     itself reflowing every time real usage re-sorts it. Skipped entirely on the
+     already-open icon (.on) -- what she's looking at right now must never visually
+     recede just because it isn't her most-opened widget historically. */
+  .wr-ic-btn[data-wr-rank="1"]:not(.on) { opacity: 0.82; transform: scale(0.88); }
+  .wr-ic-btn[data-wr-rank="2"]:not(.on) { opacity: 0.62; transform: scale(0.78); }
+  .wr-ic-btn[data-wr-rank]:hover, .wr-ic-btn[data-wr-rank]:focus-visible { opacity: 1; transform: none; }
   /* the tooltip opens LEFTWARD, not #wcard-hover-pop's usual below-left — this
      rail sits flush against the viewport's right edge, so "below-left" would
      routinely run off-screen on a narrow button; verified live. Compact single-
@@ -42862,6 +42889,28 @@
   }
   let SESSIONS = loadSessions();
   function saveSessions() { try { localStorage.setItem(SESSION_KEY, JSON.stringify(SESSIONS)); } catch (e) {} }
+  // 2026-08-31 (Linh, real weight tracking as a step in her Morning flow, not just
+  // an example): one entry per real day, keyed the same "YYYY-MM-DD" way every
+  // other date-keyed store in this file already uses. Logging again the same day
+  // (e.g. re-opening the Morning plan) updates that day's entry in place rather
+  // than appending a duplicate -- one real weigh-in a day is the honest shape of
+  // this data, not a running log of re-taps.
+  const WEIGHT_LOG_KEY = "book33-weight-log";
+  function loadWeightLog() {
+    try { const v = JSON.parse(localStorage.getItem(WEIGHT_LOG_KEY)); if (Array.isArray(v)) return v; } catch (e) {}
+    return [];
+  }
+  let WEIGHT_LOG = loadWeightLog();
+  function saveWeightLog() { try { localStorage.setItem(WEIGHT_LOG_KEY, JSON.stringify(WEIGHT_LOG)); } catch (e) {} }
+  function todayWeightEntry() { const k = keyOf(TODAY); return WEIGHT_LOG.find(w => w.date === k) || null; }
+  function logWeight(weight, note, measurements) {
+    const k = keyOf(TODAY);
+    let entry = WEIGHT_LOG.find(w => w.date === k);
+    if (!entry) { entry = { id: uid(), date: k }; WEIGHT_LOG.push(entry); }
+    entry.weight = weight; entry.note = note || ""; entry.measurements = measurements || ""; entry.loggedAt = Date.now();
+    WEIGHT_LOG.sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+    saveWeightLog();
+  }
   // "book33-session -- one at a time" (§3.1): enforced here, at the one place
   // a session is looked up, rather than by the store's shape. SESSIONS is an
   // array of past+current records (same array-of-records shape every other
@@ -43042,6 +43091,32 @@
       <span>${esc(label)}</span>
     </label>`;
   }
+  // 2026-08-31 (Linh, real weight tracking in the Morning flow): a step tagged
+  // logType:"weight" (see stepLabel()'s own object shape -- same {text, ...}
+  // pattern the hair-wash steps already use, just one more optional key) renders
+  // as this inline log form instead of a plain checkbox. Once done, reads back
+  // TODAY's real logged entry rather than just showing a static checked box --
+  // the whole point is this step both tracks progress AND records real data, not
+  // one or the other. Submit handling lives in the shared submit delegate
+  // ([data-weight-log-form], search it) -- same "step done" bookkeeping the plain
+  // checkbox path uses, just triggered by the form instead of a checkbox change.
+  function sessionWeightStepHtml(id, eventId, count, label) {
+    const done = isDone(id);
+    const entry = todayWeightEntry();
+    if (done && entry) {
+      return `<label class="sc-row done">
+        <input type="checkbox" class="tick" data-step-tick="${esc(id)}" data-item="${esc(eventId)}" data-step-count="${count}" checked aria-label="Mark ${esc(label)} done">
+        <span>${esc(label)} — ${esc(String(entry.weight))}kg${entry.note ? ` · ${esc(entry.note)}` : ""}</span>
+      </label>`;
+    }
+    return `<form class="sc-weight-row" data-weight-log-form="${esc(id)}" data-weight-log-item="${esc(eventId)}" data-weight-log-count="${count}">
+      <span class="sc-weight-label">${esc(label)}</span>
+      <input type="number" step="0.1" inputmode="decimal" class="sc-weight-input" placeholder="kg" aria-label="Weight in kg" required>
+      <input type="text" class="sc-weight-note" placeholder="Note (optional)" aria-label="Note" maxlength="60">
+      <input type="text" class="sc-weight-measure" placeholder="Measurements (optional)" aria-label="Measurements" maxlength="60">
+      <button type="submit" class="sc-weight-log-btn">Log</button>
+    </form>`;
+  }
   // the move control MUST sit outside the <label> -- a <label> forwards clicks to its
   // own control, so a button nested inside this one would tick the item done instead
   // of opening the picker. The row is a wrapper div now, with the label holding only
@@ -43123,7 +43198,12 @@
     const extraPct = s.extras.length ? extraDone / s.extras.length : 0;
     const lightAccent = `color-mix(in oklab, ${mode.accent || "var(--margin-rule)"} 55%, var(--paper))`;
     const planRows = item && Array.isArray(item.steps)
-      ? item.steps.map((st, i) => sessionListRowHtml(`${s.eventId}::step::${i}`, s.eventId, item.steps.length, stepLabel(st))).join("")
+      ? item.steps.map((st, i) => {
+          const stepId = `${s.eventId}::step::${i}`;
+          return (st && typeof st === "object" && st.logType === "weight")
+            ? sessionWeightStepHtml(stepId, s.eventId, item.steps.length, stepLabel(st))
+            : sessionListRowHtml(stepId, s.eventId, item.steps.length, stepLabel(st));
+        }).join("")
       : "";
     const extraRows = s.extras.length
       ? s.extras.map(ex => sessionExtraRowHtml(ex) + (scMoveOpenId === ex.id ? scMovePickHtml(s) : "")).join("")
@@ -47560,6 +47640,40 @@
   // it is harmless (both rail surfaces iterate THIS list).
   const WR_WIDGET_IDS = ["focusTile", "railCycle", "railPatients", "railTodo", "upkeepSuggest", "upkeepDial", "pileupBox", "streaksWidget", "boostWidget", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunRoutines"];
   const WR_LABELS = { focusTile: "Numerology", railCycle: "Cycle", railPatients: "Today's patients", railTodo: "To-do", upkeepSuggest: "Suggestions", upkeepDial: "Upkeep", pileupBox: "Piling up", streaksWidget: "Streaks", boostWidget: "Today's boost", biomechTip: "Biomechanics", sunWeekShape: "This week's shape", sunTodoByMode: "To-do, by Mode", sunRoutines: "Routines" };
+  // 2026-08-31 (code7 + code33, "help me prioritise the widgets i use most often"):
+  // there was no usage data anywhere to prioritise BY -- asking her to recall her own
+  // top widgets from memory would be exactly the "ask for what's already knowable"
+  // code7 rules out, once the app actually starts counting. WR_DEFAULT_ORDER is a
+  // one-time provisional guess (daily-relevant ones first -- To-do/Cycle/Upkeep;
+  // clinic-day-only and Sunday-only ones naturally last, since they're rare by
+  // construction), used only until real opens accumulate. Below WR_RANK_THRESHOLD
+  // total real opens across every optional widget, the first handful of taps aren't
+  // enough signal to trust over a sensible guess; at/above it, real frequency wins
+  // outright (a tie -- including "never opened" -- falls back to the default order, so
+  // untouched widgets don't shuffle randomly). Her own confirmed answer: "sensible
+  // default now, re-sorts as data comes in" -- no manual drag-reorder to fight this,
+  // ordering is fully usage-driven from here on.
+  const WR_DEFAULT_ORDER = ["railTodo", "railCycle", "upkeepDial", "railPatients", "upkeepSuggest", "boostWidget", "pileupBox", "streaksWidget", "biomechTip", "sunWeekShape", "sunTodoByMode", "sunRoutines"];
+  const WR_RANK_THRESHOLD = 20;
+  function wrRankedIds(ids) {
+    const totalOpens = ids.reduce((s, id) => s + ((TILE_PREFS[id] || {}).opens || 0), 0);
+    const defaultRank = id => { const i = WR_DEFAULT_ORDER.indexOf(id); return i === -1 ? 99 : i; };
+    if (totalOpens < WR_RANK_THRESHOLD) return ids.slice().sort((a, b) => defaultRank(a) - defaultRank(b));
+    return ids.slice().sort((a, b) => {
+      const oa = (TILE_PREFS[a] || {}).opens || 0, ob = (TILE_PREFS[b] || {}).opens || 0;
+      return ob - oa || defaultRank(a) - defaultRank(b);
+    });
+  }
+  // Called on every real OPEN (not a close-by-reclicking -- see the two [data-wr-open]/
+  // [data-wrm-open] click handlers below) from EITHER surface (desktop rail, mobile
+  // drawer) -- one shared counter, so usage on one device counts toward the rank
+  // everywhere, same "one data source, two displays" rule this whole rail already
+  // follows for its content.
+  function wrTrackOpen(id) {
+    const p = TILE_PREFS[id] || (TILE_PREFS[id] = {});
+    p.opens = (p.opens || 0) + 1;
+    saveTilePrefs();
+  }
   // 2026-08-24 ("the widgets become an icon rail"): the four real-element
   // widgets #wrPinned used to hold unconditionally (see placeDeskGrid()) are
   // now icons too, fixed order, first in the rail — they're not TILE_PREFS-
@@ -48047,9 +48161,7 @@
     const fallbackMount = document.getElementById("wrFallback");
     const mobMount = document.getElementById("wrMobileCards");
     if (!fallbackMount && !mobMount) return;
-    const ordered = WR_WIDGET_IDS.slice()
-      .sort((a, b) => ((TILE_PREFS[a] || {}).ord ?? 99) - ((TILE_PREFS[b] || {}).ord ?? 99))
-      .filter(id => !(TILE_PREFS[id] || {}).hidden);
+    const ordered = wrRankedIds(WR_WIDGET_IDS).filter(id => !(TILE_PREFS[id] || {}).hidden);
     if (fallbackMount) fallbackMount.innerHTML = ordered.filter(id => id !== "focusTile").map(wrCardHtml).join("");
     // 2026-08-24 (icon-per-widget mobile/tablet drawer): #wrMobileCards' content now
     // branches on WHERE #wrMobile currently lives, same "one shared data source, two
@@ -48090,7 +48202,14 @@
   // colour instead. Computed fresh here at build time (this only runs on a full
   // rail render); updateSessionIconDot() is the surgical per-tick touch that keeps
   // it correct between full renders (see its own comment, and sessionTick()'s).
-  function wrIconBtnHtml(id, label) {
+  // 2026-08-31 (code33, "show the priority, don't just list it" -- her own confirmed
+  // answer to make this real): `rank` is this icon's position among the CURRENTLY
+  // VISIBLE optional widgets, ordered by wrRankedIds() below -- undefined for a pinned
+  // icon (WR_PINNED_IDS are context/time-critical, never usage-ranked, always full
+  // weight). Three tiers only, not a continuous formula -- with typically well under a
+  // dozen visible icons a per-index gradient would be indistinguishable noise; three
+  // clearly different sizes is what actually reads as "this matters more" at a glance.
+  function wrIconBtnHtml(id, label, rank) {
     const active = wrOpenId === id;
     let dot = "";
     if (id === "daySessionCard") {
@@ -48098,9 +48217,10 @@
       const timesUp = !!s && sessionRemainingMs(s) === 0;
       dot = `<span class="wr-ic-dot"${timesUp ? ' data-timesup="true"' : ""} aria-hidden="true"></span>`;
     }
+    const tier = rank === undefined ? "" : rank < 3 ? "0" : rank < 6 ? "1" : "2";
     // b33IconSvg() first, WR_ICONS emoji only as the fallback for an id the set
     // doesn't cover -- tooltip/aria-label untouched.
-    return `<button type="button" class="wr-ic-btn num-hover-trigger${active ? " on" : ""}" data-wr-open="${id}" aria-expanded="${active}" aria-label="${esc(label)}">
+    return `<button type="button" class="wr-ic-btn num-hover-trigger${active ? " on" : ""}" data-wr-open="${id}"${tier ? ` data-wr-rank="${tier}"` : ""} aria-expanded="${active}" aria-label="${esc(label)}">
       ${b33IconSvg(id) || `<span aria-hidden="true">${WR_ICONS[id] || "•"}</span>`}${dot}
       <span class="wcard-hover-pop" role="tooltip">${esc(label)}</span>
     </button>`;
@@ -48137,9 +48257,13 @@
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
     html += `<div class="wr-ic-sep" aria-hidden="true"></div>`;
+    // rank counts only cards actually rendering today -- a Sunday-only widget skipped
+    // on a Tuesday shouldn't burn a rank slot nobody sees.
+    let rank = 0;
     cardOrdered.forEach(id => {
       if (wrCardHtml(id) === "") return;
-      html += wrIconBtnHtml(id, WR_LABELS[id]);
+      html += wrIconBtnHtml(id, WR_LABELS[id], rank);
+      rank++;
     });
     rail.innerHTML = html;
   }
@@ -48333,16 +48457,24 @@
   document.addEventListener("click", e => {
     const openBtn = e.target.closest("[data-wr-open]");
     if (openBtn) {
-      wrOpenId = wrOpenId === openBtn.dataset.wrOpen ? null : openBtn.dataset.wrOpen;
+      const id = openBtn.dataset.wrOpen, opening = wrOpenId !== id;
+      wrOpenId = opening ? id : null;
+      // real usage, tracked on the OPEN edge only -- reclicking the already-open icon
+      // to close it isn't a fresh "she chose this widget" signal, just a dismissal.
+      if (opening) wrTrackOpen(id);
       renderDeskWidgetRail();
       return;
     }
     // mobile/tablet drawer's own icon row -- a separate attribute (not [data-wr-open])
     // and a separate state var (wrMobileOpenId, not wrOpenId) on purpose, see
-    // wrMobileOpenId's own comment for why the two surfaces can't share one.
+    // wrMobileOpenId's own comment for why the two surfaces can't share one. Usage
+    // still tracks into the SAME TILE_PREFS[id].opens counter as the desktop rail --
+    // one ranking, informed by whichever surface she's actually using.
     const mobOpenBtn = e.target.closest("[data-wrm-open]");
     if (mobOpenBtn) {
-      wrMobileOpenId = wrMobileOpenId === mobOpenBtn.dataset.wrmOpen ? null : mobOpenBtn.dataset.wrmOpen;
+      const id = mobOpenBtn.dataset.wrmOpen, opening = wrMobileOpenId !== id;
+      wrMobileOpenId = opening ? id : null;
+      if (opening) wrTrackOpen(id);
       renderDeskWidgetRail();
       return;
     }
@@ -50437,24 +50569,30 @@
       </div>`;
   }
   /* ============================================================
-     Modes law rule 4 -- hyperfocus takeover for Study/Cleaning
-     (automatic) and Morning/Night (ambient rail + manual Focus). Entirely separate
-     from the EXISTING .mode-focus/syncModeFocus() mechanism -- that one declutters
-     the Day page's chrome, the timeline itself stays visible underneath; this is
-     the further, dedicated full-screen takeover rule 4 actually describes
+     Modes law rule 4 -- hyperfocus takeover for Study/Cleaning/Work (automatic),
+     originally Morning/Night too but only via ambient rail + manual Focus. Entirely
+     separate from the EXISTING .mode-focus/syncModeFocus() mechanism -- that one
+     declutters the Day page's chrome, the timeline itself stays visible underneath;
+     this is the further, dedicated full-screen takeover rule 4 actually describes
      ("exactly three things remain... everything else is gone").
      Deliberately does not touch syncModeFocus()/applyModeFocusClass() or any of
      their CSS -- this reuses renderSessionCard()/currentSession() and rides the
      SAME state.modeRevealAll reveal-all flag Study/Cleaning already had (the
      missing "back in" control just flips it back to false, no new flag for those
-     two) -- state.modeFocusEngaged is the ONE new flag, and it's Morning/Night-only.
-     ============================================================ */
+     two) -- state.modeFocusEngaged is the ONE new flag, and it's Night-only now.
+     2026-08-31 (Linh, "i want a flow of things pre scheduled/ordered so it requires
+     less effort from me"): Morning moved from manual-Focus into the auto list --
+     manually tapping Focus every morning is the opposite of the low-effort goal she
+     described, and directly overrides rule 4's original Morning placement (see
+     [[feedback_recent_overrides_old]]). Night stays manual for now -- not asked
+     about, no reason yet to change it. */
   // Work is in the auto list --
   // syncSessionAutoStart() already auto-starts a session for whatever mode's block is
   // covering "now", generically, via modeOf(item), so this one line is what makes the
   // full takeover open the moment a Work-tagged block starts, exactly like Study/
-  // Cleaning already do -- no separate schedule/time-of-day system to build.
-  const MT_AUTO_MODES = ["study", "clean", "work"];
+  // Cleaning already do -- no separate schedule/time-of-day system to build. Morning
+  // joins it the same way, 2026-08-31.
+  const MT_AUTO_MODES = ["study", "clean", "work", "morning"];
   // A Mode enters via the
   // Focus button rather than an automatic session-triggered takeover whenever it's
   // neither Home (not a real Mode) nor one of the three MT_AUTO_MODES above, which
@@ -51549,6 +51687,27 @@
       addSessionExtra(input.value);
       input.value = "";
       renderSessionCard();
+      return;
+    }
+    // 2026-08-31 (Linh, real weight tracking as a step in the Morning flow): a
+    // logType:"weight" step renders as this inline form instead of a plain
+    // checkbox (see sessionWeightStepHtml()) -- submitting both saves the entry
+    // AND marks the step done, same [data-step-tick]/"all steps done" bookkeeping
+    // the plain checkbox delegate does at line ~45610, just triggered from a form
+    // submit instead of a checkbox change.
+    const weightForm = e.target.closest("[data-weight-log-form]");
+    if (weightForm) {
+      e.preventDefault();
+      const id = weightForm.dataset.weightLogForm;
+      const itemId = weightForm.dataset.weightLogItem;
+      const count = parseInt(weightForm.dataset.weightLogCount, 10);
+      const w = weightForm.querySelector(".sc-weight-input").value;
+      if (!w) return;
+      logWeight(parseFloat(w), weightForm.querySelector(".sc-weight-note").value, weightForm.querySelector(".sc-weight-measure").value);
+      toggleDone(id, true);
+      const allStepsDone = Array.from({ length: count }, (_, i) => isDone(`${itemId}::step::${i}`)).every(Boolean);
+      toggleDone(itemId, allStepsDone);
+      reRenderCurrent();
       return;
     }
     // The inline day+time picker's own submit -- creates the SAME kind of plain EVENTS
