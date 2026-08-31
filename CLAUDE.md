@@ -94,9 +94,11 @@ measured px value must say **which width it was measured at**.
 for reading and quick capture. Desktop may **show more, never something different**: times
 in cells the phone hides, five Up-next rows instead of three, wider rails. Not a different
 arrangement.
-**Mobile Day view:** only the grab handle, the all-day row, the mode-hidden pill, and the
-Now-glance status strip may sit above the calendar. Everything else goes in a drawer.
-(Enforced by `dayLayoutAboveCalendarGuard()` — dev-only console warning, walks
+**Mobile Day view:** only the all-day row, the mode-hidden pill, and the Now-glance
+status strip may sit above the calendar — the top zone itself (quick-add, date-nav,
+1/3/5/7 picker) is always fully shown now, no grab handle to collapse it (2026-08-31,
+the handle was removed once it had nothing left to toggle). Everything else goes in a
+drawer. (Enforced by `dayLayoutAboveCalendarGuard()` — dev-only console warning, walks
 `.day-main`'s direct children against an id allowlist.)
 
 #### R9. Every commit
@@ -718,16 +720,16 @@ directly rather than writing a new bespoke overlay.
 ## Standing pattern — mobile Day-view swipe drawers
 Below 1024px, single-Day view only, the calendar renders full-width/edge-to-edge and
 everything else moves into one of three places:
-- **Top** (`#dayTopDrawer`, in-flow collapsible, not an overlay): the date strip, the
-  weekday/date header, the Today/‹/› nav row, the 1/3/5/7 day-count picker, and the
-  quick-add bar — in that DOM order. A draggable pull-handle (`#ddGrab`, no visible text
-  label, chevron flips via `aria-expanded`) sits directly below it, always in flow.
-  Drag past a small threshold to open/close mid-gesture, or tap to toggle (wired through
-  native `click` only — a real touch tap fires a synthetic click almost immediately after
-  touchend on every mobile browser, so a second listener on touchend/mouseup would
-  double-fire and instantly re-close whatever the tap just opened). A separate
-  bottom-edge flick-up gesture opens the zone AND scrolls back to the top, with a brief
-  "↑ back to the top" toast. No backdrop, no modal — it doesn't overlay anything.
+- **Top** (`#dayTopDrawer`, in-flow, not an overlay): the date strip, the weekday/date
+  header, the Today/‹/› nav row, the 1/3/5/7 day-count picker, and the quick-add bar —
+  in that DOM order. Always fully shown now (2026-08-30, "remove the dropdown, always
+  visible bar") — no grab handle, nothing to collapse or toggle; `openDayTopZone()`/
+  `closeDayTopZone()`/`dayTopZoneIsOpen()` still exist for their other real callers
+  (Escape, the flick-up gesture below, `placeDayDrawers()`'s own tidy-up) but no longer
+  visibly open or close anything. A bottom-edge flick-up gesture scrolls back to the top
+  of the page (useful from deep in the hour grid), with a brief "↑ back to the top"
+  toast — that gesture is still real, it just no longer needs to "open" a collapsed
+  zone. No backdrop, no modal — it doesn't overlay anything.
 - **Left** (`#navPanel`, extended): a narrow icon-only rail (same nav items, same order
   as desktop) where tapping a page icon navigates there, except the Calendar icon, which
   expands a second panel beside the rail holding the mini-cal/numerology/Parts-of-life
