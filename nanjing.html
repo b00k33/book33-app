@@ -202,13 +202,13 @@ main{padding:0 0 24px}
   width:74px;height:74px;object-fit:cover;border-radius:var(--r-cell);cursor:pointer;
   background:var(--raised);display:block;
 }
-.picadd{
+.picadd,.picpaste{
   width:74px;height:74px;border:0;border-radius:var(--r-cell);background:var(--raised);
   color:var(--brass);font-size:var(--fs-meta);line-height:1.3;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;
 }
-.picadd:hover{color:var(--gold)}
-.picadd .plus{font-size:18px;line-height:1}
+.picadd:hover,.picpaste:hover{color:var(--gold)}
+.picadd .plus,.picpaste .clip{font-size:18px;line-height:1}
 .pichint{font-size:var(--fs-meta);color:var(--faint);margin-top:8px;line-height:var(--lh-read)}
 #photo{position:fixed;inset:0;z-index:70;background:#0b0805;display:none;flex-direction:column}
 #photo.on{display:flex}
@@ -537,7 +537,31 @@ function picsHtml(ctx, label){
       return '<img src="' + p.d + '" alt="' + h(p.cap || 'Photo') + '" data-act="picopen" data-ctx="' + h(ctx) + '" data-id="' + p.id + '">';
     }).join('') +
     '<button class="picadd" data-act="picadd" data-ctx="' + h(ctx) + '">' +
-    '<span class="plus">+</span>' + h(label || 'Photo') + '</button></div>';
+    '<span class="plus">+</span>' + h(label || 'Photo') + '</button>' +
+    '<button class="picpaste" data-act="pastebtn" data-ctx="' + h(ctx) + '">' +
+    '<span class="clip">⎘</span>Paste</button></div>';
+}
+function pasteFromClipboard(ctx){
+  if(!navigator.clipboard || !navigator.clipboard.read){
+    toast('Paste isn’t supported in this browser — use the + tile instead.');
+    return;
+  }
+  navigator.clipboard.read().then(function(items){
+    var gets = [];
+    items.forEach(function(item){
+      item.types.forEach(function(type){
+        if(/^image\//.test(type)){
+          gets.push(item.getType(type).then(function(blob){
+            return new File([blob], 'clipboard.' + (type.split('/')[1] || 'jpg'), { type: type });
+          }));
+        }
+      });
+    });
+    if(!gets.length){ toast('No image on the clipboard — copy a photo first.'); return; }
+    Promise.all(gets).then(function(files){ addPics(files, ctx); });
+  }).catch(function(){
+    toast('Couldn’t read the clipboard — allow paste access, or use the + tile.');
+  });
 }
 
 picker.addEventListener('change', function(){
@@ -967,6 +991,7 @@ view.addEventListener('click', function(ev){
     b.textContent = on ? 'Hide numbers' : 'Show numbers';
   }
   else if(a === 'picadd'){ pendingCtx = b.dataset.ctx; activeCtx = pendingCtx; picker.click(); }
+  else if(a === 'pastebtn'){ activeCtx = b.dataset.ctx; pasteFromClipboard(b.dataset.ctx); }
   else if(a === 'picopen'){ showPic(b.dataset.ctx, b.dataset.id); }
   else if(a === 'driver'){ openDriver(); }
   else if(a === 'backup'){ backup(); }
