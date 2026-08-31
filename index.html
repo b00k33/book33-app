@@ -52746,13 +52746,24 @@
   // "l.end" means to every one of them. The em-dash range is built once here, so
   // the desktop cells and the phone's times sub-line (evlFillTimesSummary reads
   // these same objects) can never disagree about a time.
+  // 2026-08-31 (Linh, "show start and finish time in blocks"): every filled cell
+  // now ALWAYS resolves an end, never start-alone -- l.end, else the task's own
+  // durationMin, else the same 30-minute last-resort routineDurMin() already uses
+  // for a block with no real duration anywhere (search that function's own "30 as
+  // its own last resort"). One fallback chain, reused rather than invented twice.
+  function evlResolveEnd(startTime, explicitEnd, durationMin) {
+    if (explicitEnd) return explicitEnd;
+    const mins = durationMin || 30;
+    return minToTime(Math.min(timeToMin(startTime) + mins, 1439));
+  }
   function evlWeeklyFillFromSchedules(schedules, task) {
     const fill = Array.from({ length: 7 }, () => ({ on: false, time: "", min: 0 }));
     (schedules || []).forEach(l => {
       let label = "";
+      let end = "";
       if (l.start) {
-        const end = l.end || (task && task.durationMin ? minToTime(Math.min(timeToMin(l.start) + task.durationMin, 1439)) : "");
-        label = end ? `${fmtTime(l.start)} – ${fmtTime(end)}` : fmtTime(l.start);
+        end = evlResolveEnd(l.start, l.end, task && task.durationMin);
+        label = `${fmtTime(l.start)} – ${fmtTime(end)}`;
       }
       // Minutes stored alongside the
       // printed label, from the SAME start/end this label already resolved -- never
@@ -52761,9 +52772,7 @@
       // what's left of today plus however far into tomorrow endMin reaches, not a
       // negative subtraction.
       const startMin = l.start ? timeToMin(l.start) : null;
-      const endMin = l.start ? (l.end ? timeToMin(l.end)
-                     : (task && task.durationMin
-                        ? Math.min(timeToMin(l.start) + task.durationMin, 1439) : null)) : null;
+      const endMin = l.start ? timeToMin(end) : null;
       const min = (startMin != null && endMin != null)
                 ? (endMin >= startMin ? endMin - startMin : (1440 - startMin) + endMin)
                 : 0;
@@ -52774,14 +52783,14 @@
   function evlPatternFill(kind, task) {
     if ((kind === "routine" && task.freq === "weekly") || kind === "recur") return evlWeeklyFillFromSchedules(schedulesOf(task), task);
     if (kind === "routine" && task.freq === "daily") {
-      // same end resolution as generatedFor()'s own daily branch: durationMin or nothing
+      // same end resolution as generatedFor()'s own daily branch, always resolved now
       let t = "";
       const startMin = task.start ? timeToMin(task.start) : null;
       let endMin = null;
       if (task.start) {
-        const end = task.durationMin ? minToTime(Math.min(timeToMin(task.start) + task.durationMin, 1439)) : "";
-        t = end ? `${fmtTime(task.start)} – ${fmtTime(end)}` : fmtTime(task.start);
-        endMin = end ? timeToMin(end) : null;
+        const end = evlResolveEnd(task.start, task.end, task.durationMin);
+        t = `${fmtTime(task.start)} – ${fmtTime(end)}`;
+        endMin = timeToMin(end);
       }
       // same overnight wrap as evlWeeklyFillFromSchedules above -- a daily rule can
       // cross midnight exactly the same way a weekly one can.
@@ -53170,12 +53179,19 @@
       }).join("") + `<div class="evl-pat-head"></div>`;
     // same Mode-bucketed grouping/sort as the old "Every week" section -- see its
     // own 2026-08-30 comment (kept here since it applies unchanged to real dates).
-    const sortRows = arr => arr.sort((a, b) => {
-      const fd = f => { const i = f.findIndex(c => c.on); return i === -1 ? 9 : i; };
-      return fd(a.fill) - fd(b.fill)
-        || (a.fill.find(c => c.on && c.time) || { time: "￿" }).time.localeCompare((b.fill.find(c => c.on && c.time) || { time: "￿" }).time)
-        || a.title.localeCompare(b.title);
-    });
+    // 2026-08-31 (Linh, "sort in alphabetical order inside groups" -- code6):
+    // was weekday-of-first-occurrence then that day's own start time, which reads
+    // as an unstable order (which row comes "first" shifts by which weekday you
+    // happen to be looking at) rather than a scannable, name-findable list. A
+    // group here is a handful of named rows (Work CBD/Kim/Work Acupreg), not a
+    // timeline -- alphabetical by title is the stable, predictable choice for
+    // that shape (design44 R3, "succinct, scannable at a glance"). Most titles
+    // in this app carry a leading emoji as literal text (her own style, e.g.
+    // "☀️ D · No work, no Pilates") -- sorting the raw string compares emoji code
+    // points first, not the letters a person actually reads, so the leading
+    // run of non-letter/non-digit characters is stripped before comparing.
+    const evlSortKey = t => t.replace(/^[^\p{L}\p{N}]+/u, "");
+    const sortRows = arr => arr.sort((a, b) => evlSortKey(a.title).localeCompare(evlSortKey(b.title)));
     const groups = new Map();
     rows.forEach(r => {
       const mid = r.mode || "";
