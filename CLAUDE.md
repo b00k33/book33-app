@@ -252,18 +252,39 @@ These have each shipped at least once. Check them by name.
     resolved a "floating" complaint; re-measure whether it now has something to
     visually attach to, not just less air around it.
 15. **The stale tablet bridge.** This file has several `@media (min-width: 641px) and
-    (max-width: 1023px)` blocks that exist only to duplicate a `<=640px` block's geometry
-    for the phone-nav components that also render in that gap (search "641-1023px" for
-    all of them). A later pass that changes one of those components' FACE at `<=640px`
-    (e.g. 2026-08-16/08-24 swapping `#navDrawerBtn`'s glowing medallion for a wordmark,
-    then a hamburger) is easy to apply only to the `<=640px` block and never check
-    whether a 641-1023px bridge duplicated the property it just changed — the bridge
-    then keeps rendering the OLD face at a completely ordinary desktop browser width
-    (941px is this app's own devtools default), not some rare narrow phone case. Real
+    (max-width: <N>px)` blocks (`<N>` is the mobile/desktop cutoff minus 1 — see Trap 16,
+    it has moved once already) that exist only to duplicate a `<=640px` block's geometry
+    for the phone-nav components that also render in that gap (grep the desktop cutoff
+    number, e.g. currently "767px", to find all of them). A later pass that changes one
+    of those components' FACE at `<=640px` (e.g. 2026-08-16/08-24 swapping
+    `#navDrawerBtn`'s glowing medallion for a wordmark, then a hamburger) is easy to
+    apply only to the `<=640px` block and never check whether a tablet bridge duplicated
+    the property it just changed — the bridge then keeps rendering the OLD face at a
+    completely ordinary desktop browser width, not some rare narrow phone case. Real
     2026-08-31 incident: exactly this, on `.nav-drawer-logo`, caught only because Linh
-    was looking at the app in a normal-width window. Whenever a `<=640px` block's
-    property changes, grep "641-1023px" and check every bridge block for the same
-    property before calling the change done.
+    was looking at the app in a normal-width window (941px). Whenever a `<=640px`
+    block's property changes, grep the tablet-bridge blocks and check every one of them
+    for the same property before calling the change done.
+16. **The two-implementation seam.** The Day view is not one responsive layout — it is
+    TWO SEPARATE implementations (mobile: `.nav-tiers`/`#navDrawerBtn`/swipe drawers;
+    desktop: `#deskDayTopbar`/`#deskGrid` 3-column) stitched together at one `matchMedia`
+    breakpoint (`deskGridMq`, JS) mirrored across ~14 separate `@media` blocks and a
+    handful of `window.innerWidth` checks — originally 1024px/1023px, moved to
+    768px/767px on 2026-08-31 (Linh: "narrow width brings back old design, i want new
+    design to be in all widths" — she had NOT approved the file's own prior comment
+    calling 641-1023px "her mobile day, not a small desktop"; see
+    [[feedback_recent_overrides_old]] equivalent — her current word beats an old
+    in-file design note every time). Moving this seam again means grepping the OLD
+    number as an exact `px` string (e.g. "1024px"/"1023px") across the whole file, not
+    just fixing `deskGridMq` — a partial move re-creates Trap 15 immediately, because
+    the CSS blocks and the JS constant only agree with each other if every copy moves
+    together. The 3-column grid's own hard floor is real (290px left rail + 300px right
+    rail + gaps ≈ 620px fixed): below roughly 750-800px the right rail already drops to
+    its own `#wrFallback` 2-up block (a `min-width:1024px/max-width:1199px` sub-tier
+    that also moved to `768px/1199px`), so the grid degrades to left-rail + timeline
+    only — do not assume the seam can move all the way down to true phone width (~375px)
+    without a real rebuild of the 3-column grid itself; that is a separate, much larger
+    project from moving the seam within the range where the existing grid still fits.
 
 ### PART 4 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
@@ -650,7 +671,7 @@ more than one independent breakdown.
 
 ### Approved exception — mobile Day view
 Scope: the `MOBILE DAY VIEW — LINH'S APPROVED DESIGN` block in index.html (one
-`@media (max-width: 1023px)` block plus the small `@media (max-width: 640px)` header
+`@media (max-width: 767px)` block plus the small `@media (max-width: 640px)` header
 block right after it) — the mobile header row, day-context chips, command bar, merged
 day-nav row, two meters, sleep note, hour grid and calendar blocks. It uses values off
 both the spacing and type scales on purpose (spacing/sizes 3/5/6/7/9/10/14/24/26/32/34/50px,
@@ -697,7 +718,7 @@ gap, and the "N left for today" footer/progress bar above the list.
 When editing an existing thing (an event, routine, or fitness session) from the calendar
 should NOT navigate away from where you are, dock the editor into the shared
 `.slide-panel-overlay`/`.slide-panel-sheet` component: a fixed dark scrim + a sheet that's
-full-screen below 1024px and docks to `min(440px, 92vw)` on the right, gold `border-left`,
+full-screen below 768px and docks to `min(440px, 92vw)` on the right, gold `border-left`,
 above it. `.slide-panel-head`/`.slide-panel-body` give the title+close header/scrolling
 body the same look at every width. Save and Cancel both close back to the exact
 page/day the user was on — never a `state.view` change.
@@ -731,7 +752,7 @@ directly rather than writing a new bespoke overlay.
   moves back out) if the same component also renders elsewhere with a different accent.
 
 ## Standing pattern — mobile Day-view swipe drawers
-Below 1024px, single-Day view only, the calendar renders full-width/edge-to-edge and
+Below 768px, single-Day view only, the calendar renders full-width/edge-to-edge and
 everything else moves into one of three places:
 - **Top** (`#dayTopDrawer`, in-flow, not an overlay): the date strip, the weekday/date
   header, the Today/‹/› nav row, the 1/3/5/7 day-count picker, and the quick-add bar —
@@ -751,7 +772,7 @@ everything else moves into one of three places:
   Boost/Streaks/Cycle — same content as the desktop rail).
 Mutual exclusivity + one shared backdrop cover the left/right overlay drawers only (only
 one open at a time); the top zone has no backdrop and isn't part of that exclusivity.
-Desktop (≥1024px) and the 3/5/7-day mobile views are completely untouched.
+Desktop (≥768px) and the 3/5/7-day mobile views are completely untouched.
 
 **Cross-closure ownership**: some of this content is ALSO reparented by a separate
 sync-module closure under different conditions (the mini-cal grid, the weekday/date
