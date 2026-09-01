@@ -48495,6 +48495,15 @@
   // new rule. #sunWeekAhead is filtered the same way, by weekday, since it has
   // no WR_WIDGET_IDS/wrCardHtml() entry to ask.
   let wrOpenId = null;
+  // 2026-09-01 (Linh, shown the SESSION panel live: "make this stay expanded"
+  // -> confirmed "auto-open, no tap needed"): tracks the startedAt of the
+  // session this panel last auto-opened FOR, so the auto-open is edge-
+  // triggered (fires once when a NEW session begins) rather than forcing
+  // wrOpenId open on every render -- that would fight the panel's own X/
+  // Escape/outside-click closes (Trap 1, "a control that turns something off
+  // must ... not hide itself once used"). Once she dismisses it for THIS
+  // session, it stays dismissed until the next session starts.
+  let wrSessionAutoOpenedFor = null;
   // 2026-08-31: whether the Insights cluster's collapsed flyout is open --
   // session-lifetime like wrArrangeOpen below, not reset per day.
   let wrInsightsOpen = false;
@@ -48713,6 +48722,19 @@
       panel.classList.remove("open"); panel.setAttribute("aria-hidden", "true");
       document.documentElement.toggleAttribute("data-wr-panel-open", false);
       return;
+    }
+    // Auto-open edge trigger: a session just starting (or already running the
+    // first time this ever renders while not under a full takeover -- e.g.
+    // she dismissed the takeover via "Back to Today") opens this panel by
+    // itself. sess.startedAt is a fresh epoch ms per session, so a second,
+    // later session (a fresh Work block after a break) auto-opens again even
+    // though wrSessionAutoOpenedFor is non-null from the last one. Skipped
+    // entirely while the full takeover owns the card (mtActiveTakeoverModeId()
+    // below) -- nothing to open here, that surface already shows it full-screen.
+    const sess = currentSession();
+    if (sess && !mtActiveTakeoverModeId() && wrSessionAutoOpenedFor !== sess.startedAt) {
+      wrSessionAutoOpenedFor = sess.startedAt;
+      wrOpenId = "daySessionCard";
     }
     const pinnedEls = {};
     WR_PINNED_IDS.forEach(id => { pinnedEls[id] = document.getElementById(id); });
