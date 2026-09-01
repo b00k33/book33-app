@@ -17592,6 +17592,11 @@
   }
   .wr-panel-close:hover { background: var(--raised); color: var(--margin-rule); }
   .wr-panel-body { flex: 1 1 auto; overflow-y: auto; padding: 16px; }
+  /* 2026-09-01 combined status panel ("right now and today and mode together"):
+     the panel body can now hold several member elements stacked -- flex+gap so
+     the seams between them are consistent 16px, not each member's own ad-hoc
+     margins colliding. Harmless for every single-member panel (one child). */
+  .wr-panel-body { display: flex; flex-direction: column; gap: 16px; }
   /* the grip only makes sense inside the old draggable card LIST — a panel shows
      one widget at a time, nothing to reorder against, so it's just noise here. */
   .wr-panel-body .wr-grip { display: none; }
@@ -47858,6 +47863,16 @@
   // #dsbSessionSlot behaviour, unlike shopSlot which already spanned both bands).
   const WR_PINNED_IDS = ["rightNowCard", "daySessionCard", "sunWeekAhead", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
   const WR_PINNED_LABELS = { rightNowCard: "Right now", daySessionCard: "Session", sunWeekAhead: "Plan the week ahead", dayCtxWrap: "Today & fasting", modeAmbientRail: "Mode", shopSlot: "Shopping" };
+  // 2026-09-01 (Linh: "put right now and today and mode together on one panel"):
+  // the three ambient status widgets open as ONE combined panel under the Right
+  // now icon -- dayCtxWrap (Today & fasting) and modeAmbientRail (Mode) keep
+  // their WR_PINNED_IDS entries (placeDeskGrid()'s reparenting, the mobile
+  // drawer, #wrFallback all still manage them individually) but lose their own
+  // rail icons; renderWrPanel() mounts every member of this list, in this
+  // order, whenever rightNowCard's panel is open. Each member still self-hides
+  // when empty (dcx-wrap's no-empty-placeholder rule, the ambient rail outside
+  // Morning/Night), so the combined panel just shows whichever are live.
+  const WR_RIGHTNOW_MEMBERS = ["rightNowCard", "dayCtxWrap", "modeAmbientRail"];
   // one glyph per widget, pinned + TILE_PREFS-managed alike. biomechTip/
   // streaksWidget/pileupBox/railPatients per Linh's own naming; the rest are a
   // judgment call, grounded in the app's existing icon vocabulary where one
@@ -48442,17 +48457,13 @@
         const scEl = document.getElementById("daySessionCard");
         if (!scEl || scEl.hidden) return;
       }
-      // same "no icon when there's nothing to show" contract -- but computed directly
-      // (not read off #modeAmbientRail's own .hidden) because placeDeskGrid() calls
-      // renderDeskWidgetRail() -> here BEFORE renderModeAmbientRail() runs later in
-      // the same renderDay() pass (search "renderModeTakeover(); renderModeAmbientRail();"),
-      // so the DOM attribute would still be reporting last pass's state. Same condition
-      // renderModeAmbientRail() itself gates on, just evaluated here too rather than
-      // trusting call order.
-      if (id === "modeAmbientRail") {
-        const am = activeMode();
-        if (am.id === MODE_HOME.id || mtActiveTakeoverModeId()) return;
-      }
+      // 2026-09-01 ("put right now and today and mode together on one panel"):
+      // no icons of their own any more -- both open inside rightNowCard's
+      // combined panel, see WR_RIGHTNOW_MEMBERS. (This also retired the old
+      // modeAmbientRail is-there-an-ambient-mode icon gate that lived here --
+      // the element still self-hides inside the panel on the same condition,
+      // via renderModeAmbientRail() itself.)
+      if (id === "dayCtxWrap" || id === "modeAmbientRail") return;
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
     html += `<div class="wr-ic-grouplabel">Now</div><div class="wr-ic-sep" aria-hidden="true"></div>`;
@@ -48700,17 +48711,23 @@
     document.documentElement.toggleAttribute("data-wr-panel-open", true);
     if (WR_PINNED_IDS.includes(wrOpenId)) {
       title.textContent = WR_PINNED_LABELS[wrOpenId];
-      const el = pinnedEls[wrOpenId];
+      // 2026-09-01 ("put right now and today and mode together on one panel"):
+      // rightNowCard's panel mounts every WR_RIGHTNOW_MEMBERS element, in that
+      // order; every other pinned id still mounts just itself. Members are
+      // appended unconditionally (not parent-guarded) so their relative order
+      // is re-asserted on every render, not just first mount.
+      const memberIds = wrOpenId === "rightNowCard" ? WR_RIGHTNOW_MEMBERS : [wrOpenId];
+      const members = memberIds.map(id => pinnedEls[id]).filter(Boolean);
       // This branch must clear what was already in
       // body -- a generated .wr-card left behind by the OTHER branch's own
       // `body.innerHTML = wrCardHtml(...)` (a few lines down) survived every
-      // pinned-after-normal switch. Remove every child that ISN'T the pinned node
+      // pinned-after-normal switch. Remove every child that ISN'T a pinned node
       // about to show -- never `body.innerHTML = ""` here, since that would also
-      // discard el itself (a real, reparented-in DOM node, not markup that can be
-      // regenerated) if it happened to already be sitting in body.
-      [...body.children].forEach(c => { if (c !== el) c.remove(); });
-      if (el && el.parentElement !== body) body.appendChild(el);
-      Object.entries(pinnedEls).forEach(([id, el]) => { if (id !== wrOpenId && el && el.parentElement !== offstage) offstage.appendChild(el); });
+      // discard the members themselves (real, reparented-in DOM nodes, not markup
+      // that can be regenerated) if they happened to already be sitting in body.
+      [...body.children].forEach(c => { if (!members.includes(c)) c.remove(); });
+      members.forEach(el => body.appendChild(el));
+      Object.entries(pinnedEls).forEach(([id, el]) => { if (!memberIds.includes(id) && el && el.parentElement !== offstage) offstage.appendChild(el); });
     } else {
       title.textContent = WR_LABELS[wrOpenId] || "";
       Object.values(pinnedEls).forEach(el => { if (el && el.parentElement !== offstage) offstage.appendChild(el); });
