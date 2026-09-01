@@ -35925,10 +35925,20 @@
   // reason (they don't change second to second). Only rendered when a fast is
   // actually active -- omitted entirely otherwise, same no-empty-placeholder rule as
   // the birthday/cycle chips.
+  // 2026-09-02 (Linh: "how to turn off fasting widget in side panel" -> "toggle on to
+  // show or off. if im fasting, show"): the inactive "— not fasting" row is now behind
+  // an Arrange checkbox (renderWrArrangePop, data-wr-vis="dcxFasting", same TILE_PREFS
+  // store every other Arrange checkbox writes) and OFF by default -- she said on
+  // 2026-08-31 she doesn't need fasting on the page, which supersedes the 2026-08-16
+  // mockup's fixed TODAY/FASTING pair below. `hidden === false` (not `!hidden`) is
+  // deliberate: an unset pref must read as off. A RUNNING fast always renders,
+  // whatever the toggle says -- that half of her answer is unconditional.
+  const dcxFastingShown = () => (TILE_PREFS.dcxFasting || {}).hidden === false;
   function renderDcxFastMeter() {
     const el = document.getElementById("dayCtxFasting");
     if (!el) return;
     const fd = widgetFastingDigest();
+    if (!fd.active && !dcxFastingShown()) { el.innerHTML = ""; return; }
     // 2026-08-15 corrections pass (item 8): mobile keeps the deliberate
     // no-empty-placeholder rule this function's own original comment describes
     // (omitted entirely when not fasting, same as the birthday/cycle chips) —
@@ -49156,7 +49166,13 @@
     pop.innerHTML = idsForSurface.map(id => {
       const hidden = !!(TILE_PREFS[id] || {}).hidden;
       return `<label class="wr-arrange-row"><input type="checkbox" data-wr-vis="${id}" ${hidden ? "" : "checked"}> ${esc(WR_LABELS[id])}</label>`;
-    }).join("");
+    }).join("")
+      // Fasting row (2026-09-02, see dcxFastingShown near renderDcxFastMeter): NOT in
+      // WR_WIDGET_IDS on purpose -- that list drives the rail cards/icon rail/order
+      // system, and the fasting meter is a member of the Right-now block, not a rail
+      // card. Its own row here, same data-wr-vis handler, default unchecked. A running
+      // fast shows regardless, which the label says so the checkbox isn't a surprise.
+      + `<label class="wr-arrange-row"><input type="checkbox" data-wr-vis="dcxFasting" ${dcxFastingShown() ? "checked" : ""}> Fasting <span style="color:var(--ink-faint)">(always shows while fasting)</span></label>`;
     btn.parentElement.style.position = "relative";
     btn.parentElement.appendChild(pop);
   }
@@ -49243,6 +49259,8 @@
     t.hidden = !cb.checked;
     saveTilePrefs();
     renderDeskWidgetRail();
+    // the Fasting row isn't a rail card, so the rail re-render above doesn't touch it
+    if (cb.dataset.wrVis === "dcxFasting") renderDcxFastMeter();
   });
   // drag-to-reorder by the ⋮⋮ grip — its own self-contained system (data-wr-id/
   // .wr-dragging/.wr-over), deliberately NOT the mobile tile-shelf drag system
