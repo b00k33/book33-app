@@ -6471,6 +6471,12 @@
     color: var(--ink-soft); text-align: left; cursor: pointer; width: 100%;
   }
   .ngs-row:hover, .ngs-row:focus-visible { color: var(--ink); }
+  /* 2026-09-01 revival ("same for mobile"): label · name · meta internals for the
+     Right now rows -- R12's own dot·name·meta skeleton, label standing in for the
+     dot. Name carries weight, meta carries nothing extra (one signal per row). */
+  .ngs-lbl { flex: none; width: 48px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .ngs-row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+  .ngs-meta { flex: none; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .ngs-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
   /* --- "Right now" widget-rail card (2026-09-01: moved off its own standalone
      landing page into the Day page's widget rail -- see #rightNowCardHome's own
@@ -42704,12 +42710,41 @@
     renderNowCurrentCard(now);
     renderNowFacts(now);
   }
-  // left as a no-op rather than deleted (this file's own reversible-disable
-  // convention, same as #numStarBtn) -- the original body is in git history if
-  // she wants these two facts back.
+  // 2026-09-01 (Linh: "same for mobile", right after the desktop rail's Right
+  // now panel became default-open): revived from its retired no-op. This strip
+  // is the mobile-day-layout law's own sanctioned slot -- CLAUDE.md R8 names
+  // "the Now-glance status strip" as one of the three things allowed above the
+  // calendar (the guard's allowlist gets the id back alongside this change) --
+  // so the Right now facts land here on a phone instead of behind the right
+  // drawer's swipe. Same data functions as the desktop card (currentItem/
+  // nextItem/openTodoCount), compressed to .ngs-row one-liners. Gated to
+  // mobile single-day viewing TODAY: these rows describe right-now facts,
+  // which would read as belonging to whatever other day is on screen -- and
+  // desktop already shows the full card in the default-open rail panel, so
+  // rendering both there would duplicate.
   function renderNowGlanceStrip() {
     const el = document.getElementById("nowGlanceStrip");
-    if (el) { el.innerHTML = ""; el.hidden = true; }
+    if (!el) return;
+    const show = !deskGridMq.matches && calDaysActive() === 1 && state.view === "day"
+      && keyOf(state.anchor) === keyOf(TODAY);
+    if (!show) { el.innerHTML = ""; el.hidden = true; return; }
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const item = currentItem(now), nx = nextItem(now), todo = openTodoCount();
+    let html = "";
+    if (item) {
+      const e = itemEndMin(item);
+      html += `<button type="button" class="ngs-row" data-ngs="now"><span class="ngs-lbl">Now</span><b>${esc(item.title)}</b><span class="ngs-meta">${e != null ? `${fmtDurMin(Math.max(0, e - nowMin))} left` : esc(fmtTime(item.start))}</span></button>`;
+    } else {
+      html += `<div class="ngs-row"><span class="ngs-lbl">Now</span><b>Nothing on</b><span class="ngs-meta">${nx ? `free until ${esc(fmtTime(nx.start))}` : "nothing else today"}</span></div>`;
+    }
+    if (nx) html += `<button type="button" class="ngs-row" data-ngs="next"><span class="ngs-lbl">Next</span><b>${esc(nx.title)}</b><span class="ngs-meta">${esc(fmtTime(nx.start))} · in ${fmtDurMin(Math.max(0, toMin(nx.start) - nowMin))}</span></button>`;
+    if (todo.total) html += `<button type="button" class="ngs-row" data-ngs="todo"><span class="ngs-lbl">To do</span><b>${todo.total} thing${todo.total === 1 ? "" : "s"}</b></button>`;
+    el.innerHTML = html;
+    el.hidden = false;
+    el.querySelector('[data-ngs="now"]')?.addEventListener("click", () => nowJumpToEvent(item));
+    el.querySelector('[data-ngs="next"]')?.addEventListener("click", () => nowJumpToEvent(nx));
+    el.querySelector('[data-ngs="todo"]')?.addEventListener("click", openTodoPanel);
   }
   // the Settings/Notifications page's read-only summary list -- every real mode
   // (in .order) + Home last, each
@@ -47149,7 +47184,10 @@
     if (!isDev || !mobileDayDrawersActive()) return;
     const main = document.querySelector(".day-main");
     if (!main) return;
-    const ALLOWED_IDS = new Set(["dayTopDrawer", "ddBackToTopFlash", "dayAlldayRow"]);
+    // nowGlanceStrip re-added 2026-09-01 -- it was always in R8's own written
+    // allowlist ("the Now-glance status strip"), only dropped from this set
+    // while the strip was a retired no-op; revived for "same for mobile".
+    const ALLOWED_IDS = new Set(["dayTopDrawer", "ddBackToTopFlash", "dayAlldayRow", "nowGlanceStrip"]);
     const offenders = [];
     for (const el of main.children) {
       if (el.id === "timelineScroll" || el.id === "multiDayWrap") break;
