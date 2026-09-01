@@ -285,6 +285,16 @@ These have each shipped at least once. Check them by name.
     only — do not assume the seam can move all the way down to true phone width (~375px)
     without a real rebuild of the 3-column grid itself; that is a separate, much larger
     project from moving the seam within the range where the existing grid still fits.
+17. **The drawer one tier up.** The mobile side drawers (`#navPanel`, `#dayRightDrawer`,
+    Life Map's `.lm-side-panel`) are `z-index: 301`; every sheet-style overlay (View
+    sheet, `#addForm`, `#editPanelOverlay` and its occupants) is `300`. Anything that
+    opens a sheet from a control living INSIDE a drawer, without closing the drawer
+    first, renders the sheet completely covered — no error, no clipped edge, just
+    "the popup is hidden" (2026-09-02, Fasting from the right drawer; had been true at
+    every panel shape). `animateSheetOpen()` now calls `closeAllDayDrawers()` up front,
+    so a sheet opened through it is safe; a NEW overlay that toggles `hidden` itself
+    instead of going through that helper re-creates this — route it through the helper,
+    and if a new 301-tier surface is added, add its close to the same call.
 
 ### PART 4 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
