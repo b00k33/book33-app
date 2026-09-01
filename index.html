@@ -9019,7 +9019,11 @@
      whichever button (#fStart or #fEnd) triggered it -- same "append to body,
      position via getBoundingClientRect, clamp to viewport" technique .cyc-popover
      already uses elsewhere in this form family (search that class). */
-  #addForm .when-pop {
+  /* Scoped to both hosts (not just #addForm) since #ovrWhenPop -- the routine-occurrence
+     override sheet's own instance of this same popover, search "openOvrWhenPop" -- lives
+     inside #tlDetailOverlay instead, a sibling display context #addForm's own rules
+     can't reach. */
+  #addForm .when-pop, #ovrWhenPop {
     position: fixed; z-index: 60; width: 220px; max-height: 320px; overflow: hidden;
     display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
     /* var(--field-radius) (999px) would exceed a 220x320 tall panel, consuming the
@@ -9029,23 +9033,25 @@
     border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0,0,0,0.35);
     border: 1px solid var(--field-bg);
   }
-  #addForm .when-pop-list { overflow-y: auto; padding: 4px; }
-  #addForm .when-pop-row {
+  #addForm .when-pop-list, #ovrWhenPop .when-pop-list { overflow-y: auto; padding: 4px; }
+  #addForm .when-pop-row, #ovrWhenPop .when-pop-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--field-radius-sm);
     font-size: 13px; color: var(--ink); background: none; border: 0; cursor: pointer;
   }
-  #addForm .when-pop-row:hover, #addForm .when-pop-row:focus-visible, #addForm .when-pop-row[aria-selected="true"] {
+  #addForm .when-pop-row:hover, #addForm .when-pop-row:focus-visible, #addForm .when-pop-row[aria-selected="true"],
+  #ovrWhenPop .when-pop-row:hover, #ovrWhenPop .when-pop-row:focus-visible, #ovrWhenPop .when-pop-row[aria-selected="true"] {
     background: var(--field-bg); outline: none;
   }
-  #addForm .when-pop-row .when-pop-dur { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
-  #addForm .when-pop-row .when-pop-next { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
-  #addForm .when-pop-custom {
+  #addForm .when-pop-row .when-pop-dur, #ovrWhenPop .when-pop-row .when-pop-dur { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  #addForm .when-pop-row .when-pop-next, #ovrWhenPop .when-pop-row .when-pop-next { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+  #addForm .when-pop-custom, #ovrWhenPop .when-pop-custom {
     flex: 0 0 auto; border-top: 1px solid var(--field-bg); padding: 10px; font-size: 12px;
     color: var(--ink-soft); background: none; border-left: 0; border-right: 0; border-bottom: 0;
     cursor: pointer; text-align: center;
   }
-  #addForm .when-pop-custom:hover, #addForm .when-pop-custom:focus-visible { color: var(--ink); outline: none; }
+  #addForm .when-pop-custom:hover, #addForm .when-pop-custom:focus-visible,
+  #ovrWhenPop .when-pop-custom:hover, #ovrWhenPop .when-pop-custom:focus-visible { color: var(--ink); outline: none; }
   /* the old H/M+chips picker is superseded by the End-popover's duration list --
      the field stays IN the DOM (display:none, not deleted): #fDur/durHours/
      durMinutes/durChips/durCustomChip are still the real state a list-pick writes
@@ -19322,6 +19328,18 @@
            full-bleed rows by renderTlDetailHeadActions() — its own click listener is
            bound by id near tryTlDelete and keeps firing wherever this div sits. -->
       <div class="tl-detail-manage" id="tlDetailHeadActions"></div>
+      <!-- Same .when-pop popover mechanism #fWhenPop uses in #addForm (search
+           "openOvrWhenPop"), for this sheet's own #ovrStart/#ovrEnd -- kept as a static
+           sibling here (NOT inside #tlDetailBody, which renderTlDetailBody() overwrites
+           wholesale on every open/scope-toggle) so re-rendering the fields never wipes
+           the popover mid-interaction. It must live somewhere that isn't display:none
+           while #ovrStart/#ovrEnd exist -- #addForm itself is exactly that everywhere
+           else in the file (hidden whenever a DIFFERENT panel like this one is open),
+           which is why this can't just reuse #fWhenPop's own markup location. -->
+      <div class="when-pop" id="ovrWhenPop" hidden role="listbox" aria-label="Pick a time">
+        <div class="when-pop-list" id="ovrWhenPopList"></div>
+        <button type="button" class="when-pop-custom" id="ovrWhenPopCustom">Type an exact time…</button>
+      </div>
     </div>
   </div>
 
@@ -31666,11 +31684,11 @@
         <div class="tl-detail-when-row">
           <label class="fit-field">
             <span class="fit-field-lbl">Start time</span>
-            <input type="time" id="ovrStart" value="${esc(fldStart)}">
+            <input type="time" id="ovrStart" value="${esc(fldStart)}" aria-haspopup="listbox">
           </label>
           <label class="fit-field">
             <span class="fit-field-lbl">End time</span>
-            <input type="time" id="ovrEnd" value="${esc(fldEnd)}">
+            <input type="time" id="ovrEnd" value="${esc(fldEnd)}" aria-haspopup="listbox">
           </label>
         </div>
         <div class="ovr-actions">
@@ -59708,6 +59726,132 @@
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && fWhenPop && !fWhenPop.hidden && document.activeElement !== fStart && document.activeElement !== fEnd) {
       closeFWhenPop();
+    }
+  }, true);
+  // Same dropdown-before-typing UX as #fStart/#fEnd above (Linh, 2026-09-02: "on the
+  // new event editing panel, when i choose end time, give option to select dropdown
+  // before typing exact time"), extended to the routine-occurrence override sheet's
+  // #ovrStart/#ovrEnd -- those two inputs live inside `scopeHtml` (search that name),
+  // re-rendered fresh every time the detail sheet opens or its scope toggle flips, so
+  // they're looked up by id at use time rather than captured once, and wired via
+  // document-level delegation rather than a direct listener bound at boot.
+  const ovrWhenPop = document.getElementById("ovrWhenPop");
+  const ovrWhenPopList = document.getElementById("ovrWhenPopList");
+  const ovrWhenPopCustom = document.getElementById("ovrWhenPopCustom");
+  let ovrWhenPopMode = null;
+  function closeOvrWhenPop() {
+    if (!ovrWhenPop || ovrWhenPop.hidden) return;
+    ovrWhenPop.hidden = true;
+    ovrWhenPopMode = null;
+  }
+  function ovrWhenPopRows(mode) {
+    const rows = [];
+    if (mode === "start") {
+      for (let m = 0; m < 1440; m += 30) rows.push({ value: minToTime(m), label: fmtTime(minToTime(m)), dur: "", nextDay: false });
+    } else {
+      const startInput = document.getElementById("ovrStart");
+      const base = startInput && startInput.value ? toMin(startInput.value) : 0;
+      for (let off = 30; off <= 960; off += 30) {
+        const abs = base + off;
+        rows.push({ value: minToTime(abs % 1440), label: fmtTime(minToTime(abs % 1440)), dur: fmtPresetDur(off), nextDay: abs >= 1440 });
+      }
+    }
+    return rows;
+  }
+  function openOvrWhenPop(mode, triggerInput) {
+    ovrWhenPopMode = mode;
+    triggerInput.setAttribute("aria-expanded", "true");
+    const current = triggerInput.value;
+    ovrWhenPopList.innerHTML = ovrWhenPopRows(mode).map(r => `
+      <button type="button" class="when-pop-row" role="option" tabindex="-1"
+        data-when-val="${esc(r.value)}" aria-selected="${r.value === current}">
+        <span>${esc(r.label)}${r.nextDay ? '<span class="when-pop-next">next day</span>' : ""}</span>
+        ${r.dur ? `<span class="when-pop-dur">${esc(r.dur)}</span>` : ""}
+      </button>`).join("");
+    ovrWhenPop.hidden = false;
+    const r = triggerInput.getBoundingClientRect();
+    const popW = 220;
+    ovrWhenPop.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - popW - 8)))}px`;
+    const spaceBelow = window.innerHeight - r.bottom;
+    if (spaceBelow < 200 && r.top > spaceBelow) {
+      ovrWhenPop.style.top = "auto";
+      ovrWhenPop.style.bottom = `${Math.round(window.innerHeight - r.top + 6)}px`;
+    } else {
+      ovrWhenPop.style.bottom = "auto";
+      ovrWhenPop.style.top = `${Math.round(r.bottom + 6)}px`;
+    }
+    const rows = ovrWhenPopList.querySelectorAll(".when-pop-row");
+    let active = ovrWhenPopList.querySelector('[aria-selected="true"]') || rows[0];
+    rows.forEach(b => b.tabIndex = -1);
+    if (active) {
+      active.tabIndex = 0;
+      ovrWhenPopList.scrollTop = active.offsetTop - ovrWhenPopList.clientHeight / 2 + active.offsetHeight / 2;
+      active.focus();
+    }
+  }
+  function ovrWhenPopPick(value) {
+    const targetId = ovrWhenPopMode === "start" ? "ovrStart" : "ovrEnd";
+    const input = document.getElementById(targetId);
+    closeOvrWhenPop();
+    if (!input) return;
+    input.value = value;
+    input.setAttribute("aria-expanded", "false");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  ovrWhenPopList.addEventListener("click", e => {
+    const b = e.target.closest(".when-pop-row"); if (!b) return;
+    ovrWhenPopPick(b.dataset.whenVal);
+  });
+  ovrWhenPopList.addEventListener("keydown", e => {
+    const rows = Array.from(ovrWhenPopList.querySelectorAll(".when-pop-row"));
+    const idx = rows.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (idx === -1) return;
+      const next = rows[Math.max(0, Math.min(rows.length - 1, idx + (e.key === "ArrowDown" ? 1 : -1)))];
+      rows.forEach(b => b.tabIndex = -1);
+      next.tabIndex = 0; next.focus();
+      next.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeOvrWhenPop();
+      const input = document.getElementById(ovrWhenPopMode === "start" ? "ovrStart" : "ovrEnd");
+      if (input) input.focus();
+    }
+  });
+  ovrWhenPopCustom.addEventListener("click", () => {
+    const targetId = ovrWhenPopMode === "start" ? "ovrStart" : "ovrEnd";
+    closeOvrWhenPop();
+    const input = document.getElementById(targetId);
+    if (!input) return;
+    if (typeof input.showPicker === "function") { try { input.showPicker(); } catch (err) { input.focus(); } }
+    else input.focus();
+  });
+  // mousedown (not click), same b33mp-derived technique #fStart/#fEnd use above, and
+  // delegated on document since #ovrStart/#ovrEnd don't exist until the detail sheet
+  // is actually open.
+  document.addEventListener("mousedown", e => {
+    const input = e.target.closest("#ovrStart, #ovrEnd");
+    if (!input) return;
+    e.preventDefault();
+    openOvrWhenPop(input.id === "ovrStart" ? "start" : "end", input);
+  });
+  document.addEventListener("keydown", e => {
+    const input = e.target.closest && e.target.closest("#ovrStart, #ovrEnd");
+    if (!input) return;
+    if (e.key !== "Enter" && e.key !== " " && !(e.key === "ArrowDown" && e.altKey)) return;
+    e.preventDefault();
+    openOvrWhenPop(input.id === "ovrStart" ? "start" : "end", input);
+  });
+  document.addEventListener("click", e => {
+    if (!ovrWhenPop || ovrWhenPop.hidden) return;
+    if (e.target.closest(".when-pop") || e.target.closest("#ovrStart, #ovrEnd")) return;
+    closeOvrWhenPop();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && ovrWhenPop && !ovrWhenPop.hidden && !document.activeElement.closest?.("#ovrStart, #ovrEnd")) {
+      closeOvrWhenPop();
     }
   }, true);
   // 2026-08-22 (STEP 5, "fit without scrolling"): the h/m stepper boxes used to
