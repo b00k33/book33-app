@@ -30,7 +30,12 @@ self.addEventListener("activate", function (e) {
     caches.keys().then(function (keys) {
       // "b33-share" is the share-target's tiny hand-off stash, not an app-shell
       // version â€” never sweep it (a shared .ics could be mid-flight during an update)
-      var olds = keys.filter(function (k) { return k !== CACHE_VERSION && k !== "b33-share"; });
+      // ONLY b33 caches: cache storage is origin-wide and C7 Case Files
+      // (/c7-case-files-app/) shares b00k33.github.io — sweeping non-b33
+      // caches wipes that app's offline shell (real incident, 2026-09-01:
+      // this line ate c7's caches; c7's worker had the same bug in reverse,
+      // fixed the same day).
+      var olds = keys.filter(function (k) { return k.indexOf("b33-") === 0 && k !== CACHE_VERSION && k !== "b33-share"; });
       return caches.open(CACHE_VERSION).then(function (fresh) {
         return Promise.all(olds.map(function (name) {
           return caches.open(name).then(function (old) {
