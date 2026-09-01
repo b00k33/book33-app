@@ -7184,9 +7184,20 @@
   /* the running total lives in .efp-subhead (the section header, next to the
      "Sub-tasks" label) so it reads as part of the heading instead of only appearing in
      its own row once you scroll past the add buttons. */
-  .efp-subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .efp-subhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
   .efp-subhead .rtn-sub-total { margin-top: 0; }
   .rtn-sub-total { margin-top: 8px; font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; font-weight: 600; }
+  /* 2026-09-01: Set-total/From-steps toggle -- compact .track-opt pair inline in the
+     subhead, not a full-width .track-picker row (there's no room for one beside the
+     "Sub-tasks" label + total). margin-left:auto pushes it (and the total after it)
+     to the header's right edge when the label is short; flex-wrap on .efp-subhead
+     above lets it drop to its own line rather than clip at narrow widths. */
+  .rtn-dur-mode-toggle { display: flex; gap: 4px; margin-left: auto; }
+  .rtn-dur-mode-toggle .track-opt { flex: none; padding: 4px 10px; font-size: 11px; border-radius: 999px; }
+  /* "Set total": the routine's own Start/End row (always on this form) is the one
+     place the length is set, so each step's own min box would just be dead input --
+     hidden rather than disabled, so the row reads as a plain checklist item. */
+  #fSubList.rtn-sub-dur-set .rtn-sub-min-wrap { display: none; }
   /* one quiet line, pill + sentence -- not a warning box (no tinted background block,
      no border). Own row under the Sub-tasks/total header rather than crammed into that
      same flex row -- "EVERY DINNER · steps run back-to-back on the calendar" is too
@@ -22089,6 +22100,19 @@
           <div class="field full" id="fSubTasksField" hidden>
             <div class="efp-subhead">
               <label>Sub-tasks</label>
+              <!-- 2026-09-01 (Set-total/From-steps toggle, back after being retired
+                   2026-08-25 -- Linh: "i dont want the actions inside to determine
+                   the time. i just want to total time set"): only shown once there's
+                   an actual choice to make (updateFSubTotal hides it while the list
+                   is empty), same rule the old #rtnAddForm toggle used. "Set total"
+                   hides each step's own min box (see the #fSubList.rtn-sub-dur-set
+                   CSS) and leaves the routine's own Start/End "When" row -- already
+                   on this form for every event -- as the one place the length is
+                   set, instead of a second duration control. -->
+              <div class="rtn-dur-mode-toggle" id="fSubDurModeToggle" role="group" aria-label="How the length is set" hidden>
+                <button type="button" class="track-opt" data-durmode="steps" aria-pressed="true">From steps</button>
+                <button type="button" class="track-opt" data-durmode="set" aria-pressed="false">Set total</button>
+              </div>
               <span id="fSubTotal" class="rtn-sub-total" hidden></span>
             </div>
             <div class="rtn-sub-scope">
@@ -50552,7 +50576,19 @@
     const subs = readRtnSubs(fSubList);
     const el = document.getElementById("fSubTotal");
     const finEl = document.getElementById("fSubFinish");
-    if (!subs.length) {
+    // 2026-09-01: the toggle only means anything once there's a real choice --
+    // no saved sub-tasks means Set total (the Start/End row above) is the only
+    // way anyway, same "nothing to switch between yet" rule the old
+    // #rtnAddForm toggle used.
+    const toggle = document.getElementById("fSubDurModeToggle");
+    const hasSubs = subs.length > 0;
+    if (toggle) {
+      toggle.hidden = !hasSubs;
+      toggle.querySelectorAll(".track-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.durmode === fSubDurMode)));
+    }
+    const setTotal = hasSubs && fSubDurMode === "set";
+    fSubList.classList.toggle("rtn-sub-dur-set", setTotal);
+    if (!hasSubs || setTotal) {
       el.hidden = true; el.textContent = "";
       finEl.hidden = true; finEl.textContent = "";
       return;
@@ -50609,13 +50645,24 @@
   function regrowAllRtnSubText(root = fSubList) {
     root.querySelectorAll(".rtn-sub-text").forEach(autoGrowRtnSubText);
   }
+  // 2026-09-01 (real bug found while restoring an archived routine): the
+  // .rtn-sub-min input used to carry `min="1"` -- a step with no saved
+  // minutes populates as 0 (search "Math.max(0, parseInt(s.min, 10)"), which
+  // VIOLATES that constraint even though the field isn't `required`. Native
+  // HTML5 validation blocks the whole form's submit on any constraint
+  // violation, required or not -- so a routine with even one still-empty
+  // step silently failed to save, no error shown, every field just kept
+  // resetting on the next open. The floor this was protecting against
+  // already exists in JS at every real reader (readRtnSubs/subtaskDurMin
+  // both do `Math.max(1, s.min || 0)`), so the HTML constraint was pure
+  // downside -- dropped instead of worked around.
   function addRtnSubRow(text = "", min = "", group = "", root = rtnSubList) {
     const row = document.createElement("div");
     row.className = "rtn-sub-row";
     row.innerHTML = `<span class="rtn-sub-grip" aria-hidden="true">⋮⋮</span>
       <span class="rtn-sub-num" aria-hidden="true"></span>
       <textarea class="rtn-sub-text" placeholder="Step — e.g. Cleanse" autocomplete="off" rows="1"></textarea>
-      <span class="rtn-sub-min-wrap"><input type="number" class="rtn-sub-min" min="1" step="1" placeholder="0"><span class="rtn-sub-min-suffix">min</span></span>
+      <span class="rtn-sub-min-wrap"><input type="number" class="rtn-sub-min" step="1" placeholder="0"><span class="rtn-sub-min-suffix">min</span></span>
       <button type="button" class="rtn-sub-del" aria-label="Remove sub-task">×</button>`;
     const textEl = row.querySelector(".rtn-sub-text");
     textEl.value = text;
@@ -50647,6 +50694,11 @@
   // one-arg wrapper (not inlined into its 3 call sites) since addRtnSubRow/
   // clearRtnSubRows/subListClick already call it by this name.
   function subUpdateTotal(root) { updateFSubTotal(); }
+  document.getElementById("fSubDurModeToggle").addEventListener("click", e => {
+    const b = e.target.closest(".track-opt"); if (!b) return;
+    fSubDurMode = b.dataset.durmode === "set" ? "set" : "steps";
+    updateFSubTotal();
+  });
   document.getElementById("fSubAdd").addEventListener("click", () => addRtnSubRow("", "", "", fSubList));
   document.getElementById("fSubAddGroup").addEventListener("click", () => {
     const sec = rtnMakeGroupSection(`Group ${rtnSubGroupSections(fSubList).length + 1}`, false, undefined, undefined, fSubList);
@@ -54875,6 +54927,15 @@
   // eventEditId/editingRecurTemplateId's own pattern exactly. Set by
   // openEventFormForRoutine() (search that name), cleared by closeForm().
   let editingRoutineId = null;
+  // 2026-09-01 (bringing back the old Routine editor's Set-total/From-steps
+  // toggle, retired 2026-08-25 -- Linh: "i dont want the actions inside to
+  // determine the time. i just want to total time set"): "steps" matches
+  // subtaskDurMin()'s own unwritten default so a routine with saved sub-tasks
+  // and no durationMode still shows the toggle pointed at whichever one is
+  // actually driving its length. Set from task.durationMode in
+  // openEventFormForRoutine, reset in closeForm -- same pattern as
+  // editingRoutineId just above.
+  let fSubDurMode = "steps";
   let formKind = "event";
   // The picker's own state -- "none" means
   // "Doesn't repeat" (a plain one-off event); anything else means this save
@@ -55379,6 +55440,7 @@
     // fresh Add would open with a stale routine's sub-tasks/extra schedules still
     // sitting in the DOM.
     editingRoutineId = null;
+    fSubDurMode = "steps";
     clearRtnSubRows(fSubList);
     fRptExtraSchedules = [];
     renderRtnFRptSchedExtra();
@@ -55886,6 +55948,7 @@
     // sub-tasks: same load order as openRtnForm() itself -- named groups seeded
     // before the rows land, so an empty group she made but hasn't filled yet
     // survives a reload.
+    fSubDurMode = task.durationMode === "set" ? "set" : "steps";
     clearRtnSubRows(fSubList);
     (Array.isArray(task.groupOrder) ? task.groupOrder : []).forEach(label => {
       const meta = (task.groupMeta && task.groupMeta[label]) || {};
@@ -59686,10 +59749,13 @@
     if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
     const subtasks = readRtnSubs(fSubList);
-    // no Set-total/From-steps toggle here (see fSubTasksField's own comment) --
-    // steps' own minutes always decide the length once any exist, same as
-    // #rtnAddForm's own unwritten "steps" default.
-    if (!allDay && start && end && !subtasks.length) task.end = end;
+    // 2026-09-01: Set-total/From-steps toggle is back (search fSubDurMode's own
+    // declaration) -- steps' own minutes decide the length once any exist,
+    // UNLESS she's explicitly set a total instead, same as the old #rtnAddForm's
+    // rtnDurMode="set" case.
+    const setTotal = subtasks.length > 0 && fSubDurMode === "set";
+    if (setTotal) task.durationMode = "set";
+    if (!allDay && start && end && (!subtasks.length || setTotal)) task.end = end;
     if (subtasks.length) task.subtasks = subtasks;
     // groupOrder/groupMeta: same "read straight off the live DOM sections" logic
     // as #rtnAddForm's own submit handler -- a group left unnamed is dropped (its
