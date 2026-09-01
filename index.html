@@ -52987,20 +52987,25 @@
   // to print in a filled cell. Weekly/daily read their exact rule straight off the
   // template -- no guessing. Non-weekly series don't reach the fill function below
   // (see evlSeriesSection) so there is no all-blank-grid case to worry about.
-  // Each layer's end resolves by the SAME
-  // else the routine's shared durationMin, else nothing (start alone, never
-  // "10am –" with a dangling dash). Resolved HERE at the call site, deliberately
-  // NOT by adding `end` to schedulesOf()'s synthesised fallback layer: that helper
-  // has a dozen callers which each already apply this exact fallback themselves,
-  // and giving the fallback layer a pre-filled end would silently change what
-  // "l.end" means to every one of them. The em-dash range is built once here, so
-  // the desktop cells and the phone's times sub-line (evlFillTimesSummary reads
-  // these same objects) can never disagree about a time.
-  // 2026-08-31 (Linh, "show start and finish time in blocks"): every filled cell
-  // now ALWAYS resolves an end, never start-alone -- l.end, else the task's own
-  // durationMin, else the same 30-minute last-resort routineDurMin() already uses
-  // for a block with no real duration anywhere (search that function's own "30 as
-  // its own last resort"). One fallback chain, reused rather than invented twice.
+  // Each layer's end resolves in order: its OWN explicit end, else the task's
+  // flat end (a flat weekly routine has no schedules array at all --
+  // schedulesOf()'s synthesised fallback layer deliberately omits `end`, per
+  // its own comment, so every real caller is expected to fall back to the
+  // task's own field itself; this one didn't), else the task's shared
+  // durationMin, else the same 30-minute last-resort routineDurMin() already
+  // uses for a block with no real duration anywhere. One fallback chain,
+  // reused rather than invented twice. The em-dash range is built once here,
+  // so the desktop cells and the phone's times sub-line (evlFillTimesSummary
+  // reads these same objects) can never disagree about a time.
+  // 2026-09-01 (real bug found live, Linh: "if kims routine is 2 hours, why
+  // does the time show 30mins" -- a flat weekly routine with an explicit
+  // task.end, no schedules array): this function was skipping straight from
+  // "no l.end" to durationMin/30min, never checking task.end at all -- the
+  // ONE fallback step every other schedulesOf() consumer already applies
+  // (search "primary.end || task.end" in openEventFormForRoutine for the
+  // same pattern done correctly). A routine like Kim (12pm-2pm, single
+  // weekday, no multi-schedule layers) rendered as 12pm-12:30pm here while
+  // every other view of the same routine showed the real 2 hours.
   function evlResolveEnd(startTime, explicitEnd, durationMin) {
     if (explicitEnd) return explicitEnd;
     const mins = durationMin || 30;
@@ -53012,7 +53017,7 @@
       let label = "";
       let end = "";
       if (l.start) {
-        end = evlResolveEnd(l.start, l.end, task && task.durationMin);
+        end = evlResolveEnd(l.start, l.end || (task && task.end), task && task.durationMin);
         label = `${fmtTime(l.start)} – ${fmtTime(end)}`;
       }
       // Minutes stored alongside the
