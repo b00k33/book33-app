@@ -17601,6 +17601,42 @@
      all these into the one panel") -- same 16px rhythm as the members above. */
   #wrPanelDailyCards { display: flex; flex-direction: column; gap: 16px; }
   #wrPanelDailyCards:empty { display: none; }
+  /* 2026-09-01 (code3/6/7 panel pass, her live screenshot): the .now-row
+     internals were sized for the old 720px-wide Now page -- in a ~300px panel
+     the 74px label + 34px pip left the answer ~6 characters before ellipsis
+     ("13 thin...", "10:30pm · i..."). Panel-scoped compaction only; the row's
+     own base rule is untouched for any wider mount. */
+  #wrPanelBody .now-row { height: auto; min-height: 48px; padding: 6px 10px; gap: 8px; }
+  #wrPanelBody .now-row-pip { width: 26px; height: 26px; font-size: 13px; border-radius: 8px; }
+  #wrPanelBody .now-row-label { width: 40px; }
+  #wrPanelBody .now-row-answer { font-size: 14px; white-space: normal; }
+  #wrPanelBody .now-row-detail { white-space: normal; }
+  #wrPanelBody .now-current-title { font-size: 20px; }
+  #wrPanelBody .now-current-title-on { font-size: 22px; }
+  /* Same pass, the Shopping card: inside this panel it kept the Day-page tile
+     system's dark "Ink & Brass" w-card identity (near-black ground, teal
+     heading) -- a different visual world from every card around it. The
+     w-card rule re-declares the ink/ground tokens on the element with
+     !important backgrounds; these higher-specificity rules hand the tokens
+     back to the panel's own inherited values, and the display-scale
+     .section-head h2 drops to the same 11px uppercase label voice every
+     other card in the panel speaks. Scoped to #wrPanelBody only -- every
+     other mount (mobile tile shelf, day-side) keeps the luxe look. */
+  #wrPanelBody #shopSlot.w-card, #wrPanelBody .shop-box.w-card, #wrPanelBody #shopSlot .shop-box {
+    --ink: inherit; --ink-soft: inherit; --ink-faint: inherit; --paper: inherit;
+    --note-bg: inherit; --note-line: inherit; --field-bg: inherit; --margin-rule: inherit;
+    --chrome-line: inherit; --w-a: inherit; --w-t: inherit;
+    background: var(--field-bg) !important; background-image: none !important;
+    color: var(--ink); border: none !important; box-shadow: none !important;
+    border-radius: 14px; padding: 12px 14px;
+  }
+  #wrPanelBody #shopSlot .shop-box .section-head h2 {
+    font-family: var(--font-body); font-size: 11px; font-weight: 800;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint);
+    text-shadow: none;
+  }
+  #wrPanelBody #shopSlot .shop-box .section-head .rule { display: none; }
+  #wrPanelBody #shopSlot .shop-box .shop-why { font-style: normal; font-size: 12px; color: var(--ink-soft); }
   /* the grip only makes sense inside the old draggable card LIST — a panel shows
      one widget at a time, nothing to reorder against, so it's just noise here. */
   .wr-panel-body .wr-grip { display: none; }
@@ -36499,16 +36535,22 @@
     slot.innerHTML = `<div class="shop-box" data-shop-today="${!!why}">
       <div class="section-head"><h2>Shopping list</h2><span class="rule"></span></div>
       <div class="shop-why">${whyLine}${pending ? ` <span style="color:var(--ink-faint)">· ${pending} pending</span>` : ""}</div>
-      <div class="shop-items">
-        ${SHOP.length ? SHOP.map(s => `<div class="shop-item${s.bought ? " bought" : ""}">
+      ${SHOP.length ? `<div class="shop-items">
+        ${SHOP.map(s => `<div class="shop-item${s.bought ? " bought" : ""}">
             <input type="checkbox" class="tick" data-bought="${s.id}" ${s.bought ? "checked" : ""} aria-label="Mark ${esc(s.name)} bought">
             <span class="s-name">${esc(s.name)}${s.size ? `<span class="size">${esc(s.size)}</span>` : ""}
               ${s.step ? `<br><span class="s-step">for ${esc(s.step)}</span>` : ""}</span>
             <button class="shop-del" data-shopdel="${s.id}" aria-label="Remove ${esc(s.name)}">×</button>
-          </div>`).join("")
-          : `<div class="shop-empty">Nothing on the list yet. Tap a step in your routine above to find its products.</div>`}
-      </div>
+          </div>`).join("")}
+      </div>` : ""}
     </div>`;
+    // Empty list: no .shop-items block and no sentence about emptiness at all
+    // (2026-09-01 code3/6/7 panel pass -- the old "Tap a step in your routine
+    // above to find its products" line described the Hair page's layout,
+    // meaningless from the widget panel this card mostly lives in now; R18
+    // says never write a sentence about emptiness anyway). The whyLine above
+    // still carries the one useful fact: whether today's a shopping day, and
+    // when the next one is.
   }
 
   /* ============================================================
@@ -42575,10 +42617,15 @@
     el.style.background = acc.bg;
     if (!item) {
       const nx = nextItem(now);
+      // 2026-09-01 (code3/6/7 panel pass): the countdown folds into this sub
+      // line -- the separate NEXT row below is skipped when nothing's on (see
+      // renderNowFacts), since this sentence already names the next thing;
+      // repeating it one row down was the redundancy rule's own textbook case.
+      const inMin = nx ? toMin(nx.start) - (now.getHours() * 60 + now.getMinutes()) : 0;
       el.innerHTML = `
         <div class="now-eyebrow">RIGHT NOW</div>
         <div class="now-current-title">Nothing on</div>
-        <div class="now-current-sub">${nx ? `Free until ${esc(nx.title)} at ${esc(fmtTime(nx.start))}` : "Nothing else today"}</div>`;
+        <div class="now-current-sub">${nx ? `Free until ${esc(nx.title)} at ${esc(fmtTime(nx.start))}${inMin > 0 ? ` · in ${fmtDurMin(inMin)}` : ""}` : "Nothing else today"}</div>`;
       return;
     }
     const s = toMin(item.start), e = itemEndMin(item);
@@ -42613,30 +42660,25 @@
     const el = document.getElementById("nowFactsGrid");
     if (!el) return;
     const nx = nextItem(now);
-    const todo = openTodoCount();
     const gap = nextFreeGap(now);
     const nowMin = now.getHours() * 60 + now.getMinutes();
     let html = "";
-    // NEXT -- shows whenever there's a next item today at all.
-    if (nx) {
+    // NEXT -- only while something is ON. When nothing's on, the hero card's
+    // own sub line already reads "Free until <next> at <time> · in <X>", so
+    // this row would restate it verbatim one row down (2026-09-01 code3/6/7
+    // panel pass -- seen live in her screenshot, truncated to boot).
+    // The TO DO row that used to follow is gone the same pass: the combined
+    // panel stacks the full, tickable TO-DO card a few cards below, and the
+    // mini-row's own openTodoCount() (to-dos + day tickables) visibly
+    // disagreed with that card's pending-only count -- two to-do surfaces, two
+    // numbers, one panel.
+    if (nx && currentItem(now)) {
       html += nowRowHtml({
         pip: "→", pipBg: nowAccentFor(nx).edge,
         label: "NEXT",
         answer: nx.title,
         detail: `${fmtTime(nx.start)} · in ${fmtDurMin(toMin(nx.start) - nowMin)}`,
         dataAction: "next"
-      });
-    }
-    // TO DO -- shows whenever count > 0.
-    if (todo.total) {
-      html += nowRowHtml({
-        pip: "☑", pipBg: "var(--track-neutral-bar)",
-        label: "TO DO",
-        answer: `${todo.total} thing${todo.total === 1 ? "" : "s"}`,
-        detail: TODOS.filter(t => !t.done).slice(0, 2).map(t => t.title).concat(
-            dayTickables(TODAY).filter(e => !isDone(e.id)).slice(0, 2).map(e => e.title)
-          ).slice(0, 2).join(" · "),
-        dataAction: "todo"
       });
     }
     // FREE -- her exact rule: shown only when the gap does NOT start now. gap.start
@@ -42663,8 +42705,6 @@
         const action = btn.dataset.nowAction;
         if (action === "next") {
           nowJumpToEvent(nx);
-        } else if (action === "todo") {
-          openTodoPanel();
         } else if (action === "free") {
           state.anchor = new Date(TODAY); state.view = "day"; render();
           setTimeout(() => { const sc = document.getElementById("timelineScroll") || document.getElementById("mdTimelineScroll"); if (sc) sc.scrollTop = Math.max(0, gap.start * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour-h")) || 54) / 60 - 60); }, 30);
@@ -48768,13 +48808,22 @@
       // discard the members themselves (real, reparented-in DOM nodes, not markup
       // that can be regenerated) if they happened to already be sitting in body.
       [...body.children].forEach(c => { if (!keep.includes(c)) c.remove(); });
-      members.forEach(el => body.appendChild(el));
+      // 2026-09-01 (code7, same panel pass): the Shopping card's position is
+      // context-aware -- with pending items, or on a shopping day, it keeps
+      // its status slot above the Daily cards; empty on an ordinary day it
+      // drops below them, so the actionable To-do list isn't sitting under a
+      // card with nothing in it. Ordering only -- membership/parking (the
+      // memberIds loop below) is unchanged either way.
+      const shopEl = wrOpenId === "rightNowCard" ? pinnedEls.shopSlot : null;
+      const shopHigh = shopEl && (SHOP.some(s => !s.bought) || !!shoppingDayReason(new Date()));
+      members.forEach(el => { if (el !== shopEl || shopHigh) body.appendChild(el); });
       if (dailyWrap) {
         body.appendChild(dailyWrap);
         const dailyIds = wrRankedIds(WR_WIDGET_IDS).filter(id => WR_GROUP_DAILY.includes(id) && !(TILE_PREFS[id] || {}).hidden);
         const dailyHtml = dailyIds.map(id => wrCardHtml(id)).filter(Boolean).join("");
         if (dailyHtml !== wrPanelDailyLastHtml) { dailyWrap.innerHTML = dailyHtml; wrPanelDailyLastHtml = dailyHtml; }
       }
+      if (shopEl && !shopHigh) body.appendChild(shopEl);
       Object.entries(pinnedEls).forEach(([id, el]) => { if (!memberIds.includes(id) && el && el.parentElement !== offstage) offstage.appendChild(el); });
     } else {
       title.textContent = WR_LABELS[wrOpenId] || "";
