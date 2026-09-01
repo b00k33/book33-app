@@ -60863,6 +60863,17 @@
             <button type="button" class="track-opt" data-nav-mode="tabs" aria-pressed="${PREFS.navMode === "tabs"}">Tabs</button>
           </div>
         </div>
+        <!-- 2026-09-01 (Linh asked "how do i edit modes?" twice in one day -- the
+             editor's only entry point was a gear on the Life Map strip, which is
+             not where anyone looks for configuration; Settings is the app's one
+             general-settings home, so the door belongs here too. The button
+             navigates to Life Map and opens the same panel that gear opens --
+             one editor, a second door to it, per the Modes law's own
+             "configuration lives in one place". -->
+        <div class="nt-row">
+          <span class="nt-lbl">Modes<span class="nt-sub">Rename, recolour, reorder or add Modes — opens the Modes editor on the Life Map page (also reachable from the gear on its Mode strip)</span></span>
+          <button type="button" class="today-pill" id="ntEditModesBtn">Edit Modes</button>
+        </div>
       </div>
 
       <div class="nt-group">
@@ -61094,7 +61105,15 @@
     // "More settings" links (Appearance/Weekly Review) -- plain navigation, no
     // NOTIF/PREFS write, checked first since every other branch below matches its
     // own data-nt-* shape.
-    const settingsLinkBtn = ev.target.closest("[data-view]");
+    // 2026-09-01 FIX (found via "how do i edit modes?" -- the new Edit Modes
+    // button silently did nothing): bare closest("[data-view]") walked past the
+    // page up to #wrap, which carries data-view="<current view>" as the app's
+    // own view stamp -- so EVERY click anywhere on this page matched, "navigated"
+    // to the page it was already on, and returned before any real branch below
+    // could run. Every Settings control (toggles, sound picker, steppers, the
+    // Drawer/Tabs picker) has been dead since #wrap gained that attribute.
+    // button[data-view] matches only the actual link buttons; #wrap is a div.
+    const settingsLinkBtn = ev.target.closest("button[data-view]");
     if (settingsLinkBtn) { state.view = settingsLinkBtn.dataset.view; render(); return; }
     // PREFS.navMode, not a NOTIF field -- see the HTML comment above
     // #navModePicker for why this one row is a deliberate exception on this page.
@@ -61103,6 +61122,20 @@
       const mode = navModeBtn.dataset.navMode;
       if (mode !== PREFS.navMode) { PREFS.navMode = mode; savePrefs(); renderNavExtras(); }
       renderNotifyPage();
+      return;
+    }
+    // 2026-09-01 ("how do i edit modes?", twice): Settings' own door to the
+    // Modes editor -- navigates to Life Map, then opens the SAME panel the
+    // strip's gear opens (same lmModesOpen state, same renderer; a second
+    // door, not a second editor).
+    if (ev.target.closest("#ntEditModesBtn")) {
+      state.view = "lifeMap";
+      render();
+      // open via the strip gear's own click path (not by poking lmModesOpen
+      // directly -- that state and its renderer live in the Life Map closure,
+      // out of reach from here; the gear is the public door to it, and going
+      // through it keeps one open/close code path).
+      setTimeout(() => document.querySelector("[data-lm-modes-toggle]")?.click(), 50);
       return;
     }
     const tog = ev.target.closest("[data-nt-tog]");
