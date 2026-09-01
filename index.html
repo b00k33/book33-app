@@ -17597,6 +17597,10 @@
      the seams between them are consistent 16px, not each member's own ad-hoc
      margins colliding. Harmless for every single-member panel (one child). */
   .wr-panel-body { display: flex; flex-direction: column; gap: 16px; }
+  /* the Daily widgets' generated-card stack inside the combined panel ("move
+     all these into the one panel") -- same 16px rhythm as the members above. */
+  #wrPanelDailyCards { display: flex; flex-direction: column; gap: 16px; }
+  #wrPanelDailyCards:empty { display: none; }
   /* the grip only makes sense inside the old draggable card LIST — a panel shows
      one widget at a time, nothing to reorder against, so it's just noise here. */
   .wr-panel-body .wr-grip { display: none; }
@@ -47863,16 +47867,21 @@
   // #dsbSessionSlot behaviour, unlike shopSlot which already spanned both bands).
   const WR_PINNED_IDS = ["rightNowCard", "daySessionCard", "sunWeekAhead", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
   const WR_PINNED_LABELS = { rightNowCard: "Right now", daySessionCard: "Session", sunWeekAhead: "Plan the week ahead", dayCtxWrap: "Today & fasting", modeAmbientRail: "Mode", shopSlot: "Shopping" };
-  // 2026-09-01 (Linh: "put right now and today and mode together on one panel"):
-  // the three ambient status widgets open as ONE combined panel under the Right
-  // now icon -- dayCtxWrap (Today & fasting) and modeAmbientRail (Mode) keep
-  // their WR_PINNED_IDS entries (placeDeskGrid()'s reparenting, the mobile
-  // drawer, #wrFallback all still manage them individually) but lose their own
-  // rail icons; renderWrPanel() mounts every member of this list, in this
-  // order, whenever rightNowCard's panel is open. Each member still self-hides
-  // when empty (dcx-wrap's no-empty-placeholder rule, the ambient rail outside
-  // Morning/Night), so the combined panel just shows whichever are live.
-  const WR_RIGHTNOW_MEMBERS = ["rightNowCard", "dayCtxWrap", "modeAmbientRail"];
+  // 2026-09-01 (Linh: "put right now and today and mode together on one panel",
+  // then, shown the remaining rail icons: "move all these into the one panel"):
+  // the ambient status widgets open as ONE combined panel under the Right now
+  // icon -- dayCtxWrap (Today & fasting), modeAmbientRail (Mode) and shopSlot
+  // (Shopping) keep their WR_PINNED_IDS entries (placeDeskGrid()'s reparenting,
+  // the mobile drawer, #wrFallback all still manage them individually) but lose
+  // their own rail icons; renderWrPanel() mounts every member of this list, in
+  // this order, whenever rightNowCard's panel is open -- and appends the whole
+  // Daily widget group (WR_GROUP_DAILY, generated wrCardHtml() cards in
+  // #wrPanelDailyCards) below them, so the panel is her full at-a-glance
+  // column. Each real member still self-hides when empty (dcx-wrap's
+  // no-empty-placeholder rule, the ambient rail outside Morning/Night); empty
+  // Daily cards simply return "" and don't render. Only the Insights cluster
+  // stays behind its own flyout, per her screenshot's own scope.
+  const WR_RIGHTNOW_MEMBERS = ["rightNowCard", "dayCtxWrap", "modeAmbientRail", "shopSlot"];
   // one glyph per widget, pinned + TILE_PREFS-managed alike. biomechTip/
   // streaksWidget/pileupBox/railPatients per Linh's own naming; the rest are a
   // judgment call, grounded in the app's existing icon vocabulary where one
@@ -48394,6 +48403,15 @@
   // Escape / outside click) still closes it and stays closed for the session,
   // same as any other panel -- this only changes what a fresh load shows.
   let wrOpenId = "rightNowCard";
+  // 2026-09-01 ("move all these into the one panel"): the persistent wrapper
+  // holding the Daily widgets' generated cards inside the combined panel --
+  // kept as a closure reference (NOT re-looked-up by id) because other panel
+  // states detach it (body.innerHTML wipes), and a detached node keeps its
+  // children, so reattaching it with unchanged content costs nothing. The
+  // lastHtml guard is what stops every render pass from wiping in-progress
+  // typing inside a card's own input (a rewrite only happens when the
+  // generated markup actually changed).
+  let wrPanelDailyWrap = null, wrPanelDailyLastHtml = null;
   // 2026-09-01 (Linh, shown the SESSION panel live: "make this stay expanded"
   // -> confirmed "auto-open, no tap needed"): tracks the startedAt of the
   // session this panel last auto-opened FOR, so the auto-open is edge-
@@ -48457,26 +48475,24 @@
         const scEl = document.getElementById("daySessionCard");
         if (!scEl || scEl.hidden) return;
       }
-      // 2026-09-01 ("put right now and today and mode together on one panel"):
-      // no icons of their own any more -- both open inside rightNowCard's
-      // combined panel, see WR_RIGHTNOW_MEMBERS. (This also retired the old
-      // modeAmbientRail is-there-an-ambient-mode icon gate that lived here --
-      // the element still self-hides inside the panel on the same condition,
-      // via renderModeAmbientRail() itself.)
-      if (id === "dayCtxWrap" || id === "modeAmbientRail") return;
+      // 2026-09-01 ("put right now and today and mode together on one panel",
+      // then "move all these into the one panel"): no icons of their own any
+      // more -- all three open inside rightNowCard's combined panel, see
+      // WR_RIGHTNOW_MEMBERS. (This also retired the old modeAmbientRail
+      // is-there-an-ambient-mode icon gate that lived here -- the element
+      // still self-hides inside the panel on the same condition, via
+      // renderModeAmbientRail() itself.)
+      if (id === "dayCtxWrap" || id === "modeAmbientRail" || id === "shopSlot") return;
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
-    html += `<div class="wr-ic-grouplabel">Now</div><div class="wr-ic-sep" aria-hidden="true"></div>`;
-    // 2026-08-31 (icon rail regroup): cardOrdered is one usage-ranked list across
-    // every optional widget -- split it into the Daily cluster (stays visible,
-    // individually iconed, ranked/tiered same as before) and the Insights
-    // cluster (collapsed behind one flyout icon, see renderWrInsightsFlyout()
-    // below). See WR_GROUP_DAILY/_INSIGHTS's own comment for why membership is
-    // fixed rather than usage-sorted.
-    const dailyIds = cardOrdered.filter(id => WR_GROUP_DAILY.includes(id) && wrCardHtml(id) !== "");
+    html += `<div class="wr-ic-grouplabel">Now</div>`;
+    // 2026-09-01 ("move all these into the one panel"): the Daily cluster's
+    // individual icons are gone -- those widgets render as cards inside the
+    // combined Right now panel now (renderWrPanel()'s #wrPanelDailyCards).
+    // Only the Insights flyout keeps its own trigger, per her screenshot's
+    // own scope (the 2026-08-31 regroup's dailyIds icon loop lived here; git
+    // history has it).
     const insightIds = cardOrdered.filter(id => WR_GROUP_INSIGHTS.includes(id) && wrCardHtml(id) !== "");
-    dailyIds.forEach((id, i) => { html += wrIconBtnHtml(id, WR_LABELS[id], i); });
-    if (dailyIds.length) html += `<div class="wr-ic-grouplabel">Daily</div>`;
     if (insightIds.length) {
       html += `<div class="wr-ic-sep" aria-hidden="true"></div>`;
       // "on" also when the currently open panel IS an Insights widget -- so
@@ -48675,7 +48691,8 @@
       // renderSessionCard() is the one place that sets .hidden, same contract
       // sunWeekAhead's own dowIndex check reads here.
       const scEl = document.getElementById("daySessionCard");
-      if (!scEl || scEl.hidden) wrOpenId = null;
+      // step-back (not fully closed), same rule as every dismissal path
+      if (!scEl || scEl.hidden) wrOpenId = "rightNowCard";
     }
     // Unlike daySessionCard just above (deliberately left alone under a
     // takeover so it resumes showing once the takeover ends -- a DIFFERENT node than
@@ -48697,8 +48714,8 @@
     // auto-close if the open id's content has gone empty for the CURRENTLY
     // viewed day (a Sunday-only widget, left open while paging to another
     // day) rather than showing a stale or blank panel.
-    if (wrOpenId === "sunWeekAhead" && dowIndex(state.anchor) !== 6) wrOpenId = null;
-    if (wrOpenId && !WR_PINNED_IDS.includes(wrOpenId) && wrCardHtml(wrOpenId) === "") wrOpenId = null;
+    if (wrOpenId === "sunWeekAhead" && dowIndex(state.anchor) !== 6) wrOpenId = "rightNowCard";
+    if (wrOpenId && !WR_PINNED_IDS.includes(wrOpenId) && wrCardHtml(wrOpenId) === "") wrOpenId = "rightNowCard";
     if (!wrOpenId) {
       panel.classList.remove("open");
       panel.setAttribute("aria-hidden", "true");
@@ -48718,15 +48735,32 @@
       // is re-asserted on every render, not just first mount.
       const memberIds = wrOpenId === "rightNowCard" ? WR_RIGHTNOW_MEMBERS : [wrOpenId];
       const members = memberIds.map(id => pinnedEls[id]).filter(Boolean);
+      // The Daily widget group renders below the real members as generated
+      // cards ("move all these into the one panel") -- same ordering/hidden
+      // rules the old per-icon rail applied (wrRankedIds + TILE_PREFS.hidden +
+      // empty cards skipped), so Arrange still governs what shows here.
+      const keep = [...members];
+      let dailyWrap = null;
+      if (wrOpenId === "rightNowCard") {
+        if (!wrPanelDailyWrap) { wrPanelDailyWrap = document.createElement("div"); wrPanelDailyWrap.id = "wrPanelDailyCards"; }
+        dailyWrap = wrPanelDailyWrap;
+        keep.push(dailyWrap);
+      }
       // This branch must clear what was already in
       // body -- a generated .wr-card left behind by the OTHER branch's own
       // `body.innerHTML = wrCardHtml(...)` (a few lines down) survived every
-      // pinned-after-normal switch. Remove every child that ISN'T a pinned node
+      // pinned-after-normal switch. Remove every child that ISN'T a node
       // about to show -- never `body.innerHTML = ""` here, since that would also
       // discard the members themselves (real, reparented-in DOM nodes, not markup
       // that can be regenerated) if they happened to already be sitting in body.
-      [...body.children].forEach(c => { if (!members.includes(c)) c.remove(); });
+      [...body.children].forEach(c => { if (!keep.includes(c)) c.remove(); });
       members.forEach(el => body.appendChild(el));
+      if (dailyWrap) {
+        body.appendChild(dailyWrap);
+        const dailyIds = wrRankedIds(WR_WIDGET_IDS).filter(id => WR_GROUP_DAILY.includes(id) && !(TILE_PREFS[id] || {}).hidden);
+        const dailyHtml = dailyIds.map(id => wrCardHtml(id)).filter(Boolean).join("");
+        if (dailyHtml !== wrPanelDailyLastHtml) { dailyWrap.innerHTML = dailyHtml; wrPanelDailyLastHtml = dailyHtml; }
+      }
       Object.entries(pinnedEls).forEach(([id, el]) => { if (!memberIds.includes(id) && el && el.parentElement !== offstage) offstage.appendChild(el); });
     } else {
       title.textContent = WR_LABELS[wrOpenId] || "";
@@ -48742,7 +48776,13 @@
     const openBtn = e.target.closest("[data-wr-open]");
     if (openBtn) {
       const id = openBtn.dataset.wrOpen, opening = wrOpenId !== id;
-      wrOpenId = opening ? id : null;
+      // 2026-09-01 ("move all these into the one panel"): with the combined
+      // status panel as the rail's resting state, dismissing an on-demand
+      // widget (an Insights pick, Sunday's plan, the Session card) steps BACK
+      // to it rather than leaving the panel fully closed -- only re-tapping
+      // the Right now pin itself truly closes the panel. Same rule at every
+      // dismissal path below (X, Escape, outside click, the auto-close guards).
+      wrOpenId = opening ? id : (id === "rightNowCard" ? null : "rightNowCard");
       // real usage, tracked on the OPEN edge only -- reclicking the already-open icon
       // to close it isn't a fresh "she chose this widget" signal, just a dismissal.
       if (opening) wrTrackOpen(id);
@@ -48773,7 +48813,8 @@
       return;
     }
     if (e.target.closest("#wrPanelClose")) {
-      wrOpenId = null;
+      // step-back rule, see the [data-wr-open] comment above
+      wrOpenId = wrOpenId === "rightNowCard" ? null : "rightNowCard";
       renderDeskWidgetRail();
     }
   });
@@ -48827,12 +48868,18 @@
     const path = e.composedPath();
     const passesThrough = sel => path.some(el => el.nodeType === 1 && el.matches && el.matches(sel));
     if (passesThrough("#wrPanel, #deskWidgetRail, #b33mpOverlay, #editPanelOverlay, #tlDetailOverlay")) return;
-    wrOpenId = null;
+    // step-back rule ("move all these into the one panel"): an outside click
+    // dismisses the on-demand widget back to the combined status panel, never
+    // to a fully closed rail.
+    wrOpenId = "rightNowCard";
     renderDeskWidgetRail();
   });
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape" || (!wrOpenId && !wrMobileOpenId)) return;
-    wrOpenId = null; wrMobileOpenId = null;
+    // step-back rule: Escape from an on-demand widget returns to the combined
+    // panel; a second Escape (from the combined panel itself) closes the rail.
+    wrOpenId = wrOpenId === "rightNowCard" || !wrOpenId ? null : "rightNowCard";
+    wrMobileOpenId = null;
     renderDeskWidgetRail();
   });
   // renderWrMobileDrawerSelect()'s own "resets to null when a render finds the drawer
