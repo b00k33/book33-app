@@ -594,6 +594,30 @@ implies a general preference, not a one-off fix — e.g. "too much detail" → s
 progressive disclosure generally, apply that instinct forward on other screens without
 being told again each time. Same standing instinct as [[feedback_dont_make_her_repeat_herself]].
 
+**Navigation continuity & layout stability (2026-09-02).** Pay close attention to what
+happens when she clicks between pages, tables, records and functions — the interface
+must never feel like it's jumping, jerking, teleporting or rebuilding itself. Avoid:
+sudden layout shifts, elements moving after page load, changing sidebar widths, buttons
+jumping position, content appearing at a different height, unnecessary full-page
+reloads, abrupt interface replacement, inconsistent page transitions, losing scroll
+position unnecessarily, losing filters or selected context. She should feel "I moved
+deeper into the application," never "a completely different application just appeared."
+
+Before adding a navigation, ask first: **"Can this information be revealed within the
+current context instead of taking her to an entirely new page?"** A list → detail view
+should feel like entering the selected item; a table → expanded row should feel like the
+row opening; a case → timeline should feel like moving deeper into the same case. If a
+new page is genuinely warranted, keep the previous page's visual language and spatial
+continuity rather than starting fresh.
+
+Reach for: stable layout containers, reserved space for dynamic content, smooth
+transitions, persistent navigation, breadcrumbs where useful, drawers for lightweight
+secondary information, modal/detail panels where appropriate, contextual drill-down,
+preserved scroll position, preserved filters and selections, skeleton/loading states
+where actually necessary. Don't animate everything — motion should communicate spatial
+relationships and help her understand where she went, not decorate. Prioritise perceived
+stability over decorative animation: calm, deliberate, physically coherent.
+
 **Overlaps with code6/code7 on purpose, not a conflict:** all three share "8+ questions
 before a real redesign," "mock before shipping," and "learn from corrections" — that
 shared ground is written once, under code6, and applies to all three names.
