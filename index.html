@@ -28933,12 +28933,22 @@
         aria-label="${done ? "Un-tick" : "Mark done"}: ${esc(e.title)}">
         <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>${linkedBadgeHtml(e.linkInfo)}
       </button>`;
-    const doneItems = items.filter(e => isDone(e.id));
-    const todoItems = items.filter(e => !isDone(e.id));
-    const left = todoItems.length;
+    // 2026-09-01 (Linh, live screenshot of this list: "correspond with timeline
+    // instead of randomly listed") -- SUPERSEDES the done-first/todo-second
+    // grouping: rows now run in the day's own order, all-day/untimed items
+    // first (mirroring the timeline's ALL DAY band above the hour grid), then
+    // by start time. Done state stays legible per row via the existing dot +
+    // strike-through, so nothing is lost by not grouping.
+    const sorted = [...items].sort((a, b) => {
+      const sa = toMin(a.start), sb = toMin(b.start);
+      if (sa == null && sb == null) return 0;
+      if (sa == null) return -1;
+      if (sb == null) return 1;
+      return sa - sb;
+    });
+    const left = items.filter(e => !isDone(e.id)).length;
     return `
-      ${doneItems.map(e => row(e, true)).join("")}
-      ${todoItems.map(e => row(e, false)).join("")}
+      ${sorted.map(e => row(e, isDone(e.id))).join("")}
       ${left > 0 ? `<div class="dp-recap-left">${left} left for today — no rush.</div>`
         : `<div class="dp-recap-left dp-recap-clear">✓ All done today.</div>`}
     `;
