@@ -46760,7 +46760,22 @@
       // it's out of the rail applyDayTiles() owns it and moves it on to whichever
       // shelf/group her prefs say. Returning it unconditionally every render would
       // yank it back off that shelf and the two placers would fight forever.
-      if (shopSlotHome && shopSlotEl && (shopSlotEl.parentElement === pinnedSlot || shopSlotEl.parentElement === wrFallbackEl)) shopSlotHome.after(shopSlotEl);
+      // 2026-09-01 fix (Linh, live phone: "shopping list at bottom of mobile day
+      // page unnecessary" -- found sitting inline, visible, below the To-do card):
+      // this line used to always land it beside shopSlotHome (in normal page flow,
+      // fully visible) and counted on placeDayDrawers()'s own renderDeskWidgetRail()
+      // call, a SEPARATE function bound to the SAME resize event, to immediately
+      // tuck it back offstage/into the drawer afterward -- a real "two placers, one
+      // element" race (this file's own Trap: cross-closure ownership). A resize that
+      // fires this placer without that follow-up landing (or lands out of order)
+      // left the card stranded in normal flow. On mobile, route it straight to the
+      // hidden parking spot instead -- renderWrMobileDrawerSelect() then correctly
+      // pulls it into the open drawer icon's own mount if/when she actually taps it.
+      if (shopSlotHome && shopSlotEl && (shopSlotEl.parentElement === pinnedSlot || shopSlotEl.parentElement === wrFallbackEl)) {
+        const shopOffstage = document.getElementById("shopSlotOffstage");
+        if (mobileDayDrawersActive() && shopOffstage) shopOffstage.appendChild(shopSlotEl);
+        else shopSlotHome.after(shopSlotEl);
+      }
       if (dayMain && dayMain.parentElement !== dayLayout) dayLayout.insertBefore(dayMain, dayLayout.firstElementChild);
       if (daySide && daySide.parentElement !== dayLayout) dayLayout.appendChild(daySide);
       // 2026-08-24 ("the ALL DAY band folds into the Today row"): a live resize that
