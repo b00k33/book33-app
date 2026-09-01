@@ -3006,6 +3006,40 @@
     .tl-detail-overlay { align-items: flex-start; padding-top: 12vh; }
     .tl-detail-sheet { border-radius: var(--radius-md); max-height: 74vh; }
   }
+  /* ================= ONE SHEET SYSTEM -- open/close motion (2026-09-02) =================
+     Linh: "viewing event and editing event is jerky. make the ui same/smoother."
+     Every sheet-style overlay in the app (the event-detail/View sheet, the
+     shared Edit/To-do/Fasting/etc. slide panel, and #addForm) now shares this
+     one fade+rise recipe on both open and close, driven by animateSheetOpen()/
+     animateSheetClose() (search those names) rather than a bare hidden=true/
+     false snap. [hidden] is globally !important (search "display: none
+     !important") so a plain CSS transition can't run across the hidden toggle
+     itself -- these classes are a short-lived JS-added state instead, present
+     only while hidden is still false and the sheet is fading in or out.
+     Backdrop (the overlay itself, or #addFormBackdrop) fades opacity only;
+     the sheet child also rises/settles a few px so the motion reads as the
+     sheet arriving from where it's anchored (bottom on mobile, top on
+     desktop), not just materialising in place. */
+  .tl-detail-overlay, .slide-panel-overlay, .addform-backdrop, #addForm {
+    transition: opacity 200ms ease;
+  }
+  .tl-detail-sheet, .slide-panel-sheet {
+    transition: transform 220ms cubic-bezier(.22,.75,.3,1), opacity 200ms ease;
+  }
+  #addForm { transition: opacity 200ms ease, transform 220ms cubic-bezier(.22,.75,.3,1), background .3s ease; }
+  .tl-detail-overlay.sheet-opening, .tl-detail-overlay.sheet-closing,
+  .slide-panel-overlay.sheet-opening, .slide-panel-overlay.sheet-closing,
+  .addform-backdrop.sheet-opening, .addform-backdrop.sheet-closing,
+  #addForm.sheet-opening, #addForm.sheet-closing { opacity: 0; }
+  .tl-detail-overlay.sheet-opening .tl-detail-sheet, .tl-detail-overlay.sheet-closing .tl-detail-sheet,
+  .slide-panel-overlay.sheet-opening .slide-panel-sheet, .slide-panel-overlay.sheet-closing .slide-panel-sheet {
+    transform: translateY(16px) scale(.98);
+  }
+  #addForm.sheet-opening, #addForm.sheet-closing { transform: translateX(-50%) translateY(16px) scale(.98); }
+  @media (prefers-reduced-motion: reduce) {
+    .tl-detail-overlay, .tl-detail-sheet, .slide-panel-overlay, .slide-panel-sheet,
+    .addform-backdrop, #addForm { transition: none !important; }
+  }
   /* ================= Mobile walkthrough (2026-08-19) =================
      Always full-screen, at every width -- it opens from a mobile-only trigger, so it
      never actually meets the >=641px override above in practice, but pinning height:
@@ -3075,24 +3109,31 @@
      below everything that can open FROM one of this overlay's four occupants —
      nothing here opens .ev-scope-overlay (320) or .b33mp-overlay (340), so there's
      no ordering fight to resolve. */
+  /* 2026-09-02 (Linh: "viewing event and editing event is jerky. make the ui
+     same/smoother"): was a right-docked drawer, full height, at every width --
+     a genuinely different shape from .tl-detail-overlay/.tl-detail-sheet's own
+     bottom-sheet/floats-from-the-top recipe, so going View -> Edit felt like a
+     different panel system taking over rather than the same sheet continuing.
+     Now shares that exact recipe (same width/radius/max-height/shadow numbers,
+     not just the same idea) so every occupant of this shared component --
+     #addForm's own restyled twin included, search "restyled below" -- reads as
+     one system with the event-detail sheet. See "ONE SHEET SYSTEM" below for
+     the open/close motion that ties them together. */
   .slide-panel-overlay {
     position: fixed; inset: 0; z-index: 300; background: color-mix(in oklab, black 68%, transparent);
-    backdrop-filter: blur(3px); display: flex; align-items: stretch; justify-content: flex-end;
+    backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center;
   }
   .slide-panel-overlay[hidden] { display: none; }
   .slide-panel-sheet {
-    /* 2026-09-01 (Linh: "improve side panels, they are too wide when opened",
-       scoped to mobile): was 100vw below 768px -- a full-screen takeover. Now a
-       docked sheet at every width, so a strip of the page stays visible behind
-       the scrim and the overlay's click-outside-to-close listener (search
-       "e.target.closest(\".slide-panel-sheet\")") gains a real "outside" to hit
-       on a phone too -- an extra exit, not a lost one (X and Escape unchanged). */
-    width: min(420px, 88vw); height: 100vh; max-height: 100vh; overflow: hidden;
+    width: min(460px, 100vw); max-height: 82vh; height: auto; overflow: hidden;
     display: flex; flex-direction: column;
-    background: var(--paper); border: none; box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
+    background: var(--paper); border: none;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
   }
   @media (min-width: 768px) {
-    .slide-panel-sheet { width: min(440px, 92vw); border-left: 1px solid var(--chrome-line); }
+    .slide-panel-overlay { align-items: flex-start; padding-top: 12vh; }
+    .slide-panel-sheet { max-height: 74vh; border-radius: var(--radius-md); border: none; }
   }
   /* title+close header/scrolling body, same values as .rtn-side-head/-body (the
      Routines page's own desktop side rail) but NOT that class directly -- that one
@@ -8416,16 +8457,21 @@
   @media (min-width: 641px) {
     .add-form { max-width: var(--content-max); margin-left: auto; margin-right: auto; }
   }
-  /* #addForm uses the same right-docked-panel/full-screen-sheet recipe as
-     .slide-panel-sheet, but keeps its OWN rule rather than switching to that
-     shared class: it's an ID selector with ~30 #addForm-scoped child rules
-     already depending on it existing as a real position:fixed element in its
-     current DOM slot, so restating the same values here is lower-risk than
-     restructuring the HTML to nest it inside a new wrapper. Covers BOTH Add and
-     Edit -- they're the same form/DOM node, and the routine editor's own
-     side-rail already treats Add the same as Edit for placement (see
-     placeRtnForm's own "+ Add routine also docks" note), so this matches that
-     established precedent rather than special-casing Edit alone. */
+  /* #addForm uses the same bottom-sheet/floats-from-the-top recipe as
+     .slide-panel-sheet (itself matched to .tl-detail-sheet, search "ONE SHEET
+     SYSTEM" for why -- 2026-09-02), but keeps its OWN rule rather than
+     switching to that shared class: it's an ID selector with ~30
+     #addForm-scoped child rules already depending on it existing as a real
+     position:fixed element in its current DOM slot, so restating the same
+     values here is lower-risk than restructuring the HTML to nest it inside a
+     new wrapper. Covers BOTH Add and Edit -- they're the same form/DOM node,
+     and the routine editor's own side-rail already treats Add the same as
+     Edit for placement (see placeRtnForm's own "+ Add routine also docks"
+     note), so this matches that established precedent rather than
+     special-casing Edit alone. Self-positioned via left:50%+transform rather
+     than a flex wrapper -- #addFormBackdrop stays a plain full-screen dim
+     layer, unlike .slide-panel-overlay's flex container, since restructuring
+     the backdrop's own role is out of scope for a shape-only match. */
   /* z-index 300, same reused tier as .slide-panel-overlay -- #addForm's header
      (Cancel/Save) must clear .nav-tiers (z-index:210). Nothing needs to stay
      BETWEEN 210 and 300 for this form: the event detail sheet
@@ -8437,15 +8483,19 @@
      z-index:60) are unaffected -- they're descendants, so they stack relative
      to #addForm's own new context, not the document root. */
   #addForm {
-    position: fixed; top: 0; right: 0; bottom: 0; left: auto; transform: none;
-    /* width was 100vw below 768px -- narrowed with .slide-panel-sheet, same
-       2026-09-01 "too wide when opened" pass, same number (one recipe). */
-    z-index: 300; width: min(420px, 88vw); height: 100vh; max-height: 100vh; overflow-y: auto;
-    margin-top: 0; padding: 12px 16px; gap: 6px 12px; border-radius: 0;
-    box-shadow: -10px 0 50px -14px rgba(0,0,0,0.65);
+    position: fixed; left: 50%; right: auto; bottom: 0; top: auto;
+    transform: translateX(-50%);
+    z-index: 300; width: min(460px, 100vw); max-height: 82vh; height: auto; overflow-y: auto;
+    margin-top: 0; padding: 12px 16px; gap: 6px 12px;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    box-shadow: 0 -10px 50px -14px rgba(0,0,0,0.65);
   }
   @media (min-width: 768px) {
-    #addForm { width: min(440px, 92vw); border-left: 1px solid var(--chrome-line); }
+    #addForm {
+      top: 12vh; bottom: auto; max-height: 74vh;
+      border-radius: var(--radius-md); border-left: none;
+      box-shadow: 0 24px 60px -12px rgba(0,0,0,0.65);
+    }
   }
   /* Label sits right on top of its field (2px) and the field's own vertical
      padding is tight (see #addForm .field input below) so the panel reads as
@@ -32077,6 +32127,46 @@
     headDoneBtn.setAttribute("aria-label", done ? doneWord : notDoneWord);
     headDoneBtn.innerHTML = done ? `<span>✓</span> Done` : `Done`;
   }
+  // Shared open/close motion for every sheet-style overlay (search "ONE SHEET
+  // SYSTEM" for the CSS side) -- Linh, 2026-09-02: "viewing event and editing
+  // event is jerky. make the ui same/smoother." [hidden] is globally
+  // !important, which blocks a plain CSS transition across the toggle itself,
+  // so these drive the fade+rise via a short-lived class instead. Callers pass
+  // every element that should animate together (an overlay/backdrop plus its
+  // sheet child, or just the overlay when the sheet's motion is already
+  // covered by a descendant selector) -- see openTlDetail/closeTlDetail and
+  // openForm/closeForm for the two shapes this is used in.
+  function animateSheetOpen(...els) {
+    els.forEach(el => { if (!el) return; el.hidden = false; el.classList.remove("sheet-closing"); el.classList.add("sheet-opening"); });
+    const first = els.find(Boolean);
+    if (first) void first.offsetHeight;   // force reflow so removing the class next frame is seen as a transition, not a no-op
+    requestAnimationFrame(() => els.forEach(el => el && el.classList.remove("sheet-opening")));
+  }
+  function animateSheetClose(onDone, ...els) {
+    const live = els.filter(el => el && !el.hidden);
+    // already mid-close (a second Escape/Back while the fade is still running) --
+    // don't restart the transition or fire onDone twice.
+    if (!live.length || live.some(el => el.classList.contains("sheet-closing"))) { if (onDone) onDone(); return; }
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      live.forEach(el => { el.hidden = true; el.classList.remove("sheet-opening", "sheet-closing"); });
+      if (onDone) onDone();
+      return;
+    }
+    let remaining = live.length;
+    const finish = () => { if (--remaining <= 0 && onDone) onDone(); };
+    live.forEach(el => {
+      el.classList.add("sheet-closing");
+      const done = () => {
+        el.removeEventListener("transitionend", done);
+        el.hidden = true;
+        el.classList.remove("sheet-closing");
+        finish();
+      };
+      el.addEventListener("transitionend", done, { once: true });
+      setTimeout(done, 260);   // safety net if transitionend never fires (e.g. display already none for some other reason)
+    });
+  }
   // On wide screens the sheet anchors directly beneath the tapped block, GCal-style,
   // and the block itself gets a gold selection outline. Phones (≤640px) keep the
   // centred overlay sheet -- this function no-ops into that behaviour there.
@@ -32108,7 +32198,7 @@
     tlDetailPanel = null;
     tlOvrScope = "day";
     tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
-    document.getElementById("tlDetailOverlay").hidden = false;
+    animateSheetOpen(document.getElementById("tlDetailOverlay"));
     document.getElementById("tlDetailOverlay").dataset.itemId = id;
     // Every occurrence, repeating or not, opens the identical bottom sheet
     // (.tl-routine-panel's side-panel variant is retired, see that class's CSS
@@ -32185,10 +32275,14 @@
   });
   function closeTlDetail() {
     const ov = document.getElementById("tlDetailOverlay");
-    ov.hidden = true;
     delete ov.dataset.itemId;
     tlDetailPanel = null;
-    positionTlDetail(null);
+    // positionTlDetail(null) resets the sheet's own anchored inline styles back
+    // to the CSS default (centred) -- deferred until the fade actually finishes
+    // so a desktop anchored-flyout sheet doesn't visibly snap to the centred
+    // position WHILE it's still fading out, which would just relocate the jerk
+    // rather than remove it.
+    animateSheetClose(() => positionTlDetail(null), ov);
   }
   function refreshOpenTlDetail() {
     const ov = document.getElementById("tlDetailOverlay");
@@ -51841,14 +51935,14 @@
     todoChecklistOpenId = null; todoChecklistOpenStepKey = null;
     document.getElementById("editPanelSheet")?.classList.add("todo-panel-mode");
     renderTodoPanel();
-    document.getElementById("editPanelOverlay").hidden = false;
+    animateSheetOpen(document.getElementById("editPanelOverlay"));
   }
   function closeTodoPanel() {
     todoPanelOpen = false;
     todoReviewing = false;
     todoChecklistOpenId = null; todoChecklistOpenStepKey = null;
     document.getElementById("editPanelSheet")?.classList.remove("todo-panel-mode");
-    document.getElementById("editPanelOverlay").hidden = true;
+    animateSheetClose(null, document.getElementById("editPanelOverlay"));
   }
   // modes stage 7's "one-pass sorting screen": #editPanelOverlay's next occupant
   // after the fasting panel (see that occupant's own comment -- "any FOURTH
@@ -51931,11 +52025,11 @@
     const title = document.getElementById("editPanelTitle");
     if (title) title.textContent = "Sort mode visibility";
     renderModeSortPanel();
-    document.getElementById("editPanelOverlay").hidden = false;
+    animateSheetOpen(document.getElementById("editPanelOverlay"));
   }
   function closeModeSortPanel() {
     modeSortOpen = false;
-    document.getElementById("editPanelOverlay").hidden = true;
+    animateSheetClose(null, document.getElementById("editPanelOverlay"));
   }
   // Sort mode visibility lives in
   // the ⋯ menu (openRtnPageMenu, calls openModeSortPanel() directly on click).
@@ -52015,11 +52109,11 @@
     const title = document.getElementById("editPanelTitle");
     if (title) title.textContent = "Plan tomorrow";
     renderPlanTomorrowPanel();
-    document.getElementById("editPanelOverlay").hidden = false;
+    animateSheetOpen(document.getElementById("editPanelOverlay"));
   }
   function closePlanTomorrowPanel() {
     planTomorrowOpen = false;
-    document.getElementById("editPanelOverlay").hidden = true;
+    animateSheetClose(null, document.getElementById("editPanelOverlay"));
   }
   document.getElementById("planTomorrowBtn")?.addEventListener("click", openPlanTomorrowPanel);
   document.addEventListener("change", e => {
@@ -52473,13 +52567,13 @@
     // "Last 7 fasts" -- always open on the week view, never wherever the Health
     // page's own Week/Month toggle was last left.
     fastChartRange = "week";
-    document.getElementById("editPanelOverlay").hidden = false;
+    animateSheetOpen(document.getElementById("editPanelOverlay"));
     renderFastEverywhere(); // fastPanelOpen is already true, so its own tail refreshes chart/stats/history/panel-stats
   }
   function closeFastPanel() {
     fastPanelOpen = false;
     document.getElementById("editPanelSheet")?.classList.remove("fast-panel-mode");
-    document.getElementById("editPanelOverlay").hidden = true;
+    animateSheetClose(null, document.getElementById("editPanelOverlay"));
     const tuckHome = document.getElementById("fastLogTuckHome"), tuck = document.querySelector(".fast-log-tuck");
     if (tuckHome && tuck) tuckHome.after(tuck);
     const chartHome = document.getElementById("fastChartHome"), chart = document.getElementById("fastChart");
@@ -55585,8 +55679,8 @@
   }
   document.getElementById("fRptSchedExtraToggle").addEventListener("click", () => setFRptSchedExtraOpen(document.getElementById("fRptSchedExtraBody").hidden));
   function closeForm() {
-    form.hidden = true; addRow.hidden = false;
-    document.getElementById("addFormBackdrop").hidden = true;
+    addRow.hidden = false;
+    animateSheetClose(null, form, document.getElementById("addFormBackdrop"));
     document.getElementById("addFormConfirm").hidden = true;
     closePresetsPop();
     form.reset(); state.track = "work"; syncTrack();
@@ -55874,8 +55968,8 @@
   }, true);
   function openForm(prefStart, prefLoc, prefWho) {
     armBackGuard();
-    addRow.hidden = true; form.hidden = false;
-    document.getElementById("addFormBackdrop").hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form, document.getElementById("addFormBackdrop"));
     formDirty = false;
     fDate.value = keyOf(state.anchor);
     updateEachWeekdayLabel();
@@ -55928,8 +56022,8 @@
   }
   function openFormForEdit(ev) {
     armBackGuard();
-    addRow.hidden = true; form.hidden = false;
-    document.getElementById("addFormBackdrop").hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form, document.getElementById("addFormBackdrop"));
     formDirty = false;
     eventEditId = ev.id;
     fTitle.value = ev.title;
@@ -55974,8 +56068,8 @@
   // the whole series, same all-occurrences semantics as editing a routine
   function openFormForRecurEdit(t) {
     armBackGuard();
-    addRow.hidden = true; form.hidden = false;
-    document.getElementById("addFormBackdrop").hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form, document.getElementById("addFormBackdrop"));
     formDirty = false;
     eventEditId = null;
     editingRecurTemplateId = t.id;
@@ -56024,8 +56118,8 @@
   // that name for the two disclosed exceptions that stay on #rtnAddForm instead).
   function openEventFormForRoutine(task, focusField) {
     armBackGuard();
-    addRow.hidden = true; form.hidden = false;
-    document.getElementById("addFormBackdrop").hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form, document.getElementById("addFormBackdrop"));
     formDirty = false;
     eventEditId = null; editingRecurTemplateId = null;
     editingRoutineId = task.id;
@@ -57895,7 +57989,8 @@
   function openFormWithAction(title) {
     armBackGuard();
     form.reset(); eventEditId = null;
-    addRow.hidden = true; form.hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form);
     fTitle.value = title;
     state.track = "personal"; syncTrack();
     formKind = "event"; syncKind();
@@ -57913,7 +58008,8 @@
     armBackGuard();
     state.view = "day"; render();
     form.reset(); eventEditId = null;
-    addRow.hidden = true; form.hidden = false;
+    addRow.hidden = true;
+    animateSheetOpen(form);
     fTitle.value = title;
     state.track = "personal"; syncTrack();
     formKind = "event"; syncKind();
