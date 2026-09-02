@@ -365,6 +365,20 @@ rule forbids a second control with the same handler. The mock's UP NEXT card
 ("mock, minus whats next") and the on-demand NOW rail (she kept RIGHT NOW always
 open) were declined by her, not by me.
 
+## 12. Session card "Stay 15 more →" — retired 2026-09-03
+
+Linh: "remove stay 15 more, i dont use it". The link in the session card's head
+row (`.sc-stay-link`, `data-sc-extend="15"`, added 2026-08-31 as the one surviving
+ending-action) no longer renders. Kept in the JS, unreferenced: `extendSession()`,
+the `[data-sc-extend]` click branch, `bookAnotherSession()` / `moveToNextSession()`
+and their branches, and the `.sc-stay-link` CSS. A session now always auto-ends at
+its scheduled time (sessionTick); to keep going she reschedules the block itself.
+
+Also that day: **Mode takeover and Mode calendar filtering became opt-in**
+(Settings → Modes, `PREFS.modeTakeover` / `PREFS.modeFilter`, both off by default,
+her "stop modes from taking over screen and calendar"). Nothing deleted — the
+Focus button, takeover overlay and Mode badge all come back when switched on.
+
 **Desktop/tablet:** none of the CSS above applies past 640px — `.day-step-row`
 already had its own, older, unrelated desktop hide rule (`#dayPage .day-main >
 .section-head .day-step-row { display: none }`, "too many arrows"); `#navMonthBtn`/
