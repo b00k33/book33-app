@@ -17654,6 +17654,11 @@
   .ds-day.dim { opacity: .38; }
   .ds-month .ds-day { min-height: 36px; }
   .ds-month .ds-day .wd { display: none; }
+  /* Days shown row (phone only, rendered by renderDateSheet): R13 label left, the
+     app's own 1/3/5/7 .cal-days-btn group right -- same component as desktop's picker */
+  .ds-days { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 0 4px; }
+  .ds-days-lbl { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+  .ds-days .cal-days-picker { display: flex; gap: 4px; }
   .ds-foot { display: flex; gap: 8px; }
   .ds-foot button {
     flex: 1; min-height: 44px; border: none; border-radius: var(--radius-sm); cursor: pointer;
@@ -35829,18 +35834,13 @@
   // #multiDayWrap hidden, unhide it just long enough to read the width, then restore
   // -- all inside this one synchronous pass, so nothing paints in between.
   function calDaysRenderCount() {
-    const stored = calDaysActive();
-    if (stored <= 1) return stored;
-    const multi = document.getElementById("multiDayWrap");
-    const mdCols = document.getElementById("mdCols");
-    if (!multi || !mdCols) return stored;
-    const wasHidden = multi.hidden;
-    if (wasHidden) multi.hidden = false;
-    const w = mdCols.getBoundingClientRect().width;
-    if (wasHidden) multi.hidden = true;
-    if (!w) return stored;   // unmeasurable (e.g. the whole page currently hidden) -- don't force a false narrow
-    const colWidth = (w - (stored - 1) * 4) / stored;
-    return colWidth >= 90 ? stored : 1;
+    // 2026-09-02 (Linh: "mobile app doesnt show 3 5 or 7 days"): the 2026-08-29 guard
+    // here silently rendered ONE day whenever the picked count couldn't give every
+    // column the 90px label threshold -- on a 375px phone that's every 5- and 7-day
+    // pick, so the picker looked broken (tap 7, still see 1). The grid already handles
+    // narrow columns by design (2026-08-25: labelable=false -> bare colour bars +
+    // #mdLegend), so the picked count renders as picked; git history has the guard.
+    return calDaysActive();
   }
   function renderCalDaysUI() {
     document.querySelectorAll(".cal-days-btn").forEach(b => {
@@ -36321,15 +36321,27 @@
       body = `<div class="ds-month-wd">${[0, 1, 2, 3, 4, 5, 6].map(i => `<span>${WD_MIN[i]}</span>`).join("")}</div><div class="ds-month">${cells}</div>`;
     }
     const month = dateSheetMode === "month";
+    // Days shown (1/3/5/7) -- phone only (2026-09-02, "mobile app doesnt show 3 5 or
+    // 7 days"): below 768px this sheet is the day/week control, so the day-count
+    // lives here (it used to hide inside the ⚙ settings sheet, where she never found
+    // it). Same .cal-days-btn/data-cal-days as desktop's own #ddtDays picker, so the
+    // document-level delegate drives it and renderCalDaysUI() paints pressed state --
+    // no second copy of the logic. Desktop keeps its top-bar picker; none here.
+    const daysRow = window.innerWidth < 768
+      ? `<div class="ds-days"><span class="ds-days-lbl">Days shown</span><span class="cal-days-picker" role="group" aria-label="Days shown">${[1, 3, 5, 7].map(n => `<button type="button" class="cal-days-btn" data-cal-days="${n}" aria-label="${n} day${n === 1 ? "" : "s"}">${n}</button>`).join("")}</span></div>`
+      : "";
     sheet.innerHTML = `<div class="ds-head">
         <button type="button" class="ds-arrow" data-ds-step="-1" aria-label="Previous ${month ? "month" : "week"}">‹</button>
         <div class="ds-title">${head}</div>
         <button type="button" class="ds-arrow" data-ds-step="1" aria-label="Next ${month ? "month" : "week"}">›</button>
-      </div>${body}
+      </div>${body}${daysRow}
       <div class="ds-foot">
         <button type="button" data-nds-today>↩ Jump to Today</button>
         <button type="button" data-ds-mode aria-pressed="${month}">${month ? "Week view" : "Month view"}</button>
       </div>`;
+    // pressed state painted locally (renderCalDaysUI() also swaps the single/multi
+    // grids -- not something a sheet render should trigger)
+    sheet.querySelectorAll(".cal-days-btn").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.calDays === calDaysActive())));
   }
   document.addEventListener("click", e => {
     const step = e.target.closest("#dateSheet [data-ds-step]");
@@ -48123,8 +48135,10 @@
     pop.className = "ddt-gear-pop";
     pop.id = "ddtGearPop";
     pop.innerHTML = `
-      ${showDays ? `<div class="ddt-gear-row ddt-gear-row--days"><span>Days shown</span>
-        <span class="cal-days-picker" role="group" aria-label="Days shown">${[1, 3, 5, 7].map(n => `<button type="button" class="cal-days-btn" data-cal-days="${n}" aria-label="${n} day${n === 1 ? "" : "s"}">${n}</button>`).join("")}</span></div>` : ""}
+      ${/* 2026-09-02: the phone's Days-shown row moved out of this settings sheet into
+            the date sheet (renderDateSheet), where the day/week controls live -- she
+            never found it in here ("mobile app doesnt show 3 5 or 7 days"). One copy
+            per width, same as desktop's #ddtDays rule just above. */ ""}
       ${showMax ? `<div class="ddt-gear-row"><span>Full-width calendar</span>
         <button type="button" class="ddt-gear-toggle" id="ddtMaxBtn" aria-pressed="${PREFS.dayMax === true}">${PREFS.dayMax === true ? "On" : "Off"}</button></div>` : ""}
       <div class="ddt-gear-row"><span>Day starts at</span><select id="ddtDayStartSel">${hourOpts(Number.isFinite(PREFS.dayStart) ? PREFS.dayStart : 6)}</select></div>
