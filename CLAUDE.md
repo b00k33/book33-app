@@ -95,10 +95,12 @@ for reading and quick capture. Desktop may **show more, never something differen
 in cells the phone hides, five Up-next rows instead of three, wider rails. Not a different
 arrangement.
 **Mobile Day view:** only the all-day row, the mode-hidden pill, and the Now-glance
-status strip may sit above the calendar — the top zone itself (quick-add, date-nav,
-1/3/5/7 picker) is always fully shown now, no grab handle to collapse it (2026-08-31,
-the handle was removed once it had nothing left to toggle). Everything else goes in a
-drawer. (Enforced by `dayLayoutAboveCalendarGuard()` — dev-only console warning, walks
+status strip may sit above the calendar — the top zone itself (the quick-add bar) is
+always fully shown now, no grab handle to collapse it (2026-08-31, the handle was
+removed once it had nothing left to toggle). Date navigation and the 1/3/5/7 day-count
+live in the top bar's **date sheet** (`#dateSheet`, opened from the date title; since
+2026-09-02 — `#calDaysRow`/`.day-step-row` stay in the top zone's DOM but hidden).
+Everything else goes in a drawer. (Enforced by `dayLayoutAboveCalendarGuard()` — dev-only console warning, walks
 `.day-main`'s direct children against an id allowlist.)
 
 #### R9. Every commit

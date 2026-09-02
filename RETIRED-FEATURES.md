@@ -309,6 +309,14 @@ more, but leaving it in place means an old saved value on her device never throw
   never a date duplicate, just co-located with one.
 - `#dayNavGear` (⚙) physically moved into `.topbar-right`, same id, same handlers
   (`gearAnchorEl()`/`renderDdtGearPop()` — zero JS changes needed).
+- **2026-09-02 — the phone's "Days shown" 1/3/5/7 row moved out of the ⚙ sheet into
+  the date sheet** (`#dateSheet`, `renderDateSheet()`, opened from the date title).
+  Linh: "mobile app doesnt show 3 5 or 7 das" — the ⚙ copy was the only one left on
+  the phone and she never found it. Same `.cal-days-btn`/`data-cal-days` markup and
+  the same document-level delegate; ⚙ keeps Day starts/ends, Week view and
+  Notification settings. Also retired the same day: `calDaysRenderCount()`'s
+  2026-08-29 narrow-phone guard that rendered 1 day for any 5/7 pick — the grid's own
+  bars-plus-legend fallback (2026-08-25) is what renders narrow columns now.
 - `#navMonthPop`'s "Week view" jump (`state.view = "week"`) had no other entry point
   anywhere in the file — moved into the ⚙ gear sheet as `#ddtGearWeekView`.
   "Month view" did **not** move — already reachable via the ☰ menu's own "Calendar"
