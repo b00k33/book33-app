@@ -19500,6 +19500,16 @@
   #dnrFoot .dnr-ic .b33-lic, .nav-panel-row .nav-ic .b33-lic { width: 18px; height: 18px; display: block; }
   .nav-panel-row .nav-ic { display: flex; justify-content: center; }
   [data-b33-install-state] .btn-save { margin-left: auto; }
+  /* -- in-app Back: a rail row on desktop, a round arrow beside ☰ on the phone (2026-09-03) -- */
+  .dnr-row.dnr-back { color: var(--margin-rule); font-weight: 600; margin-bottom: 4px; }
+  .dnr-row.dnr-back .dnr-ic { font-size: 24px; line-height: 1; }
+  .nav-back-btn {
+    flex: none; width: 44px; height: 44px; border: none; background: none; border-radius: 999px;
+    color: var(--margin-rule); font-size: 26px; line-height: 1; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-back-btn:hover, .nav-back-btn:active { background: var(--raised); }
+  @media (min-width: 768px) { .nav-back-btn { display: none; } }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -19560,6 +19570,9 @@
          The BUTTON is unchanged in every other respect — same id, same aria-label,
          same 44px box, still the thing that opens the chapters drawer; only its face
          changed. -->
+    <!-- 2026-09-03 in-app Back (phone): shows only while there is a previous page;
+         same b33GoBack() as the hardware back button. -->
+    <button type="button" class="nav-back-btn" id="navBackBtn" data-b33-back hidden aria-label="Back">‹</button>
     <button type="button" class="nav-drawer-btn" id="navDrawerBtn" aria-label="Open menu" aria-haspopup="true" aria-expanded="false"><img src="icon-192.png" alt="" class="nav-drawer-logo"><span class="nav-drawer-word" aria-hidden="true">B33</span><span class="nav-drawer-hamburger" aria-hidden="true">☰</span></button>
     <!-- GCal-shaped mobile top bar: #navDateSlot no longer hosts the
          reparented #dayRow2 (placeDateLine() below stops moving it here) -- it now
@@ -44968,12 +44981,16 @@
     // "workBoard"), so the current-patient scroll-into-view can't fight her
     // scrolling mid-visit. Computed before lastPushedView is overwritten below.
     const wmbJustEntered = state.view === "workBoard" && lastPushedView !== "workBoard";
-    // Install rows (Settings, rail footer, phone drawer) read live browser state,
-    // so they're re-synced after every render settles -- see b33SyncInstallRows.
-    setTimeout(b33SyncInstallRows, 0);
+    // Install rows (Settings, rail footer, phone drawer) and the Back controls read
+    // live state, so they're re-synced after every render settles.
+    setTimeout(() => { b33SyncInstallRows(); b33SyncBackBtns(); }, 0);
     // Android back-button: a view change (Day -> Week, etc) counts as a step to
     // record, same as opening a popup — see armBackGuard/viewBackStack above.
-    if (!suppressViewBackPush && state.view !== lastPushedView) {
+    // b33UserNav: boot itself can change the view once (restored page -> the page
+    // the open-param/notification asked for) -- that hop is not somewhere she
+    // came from, so it never enters the stack; only view changes after her first
+    // tap/keypress do (2026-09-03, the in-app Back made the stray entry visible).
+    if (!suppressViewBackPush && b33UserNav && state.view !== lastPushedView) {
       viewBackStack.push(lastPushedView);
       armBackGuard();
     }
@@ -45607,6 +45624,8 @@
   // same priority order (innermost overlay first).
   let guardArmed = false, rootBackArmedAt = 0;
   let viewBackStack = [], suppressViewBackPush = false;
+  let b33UserNav = false;   // true from her first pointer/keyboard input -- see render()
+  ["pointerdown", "keydown"].forEach(t => document.addEventListener(t, () => { b33UserNav = true; }, { once: true, capture: true }));
   function armBackGuard() {
     if (guardArmed) return;
     guardArmed = true;
@@ -45620,29 +45639,51 @@
     document.body.appendChild(el);
     setTimeout(() => { el.classList.add("bye"); setTimeout(() => el.remove(), 450); }, 1600);
   }
-  window.addEventListener("popstate", () => {
-    guardArmed = false;   // the real history entry that armed this just got consumed
+  // 2026-09-03 (Linh: "include a back function" -- the installed desktop window
+  // has no browser bar): ONE back behaviour, shared by the hardware/browser back
+  // (popstate below), the visible Back controls (desktop rail row, phone top-bar
+  // arrow -- [data-b33-back]) and, through the browser's own history, Alt+← and
+  // the mouse's back button. Innermost overlay first, then the previous page.
+  // Returns false when there is nothing left to go back to.
+  function b33GoBack() {
     // The walkthrough sits ON TOP of the detail popup (both can be "open"
     // at once) -- same extend-the-list pattern this module's own comment invited,
     // checked first since it's the innermost/topmost of the two.
-    if (!document.getElementById("tlWalkOverlay").hidden) { closeTlWalk(); armBackGuard(); return; }
-    if (!document.getElementById("tlDetailOverlay").hidden) { closeTlDetail(); armBackGuard(); return; }
-    if (!document.getElementById("addForm").hidden) { closeForm(); armBackGuard(); return; }
-    if (todoPanelOpen) { closeTodoPanel(); armBackGuard(); return; }
-    if (fastPanelOpen) { closeFastPanel(); armBackGuard(); return; }
-    if (modeSortOpen) { closeModeSortPanel(); armBackGuard(); return; }
-    if (planTomorrowOpen) { closePlanTomorrowPanel(); armBackGuard(); return; }
-    if (!document.getElementById("jumpOverlay").hidden) { closeJump(); armBackGuard(); return; }
-    if (dayRightDrawerIsOpen()) { closeDayRightDrawer(); armBackGuard(); return; }
-    if (navPanelIsOpen()) { closeNavPanel(); armBackGuard(); return; }
+    if (!document.getElementById("tlWalkOverlay").hidden) { closeTlWalk(); return true; }
+    if (!document.getElementById("tlDetailOverlay").hidden) { closeTlDetail(); return true; }
+    if (!document.getElementById("addForm").hidden) { closeForm(); return true; }
+    if (todoPanelOpen) { closeTodoPanel(); return true; }
+    if (fastPanelOpen) { closeFastPanel(); return true; }
+    if (modeSortOpen) { closeModeSortPanel(); return true; }
+    if (planTomorrowOpen) { closePlanTomorrowPanel(); return true; }
+    if (!document.getElementById("jumpOverlay").hidden) { closeJump(); return true; }
+    if (dayRightDrawerIsOpen()) { closeDayRightDrawer(); return true; }
+    if (navPanelIsOpen()) { closeNavPanel(); return true; }
     if (viewBackStack.length) {
       suppressViewBackPush = true;
       state.view = viewBackStack.pop();
       render();
       suppressViewBackPush = false;
-      armBackGuard();
-      return;
+      return true;
     }
+    return false;
+  }
+  const b33CanGoBack = () => viewBackStack.length > 0;
+  // the visible controls show only while there is a previous PAGE to return to
+  // (open sheets have their own close buttons); re-synced after every render()
+  function b33SyncBackBtns() {
+    const can = b33CanGoBack();
+    document.querySelectorAll("[data-b33-back]").forEach(el => { el.hidden = !can; });
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-b33-back]");
+    if (!b) return;
+    b33GoBack();
+    b33SyncBackBtns();
+  });
+  window.addEventListener("popstate", () => {
+    guardArmed = false;   // the real history entry that armed this just got consumed
+    if (b33GoBack()) { armBackGuard(); b33SyncBackBtns(); return; }
     const now = Date.now();
     if (now - rootBackArmedAt < 2000) return;   // 2nd press within 2s: let it actually exit, don't re-arm
     rootBackArmedAt = now;
@@ -47898,6 +47939,9 @@
     const rail = document.getElementById("deskNavRail");
     if (!scroll || !foot || !rail) return;
     let html = "", lastGroup;
+    // 2026-09-03: the in-app Back row -- first thing in the rail, shown only while
+    // there is a previous page (b33SyncBackBtns); same b33GoBack() as hardware back
+    html += `<button type="button" class="dnr-row dnr-back" data-b33-back${b33CanGoBack() ? "" : " hidden"} title="Back to the previous page"><span class="dnr-ic" aria-hidden="true">‹</span><span class="dnr-lbl">Back</span></button>`;
     const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && lastGroup && item.group) {
