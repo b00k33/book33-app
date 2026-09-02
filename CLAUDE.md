@@ -295,6 +295,15 @@ These have each shipped at least once. Check them by name.
     so a sheet opened through it is safe; a NEW overlay that toggles `hidden` itself
     instead of going through that helper re-creates this — route it through the helper,
     and if a new 301-tier surface is added, add its close to the same call.
+18. **The transformed sheet.** A `transform` on a panel (even `translateX(-50%)` for
+    centring) makes that panel the containing block for every `position: fixed`
+    descendant — popovers inside it (`.when-pop`, `.presets-pop`, `.addform-confirm`)
+    then take their `top/left` relative to the panel, not the viewport, and get clipped
+    by the panel's own overflow. Nothing errors; the control just "doesn't open"
+    (2026-09-02, `#addForm`'s time dropdown rendered 360px below the field, off the
+    phone's screen — "i cant edit time"). Centre sheets with `left:0; right:0; margin:
+    0 auto` and keep `transform: none` at rest; a transform is fine only inside a
+    short-lived open/close motion class, when no popover can be open.
 
 ### PART 4 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
