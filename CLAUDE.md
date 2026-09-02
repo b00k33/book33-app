@@ -122,6 +122,33 @@ report in `MEASURING.md` and pastes the results.** A rule nobody measures is a w
     where they are, restyled only.
 11. **Phone RIGHT NOW = the right swipe drawer, as now**, restyled to the card system.
 
+### Life Map under design45 (2026-09-03, her second mock + 8 answers)
+Her mock: Modes list on the left, sketch-stacked day columns, today on a card, a
+birthday chip above its day, a coloured totals strip along the bottom. Her answers:
+1. **Columns = hours kept, night folded** (not the axis-free stack): the grid stays 48
+   half-hour rows so tap/drag painting and proportion survive; the first 6 hours
+   (midnight–6am, `LM_FOLD_SLOTS`) are fixed 4px rows (`LM_FOLD_ROW_H`) with one
+   "12–6a" label — painted Sleep still shows there, as a slim block.
+2. **Block face = glyph + title when there is room** (title from a 1h run, glyph only
+   on a 30-min block). A same-Mode run reads as ONE rounded block: `.lm-run-start` /
+   `.lm-run-end` round the ends, row gap is 0, a 1px page hairline separates runs.
+3. **Palette = the mock's list**: "MODES +" header (the + opens the same Modes
+   editor as the gear), one tinted tile per Mode with its drawn glyph, tools row
+   beneath. Phone keeps its collapsed bar / 4-wide grid, same tile style.
+4. **Today's column on a card + birthday chips** (`lmDrawTodayFrame()`, drawn with
+   the now-line; `.lm-hd-bday` chips in the Birthdays Mode colour).
+5. **Night fold is fixed midnight–6am**, never a daytime gap.
+6. **Phone gets the same design, scaled.**
+7. **Totals tile tap arms that Mode** — the tiles carry `data-lm-mode` and ride the
+   palette's own document delegate; `lmSyncTotalsArmed()` mirrors the ring.
+8. **Subtitle "A sketch of the week ahead"**; the how-to hint appears only on a week
+   with nothing painted.
+The totals strip (`renderLmTotals()`, 2026-09-02) sums the SAME grid the columns draw —
+LM_SLOT_MIN per filled cell per Mode, most hours first, Birthdays as a count.
+Trap found on the way: `lmComputeRowHeight()` must read the ROW gap only — the old
+`rowGap || columnGap` fallback read the 6px column gap once row gap became 0, pushed
+every render into the 9px floor and let the header track balloon.
+
 ### What the first pass built (2026-09-02) — where design45 lives in index.html
 - **Tokens:** `:root[data-theme="light"]`, the two dark blocks (media + explicit), the
   `:root[data-desk-day][data-theme="light"]` desktop-Day override (it outranks the
