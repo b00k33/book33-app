@@ -19500,6 +19500,25 @@
   #dnrFoot .dnr-ic .b33-lic, .nav-panel-row .nav-ic .b33-lic { width: 18px; height: 18px; display: block; }
   .nav-panel-row .nav-ic { display: flex; justify-content: center; }
   [data-b33-install-state] .btn-save { margin-left: auto; }
+  /* -- Life Map totals strip (2026-09-03, her mock): one tile per painted Mode, the
+        Mode's own colour as a soft tint, hours in ink. One row; scrolls sideways on a
+        phone rather than wrapping (one-line law). Hidden when nothing is painted. -- */
+  .lm-totals { flex: none; display: flex; gap: 8px; margin: 8px 12px 0 0; overflow-x: auto; scrollbar-width: none; }
+  .lm-totals::-webkit-scrollbar { display: none; }
+  .lm-totals:empty { display: none; }
+  .lm-tot {
+    flex: 1 1 0; min-width: 128px; display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-radius: 12px; background: color-mix(in oklab, var(--lm-acc) 14%, var(--paper));
+    color: color-mix(in oklab, var(--lm-acc) 72%, var(--ink)); white-space: nowrap;
+  }
+  :root[data-theme="dark"] .lm-tot { background: color-mix(in oklab, var(--lm-acc) 24%, var(--paper)); color: color-mix(in oklab, var(--lm-acc) 60%, #FFFFFF); }
+  .lm-tot-nomode { color: var(--ink-soft); }
+  .lm-tot-ic { flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+  .lm-tot-ic .mode-ic { width: 18px; height: 18px; display: block; }
+  .lm-tot-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .lm-tot-lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .9; }
+  .lm-tot-val { font-size: 14px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+  @media (max-width: 767px) { .lm-totals { margin-right: 0; } .lm-tot { min-width: 112px; padding: 6px 10px; } }
   /* -- in-app Back: a rail row on desktop, a round arrow beside ☰ on the phone (2026-09-03) -- */
   .dnr-row.dnr-back { color: var(--margin-rule); font-weight: 600; margin-bottom: 4px; }
   .dnr-row.dnr-back .dnr-ic { font-size: 24px; line-height: 1; }
@@ -20946,6 +20965,12 @@
           <div class="lm-sticker-layer" id="lmStickerLayer"></div>
         </div>
         <div class="lm-untimed" id="lmUntimed" hidden></div>
+        <!-- 2026-09-03 (Linh's Life Map mock, "correspond the work shown at bottom of
+             screen in the hours ... with the colour"): one tile per Mode painted this
+             week, in that Mode's own colour, summing the painted half-hour cells --
+             the same grid the columns above draw from, so the two can never disagree.
+             Filled by renderLmTotals(). -->
+        <div class="lm-totals" id="lmTotals"></div>
       </div>
       <div class="lm-panel lm-side-panel" id="lmCellPanel"></div>
     </div>
@@ -23264,6 +23289,52 @@
     }
     return { grid, untimed };
   }
+  // 2026-09-03 (her Life Map mock): the week's totals strip -- one tile per Mode
+  // that has painted time this week, in the Mode's own colour, hours summed from
+  // the SAME grid the columns draw (LM_SLOT_MIN per filled cell), most hours
+  // first; birthdays (the day-header badges) get a count tile in the Birthdays
+  // Mode's colour when there are any. Nothing painted -> the strip is empty and
+  // its :empty rule hides it, so the grid keeps the room.
+  function renderLmTotals(grid, untimedByDay) {
+    const host = document.getElementById("lmTotals");
+    if (!host) return;
+    const hours = new Map(), blocks = new Map();
+    for (let d = 0; d < 7; d++) {
+      let prev = null;
+      grid[d].forEach(cell => {
+        const id = cell ? cell.mode.id : null;
+        if (cell) {
+          hours.set(id, (hours.get(id) || 0) + LM_SLOT_MIN / 60);
+          if (id !== prev) blocks.set(id, (blocks.get(id) || 0) + 1);
+        }
+        prev = id;
+      });
+    }
+    const fmtH = h => `${Number.isInteger(h) ? h : h.toFixed(1)}h`;
+    const tiles = [...hours.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, h]) => {
+        const m = modeById(id === "home" ? null : id);
+        const noMode = id === "home";
+        const accent = noMode ? "var(--ink-faint)" : m.accent;
+        const name = noMode ? "No Mode" : m.name;
+        const n = blocks.get(id) || 0;
+        return `<div class="lm-tot${noMode ? " lm-tot-nomode" : ""}" style="--lm-acc:${accent}" title="${esc(name)} — ${n} block${n === 1 ? "" : "s"} this week">
+          <span class="lm-tot-ic">${noMode ? "" : modeIconHtml(m, 18)}</span>
+          <span class="lm-tot-txt"><span class="lm-tot-lbl">${esc(name)}</span><span class="lm-tot-val">${fmtH(h)}</span></span>
+        </div>`;
+      });
+    const bdayN = (untimedByDay || []).reduce((s, arr) => s + arr.length, 0);
+    if (bdayN) {
+      const bm = MODES.find(x => x.id === "birthday");
+      const accent = bm && bm.accent ? bm.accent : "var(--margin-rule)";
+      tiles.push(`<div class="lm-tot" style="--lm-acc:${accent}" title="Birthdays and remembered dates this week">
+          <span class="lm-tot-ic">${bm ? modeIconHtml(bm, 18) : "🎂"}</span>
+          <span class="lm-tot-txt"><span class="lm-tot-lbl">Birthdays</span><span class="lm-tot-val">${bdayN} this week</span></span>
+        </div>`);
+    }
+    host.innerHTML = tiles.join("");
+  }
   function renderLmUntimed(list) {
     const host = document.getElementById("lmUntimed");
     if (!host) return;
@@ -23910,6 +23981,7 @@
     });
     document.getElementById("lmGrid").innerHTML = gridHtml;
     renderLmUntimed(untimedRest);
+    renderLmTotals(grid, untimedByDay);   // before lmComputeRowHeight(): the strip takes its height from the same flex column
     renderLmStrip();
     renderLmCellPanel();
     lmComputeRowHeight();
