@@ -9246,6 +9246,16 @@
      .when-pop-row's own base height (~36px) is fine for the time-picker it was built
      for; scoped taller here rather than raising the shared rule for every consumer. */
   #addForm .presets-pop-list .when-pop-row { min-height: 44px; }
+  /* 2026-09-02: row + its own ✎ (edit-in-place) side by side; the row keeps its
+     width and tap target, the ✎ is a 44px quiet line icon that goes gold on hover */
+  #addForm .presets-pop-item { display: flex; align-items: stretch; gap: 2px; }
+  #addForm .presets-pop-item .when-pop-row { flex: 1; min-width: 0; }
+  #addForm .presets-pop-edit {
+    flex: none; width: 44px; min-height: 44px; border: none; background: none; cursor: pointer;
+    color: var(--ink-faint); border-radius: var(--field-radius-sm); display: grid; place-content: center;
+  }
+  #addForm .presets-pop-edit:hover, #addForm .presets-pop-edit:focus-visible { color: var(--gold-bright); background: var(--field-bg); outline: none; }
+  #addForm .presets-pop-edit .b33-lic { width: 15px; height: 15px; }
   #addForm .presets-pop-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #addForm .presets-pop-empty { padding: 10px; font-size: 13px; color: var(--ink-soft); font-weight: 600; }
   #addForm .presets-pop-actions { flex: none; }
@@ -48529,6 +48539,7 @@
     schedule: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v4.8l3 1.9"/>',
     makeEvent: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M10 15.5h5M13 13.5l2 2-2 2"/>',
     setMode: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   };
   function b33LineIcon(key) {
     const d = B33_LINE_ICONS[key];
@@ -56098,13 +56109,22 @@
       if (!SAVED_EVENTS.length) {
         listHost.innerHTML = `<div class="presets-pop-empty">☆ Tap the star next to Title to save your first preset</div>`;
       } else {
+        // 2026-09-02 (Linh: "how to edit presets while adding events?" -> yes to an
+        // ✎ per row): each row gets its own edit button beside it -- a sibling, not
+        // nested (a button can't hold a button). It's presetEdit()'s exact flow minus
+        // openForm(), since the form is already open: load the preset, flip the ★ into
+        // "Update this preset" mode. This deliberately brings back only ✎, not the ✕
+        // the 2026-08 pass removed -- delete stays on the Presets page, with undo.
         listHost.innerHTML = SAVED_EVENTS.map(p => {
           const sub = presetSubline(p);
-          return `<button type="button" class="when-pop-row presets-pop-row" role="option" tabindex="-1"
-            data-preset-id="${esc(p.id)}" aria-selected="${String(p.id === presetSelectedId)}">
-            <span class="presets-pop-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
-            ${sub ? `<span class="when-pop-dur">${esc(sub)}</span>` : ""}
-          </button>`;
+          return `<div class="presets-pop-item">
+            <button type="button" class="when-pop-row presets-pop-row" role="option" tabindex="-1"
+              data-preset-id="${esc(p.id)}" aria-selected="${String(p.id === presetSelectedId)}">
+              <span class="presets-pop-title">${esc(p.icon ? p.icon + " " : "")}${esc(p.title)}</span>
+              ${sub ? `<span class="when-pop-dur">${esc(sub)}</span>` : ""}
+            </button>
+            <button type="button" class="presets-pop-edit" data-preset-edit="${esc(p.id)}" title="Edit this preset" aria-label="Edit preset ${esc(p.title)}">${b33LineIcon("edit")}</button>
+          </div>`;
         }).join("");
       }
     }
@@ -56186,6 +56206,20 @@
     if (presetsPopOpen) closePresetsPop(); else openPresetsPop();
   });
   document.getElementById("presetsPopList").addEventListener("click", e => {
+    // ✎ beside a row (2026-09-02): presetEdit()'s flow without openForm() -- the
+    // form is already open. Loads the preset and puts the ★ into Update mode.
+    const editBtn = e.target.closest("[data-preset-edit]");
+    if (editBtn) {
+      const p = SAVED_EVENTS.find(x => x.id === editBtn.dataset.presetEdit);
+      if (!p) return;
+      presetEditingId = p.id;
+      presetSelectedId = p.id;
+      applyPreset(p);
+      renderPresetsRow();
+      closePresetsPop();
+      fTitle.focus();
+      return;
+    }
     const row = e.target.closest(".presets-pop-row");
     if (!row) return;
     const p = SAVED_EVENTS.find(x => x.id === row.dataset.presetId);
