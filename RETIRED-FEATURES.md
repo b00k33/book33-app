@@ -327,6 +327,44 @@ day headers) — a different, necessary element, not a duplicate of the new stri
 `.mini-cal-wrap` (the mini month grid) — already lived in the ☰ drawer on mobile
 Day view before this change, never inside the rows retired here.
 
+## 11. design44 → design45 — retired 2026-09-02
+
+Linh supplied a full Day-view mock ("i really like this design. use it") and then
+"remove and delete design44". CLAUDE.md's design44 (one-screen summary, R1–R19, the
+Black & Brass palette note) is deleted; design45 replaces it. In the app itself:
+
+**Retired (hidden, not deleted — CSS, the design45 block at the end of the stylesheet
+restates every older rule at equal/higher specificity):**
+- The 52px **icon-only** desktop nav rail and the phone's 52px icon rail inside
+  `#navPanel` — both are labelled now (`.dnr-lbl` / `.nir-lbl`). The `.rail-teach`
+  "show labels for a few seconds" CSS is gone with them; `openNavPanel()` still adds
+  the class, harmlessly.
+- The top bar's own `BOOK33` wordmark (`.ddt-word`) on the desktop Day page — the
+  rail head carries the date badge + word now (the mock's top-left mark).
+- The **"Numerology"** heading on `#railNum` — the card is headed "Today" (it IS the
+  mock's TODAY card; the eight tiles are unchanged). The tile icon row
+  (`.rail-chip-ic`) is hidden on desktop so all eight tiles sit at one height.
+- `.mini-cal-mascot` (the PY · motif · UY · CD row under the desktop mini month) —
+  PY is a tile, CD is the top-bar cycle chip (`cycleAlldayChipHtml()` now prepends
+  into `#ddtAllday`).
+- Day theme's black structural accent (`--margin-rule: #111111`) and the navy
+  `#253A5E` accent — the one accent is blue `#2F5BEA` (Night `#6C8CFF`).
+- The 3px "square-ish" block radius (Day + phone) — 10px in both themes.
+- The gold/navy now-line — the now-line and the cycle chip are "dark red wine"
+  (`--now-mark` / `--cycle-ink`), her answer to the mock's pink. **Pink is banned
+  everywhere again.**
+
+**Un-retired (deliberately brought back):** the mini month on the desktop Day
+sidebar. Two earlier rules hid it as redundant (`#dayPage .mini-cal` and
+`[data-desk-day] #deskSidebar .mini-cal`, both display:none); her answer 3 ("TODAY
+tiles + mini month") puts it back, so the design45 block overrides both.
+
+**Not built, on purpose:** the mock's ⋮ per calendar block — tapping the block
+already opens the detail sheet, and her standing "verify then remove redundancy"
+rule forbids a second control with the same handler. The mock's UP NEXT card
+("mock, minus whats next") and the on-demand NOW rail (she kept RIGHT NOW always
+open) were declined by her, not by me.
+
 **Desktop/tablet:** none of the CSS above applies past 640px — `.day-step-row`
 already had its own, older, unrelated desktop hide rule (`#dayPage .day-main >
 .section-head .day-step-row { display: none }`, "too many arrows"); `#navMonthBtn`/

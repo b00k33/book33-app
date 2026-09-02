@@ -98,12 +98,65 @@ Confirm before pushing (her standing ALWAYS-ASK rule) and before deleting data. 
 what changed plus the one-line undo. **Any commit that touches layout runs the mobile
 report in `MEASURING.md` and pastes the results.** A rule nobody measures is a wish.
 
-### Open questions for the first build pass (asked 2026-09-02)
-Recorded here once she answers; until then assume the recommended option: theme scope
-(Day only vs a Night translation); where the Right-now combined panel goes (the mock puts
-NOW behind a rail icon, which conflicts with her 2026-09-01 "always-open" ask); whether
-the nav lists the mock's seven items or the app's real pages; phone scope (colours/type
-only vs a matching mobile layout later).
+### Her 11 answers for the first build pass (2026-09-02) — these are decisions, not options
+1. **Both themes.** Night gets a dark translation of the same system (dark cards on
+   near-black, the same pastels dimmed, the same blue accent) — not a colour-only Day pass.
+2. **RIGHT NOW panel stays always open** on desktop (her 2026-09-01 rule holds) — four
+   columns: labelled nav · left cards · timeline · RIGHT NOW panel, all restyled. The
+   mock's on-demand NOW rail icon is NOT adopted.
+3. **Left column = TODAY tiles + mini month only.** No UP NEXT card ("mock, minus whats
+   next").
+4. **Nav = the app's real pages**, labelled, in her priority order (Today · Events ·
+   Life Map · To-do · then the rest) — not the mock's seven names.
+5. **Blocks = mock style, her hours.** Flat pastel per Mode, dark text, tick circle left,
+   time right-aligned, ⋮ menu; the visible hour range stays whatever her settings say.
+6. **Phone gets the full matching layout in the same pass**, not colours-only.
+7. **No pink. The cycle chip and the now-marker are dark red wine** (`#7A1F2E`-class),
+   the birthday chip stays blue. Pink is therefore banned everywhere in the app again.
+8. **One pass, then show** — build everything, show desktop + phone in both themes once,
+   then ask to push.
+9. **Phone nav = top-left ☰** opening the full labelled nav as a left drawer (the existing
+   `#navPanel`, restyled). No bottom tab bar.
+10. **Phone TODAY tiles / mini month: already exist** ("the mobile already has that, no
+    need to add") — the date sheet's month grid and the existing numerology surfaces stay
+    where they are, restyled only.
+11. **Phone RIGHT NOW = the right swipe drawer, as now**, restyled to the card system.
+
+### What the first pass built (2026-09-02) — where design45 lives in index.html
+- **Tokens:** `:root[data-theme="light"]`, the two dark blocks (media + explicit), the
+  `:root[data-desk-day][data-theme="light"]` desktop-Day override (it outranks the
+  theme block, so it restates the same values -- keep the two in sync), and the pre-JS
+  fallback pair near the top of `:root`. New tokens: `--now-mark` and `--cycle-ink`
+  (the wine), `--d45-fill` (pastel strength: 34% Day / 46% Night). `--accent-seed`,
+  `--cosmic-gold`, `--gold-bright` and `--margin-rule` all resolve to the one blue.
+- **The design45 CSS block** is the LAST block in the stylesheet (search "design45 —
+  the Day-view reference"): it restates older rules at equal or higher specificity and
+  wins by source order, so the design44 rules stay in place as the reversible record.
+  Add Day-view restyles THERE, not scattered.
+- **Rail:** `#deskNavRail` is 180px, `body { margin-left: 180px }` at ≥768;
+  `dnrRailRowHtml()` emits `.dnr-lbl`; the head is date badge + `.dnr-word`; the foot
+  is her initial + name (falls back to "33").
+- **Left column:** `#deskSidebar` 275px; CSS `order` puts `#dsbNumSlot` (the TODAY
+  card = `#railNum`, eight `dayNumerologyChips()` tiles, heading "Today" + "View week"
+  via `[data-dsb-go]`, document-level delegate) above `#dsbMiniCalGroup`. The mini
+  month is un-hidden by the block (two older display:none rules would otherwise win).
+  `.mini-cal-mascot` (PY · motif · UY · CD) is hidden there; `.rail-chip-ic` hidden so
+  tiles sit at one height.
+- **Top bar:** `.ddt-word` hidden (the rail carries the mark); `renderDeskAllday()`
+  prepends `cycleAlldayChipHtml()`; chips are tinted pills, cycle = wine, Birthdays =
+  blue.
+- **Blocks:** `.tl-block/.tl-point` fill `color-mix(var(--cat-c) var(--d45-fill),
+  var(--paper))`, page ink, `--blk-radius` 10px in both themes (was 3px in Day and on
+  the phone), origin rail in the Mode colour, time right-aligned at both widths. The
+  mock's ⋮ per block was NOT built -- the whole block already opens the detail sheet,
+  and her "verify then remove redundancy" rule forbids a second control with the same
+  handler. Say so if she asks for it.
+- **Right side:** `#deskWidgetRail` 72px, `.wr-panel` at right:72px on `--chrome-tint`;
+  `.wr-card` is a white card with a hairline.
+- **Phone:** `#navPanel` is a 300px labelled drawer while `dd-drawers-active`
+  (`navIconRailRowHtml()` emits `.nir-lbl`); the Calendar/Chapters flyouts take over
+  the drawer's own width (left:0, 100%) instead of opening beside a 52px rail; the
+  `.rail-teach` CSS is retired (the class openNavPanel() still adds is inert).
 
 ### PART 5 — KNOWN TRAPS
 These have each shipped at least once. Check them by name.
