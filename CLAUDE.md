@@ -297,6 +297,12 @@ These have each shipped at least once. Check them by name.
     so a sheet opened through it is safe; a NEW overlay that toggles `hidden` itself
     instead of going through that helper re-creates this — route it through the helper,
     and if a new 301-tier surface is added, add its close to the same call.
+    **Same trap, same tier:** a sheet opened *from* another sheet at the *same*
+    z-index loses to whichever comes later in the DOM — `#tmsOverlay` ("Move to a
+    Mode", reusing `.tl-detail-overlay`'s 300) opened underneath the To-do panel
+    (`#editPanelOverlay`, also 300, later in the DOM) until it got its own 310
+    (2026-09-02). Anything that opens from a 300-tier sheet needs 310; the tiers
+    above are spoken for (320 scope/delete sheets, 340 date picker, 350 walkthrough).
 18. **The transformed sheet.** A `transform` on a panel (even `translateX(-50%)` for
     centring) makes that panel the containing block for every `position: fixed`
     descendant — popovers inside it (`.when-pop`, `.presets-pop`, `.addform-confirm`)
