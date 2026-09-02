@@ -18106,9 +18106,54 @@
      left both children shrink-wrapped to their own content width instead of the
      full drawer width -- found live: .wr-mobile-ic-open measured 105px wide inside
      a 313px container. */
-  #dayRightDrawer #wrMobileCards { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  /* 2026-09-02 (Linh: "I LIKE THE desktop side panel widget list. do it for mobile but
+     audit the sizing so its not too big" -- see renderWrMobileDrawerSelect() for the
+     measured audit): the drawer is now desktop's stacked list. Gap 8px, not desktop's
+     24 (16 gap + 8 card margin) -- mobile sizing standard's lower half, her own pick;
+     card padding stays 12px, no type shrunk. */
+  #dayRightDrawer #wrMobileCards { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
   #dayRightDrawer #wrMobileCards > * { min-width: 0; }
   #dayRightDrawer .wr-card { min-width: 0; }
+  #dayRightDrawer .wr-mob-stack { display: flex; flex-direction: column; gap: 8px; }
+  #dayRightDrawer .wr-mob-stack .wr-card { margin-bottom: 0; }
+  #dayRightDrawer .wr-mob-stack:empty, #dayRightDrawer .wr-mob-slot:empty { display: none; }
+  /* The date header + Weight logger were the drawer's first 137px before Right now
+     even started (placeDayDrawers() still appends them here -- ownership untouched,
+     so no cross-closure race; this is the reversible hide design44 asks for). The date
+     is already in the Day header behind the drawer; Weight lives on the Health page. */
+  #dayRightDrawer #dayHeaderRow, #dayRightDrawer #dayBodyCard { display: none; }
+  /* Collapsed Insights row -- design44 R13 section header (11/800/.07em, faint), one
+     compact 34px row, whole width is the target. No box, no border. */
+  #dayRightDrawer .wr-mob-insights {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    min-height: 34px; padding: 0 4px; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-faint); text-align: left;
+  }
+  #dayRightDrawer .wr-mob-insights[aria-expanded="true"] { color: var(--ink); }
+  #dayRightDrawer .wr-mob-insights-caret { font-size: 11px; }
+  /* Sizing audit, the two oversized cards (measured 2026-09-02 at 375x812 in the drawer):
+     Upkeep was 401px -- dialRingsSvg()'s 230-unit box holds rings only ~124 units tall,
+     drawn at 100% width that's a 244px-square box that's half empty, over a 99px
+     four-row legend. Capped to 150px (rings ~81px, still four distinct bands) with the
+     legend as a 2x2 grid. Card lands ~250px. Desktop's own 411px is left alone -- her
+     ask was the phone. */
+  #dayRightDrawer .wr-dial-wrap { width: 150px; margin: 0 auto; }
+  #dayRightDrawer .wr-dial-center-pct { font-size: 16px; }
+  /* the per-ring end labels (emoji + %) overlap each other at 150px and restate what
+     the legend right under it already says -- redundancy rule, hidden here only */
+  #dayRightDrawer .wr-dial-svg text { display: none; }
+  #dayRightDrawer .wr-dial-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin-top: 8px; }
+  /* Suggestions rows: the middle column is 133px here (date tile 40 + action column
+     36 + gaps out of 244), so the 4 status chips needed 53px inside .upk-chips'
+     44px/overflow:hidden cap -- the third chip line was visibly cut off (a clipped
+     name is a bug, R17/Trap 4). One scrollable line instead of a clipped wrap: nothing
+     hidden, ~22px back per row. Buttons 36 -> 32 (they set the row's height, not the
+     text). */
+  #dayRightDrawer .upk-chips { flex-wrap: nowrap; overflow-x: auto; max-height: none; scrollbar-width: none; }
+  #dayRightDrawer .upk-chips::-webkit-scrollbar { display: none; }
+  #dayRightDrawer .upk-chip { white-space: nowrap; flex: none; }
+  #dayRightDrawer .upk-btn { width: 32px; height: 32px; }
   /* .wr-ic-rail's own base rule (search it -- built for the desktop icon rail) is a
      vertical column; here it needs to read left-to-right across the drawer's own
      width instead, wrapping onto a second line if the widget count needs it. Button
@@ -48760,82 +48805,63 @@
     btn.parentElement.style.position = "relative";
     btn.parentElement.appendChild(pop);
   }
-  // Mobile/tablet drawer — the SAME "icon per widget, tap to open one at a time" idiom
-  // as the desktop rail above, reusing its WR_ICONS/WR_LABELS glyphs verbatim (one
-  // vocabulary for what a widget is called/looks like, not a second one), just in
-  // #wrMobileCards instead of a separate fixed rail+panel: the drawer itself already
-  // IS the panel here, so there's nothing to dock a second overlay against.
-  // Deliberately its own state (wrMobileOpenId), not wrOpenId — that variable is
-  // desktop's, gated on deskWidgetsActive() (>=1200px) and left open across
-  // navigations/resizes on purpose (renderWrPanel()'s whole "no-op below 1200px, the
-  // four real elements are already correctly placed" contract depends on it NOT being
-  // cleared just because the width changed). This surface needs the opposite:
-  // "nothing selected by default when the drawer first opens" is a hard requirement
-  // (her own words), so it resets to null on every render pass found with the drawer
-  // closed (see the guard below) rather than surviving between opens.
-  // Icons carry a real aria-label for screen readers instead of a hover tooltip --
-  // there's no hover on a touchscreen, and once a widget IS open its own .wr-label
-  // heading (every wrCardHtml() branch has one) names it again on-screen, so a second,
-  // always-visible caption under each icon would just repeat that a beat sooner at the
-  // cost of a taller, busier row -- the one thing this feature exists to avoid re-
-  // creating (her own "not re-creating the scroll-past-everything problem").
-  let wrMobileOpenId = null;
-  // b33IconSvg() first, same fallback order wrIconBtnHtml() (desktop
-  // widget rail, above) already uses -- b33IconSvg's own icon set already covers
-  // every id this drawer uses (verified: same 17 keys), so the emoji fallback is
-  // dead weight for every real button here, kept only for a future id the set
-  // doesn't cover yet.
-  function wrMobileIconBtnHtml(id, label) {
-    const active = wrMobileOpenId === id;
-    return `<button type="button" class="wr-ic-btn${active ? " on" : ""}" data-wrm-open="${id}" aria-expanded="${active}" aria-label="${esc(label)}">
-      ${b33IconSvg(id) || `<span aria-hidden="true">${WR_ICONS[id] || "•"}</span>`}
-    </button>`;
+  // Mobile/tablet drawer -- 2026-09-02 (Linh, screenshot of the desktop combined
+  // panel: "I LIKE THE desktop side panel widget list. do it for mobile but audit the
+  // sizing so its not too big"): the SAME stacked list renderWrPanel()'s rightNowCard
+  // branch builds on desktop, not the 2026-08-24 icon-per-widget/one-open-at-a-time
+  // rail this used to be (git history has it; her 8 calibration answers retired it
+  // outright -- "once every card is stacked and visible, it's duplicating the list").
+  // Order mirrors desktop: the real members (rightNowCard / dayCtxWrap / modeAmbientRail)
+  // are already the drawer's own siblings above #wrMobile via placeDayDrawers(), so
+  // this only has to lay the Daily cards, Shopping and the Insights group under them.
+  // Sizing audit (measured 2026-09-02, 375x812, sandbox data): the drawer opened with
+  // 137px of date header + Weight logger before Right now, and 148px of icon rail +
+  // "Tap a widget to open it" -- both gone (header/Weight hidden by CSS inside the
+  // drawer, search "#dayRightDrawer #dayHeaderRow"). Cards keep desktop's 12px padding
+  // but stack at 8px (desktop is 24px: 16 gap + 8 margin), per the mobile sizing
+  // standard's 4/8/12 lower half; no type shrunk. Empty cards are dropped entirely
+  // (design44 R18) via wrCardHtmlIsEmpty() -- every wrCardHtml() branch renders a
+  // .wr-pat-empty stub with zero real rows when it has nothing, so that's the
+  // contract, not per-card data knowledge. Long cards need nothing here: To-do already
+  // caps at 5 + "+N more" and Suggestions is <=3 rows by construction.
+  // Insights (WR_GROUP_INSIGHTS) stay behind one collapsed row, desktop's flyout
+  // equivalent -- session-lifetime state, reset when the drawer is found closed (same
+  // "never reopens pre-expanded" guard the old selection had, her own requirement).
+  let wrMobileInsightsOpen = false;
+  const wrCardProbe = document.createElement("div");
+  function wrCardHtmlIsEmpty(html) {
+    wrCardProbe.innerHTML = html;
+    const hasStub = !!wrCardProbe.querySelector(".wr-pat-empty");
+    const rows = wrCardProbe.querySelectorAll(".wr-pile-row, .wr-pat-row, .upk-list, .wr-cyc-day, .wr-dial-wrap, .wr-boost-row, .wr-num-list, .h-stat, .bm-text").length;
+    wrCardProbe.innerHTML = "";
+    return hasStub && rows === 0;
   }
-  // 2026-08-30 (Linh: "move it to side panel" -- the mobile/tablet counterpart of
-  // 2026-08-24's desktop shopSlot pin, see applyDayTiles()'s own updated guard):
-  // #shopSlot is a real, interactive DOM node (tick to mark bought, x to remove), not
-  // a wrCardHtml() string like every other id in cardOrdered -- so it can't just join
-  // htmlById below. Reparented in/out exactly the way renderWrPanel() already does for
-  // the desktop rail's own pinned real elements, just with one id and one destination
-  // instead of four and a toggle-in-place panel.
-  const WR_MOBILE_PINNED_IDS = ["shopSlot"];
   function renderWrMobileDrawerSelect(mount, cardOrdered) {
-    // every open starts blank: any render pass that finds the drawer closed resets
-    // the selection, so the NEXT open (this session or a future one) never shows a
-    // widget pre-expanded. mobileDayDrawersActive() gates whether #wrMobile even
-    // LIVES here at all (checked by the caller); this checks whether it's actually
-    // swiped into view right now -- #wrMobile stays reparented into the drawer's DOM
-    // for the whole single-day mobile/tablet session, open or shut, so renders happen
-    // continuously while shut too (a to-do tick elsewhere, a resize) and each one is a
-    // fresh chance to clear a stale selection before she ever sees it.
-    if (!dayRightDrawerIsOpen()) wrMobileOpenId = null;
-    const htmlById = {};
-    cardOrdered.forEach(id => { htmlById[id] = wrCardHtml(id); });
-    // same auto-close reasoning as renderWrPanel()'s own guard just below -- content
-    // that's gone empty (Sunday-only, or hidden via Arrange since it was opened)
-    // shouldn't leave a blank card sitting open. WR_MOBILE_PINNED_IDS excluded --
-    // those are real elements, never in htmlById (that map is only ever built from
-    // cardOrdered's string ids), so this would otherwise misread "not a string card"
-    // as "gone empty" and close a legitimately-open shopSlot on every single render.
-    if (wrMobileOpenId && !WR_MOBILE_PINNED_IDS.includes(wrMobileOpenId) && !htmlById[wrMobileOpenId]) wrMobileOpenId = null;
+    // #wrMobile stays reparented into the drawer for the whole single-day mobile
+    // session, open or shut, so renders happen while shut too -- each one resets the
+    // Insights group so the NEXT open never shows it pre-expanded.
+    if (!dayRightDrawerIsOpen()) wrMobileInsightsOpen = false;
+    const nonEmpty = id => { const h = wrCardHtml(id); return h && !wrCardHtmlIsEmpty(h) ? h : ""; };
+    // cardOrdered is already wrRankedIds()-ordered and Arrange-filtered by the caller
+    const dailyHtml = cardOrdered.filter(id => WR_GROUP_DAILY.includes(id)).map(nonEmpty).filter(Boolean).join("");
+    const insightHtml = cardOrdered.filter(id => WR_GROUP_INSIGHTS.includes(id)).map(nonEmpty).filter(Boolean);
+    // #shopSlot is a real, interactive DOM node (tick to mark bought, x to remove), not
+    // a wrCardHtml() string -- captured BEFORE the innerHTML write below (which detaches
+    // it) and re-appended after, same order renderWrPanel() uses for its own pinned
+    // elements. Position follows desktop's context-aware rule (pending items or a
+    // shopping day -> above the Daily cards); with nothing in it, it's parked offstage
+    // rather than shown empty below them -- her "hide entirely" answer, applied to
+    // this card the same as every generated one.
     const shopSlotEl = document.getElementById("shopSlot");
     const shopOffstage = document.getElementById("shopSlotOffstage");
-    if (wrMobileOpenId === "shopSlot" && !shopSlotEl) wrMobileOpenId = null;
-    const railHtml = WR_MOBILE_PINNED_IDS.map(id => wrMobileIconBtnHtml(id, WR_PINNED_LABELS[id])).join("")
-      + cardOrdered.filter(id => htmlById[id]).map(id => wrMobileIconBtnHtml(id, WR_LABELS[id])).join("");
-    const openIsShop = wrMobileOpenId === "shopSlot";
-    const openHtml = openIsShop ? "" : (wrMobileOpenId ? htmlById[wrMobileOpenId] : `<div class="wr-mobile-ic-empty">Tap a widget to open it</div>`);
-    mount.innerHTML = `<div class="wr-ic-rail">${railHtml}</div><div class="wr-mobile-ic-open"${openIsShop ? ' id="wrMobileOpenShop"' : ""}>${openHtml}</div>`;
-    // shopSlot is a live node, not markup -- move it in after the innerHTML write
-    // above (which would otherwise discard it), same append-after-write order
-    // renderWrPanel() uses for its own pinned elements.
+    const shopHigh = !!shopSlotEl && (SHOP.some(s => !s.bought) || !!shoppingDayReason(new Date()));
+    mount.innerHTML = `<div class="wr-mob-slot" id="wrMobShopTop"></div>
+      <div class="wr-mob-stack">${dailyHtml}</div>
+      ${insightHtml.length ? `<button type="button" class="wr-mob-insights" data-wrm-insights aria-expanded="${wrMobileInsightsOpen}" aria-controls="wrMobInsights">Insights · ${insightHtml.length}<span class="wr-mob-insights-caret" aria-hidden="true">${wrMobileInsightsOpen ? "▴" : "▾"}</span></button>
+      <div class="wr-mob-stack" id="wrMobInsights"${wrMobileInsightsOpen ? "" : " hidden"}>${insightHtml.join("")}</div>` : ""}`;
     if (shopSlotEl) {
-      if (openIsShop) {
-        const openMount = document.getElementById("wrMobileOpenShop");
-        if (openMount && shopSlotEl.parentElement !== openMount) openMount.appendChild(shopSlotEl);
-      } else if (shopOffstage && shopSlotEl.parentElement !== shopOffstage) {
-        shopOffstage.appendChild(shopSlotEl);
-      }
+      const target = shopHigh ? document.getElementById("wrMobShopTop") : shopOffstage;
+      if (target && shopSlotEl.parentElement !== target) target.appendChild(shopSlotEl);
     }
   }
   // Panel — shows exactly ONE open widget's full content. Real-element ids
@@ -49037,16 +49063,13 @@
       renderDeskWidgetRail();
       return;
     }
-    // mobile/tablet drawer's own icon row -- a separate attribute (not [data-wr-open])
-    // and a separate state var (wrMobileOpenId, not wrOpenId) on purpose, see
-    // wrMobileOpenId's own comment for why the two surfaces can't share one. Usage
-    // still tracks into the SAME TILE_PREFS[id].opens counter as the desktop rail --
-    // one ranking, informed by whichever surface she's actually using.
-    const mobOpenBtn = e.target.closest("[data-wrm-open]");
-    if (mobOpenBtn) {
-      const id = mobOpenBtn.dataset.wrmOpen, opening = wrMobileOpenId !== id;
-      wrMobileOpenId = opening ? id : null;
-      if (opening) wrTrackOpen(id);
+    // mobile/tablet drawer's collapsed Insights row (renderWrMobileDrawerSelect) --
+    // its own state (wrMobileInsightsOpen, not wrInsightsOpen) on purpose: desktop's
+    // flag drives a flyout off the rail and is left alone across resizes, this one
+    // resets whenever the drawer is found closed.
+    const mobInsightsBtn = e.target.closest("[data-wrm-insights]");
+    if (mobInsightsBtn) {
+      wrMobileInsightsOpen = !wrMobileInsightsOpen;
       renderDeskWidgetRail();
       return;
     }
@@ -49113,11 +49136,11 @@
     renderDeskWidgetRail();
   });
   document.addEventListener("keydown", e => {
-    if (e.key !== "Escape" || (!wrOpenId && !wrMobileOpenId)) return;
+    if (e.key !== "Escape" || (!wrOpenId && !wrMobileInsightsOpen)) return;
     // step-back rule: Escape from an on-demand widget returns to the combined
     // panel; a second Escape (from the combined panel itself) closes the rail.
     wrOpenId = wrOpenId === "rightNowCard" || !wrOpenId ? null : "rightNowCard";
-    wrMobileOpenId = null;
+    wrMobileInsightsOpen = false;
     renderDeskWidgetRail();
   });
   // renderWrMobileDrawerSelect()'s own "resets to null when a render finds the drawer
@@ -49133,7 +49156,7 @@
     const drawer = document.getElementById("dayRightDrawer");
     if (!drawer) return;
     const isOpen = drawer.classList.contains("open");
-    if (isOpen && !wrDrawerWasOpen) { wrMobileOpenId = null; renderDeskWidgetRail(); }
+    if (isOpen && !wrDrawerWasOpen) { wrMobileInsightsOpen = false; renderDeskWidgetRail(); }
     wrDrawerWasOpen = isOpen;
   }).observe(document.getElementById("dayRightDrawer"), { attributes: true, attributeFilter: ["class"] });
   // Arrange popover — scoped to this rail, a visibility checkbox per widget
@@ -49158,11 +49181,12 @@
     const pop = document.createElement("div");
     pop.className = "wr-arrange-pop";
     pop.id = "wrArrangePop";
-    // On desktop (wrArrangeBtn), focusTile is dropped from this list too —
-    // renderDeskWidgetRail() no longer renders it there at all (see its own comment),
-    // so a checkbox for it would toggle a card that can never actually appear.
-    // Mobile (wrArrangeBtnM) keeps the full list; focusTile still renders there.
-    const idsForSurface = btn.id === "wrArrangeBtnM" ? WR_WIDGET_IDS : WR_WIDGET_IDS.filter(id => id !== "focusTile");
+    // focusTile is dropped from this list on BOTH surfaces -- desktop's rail never
+    // renders it (the richer #railNum lives in the sidebar), and as of 2026-09-02 the
+    // mobile drawer's stacked list (renderWrMobileDrawerSelect) only lays Daily/Insights
+    // cards, with numerology already in the LEFT drawer via placeDayDrawers() -- so a
+    // checkbox for it here would toggle a card that can never actually appear.
+    const idsForSurface = WR_WIDGET_IDS.filter(id => id !== "focusTile");
     pop.innerHTML = idsForSurface.map(id => {
       const hidden = !!(TILE_PREFS[id] || {}).hidden;
       return `<label class="wr-arrange-row"><input type="checkbox" data-wr-vis="${id}" ${hidden ? "" : "checked"}> ${esc(WR_LABELS[id])}</label>`;
