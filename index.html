@@ -43782,6 +43782,11 @@
   // observable behaviour is unchanged -- same eight branches, same order of
   // effect -- this is a refactor, not a rule change.
   function modeFilterActive() {
+    // 2026-09-03 (Linh: "stop modes from taking over screen and calendar"): the
+    // active Mode never hides calendar items unless PREFS.modeFilter is explicitly
+    // true (Settings → Modes). Mode DETECTION (colour, widgets, ambient rail) is
+    // untouched -- only the hiding is off by default.
+    if (PREFS.modeFilter !== true) return false;
     return PREFS.modeFilterDayOnly === false || calDaysActive() === 1;
   }
   function modeWouldHide(e, am) {
@@ -52104,7 +52109,12 @@
   // neither Home (not a real Mode) nor one of the three MT_AUTO_MODES above, which
   // already auto-takeover on their own. A test, not a second list to keep in sync
   // with MODES -- a Mode she adds or renames just works.
-  function mtManualEligible(id) { return id !== MODE_HOME.id && !MT_AUTO_MODES.includes(id); }
+  // 2026-09-03 (Linh: "stop modes from taking over screen and calendar"): the
+  // takeover screen -- auto OR Focus-button -- exists only while PREFS.modeTakeover
+  // is explicitly true (Settings → Modes). Off by default: no Focus button in the
+  // ambient rail, mtActiveTakeoverModeId() never resolves a Mode.
+  const modeTakeoverEnabled = () => PREFS.modeTakeover === true;
+  function mtManualEligible(id) { return modeTakeoverEnabled() && id !== MODE_HOME.id && !MT_AUTO_MODES.includes(id); }
   let mtQueue = [], mtQueuePos = 0, mtQueueForId = null;
   // renderModeTakeover()/renderModeAmbientRail() both run
   // every second from sessionTick() (Modes law rule 4, "a session ending mid-
@@ -52135,6 +52145,7 @@
   // shape activeMode() itself follows), resolved fresh every call rather than
   // cached, so a block ending mid-takeover closes it on the very next render.
   function mtActiveTakeoverModeId() {
+    if (!modeTakeoverEnabled()) return null;   // 2026-09-03, see modeTakeoverEnabled()
     const am = activeMode();
     if (MT_AUTO_MODES.includes(am.id) && sessionIsActive() && !state.modeRevealAll) return am.id;
     if (mtManualEligible(am.id) && state.modeFocusEngaged) return am.id;
@@ -62102,6 +62113,17 @@
           <span class="nt-lbl">Modes<span class="nt-sub">Rename, recolour, reorder or add Modes — opens the Modes editor on the Life Map page (also reachable from the gear on its Mode strip)</span></span>
           <button type="button" class="today-pill" id="ntEditModesBtn">Edit Modes</button>
         </div>
+        <!-- 2026-09-03 (Linh: "stop modes from taking over screen and calendar"): both
+             behaviours are OFF unless switched on here -- the one-way-door rule, the
+             way back lives beside the thing it turns off. -->
+        <div class="nt-row">
+          <span class="nt-lbl">Modes take over the screen<span class="nt-sub">Off: no full-screen Focus view and no Focus button. On: a Mode can take the screen from its Focus button</span></span>
+          <button type="button" class="nt-switch" role="switch" data-b33-pref-tog="modeTakeover" aria-pressed="${PREFS.modeTakeover === true}" aria-label="Toggle Mode takeover"></button>
+        </div>
+        <div class="nt-row">
+          <span class="nt-lbl">Filter the calendar to the active Mode<span class="nt-sub">Off: the Day page always shows everything. On: items outside the current Mode are hidden behind the Mode badge</span></span>
+          <button type="button" class="nt-switch" role="switch" data-b33-pref-tog="modeFilter" aria-pressed="${PREFS.modeFilter === true}" aria-label="Toggle Mode filtering"></button>
+        </div>
       </div>
 
       <div class="nt-group">
@@ -62364,6 +62386,16 @@
       // out of reach from here; the gear is the public door to it, and going
       // through it keeps one open/close code path).
       setTimeout(() => document.querySelector("[data-lm-modes-toggle]")?.click(), 50);
+      return;
+    }
+    // 2026-09-03: the two Modes switches write plain PREFS keys (not NOTIF) and
+    // re-render the whole app, since the Day page and ambient rail read them live.
+    const ptog = ev.target.closest("[data-b33-pref-tog]");
+    if (ptog) {
+      const k = ptog.dataset.b33PrefTog;
+      PREFS[k] = PREFS[k] !== true;
+      savePrefs();
+      render();
       return;
     }
     const tog = ev.target.closest("[data-nt-tog]");
