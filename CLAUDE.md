@@ -7,197 +7,105 @@ removals are newer); flag the conflict rather than quietly reinstating the featu
 Book33 is a single-file mobile web app (index.html). It must always look clean,
 symmetrical, aligned and organized. Follow every rule, then re-check your work.
 
-## design44 — Book33's design system
+## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
-back), `MEASURING.md` (the commit-time checks — mandatory, see R9).
+back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
+design44 (Black & Brass, dense, three-size) was deleted on 2026-09-02 at Linh's request
+("remove and delete design44"); this replaces it. Its source is a full desktop Day-view
+mock she supplied and asked code6 / code7 / code3 to understand and apply — the mock
+itself lives in the 2026-09-02 session transcript; this is the extracted system. The
+Day view is the first surface built to it; every other surface follows as it is touched.
 
 ### THE WHOLE THING IN ONE SCREEN
-**Look**
-- Flat. Separate with colour and space — never boxes, borders or nested boxes.
-- Night palette: bg `#000`, surface `#0D0D0D`, raised `#161616`, recessed `#0A0A0A`.
-  Ink `#efe7d6`, muted `#9c8f79`, faint `#5f5645`. Gold `#d8b979`, bright `#EAC24E`.
-- Gold is the one signature colour. Used sparingly, for emphasis. No fixed list — but if
-  four gold things are visible at once, it has stopped being a signal.
-- **Three type sizes: 20 / 13 / 11.** Nothing else.
-- Both themes are equal. Every change is checked in Night *and* Day, every time.
+**Look** — light, airy, calm. A pale cool ground with white cards floating on it;
+everything rounded; soft pastel fills for calendar blocks with dark text on them; one
+clean sans face; no gradients, no dark card surfaces, no drop-shadowed sticker icons —
+line icons only. Colour is category/Mode, never decoration; blue is the single
+interactive accent.
+**Shape** — cards ~16px radius, tiles/blocks ~12px, chips 999. Gaps and padding on the
+`4 / 8 / 12 / 16 / 24 / 32` scale, card padding 16, tile gap 8. Generous whitespace: a
+card breathes, a list does not pack.
+**Behaviour** — one signal per row (colour *or* weight *or* size, never two); a name is
+never abbreviated by the layout, everything beside it may be; empty things are hidden in
+a list, kept in a sequence; every state that can be turned off can be turned back on from
+the same place.
+**Mobile is still the real device** — 360 × 697, coarse pointer. Every layout change ships
+both widths in the same commit; desktop may show more, never something different.
 
-**Shape**
-- Dense and tessellated. Short rows, small gaps, related controls packed as tiles.
-- Gaps and padding: `4 / 8 / 12 / 16 / 24 / 32` — plus `2–3px` for cells inside a
-  tessellated grid, and nothing else.
-- Heights: `20` capsule · `26` rail · `34` compact row · `44` standard row or button.
-- Radius: `999` pill · `14` card · `10` row · `6` cell.
+### PART 1 — TOKENS (Day theme, as read from the mock)
+- Ground `#F5F7FA` · card `#FFFFFF` with a hairline `#E6E9EF` (or an equally soft shadow —
+  never both) · ink `#1E2330` · muted `#6B7280` · faint `#9AA3B2`.
+- Accent blue `#2F5BEA` — links, the selected date, the active nav item's bar. The only
+  interactive colour; if four blue things are visible at once it has stopped being a signal.
+- "Now" marker pink-red `#E8506B` (line + gutter dot). Not used for anything else.
+- Block pastels (Mode colours, dark text on all of them): Morning peach `#F8D4A8`,
+  fitness lime `#B5D96A`, Work green `#4CAF6E` (this one carries near-black text).
+- Chips: tinted pill + coloured text — blue for a person/birthday chip; the cycle chip is
+  pink-tinted and is the ONE sanctioned pink in the app (cycle only, nowhere else).
+- Map to tokens, never paste hex into a component: every value above becomes a `--var`
+  in the Day-theme block and is referenced from there.
+- **Night theme:** unresolved. The mock is light; until Linh answers the theme-scope
+  question the Night palette stays as coded (black ground, white stars, navy accent) and
+  gets the *layout* of this system, not a colour translation.
 
-**Behaviour**
-- **One signal per row.** A row stands out by colour *or* weight *or* size — never two.
-- **A name is never abbreviated by the layout. Everything beside it may be.**
-- Empty things: hidden in a list, kept in a sequence.
-- Every state that can be turned off can be turned back on, from the same place.
-
-**Mobile is the real device.** 360 × 697, dark, coarse pointer. Density wins over the
-44px tap minimum — deliberately, see R7.
-
-### PART 1 — THE RULES
-
-#### R1. Compact & dense
-Short rows, small gaps, small uppercase labels, no tall pills with empty middles.
-**Tessellate** — pack related controls as tiles in a grid, not a full-width stack. Narrow
-items (sub-tasks, chips) go two or more per row.
-Gaps and padding: **4 / 8 / 12 / 16 / 24 / 32**, plus **2–3px between cells inside a
-tessellated grid**, where 4px reads as separation rather than texture.
-Heights are not on this scale and never were — see R11.
-
-#### R2. Not too wide — cap & centre
-Forms and reading `--content-max: 720px`; tables and dashboards `--wide-max: 1040–1160px`.
-Form fields never stretch the full screen.
-**Exception:** every *page* is full-bleed edge-to-edge — no floating framed-card look.
-The caps apply to content inside a page, not the page.
-
-#### R3. Succinct — scannable at a glance
-Aligned grids over scattered full-width rows: a tracker is one grid — rows are things,
-columns are days, marks are small. Light not loud: a colour dot plus text on a subtle
-ground, never a big saturated pill. Dim done items. Cap visible items, then "+N more".
-Today is tinted gold as an anchor in every view.
-
-#### R4. Flat, Black & Brass
-Separate with **colour and space**. No boxes, borders, nested boxes or outlined pills
-(banned by name). A hairline under every row is the classic failure of this rule — 3px of
-space and a change of tone does it better.
-Gold for numbers and accents; **colour means category** (Mode), never decoration.
-
-#### R5. Proportional & aligned
-One fixed calendar scale (`--hour-h`). Every shown hour is the same height, so a 2-hour
-block is exactly twice a 1-hour block. Blocks are sized from real duration and snapped to
-that scale; overlaps split into side-by-side columns; everything aligns to a shared column
-edge.
-
-#### R6. Consistency — the four components
-One definition each, reused everywhere. These four are 80% of every screen:
-see PART 2 for their specs. No one-offs, no variants without a written reason.
-
-#### R7. Interaction — and the density trade
-Anything representing a page is tappable and navigates there. The whole element is the
-target; `cursor: pointer`, hover/press state, keyboard reachable.
-**Tap targets: 44px standard; 34px allowed for a full-width single-purpose row separated by
-space.** Deliberately denser than Apple's 44pt and Google's 48dp, both of which assume
-targets packed edge to edge. Anything packed *beside* another target stays 44.
-
-#### R8. Mobile is the primary format
-The phone is the real device: **360 × 697**, dark (see `MEASURING.md`). A change is not
-finished until it works there.
-Every layout change ships both widths in the same commit. There is no desktop-only UI
-change here. If a request only describes desktop, the mobile behaviour still has to be
-decided, built and stated — ask if it isn't obvious; never default to "leave mobile as it is."
-A number tuned at one width is a bug at the other. Every `min-width`, `max-width` or
-measured px value must say **which width it was measured at**.
-**Desktop is for the heavy work** — editing, bulk changes, setting things up; the phone is
-for reading and quick capture. Desktop may **show more, never something different**: times
-in cells the phone hides, five Up-next rows instead of three, wider rails. Not a different
-arrangement.
-**Mobile Day view:** only the all-day row, the mode-hidden pill, and the Now-glance
-status strip may sit above the calendar — the top zone itself (the quick-add bar) is
-always fully shown now, no grab handle to collapse it (2026-08-31, the handle was
-removed once it had nothing left to toggle). Date navigation and the 1/3/5/7 day-count
-live in the top bar's **date sheet** (`#dateSheet`, opened from the date title; since
-2026-09-02 — `#calDaysRow`/`.day-step-row` stay in the top zone's DOM but hidden).
-Everything else goes in a drawer. (Enforced by `dayLayoutAboveCalendarGuard()` — dev-only console warning, walks
-`.day-main`'s direct children against an id allowlist.)
-
-#### R9. Every commit
-Commit and push to main automatically — except confirm before deleting data. Report what
-changed plus the one-line undo. **Any commit that touches layout runs the mobile report in
-`MEASURING.md` and pastes the results.** A rule nobody measures is a wish.
-
-### PART 2 — TOKENS & COMPONENTS
-
-#### R10. Type — three sizes
+### PART 2 — TYPE
 | px | Role |
 |---|---|
-| **20** | Page title |
-| **13** | Names, body, sub-headings (sub-headings are 13/800, not a bigger size) |
-| **11** | Meta, dates, counts, and section labels (uppercase, `letter-spacing: .07em`, faint) |
-Nothing else, at any width. A section label stays quieter than a name because of **case
-and colour**, not size — which is what makes three sizes enough.
+| **26 / 600** | The Day title only ("Friday, 4 September") |
+| **20 / 700** | Tile values (UD 5, PM 1) and page titles elsewhere |
+| **14 / 500** | Body, row text, block titles |
+| **13 / 500** | Chip text, secondary meta |
+| **11 / 700 uppercase, tracked** | Section labels (TODAY · UP NEXT · SEPTEMBER 2026), tile captions, rail labels (10px on the right rail) |
+A section label stays quieter than a name because of case and colour, not size.
 
-#### R11. Heights & radius
-Radius follows **shape**, not the individual component — that's the whole rule. Get the
-shape right and the radius is never a judgment call.
+### PART 3 — LAYOUT (desktop Day view; the reference every other page matches)
+Three columns plus a rail:
+1. **Left nav, ~180px, LABELLED** — line icon + word per item, active item on a soft tint
+   with a 4px accent bar at the left edge, avatar + chevron pinned bottom-left. Her standing
+   "labels over icons" preference, made concrete. Priority order stays Today > Events >
+   Life Map > To-do > everything else.
+2. **Left column, ~275px, stacked white cards:** TODAY (label + "View week" link; a
+   2-column grid of 8 numerology tiles: UD · PM · Ruler · Moon · Sign · Zodiac year ·
+   Zodiac month · PY — big value, small caption) → mini month (‹ › in the header; selected
+   day a filled blue circle; a dot under days that hold events; other-month days faint) →
+   UP NEXT (label + "View all"; rows = colour dot · name · date/time right-aligned; a
+   second line only when the name needs it).
+3. **Timeline, fills the middle:** hour gutter left; one fixed `--hour-h` so a 2-hour block
+   is exactly twice a 1-hour block; blocks span the full column width, pastel fill, tick
+   circle at the left, title, time range right-aligned, ⋮ at the far right; overlaps split
+   into side-by-side columns; the now-line in pink with a dot in the gutter.
+4. **Right rail, ~90px:** icon + 10px uppercase label (NOW · FAVORITES · INSIGHTS) and a
+   round + button beneath — on-demand panels open from here.
+Top bar: ‹ › (round buttons, always one day) · big date · live chips (Week 36 · 👤 name ·
+age · cycle) · **Day ▾** view switch (1/3/5/7) · moon (theme) · gear. Bottom-right: a
+"● Synced" pill.
+**Components:** the row is still dot · name · meta-right, `min-width: 0` on the name; the
+section header is label · count · optional right-aligned link ("View all"); the toggle is
+one segmented control for every either/or, filled accent on the active option; the
+capsule is a 20px tabular-numeral pill.
+**Tap targets:** 44px for a primary control; 34px allowed for a full-width single-purpose
+row separated by space; the 24–44px band is the floor for a dense list only.
 
-| Shape | Radius | Heights in use |
-|---|---|---|
-| Row (rectangular, filled) | **10** (`--radius-sm`) | 34 compact · 44 standard · 52 data · 64 rich |
-| Circle (icon / avatar / mode chip tap target) | **999** | 20 capsule · 44 standard |
-| Card / standalone button (sits alone on the page, not in a list) | **14** | 26 month rail · 44–60 button |
+### PART 4 — BEHAVIOURS THE MOCK IMPLIES (code7)
+The numerology tiles are the day's context at a glance — no tap needed. The mini month
+is the far-jump control; ‹ › step days; Day ▾ switches 1/3/5/7. Up next is the "what's
+coming" strip (next three, across days). Week / person / cycle chips are live facts and
+tappable — a chip opens its own sheet in place, never a page jump (the 2026-09-02
+birthday-tap rule).
 
-A row is never 6, 14, or 999 — those belong to buttons and circles. If a component needs
-a radius R11 doesn't name, it's the wrong shape for the job, not a new radius.
+### Every commit
+Confirm before pushing (her standing ALWAYS-ASK rule) and before deleting data. Report
+what changed plus the one-line undo. **Any commit that touches layout runs the mobile
+report in `MEASURING.md` and pastes the results.** A rule nobody measures is a wish.
 
-Four row heights, each doing a distinct job — adding a fifth needs a fifth job, not a
-fifth number:
-| Row | Height | When |
-|---|---|---|
-| Compact | 34 | Phone, list-dense contexts (see mobile sizing standards, below) |
-| Standard | 44 | The base row — one line, meta right-aligned, nothing else |
-| Data | 52 | Standard + 2–3 of the row's own controls (a tick, a Mode chip, an action) |
-| Rich | 64 | Standard + a second content line under the name (an answer and its detail) |
+### Open questions for the first build pass (asked 2026-09-02)
+Recorded here once she answers; until then assume the recommended option: theme scope
+(Day only vs a Night translation); where the Right-now combined panel goes (the mock puts
+NOW behind a rail icon, which conflicts with her 2026-09-01 "always-open" ask); whether
+the nav lists the mock's seven items or the app's real pages; phone scope (colours/type
+only vs a matching mobile layout later).
 
-#### R12. The row — the most important component in the app
-```
-[mode dot]  Name……………………………………  meta · number
-```
-- Colour dot, `data-mode`, from the one Mode resolver. Never a second colour source.
-- Name flexes, `min-width: 0`, left-aligned, at the left edge of the row.
-- Meta right-aligned, so meta forms a readable column down the edge.
-- Filled ground one step off the page (`#161616` on `#0D0D0D`). **No border.**
-- Radius and heights: see R11. This diagram is the standard row — data and rich rows
-  keep the same skeleton (dot · name · meta) and only add what their extra height is for.
-  A divided list (hairline `border-bottom`, no fill, no radius) is a legitimate row
-  variant too — used where rows sit inside their own scrollable sheet rather than
-  stacked on the page.
-
-#### R13. The section header
-Small uppercase label · count · optional control, right-aligned.
-`11px / 800 / letter-spacing .07em / --ink-faint`. The count is part of the label, not a
-badge. Never a box.
-
-#### R14. The toggle
-One segmented control for every either/or — Pattern/List, Dots/Numbers, All/Repeats/One-offs.
-Filled brass on the active option, plain text on the rest, `aria-pressed`. **Outlined pills
-are banned** and this is the component that replaces them.
-
-#### R15. The capsule and the dot
-The gold number capsule (20px, tabular numerals, `999` radius) says *how many* or *which
-day*. The 7–8px Mode dot says *what kind*. Both read their colour from the same Mode
-resolver as everything else.
-
-#### R16. Emphasis — one signal per row
-A row stands out by **colour or weight or size — never two.** Names carry weight; numbers
-carry colour; nothing carries both. When a row is urgent, **the name goes gold**, so the eye
-lands on *what* is urgent rather than on a number it then has to read leftward from.
-The failure this replaces: a gold title, gold labels, bold names and bold gold numbers all
-at once — six things shouting, so the page has no first thing.
-
-#### R17. Text that doesn't fit
-**A name is never abbreviated by the layout. Everything beside it may be.**
-In order: meta sheds detail first ("Sat 1 Aug · 2d" → "1 Aug · 2d" → "2d"); then the name
-column takes width from the cells; then, and only then, the name wraps to two lines. It is
-never clipped, at any width.
-Why: every other string on a row comes from a set you already know — a date, a countdown, a
-weekday. A name is the one string whose job is to be *the specific one*, and a clipped name
-doesn't fail loudly, it quietly becomes a different plausible name.
-
-#### R18. Empty and zero states
-**Hidden in a list, kept in a sequence.** A list of events drops what isn't there. Anything
-with a fixed sequence — twelve months, seven weekdays, twenty-four hours — keeps every slot,
-quieted, so "nothing here" is visible and the layout never jumps.
-Show a dash, not a zero. Never write a sentence about emptiness.
-
-#### R19. Motion
-Short and responsive — motion should make a tap feel answered, never make it wait. Nothing
-may delay an interaction. Reduced-motion is off on the reference device, so animations do
-run, on a phone: keep them cheap.
-
-### PART 3 — KNOWN TRAPS
+### PART 5 — KNOWN TRAPS
 These have each shipped at least once. Check them by name.
 1. **The one-way door.** A control that turns something off must turn it back on, from the
    same place, and must not hide itself once used.
@@ -208,12 +116,12 @@ These have each shipped at least once. Check them by name.
    desktop-tuned rule is misfiring — nearly always a `min-width` larger than the container
    it now sits in, forcing a permanent flex-wrap. Fix the rule; never shrink the type.
    Trigger narrow shapes on **container width, not viewport width**.
-4. **The clipped name.** See R17.
+4. **The clipped name.** A name is never abbreviated by the layout (design45, "Behaviour").
 5. **The invisible chart.** A bar strip with no labels and no tap targets answers nothing.
    If a visual can't be read *and* acted on, it is decoration.
 6. **The duplicated section.** Auto-expanding a month that Up-next already lists. Nothing
    auto-expands.
-7. **Gold inflation.** See R16.
+7. **Accent inflation.** One signal per row; four accent-blue things at once is no signal (design45).
 8. **The reused CSS class without a scoped size override.** A shared component (`.ud-badge`,
    a chip, a badge) that gets dropped into a new, more compact context inherits whatever
    font-size its base rule happens to have — usually built for a completely different,
@@ -313,7 +221,7 @@ These have each shipped at least once. Check them by name.
     0 auto` and keep `transform: none` at rest; a transform is fine only inside a
     short-lived open/close motion class, when no popover can be open.
 
-### PART 4 — HOW CLAUDE WORKS ON THIS APP
+### PART 6 — HOW CLAUDE WORKS ON THIS APP
 Linh's standing rulesets, written down here so a session with no memory of her still has them.
 
 #### code6 — Senior Mobile UI/UX Design Consultant
@@ -552,17 +460,17 @@ calibration — full detail in cross-session memory `feedback_code7_calibration`
   the Repeats picker/All Events page.
 
 ### Precedence — where a specific exception overrides the general rule
-- **Full-bleed pages vs. cap-and-centre (R2).** The page canvas itself is full-bleed at
-  every width; R2's caps govern INNER content only (forms, editors, tables). Don't
-  re-add a page-level cap.
+- **Full-bleed pages vs. cap-and-centre.** The page canvas itself is full-bleed at
+  every width; content caps (`--content-max` 720 for forms/reading, `--wide-max`
+  1040–1160 for tables/dashboards) govern INNER content only. Don't re-add a page-level cap.
 - **Tap-target floor.** 44px is the preferred size for a primary control used
-  one-handed; R7's "24–44px acceptable" band is the floor for a dense list, not a
-  primary control.
+  one-handed; the "24–44px acceptable" band (design45, Tap targets) is the floor for a
+  dense list, not a primary control.
 - **Named off-scale exceptions** (mobile Day view, mobile Body page, mobile Routines,
   `.dp-t-row` dense list rows — see their own sections below) each win inside their own
   documented scope only. Don't round any of them back to the standard scale.
-- **Today tinted gold in every view (R3)** vs. the Day grid's own today-wash removal —
-  unresolved, a real conflict. Ask before re-adding the wash to the day grid.
+- **Today tinted in every view** vs. the Day grid's own today-wash removal — unresolved,
+  a real conflict. Ask before re-adding the wash to the day grid.
 
 #### code3 — Senior Visual Systems Designer, Information Architect & Interaction Designer (2026-08-31)
 Third trigger-word persona, same shape as code6/code7: code6 is visual/spacing/mobile
@@ -593,8 +501,8 @@ same structure in prose per item.
 **Cards need a reason.** Not every element needs a box. A card should mark a real
 conceptual boundary; when every element has a container the page fragments. Ask "does
 this actually need a box?" before adding one — often spacing + alignment + typography
-already does the job (this is the same instinct as design44 R4's "no nested boxes," one
-level more general).
+already does the job (design45's cards mark real boundaries — TODAY, the month, UP NEXT —
+not every element).
 
 **Icons and colour are systems, evaluated together, not per-element.** Consistent
 family/weight/size/placement; colour communicates meaning (category/status/priority),
@@ -705,21 +613,12 @@ persona ("ask at least 8 questions to make me happy").
 - **Style:** fresh per topic, not anchored to Book33's Ink & Brass system — the subject
   dictates its own palette/style each time.
 
-### Palette note — design44's names vs. app's real tokens
-§4's hexes are Linh's mockup vocabulary, not all of them literal app tokens. §6 says reuse
-variables and never one-off, so map, don't paste:
-`gold #d8b979` → `var(--cosmic-gold)` · `bright gold #EAC24E` → `var(--gold-bright)` ·
-`ink #efe7d6` → `var(--dl-day)` (nearest live token; the app's body ink is
-`var(--ink)` #F0E6D4) · `muted #9c8f79` → `var(--dl-small)` · `faint #5f5645` →
-`var(--dl-sep)` · `hairline rgba(216,185,121,.10)` → `var(--note-line)`.
-A raw hex from §4 pasted into a component is still a bug by §6.
-
 ## book33-support-rules — the standing support system
-Translates Linh's own profile into concrete, enforceable rules — the same role design44
+Translates Linh's own profile into concrete, enforceable rules — the same role design45
 plays for visual design, but for STRUCTURE and FUNCTION. Claude Code reads this on every
 change and applies it by DEFAULT, not only to screens that mention essentials by name.
 When a request conflicts with one of these, say so — same as the existing "flag conflicts
-with design44" rule.
+with design45" rule.
 
 ### 1. One tap, always
 Any done/skip/log action — essential, routine, habit, quick log — is ONE tap. No
@@ -876,7 +775,7 @@ font-size/line-height/internal padding only, never a tap-target shrink.
 Scope: the single shared `.dp-t-row` rule (index.html) — its real consumers are the
 Today/day-recap checklist and the chain phase-band rows (`.phase-t-row`). Values:
 `min-height: 33px` (not the standard 44px), `padding: 2px 4px`. The 33px height itself is
-NOT a scale violation — it lands inside the 24–44px acceptable tap-target band (R7); this
+NOT a scale violation — it lands inside the 24–44px acceptable tap-target band (design45); this
 is a scrolling list of many small toggles, not a single primary control, so density wins
 here the same way it does in the Routines exception above.
 Untouched: the dot indicator, done-state strike-through/opacity, the 12px dot-to-label
@@ -1185,7 +1084,7 @@ The active Mode reshapes the whole app.**
 
 ## Before finishing
 - Confirm every rule is met; check dark AND light.
-- Mobile report required (see R8 and `MEASURING.md`) — screenshots at 360×697 in both
+- Mobile report required (see design45 "Every commit" and `MEASURING.md`) — screenshots at 360×697 in both
   themes, plus the four measured numbers. A commit touching layout without one is not
   finished.
 - Mobile sizing standards (above) — check all six: row/cell heights within the stated
