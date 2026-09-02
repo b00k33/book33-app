@@ -19496,6 +19496,10 @@
 
   /* -- phone nav drawer: labelled rows, count inline at the right -- */
   .nir-count { position: static; margin-left: auto; }
+  /* -- the Install app rows (rail footer, phone drawer) share the nav rows' shape; their line icon sits at the nav icon size -- */
+  #dnrFoot .dnr-ic .b33-lic, .nav-panel-row .nav-ic .b33-lic { width: 18px; height: 18px; display: block; }
+  .nav-panel-row .nav-ic { display: flex; justify-content: center; }
+  [data-b33-install-state] .btn-save { margin-left: auto; }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -44964,6 +44968,9 @@
     // "workBoard"), so the current-patient scroll-into-view can't fight her
     // scrolling mid-visit. Computed before lastPushedView is overwritten below.
     const wmbJustEntered = state.view === "workBoard" && lastPushedView !== "workBoard";
+    // Install rows (Settings, rail footer, phone drawer) read live browser state,
+    // so they're re-synced after every render settles -- see b33SyncInstallRows.
+    setTimeout(b33SyncInstallRows, 0);
     // Android back-button: a view change (Day -> Week, etc) counts as a step to
     // record, same as opening a popup — see armBackGuard/viewBackStack above.
     if (!suppressViewBackPush && state.view !== lastPushedView) {
@@ -45397,7 +45404,9 @@
     html += `<div class="nir-sep" aria-hidden="true"></div>` + navIconRailChaptersRowHtml();
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) html += `<div class="nir-sep" aria-hidden="true"></div>` + navIconRailRowHtml(footerItem);
+    html += b33InstallRowHtml("nir");
     host.innerHTML = html;
+    b33SyncInstallRows();
   }
   function navTabRowHtml(item) {
     const active = item.viewId === state.view;
@@ -45451,7 +45460,9 @@
     html += `<div class="nav-panel-group-lbl">More</div>` + navPanelEverythingElseRowHtml();
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) html += navPanelRowHtml(footerItem);
+    html += b33InstallRowHtml("panel");
     host.innerHTML = html;
+    b33SyncInstallRows();
     // No label -> no footer. An empty <div> here would still paint its own
     // border-top and 12px/12px padding, i.e. a ~25px bordered strip with nothing in
     // it -- the "never reserve empty space / no placeholder" rule the all-day row and the
@@ -47921,8 +47932,10 @@
     // design45: the mock's bottom-left avatar is her initial + name; "33" stays the
     // fallback when no profile name is set.
     const who = (typeof PROFILE !== "undefined" && PROFILE && PROFILE.name) ? String(PROFILE.name).trim() : "";
-    foot.innerHTML = `<div class="dnr-avatar-row"><span class="dnr-avatar-ic"><span class="dnr-avatar-badge">${who ? esc(who[0].toUpperCase()) : "33"}</span></span>`
+    foot.innerHTML = b33InstallRowHtml("rail")
+      + `<div class="dnr-avatar-row"><span class="dnr-avatar-ic"><span class="dnr-avatar-badge">${who ? esc(who[0].toUpperCase()) : "33"}</span></span>`
       + (who ? `<span class="dnr-lbl dnr-foot-name">${esc(who)}</span>` : "") + `</div>`;
+    b33SyncInstallRows();
     renderDnrHead();
     renderDnrLauncherPop();
     // 2026-08-24: cheap, width-independent, so it rides this same every-render hook
@@ -48819,12 +48832,54 @@
     makeEvent: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/><path d="M10 15.5h5M13 13.5l2 2-2 2"/>',
     setMode: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    install: '<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
   };
   function b33LineIcon(key) {
     const d = B33_LINE_ICONS[key];
     if (!d) return "";
     return `<svg class="b33-lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   }
+  // ---- Install door (2026-09-02, Linh: "make b33 downloadable app for desktop").
+  // Chrome/Edge fire beforeinstallprompt once the manifest + worker qualify; the
+  // event is held here and replayed from a real button (Settings row, desktop
+  // rail footer, phone drawer). Nothing shows on browsers without the API
+  // (Safari/Firefox) except the Settings hint, and nothing shows at all once
+  // the app is already running standalone.
+  let b33InstallEvt = null;
+  const b33IsInstalled = () => (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); b33InstallEvt = e; b33SyncInstallRows(); });
+  window.addEventListener("appinstalled", () => { b33InstallEvt = null; b33SyncInstallRows(); });
+  function b33InstallRowHtml(kind) {
+    const show = !!b33InstallEvt && !b33IsInstalled();
+    if (kind === "rail") return `<button type="button" class="dnr-row" data-b33-install data-b33-install-row${show ? "" : " hidden"} title="Install Book33 as an app"><span class="dnr-ic">${b33LineIcon("install")}</span><span class="dnr-lbl">Install app</span></button>`;
+    if (kind === "nir") return `<button type="button" class="nir-row" data-b33-install data-b33-install-row${show ? "" : " hidden"}><span class="nav-ic" aria-hidden="true">${b33LineIcon("install")}</span><span class="nir-lbl">Install app</span></button>`;
+    return `<button type="button" class="nav-panel-row" data-b33-install data-b33-install-row${show ? "" : " hidden"}><span class="nav-ic" aria-hidden="true">${b33LineIcon("install")}</span><span class="nav-panel-lbl">Install app</span></button>`;
+  }
+  function b33SyncInstallRows() {
+    const installed = b33IsInstalled(), can = !!b33InstallEvt && !installed;
+    document.querySelectorAll("[data-b33-install-row]").forEach(el => { el.hidden = !can; });
+    document.querySelectorAll("[data-b33-install-state]").forEach(row => {
+      const btn = row.querySelector("[data-b33-install]"), done = row.querySelector("[data-b33-install-done]"), hint = row.querySelector("[data-b33-install-hint]");
+      if (btn) btn.hidden = !can;
+      if (done) done.hidden = !installed;
+      if (hint) hint.textContent = installed ? "Book33 is running as its own app."
+        : can ? "Opens in its own window, with its own icon — one click."
+        : "Chrome or Edge: use the install icon at the right end of the address bar (or the browser menu → Install Book33). Safari: Share → Add to Dock / Home Screen.";
+    });
+  }
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("[data-b33-install]");
+    if (!b || !b33InstallEvt) return;
+    const evt = b33InstallEvt;
+    try {
+      evt.prompt();
+      await evt.userChoice;
+      // a deferred prompt can be shown once only, accepted or dismissed -- the
+      // browser fires a fresh beforeinstallprompt later if it's still installable
+      b33InstallEvt = null;
+    } catch (err) { b33InstallEvt = null; }
+    b33SyncInstallRows();
+  });
   // item 9: toggled by the "+N more" button inside the pileupBox card itself
   // (see wrCardHtml) — same session-lifetime persistence as wrArrangeOpen just
   // below, not reset per day.
@@ -61763,6 +61818,16 @@
             <button type="button" class="track-opt" data-nav-mode="drawer" aria-pressed="${PREFS.navMode === "drawer"}">Drawer</button>
             <button type="button" class="track-opt" data-nav-mode="tabs" aria-pressed="${PREFS.navMode === "tabs"}">Tabs</button>
           </div>
+        </div>
+        <!-- 2026-09-02 (Linh: "make b33 downloadable app for desktop"): the install
+             door. Chrome/Edge hand the app a deferred beforeinstallprompt event
+             (b33InstallEvt, JS); this row shows the real Install button while that
+             event is held, "Installed" once the app runs standalone, and otherwise
+             the browser's own route (Safari/Firefox have no prompt API). -->
+        <div class="nt-row" data-b33-install-state>
+          <span class="nt-lbl">Desktop &amp; phone app<span class="nt-sub" data-b33-install-hint>Install Book33 as its own app — it opens in its own window, with its own icon.</span></span>
+          <button type="button" class="btn-save" data-b33-install hidden>Install Book33</button>
+          <span class="nt-sub" data-b33-install-done hidden>Installed ✓</span>
         </div>
         <!-- 2026-09-01 (Linh asked "how do i edit modes?" twice in one day -- the
              editor's only entry point was a gear on the Life Map strip, which is
