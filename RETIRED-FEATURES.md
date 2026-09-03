@@ -403,3 +403,14 @@ already had its own, older, unrelated desktop hide rule (`#dayPage .day-main >
 mobile media query, same list `.nav-search-btn`/`.nav-mode-badge`/`.day-fab` already
 use) so nothing new renders above 640px. `#ddtGear` (desktop's own separate gear) is
 untouched.
+
+## 14. Right now's NEXT quick-add "+" and the FREE gap row — retired 2026-09-03
+
+Both shipped same-day as part of §13's Mode group follow-up (code7, "Right now keeps
+NEXT, + moves there"); Linh lived with them live on her phone for under an hour and
+sent a screenshot: "i dont need this" (confirmed via popup: both the "+" and the FREE
+row). `renderNowFacts()` now renders only the plain NEXT row — no `.now-row-wrap`
+wrapper, no `mar-next-add` button beside it, no `mar-quickadd`/`now-quickadd` form,
+and no `FREE · <duration>` row for the gap after it. The `.now-row-wrap`/`.now-quickadd`
+CSS was deleted as dead weight along with it. `nextFreeGap()` itself is untouched —
+the hero card's "Free until X at Y" sub-line still reads it.
