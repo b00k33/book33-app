@@ -414,3 +414,23 @@ wrapper, no `mar-next-add` button beside it, no `mar-quickadd`/`now-quickadd` fo
 and no `FREE · <duration>` row for the gap after it. The `.now-row-wrap`/`.now-quickadd`
 CSS was deleted as dead weight along with it. `nextFreeGap()` itself is untouched —
 the hero card's "Free until X at Y" sub-line still reads it.
+
+## 15. Work session card's full patient list + paste box — retired 2026-09-03
+
+Linh: "merge the work mode widget nad day board together. they are a pair" — the
+same `wmbPatientList()` rows and `wmbPasteFormHtml()` paste box were rendering in
+full in BOTH the Right now Work card (`scWorkBoardHtml()`, inside the Mode group)
+AND the Work day board page. Picked "Board is the one list" off a 3-option mock
+(sent as `work-merge-mock.html`). `scWorkBoardHtml()` now renders a glance only —
+current patient (if any) on a "Now" row, the next one on a "Next" row, or "N
+patients today — all seen" once the day's done, or the plain empty state when
+nothing's booked. No per-patient focus line, no status/source chips, no paste
+box — those, and the full chronological list, live ONLY on the Work day board
+(`renderWorkBoard()`) now. The board itself is untouched.
+
+**Known remaining duplication, not folded in (out of scope for this pass):**
+the desktop widget-rail's own `railPatients` card (`wrCardHtml`, id `railPatients`)
+still renders the full list + its own paste box when no Work session is running
+(`scShowsPatients()` is false) — Linh's ask was specifically about the session
+card shown in her screenshots, not this secondary rail card. Flag it to her
+before touching it if it comes up again.
