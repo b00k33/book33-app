@@ -461,3 +461,19 @@ a block's scheduled end for sessions started under a block; plan-complete ends a
 session; `extendSession()`/`bookAnotherSession()`/`moveToNextSession()` still
 unrendered (§12). `activeModeItem()` still scans the calendar — only to feed the
 suggestion and the opt-in filter badge.
+
+## 17. "Open for now" card's "Fits in this gap" to-dos — retired 2026-09-03
+
+Her words: "i dont like the open for now page. let me choose mode instead of
+choosing to do" — answer: "the Mode chips first — pick a Mode, then that
+Mode's card opens". The free-time card (renderModeTakeover's Home branch,
+shown whenever nothing tagged covers now) used to offer the two oldest
+pending to-dos with a "Do →" tick (2026-08-31, "more interactive"). Gone.
+
+**Now:** the same card keeps its head ("Open until 5:00pm" / "Open for
+now") and the next-up line, and below it the Mode chips — `modeChipsHtml()`,
+the one row the Mode group head also draws (factored out of
+`wrSyncModeGroup()` for this). Tapping a chip starts that Mode
+(`toggleModeChip`), `activeMode()` stops being Home, the card goes, the
+Mode's own card is what she lands on. The `[data-sc-freetodo-done]` click
+branch stays in the JS, unreferenced.
