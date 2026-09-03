@@ -214,6 +214,22 @@ every render into the 9px floor and let the header track balloon.
   the same `book33-clinic-day` contract `/patients` writes (+ `phone`). State:
   `wmbPasteOpen/Draft/Day/Msg`; the draft survives re-renders. Acupuncture patients
   are C22's; herbal patients are LCM's (her words, 2026-09-03).
+- **Walk-ins merge into a pasted day (2026-09-03, her pick "Merge the calendar in").**
+  `wmbPatientList()` no longer treats an import as the whole truth: `wmbCalendarPatients()`
+  (the Work events inside today's CBD Work block, minus routine occurrences, skipped or
+  moved ghosts, and lunch/break/admin-named blocks — `WMB_NOT_PATIENT_RE`) is merged into
+  it, minus anything the import already names: identical start, or the same person
+  (`normTitle`, so a decorated title still matches) within 90 minutes of an imported slot
+  — a second visit hours later is a real second row. Each merged row carries
+  `source: "calendar"`. `wmbPatientCountFor(date)` gives the Night group's Tomorrow line
+  the pasted-for-tomorrow count (`loadClinicDayFor(dateKey)`), else the calendar guess. `wmbSourceChip(p, compact)` marks them — the word "calendar" on the
+  board, a `b33LineIcon("calendar")` glyph in the narrow panel rows, because the NAME never
+  shrinks for a marker. **Phone door (her pick "include link to board"):** an empty patients
+  card is still dropped from the phone stack, but its slot now renders
+  `wrPatientsBoardLinkHtml()`, a one-line "Work day board →" through `[data-sc-open-board]`
+  — that is where the paste box always lives. Both `[data-sc-open-board]` and `[data-wr-go]`
+  now call `closeAllDayDrawers()` first: navigating from a control inside the phone drawer
+  used to leave the drawer covering the destination (Trap 17's family; found live).
 - **Phone:** `#navPanel` is a 300px labelled drawer while `dd-drawers-active`
   (`navIconRailRowHtml()` emits `.nir-lbl`); the Calendar/Chapters flyouts take over
   the drawer's own width (left:0, 100%) instead of opening beside a 52px rail; the
