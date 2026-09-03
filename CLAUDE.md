@@ -202,18 +202,32 @@ every render into the 9px floor and let the header track balloon.
   **Birthdays group** (`#wrBdayGroup`, `renderWrBdayGroup()`) is a second card under
   the Mode group whenever today holds a birthday — person name + "turns N" + relation,
   then `bdayActionRows(e, true)`; no numerology (the right rail never carries it).
-  The To-do card hides the active Mode's to-dos while the group lists them; Right
-  now's NEXT row carries the Mode quick-add "+" and the group has no "Coming up".
+  The To-do card hides the active Mode's to-dos while the group lists them. Right
+  now's NEXT row is plain again — no quick-add "+", no FREE gap row below it
+  (both retired same-day they shipped, RETIRED-FEATURES.md §14, "i dont need this").
 - **Cliniko paste box (2026-09-03 pm, "a text box so i can copy paste my cliniko
   schedule"):** `wmbPasteFormHtml()` (one collapsed "Paste Cliniko schedule ▾" line →
-  textarea + Today/Tomorrow + Save) is mounted in the Work group's patients section,
-  the panel's Today's patients card and `#wmbPasteSlot` on the Work Day Board;
-  `clinicDayParseText()` reads Cliniko's day-view text (zero-width joiners around the
-  times stripped, "11 – 12pm" meridiem inference, Available/Break/Lunch/Unavailable
-  blocks skipped and named in the result line) and `clinicDaySaveFromText()` writes
-  the same `book33-clinic-day` contract `/patients` writes (+ `phone`). State:
+  textarea + Today/Tomorrow + Save) is mounted in the panel's Today's patients rail
+  card (`railPatients`, only rendered while no Work session is running — see
+  `scShowsPatients()`) and `#wmbPasteSlot` on the Work Day Board. `clinicDayParseText()`
+  reads Cliniko's day-view text (zero-width joiners around the times stripped,
+  "11 – 12pm" meridiem inference, Available/Break/Lunch/Unavailable blocks skipped and
+  named in the result line) and `clinicDaySaveFromText()` writes the same
+  `book33-clinic-day` contract `/patients` writes (+ `phone`). State:
   `wmbPasteOpen/Draft/Day/Msg`; the draft survives re-renders. Acupuncture patients
-  are C22's; herbal patients are LCM's (her words, 2026-09-03).
+  are C22's; herbal patients are LCM's (her words, 2026-09-03). **Not** in the Work
+  group's own session card any more — see the next bullet.
+- **Work session card is a glance, not a second board (2026-09-03, "merge the work
+  mode widget nad day board together. they are a pair", picked "Board is the one
+  list" off a 3-option mock):** `scWorkBoardHtml()` (inside the Mode group, only
+  while a Work session is running) no longer renders the full patient list or the
+  paste box — both were duplicating the Work Day Board exactly. It renders "Now"/
+  "Next" rows (current + next patient off the same `wmbPatientList()`) or "N
+  patients today — all seen" once the day's done. The full chronological list,
+  per-patient briefing, gaps and duties stay the board's job alone — tap "Work day
+  board →" in the group head. RETIRED-FEATURES.md §15 (also notes the
+  `railPatients` rail card above still duplicates the list when no session is
+  running — out of scope for this pass, flag before touching).
 - **Walk-ins merge into a pasted day (2026-09-03, her pick "Merge the calendar in").**
   `wmbPatientList()` no longer treats an import as the whole truth: `wmbCalendarPatients()`
   (the Work events inside today's CBD Work block, minus routine occurrences, skipped or

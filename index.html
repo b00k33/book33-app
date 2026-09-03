@@ -19624,6 +19624,9 @@
   .sc-pat-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sc-pat-row .wmb-status { flex: none; }
   .sc-pat-focus { font-size: 11px; color: var(--ink-soft); line-height: 1.3; margin: 2px 0 0 60px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* the session card's glance rows (scWorkBoardHtml, "Board is the one list") --
+     same .sc-pat card/row grammar, just a Now/Next label instead of a bare time */
+  .sc-pat-glance-lbl { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--margin-rule); width: 32px; }
   /* -- Mode group (2026-09-03, "organise the work widgets together with work mode"): the
         Session card and the Mode card are sections of ONE card under Right now, tinted in
         the Mode's colour and labelled once in its head; both members drop their own card
@@ -44742,26 +44745,32 @@
   // import when it exists, the calendar guess otherwise), so the two can never
   // disagree. Current patient is marked, seen ones dim, each row shows the
   // briefing focus when the import carried one; the label links to the full board.
+  // 2026-09-03 (Linh, "merge the work mode widget nad day board together. they
+  // are a pair", picked "Board is the one list" off a 3-way mock): the full
+  // list, briefings, gaps, duties and the paste box now live ONLY on the Work
+  // day board (renderWorkBoard() below) -- this card is a glance, not a second
+  // copy of it. Just current/next patient, or a seen-count once the day's done.
   function scWorkBoardHtml(mode) {
     if (!mode || mode.id !== "work") return "";
     let list;
     try { list = wmbPatientList(); } catch (e) { return ""; }
     const pats = list.items.slice().sort((a, b) => toMin(a.start) - toMin(b.start));
     const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
-    const rows = pats.length ? pats.map(p => {
-      const s = toMin(p.start), e2 = toMin(p.end) || s + 30;
-      const cur = nowMin >= s && nowMin < e2;
-      const seen = e2 <= nowMin || p.status === "completed";
-      return `<div class="sc-pat${cur ? " current" : ""}${seen ? " seen" : ""}">
-        <div class="sc-pat-row"><span class="sc-pat-time">${esc(fmtTime(p.start))}</span><span class="sc-pat-name">${esc(p.name || "Patient")}</span>${wmbSourceChip(p, true)}${wmbStatusChip(p.status)}</div>
-        ${p.focus ? `<div class="sc-pat-focus">${esc(p.focus)}</div>` : ""}
-      </div>`;
-    }).join("") : `<div class="sc-empty">${list.fromImport ? "No patients on today's list" : "Nothing booked in Book33 — paste the day from Cliniko below"}</div>`;
+    const cur = pats.find(p => { const s = toMin(p.start), e2 = toMin(p.end) || s + 30; return nowMin >= s && nowMin < e2; });
+    const next = pats.find(p => toMin(p.start) > nowMin && p !== cur);
+    const glanceRow = (lbl, p) => `<div class="sc-pat${lbl === "Now" ? " current" : ""}"><div class="sc-pat-row sc-pat-glance"><span class="sc-pat-glance-lbl">${lbl}</span><span class="sc-pat-name">${esc(p.name || "Patient")}</span><span class="sc-pat-time">${esc(fmtTime(p.start))}</span></div></div>`;
+    let body;
+    if (!pats.length) {
+      body = `<div class="sc-empty">${list.fromImport ? "No patients on today's list" : "Nothing booked in Book33 yet"}</div>`;
+    } else if (!cur && !next) {
+      body = `<div class="sc-empty">${pats.length} patient${pats.length === 1 ? "" : "s"} today — all seen</div>`;
+    } else {
+      body = (cur ? glanceRow("Now", cur) : "") + (next ? glanceRow("Next", next) : "");
+    }
     // 2026-09-03: the "Work day board →" link moved up to the Mode group's head
     // (wrSyncModeGroup) -- one door per card, not one per section.
     return `<div class="sc-list-label sc-pats-label"><span>Today's patients · ${pats.length}${list.fromImport ? "" : " (calendar guess)"}</span></div>
-      <div class="sc-pats">${rows}</div>
-      ${wmbPasteFormHtml()}`;
+      <div class="sc-pats">${body}</div>`;
   }
   // The combined panel's own Today's patients card (wrCardHtml "railPatients")
   // hides while the Session card is already showing the list -- same rows twice
