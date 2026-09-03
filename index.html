@@ -19658,6 +19658,40 @@
   }
   .wr-mode-group .sc-pat, .wr-mode-group .mar-chip, .wr-mode-group .mar-next-add { background: var(--paper); }
   .wr-mode-group .sc-pat.current { background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); }
+  /* -- Mode group rows (the other Modes, 2026-09-03): routine occurrences as tappable rows
+        with elapsed meta; Tomorrow lines for Night; the Birthdays group's person + actions -- */
+  .wr-mg-sec { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); margin-top: 4px; }
+  .wr-mg-sec > span:last-child { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 8px; }
+  .wr-mg-rows { display: flex; flex-direction: column; gap: 4px; }
+  .wr-mg-row, .wr-mg-line {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 10px; border-radius: 10px;
+    background: var(--paper); border: none; font: inherit; font-size: 13px; color: var(--ink); text-align: left;
+  }
+  .wr-mg-row { cursor: pointer; }
+  .wr-mg-row.done { opacity: .55; }
+  .wr-mg-row.done .wr-mg-name { text-decoration: line-through; font-weight: 500; }
+  .wr-mg-dot { flex: none; width: 10px; height: 10px; border-radius: 999px; border: 1.5px solid var(--ink-faint); }
+  .wr-mg-row.done .wr-mg-dot { background: var(--ink-faint); }
+  .wr-mg-name { flex: 1; min-width: 0; font-weight: 600; }
+  .wr-mg-meta, .wr-mg-t { flex: none; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .wr-mg-t { width: 52px; }
+  .wr-mode-group .mode-ambient-rail .wr-mg-sec:first-child { margin-top: 0; }
+  .wr-mode-group .mode-ambient-rail .mar-head { margin-top: 8px; }
+  .wr-bd-person {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px;
+    background: var(--paper); border: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  }
+  .wr-bd-ic { flex: none; font-size: 20px; line-height: 1; }
+  .wr-bd-txt { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .wr-bd-txt b { font-size: 14px; }
+  .wr-bd-age { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: color-mix(in oklab, var(--mg-acc, var(--margin-rule)) 14%, var(--paper)); color: color-mix(in oklab, var(--mg-acc, var(--margin-rule)) 75%, var(--ink)); }
+  .wr-bd-rel { flex-basis: 100%; font-size: 12px; color: var(--ink-soft); }
+  .wr-bd-acts { display: flex; flex-direction: column; gap: 4px; }
+  .wr-bd-acts .bd-pop-row {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 10px; border-radius: 10px;
+    background: var(--paper); border: none; font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer;
+  }
+  .wr-bd-acts .bd-pop-row[aria-pressed="true"] { opacity: .55; }
   /* Right now's NEXT row with the quick-add "+" beside it (Coming up left the Mode group) */
   .now-row-wrap { display: flex; align-items: center; gap: 8px; }
   /* the phone drawer gets the same compaction #wrPanelBody's rows have (74px label +
@@ -28759,6 +28793,21 @@
   function saveEvents(list) { try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); } catch (e) {} saveWidgetDigest(); resyncItems(); }
   function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveDone(map) { try { localStorage.setItem(DONE_KEY, JSON.stringify(map)); } catch (e) {} }
+  // 2026-09-03 (Mode groups, her "Elapsed" pick for the essentials rows): WHEN an
+  // occurrence was ticked, keyed like DONE (same occurrence ids), ms timestamps.
+  // DONE stays the single source of truth for done-ness; this only answers "at
+  // what time" for the group's rows ("✓ 6:41"). Pruned to the last 14 days on
+  // load so it never grows. book33-* key = Book33-owned, cloud-synced free.
+  const DONE_AT_KEY = "book33-done-at";
+  function loadDoneAt() {
+    try {
+      const m = JSON.parse(localStorage.getItem(DONE_AT_KEY) || "{}");
+      const cutoff = Date.now() - 14 * 86400000;
+      Object.keys(m).forEach(k => { if (!(m[k] > cutoff)) delete m[k]; });
+      return m;
+    } catch (e) { return {}; }
+  }
+  function saveDoneAt() { try { localStorage.setItem(DONE_AT_KEY, JSON.stringify(DONE_AT)); } catch (e) {} }
   // 2026-08-06 (Linh, outcomes spec): per-OCCURRENCE completion outcomes — keyed by the
   // exact same occurrence ids DONE uses (rt-<taskId>-<date> for routines, so a recurring
   // item's outcome only ever touches that day, never the series). Each entry is
@@ -28892,6 +28941,7 @@
     if (changed) saveEvents(EVENTS);
   })();
   let DONE = loadDone();
+  let DONE_AT = loadDoneAt();
   let OUTCOMES = loadOutcomes();
   let SHOP = loadShop();
   let TODOS = loadTodos();
@@ -29547,6 +29597,8 @@
   function toggleDone(id, on) {
     if (on) DONE[id] = true; else delete DONE[id];
     saveDone(DONE);
+    if (on) DONE_AT[id] = Date.now(); else delete DONE_AT[id];
+    saveDoneAt();
     if (on) fireReward(id);
     saveWidgetDigest();
   }
@@ -48151,6 +48203,11 @@
       if (ctxWrap && rightBody && ctxWrap.parentElement !== rightBody) rightBody.appendChild(ctxWrap);
       if (ambRail && modeGroup && ambRail.parentElement !== modeGroup) wrModeGroupMount(modeGroup, ambRail);
       wrSyncModeGroup();
+      if (modeGroup) {
+        const bg = wrBdayGroupEl();
+        if (bg.parentElement !== rightBody) modeGroup.after(bg);
+        renderWrBdayGroup();
+      }
       if (wrMobile && rightBody && wrMobile.parentElement !== rightBody) rightBody.appendChild(wrMobile);
       // both confirmed viewport-agnostic (just fill whatever element currently holds
       // their target ids) -- normally called from placeDeskGrid()'s desktop branch /
@@ -49975,6 +50032,54 @@
   // the same real DOM nodes every other placement system moves -- only their
   // parent inside the panel/drawer changed, so every "is it in the drawer"
   // check must use contains()/closest(), never parentElement.
+  // 2026-09-03 (her "Work first, Birthdays under it"): a birthday is an all-day
+  // item, so it never becomes the ACTIVE Mode (activeMode() reads timed blocks) --
+  // the Birthdays group is therefore its own card, shown whenever today holds a
+  // birthday, directly under the Mode group at both widths. Same .wr-mode-group
+  // skin in the Birthdays Mode colour; the rows are bdayActionRows(e, true) --
+  // the exact Message / Mark messaged / Gift idea controls the ribbon's popover
+  // uses, served by their existing document-level delegates. No numerology here
+  // (her 2026-08-24 rule: the right rail carries no numerology/astrology); the
+  // profile door is the person's own name.
+  function wrBdayGroupEl() {
+    let g = document.getElementById("wrBdayGroup");
+    if (!g) {
+      g = document.createElement("section");
+      g.id = "wrBdayGroup"; g.className = "wr-mode-group wr-bday-group"; g.hidden = true;
+    }
+    return g;
+  }
+  function renderWrBdayGroup() {
+    const g = document.getElementById("wrBdayGroup");
+    if (!g) return;
+    let bdays = [];
+    try { bdays = alldayItemsFor(TODAY).bdays || []; } catch (e) {}
+    if (!bdays.length) { g.hidden = true; if (g.innerHTML) g.innerHTML = ""; return; }
+    const bm = MODES.find(m => m.id === "birthday") || MODES.find(m => /birthday/i.test(m.name || "")) || null;
+    g.style.setProperty("--mg-acc", (bm && bm.accent) || "var(--margin-rule)");
+    const ic = bm ? (modeIconHtml(bm, 16) || modeEmojiHtml(bm)) : "🎂";
+    const html = `<div class="wr-mg-head"><span class="wr-mg-lbl">${ic}<span>${esc(bm ? bm.name : "Birthdays")}</span></span><button type="button" class="wr-mg-link" data-wr-go="people">People →</button></div>` +
+      bdays.map(e => {
+        const p = e.personId ? personById(e.personId) : null;
+        const age = p && p.year ? TODAY.getFullYear() - p.year : null;
+        const sub = (p && p.relation) || e.note || "";
+        // the person's NAME, not the occurrence title ("Karen's 42nd Birthday" would
+        // say the age twice next to the pill)
+        const name = (p && p.name) || e.title.replace(/['’]s\s+.*$/i, "");
+        return `<button type="button" class="wr-bd-person"${e.personId ? ` data-bday-person="${esc(e.personId)}"` : ""}>
+            <span class="wr-bd-ic" aria-hidden="true">${esc(e.icon || "🎂")}</span>
+            <span class="wr-bd-txt"><b>${esc(name)}</b>${age !== null ? `<span class="wr-bd-age">turns ${age}</span>` : ""}${sub ? `<span class="wr-bd-rel">${esc(sub)}</span>` : ""}</span>
+          </button>
+          <div class="wr-bd-acts">${bdayActionRows(e, true)}</div>`;
+      }).join("");
+    if (g.innerHTML !== html) g.innerHTML = html;
+    g.hidden = false;
+  }
+  document.addEventListener("click", e => {
+    const go = e.target.closest("[data-wr-go]");
+    if (!go) return;
+    state.view = go.dataset.wrGo; render();
+  });
   function wrModeGroupEl() {
     let g = document.getElementById("wrModeGroup");
     if (!g) {
@@ -50140,6 +50245,7 @@
         keep.push(dailyWrap);
         modeGroup = wrModeGroupEl();
         keep.push(modeGroup);
+        keep.push(wrBdayGroupEl());
       }
       // This branch must clear what was already in
       // body -- a generated .wr-card left behind by the OTHER branch's own
@@ -50171,7 +50277,14 @@
         if (modeGroup && WR_MODE_GROUP_IDS.includes(el.id)) { body.appendChild(modeGroup); wrModeGroupMount(modeGroup, el); return; }
         body.appendChild(el);
       });
-      if (modeGroup) wrSyncModeGroup();
+      if (modeGroup) {
+        wrSyncModeGroup();
+        // Birthdays group rides directly under the Mode group ("Work first,
+        // Birthdays under it"); hidden by its own renderer when today has none.
+        const bg = wrBdayGroupEl();
+        if (modeGroup.parentElement === body) modeGroup.after(bg); else body.appendChild(bg);
+        renderWrBdayGroup();
+      }
       if (dailyWrap) {
         body.appendChild(dailyWrap);
         const dailyIds = wrRankedIds(WR_WIDGET_IDS).filter(id => WR_GROUP_DAILY.includes(id) && !(TILE_PREFS[id] || {}).hidden);
@@ -52811,15 +52924,92 @@
             <input type="text" class="mar-quickadd-input" placeholder="Add a task for ${esc(u.mode.name)}…" aria-label="Task for ${esc(u.mode.name)}">
           </form>` : ""}`).join("")}
       </div>` : "";
-    const html = `
+    const html = inGroup ? marGroupHtml(am, focusBtn) : `
       <div class="mar-head">
-        <span class="mar-title">${inGroup ? `To-dos · ${doneN} of ${total}` : `${modeEmojiHtml(am)} ${esc(am.name)} · ${doneN} of ${total}`}</span>
+        <span class="mar-title">${modeEmojiHtml(am)} ${esc(am.name)} · ${doneN} of ${total}</span>
         ${focusBtn}
       </div>
       <div class="mar-strip">${stripHtml}</div>
       ${nextHtml}`;
     if (html !== marLastHtml) { host.innerHTML = html; marLastHtml = html; }
     wrSyncModeGroup();
+  }
+  // 2026-09-03 (Mode groups for the other Modes -- her mock answers: Morning, Night,
+  // Birthdays; rows carry ELAPSED time; Work first when two groups are on): the
+  // Mode card's in-group face. The Mode's routine occurrences (Morning's
+  // essentials, Night's wind-down -- whatever is tagged with the Mode) become
+  // tappable rows through the app-wide [data-tick-ev] delegate, with the tick
+  // time from DONE_AT on done rows and "Xm in" (into the block) on open ones --
+  // never a lateness word (support rule 2, no failure states). The hair-wash
+  // routine's row names today's wash and the days since. A leave-by label comes
+  // from dayCommitments() (the next located commitment minus its travel band)
+  // when it is within three hours. Night/Sleep add tomorrow's first two blocks
+  // (with the clinic count on a Work block) and the in-bed-by time (today's
+  // Sleep block, else the template's 10pm). To-dos stay chips beneath. Fasting is
+  // deliberately NOT here -- the Today card's meter already carries it for every
+  // Mode, and a second copy one card down is the redundancy rule's own case.
+  function marGroupHtml(am, focusBtn) {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const todos = TODOS.filter(t => modeOf(t) === am.id);
+    const occs = generatedFor(TODAY).filter(o => o.rtTaskId && !o.ghostSkip && !o.ghostMoved && modeOf(o) === am.id)
+      .sort((a, b) => ((a.start && toMin(a.start)) || 0) - ((b.start && toMin(b.start)) || 0));
+    const sess = currentSession();
+    const sItem = sess ? sessionCoveringItem(sess) : null;
+    const blockStart = sItem && sItem.start ? toMin(sItem.start) : null;
+    const clockOf = ms => { const d = new Date(ms); return fmtTime(`${d.getHours()}:${d.getMinutes()}`); };
+    const rows = occs.map(o => {
+      const done = isDone(o.id);
+      let meta = "";
+      if (done) meta = DONE_AT[o.id] ? `✓ ${clockOf(DONE_AT[o.id])}` : "✓";
+      else if (blockStart != null && nowMin > blockStart) meta = `${fmtDurMin(nowMin - blockStart)} in`;
+      if (o.rtTaskId === HAIR_ROUTINE_ID) {
+        // the occurrence title already names today's wash ("Regular wash") -- only
+        // the days since the last one is new information here
+        const since = HAIRD.lastDone ? dayDiff(TODAY, parseKey(HAIRD.lastDone)) : null;
+        meta = [since != null && since > 0 ? `${since}d since` : "", done ? "✓" : ""].filter(Boolean).join(" · ");
+      }
+      return `<button type="button" class="wr-mg-row${done ? " done" : ""}" data-tick-ev="${esc(o.id)}" data-on="${done}"><span class="wr-mg-dot"></span><span class="wr-mg-name">${esc(o.title)}</span>${meta ? `<span class="wr-mg-meta">${esc(meta)}</span>` : ""}</button>`;
+    }).join("");
+    const occDone = occs.filter(o => isDone(o.id)).length;
+    const secLabel = occs.some(o => o.category === "Daily essentials") ? "Essentials" : "Routines";
+    let leave = "";
+    try {
+      const c = dayCommitments(TODAY).find(x => x.start - x.travelMin > nowMin);
+      if (c && c.start - c.travelMin - nowMin <= 180) leave = `leave by ${fmtTime(minToHM(c.start - c.travelMin))}`;
+    } catch (e) {}
+    let tomorrowHtml = "";
+    if (am.id === "night" || am.id === "sleep") {
+      const tm = addDays(TODAY, 1);
+      let tItems = [], pats = 0;
+      try {
+        const all = dayEventsRawFor(tm).filter(e => e.start && !e.allDay).sort((a, b) => toMin(a.start) - toMin(b.start));
+        tItems = all.slice(0, 2);
+        // the first Work block always makes the cut (it carries the clinic count)
+        const w = all.find(e => modeOf(e) === "work");
+        if (w && !tItems.includes(w)) tItems.push(w);
+      } catch (e) {}
+      try { pats = clinicPatientsIn(dayEventsRawFor(tm)).length; } catch (e) {}
+      let bed = SLEEP_START_MIN;
+      try { const sb = dayEventsRawFor(TODAY).find(e => e.start && !e.allDay && modeOf(e) === "sleep"); if (sb) bed = toMin(sb.start); } catch (e) {}
+      tomorrowHtml = `<div class="wr-mg-sec"><span>Tomorrow</span><span>${WD_FULL[(tm.getDay() + 6) % 7].slice(0, 3)} ${tm.getDate()} ${MON_SHORT[tm.getMonth()]}</span></div>
+        <div class="wr-mg-rows">
+          ${tItems.map(e => `<div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(e.start))}</span><span class="wr-mg-name">${esc(e.title)}</span>${modeOf(e) === "work" && pats ? `<span class="wr-mg-meta">${pats} patient${pats === 1 ? "" : "s"}</span>` : ""}</div>`).join("")}
+          <div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(minToHM(bed)))}</span><span class="wr-mg-name">In bed</span>${bed > nowMin ? `<span class="wr-mg-meta">in ${fmtDurMin(bed - nowMin)}</span>` : ""}</div>
+        </div>`;
+    }
+    const todoDone = todos.filter(t => t.done).length;
+    let markedCurrent = false;
+    const chips = todos.map(t => {
+      let cls = "";
+      if (t.done) cls = "mar-done"; else if (!markedCurrent) { cls = "mar-current"; markedCurrent = true; }
+      return `<span class="mar-chip ${cls}">${t.done ? "✓ " : ""}${esc(t.title)}</span>`;
+    }).join("");
+    const rowsHtml = occs.length ? `<div class="wr-mg-sec"><span>${secLabel} · ${occDone} of ${occs.length}</span><span>${esc(leave)}${!todos.length ? focusBtn : ""}</span></div><div class="wr-mg-rows">${rows}</div>` : "";
+    const todosHtml = todos.length
+      ? `<div class="mar-head"><span class="mar-title">To-dos · ${todoDone} of ${todos.length}</span>${focusBtn}</div><div class="mar-strip">${chips}</div>`
+      : (!occs.length ? `<div class="mar-head"><span class="mar-title">To-dos · 0 of 0</span>${focusBtn}</div><div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>` : "");
+    return rowsHtml + tomorrowHtml + todosHtml;
   }
   document.addEventListener("click", e => {
     if (e.target.closest("[data-mt-back]")) {
