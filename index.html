@@ -2686,6 +2686,9 @@
      decoration -- text-align reset to left since the rest of the card is
      centered but a list of rows never should be. */
   .sc-freetime-fits { text-align: left; margin-top: 18px; }
+  .sc-freetime-chips { justify-content: center; margin-top: 0; }
+  .sc-freetime-chips .wr-mg-chip { font-size: 13px; padding: 7px 13px; }
+  .sc-freetime .sc-freetime-fits-label { text-align: center; }
   .sc-freetime-fits-label { font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
   .sc-freetime-fits-row { display: flex; align-items: center; gap: 10px; background: var(--raised); border-radius: var(--radius-sm); padding: 9px 12px; margin-bottom: 6px; }
   .sc-freetime-fits-row:last-child { margin-bottom: 0; }
@@ -50775,6 +50778,20 @@
   // ambient card. Running chip = filled; the calendar's suggestion = dashed and
   // glowing "▶ Work"; tap any chip to start it, tap the running one to end it.
   let wrMgChipsLastHtml = null;
+  // THE Mode chips row -- the Mode group head and the free-time "Open for now"
+  // card (renderModeTakeover) both draw this, one markup, one delegate
+  // ([data-mode-chip] -> toggleModeChip). Running = filled, the calendar's
+  // covering block = dashed/glowing "▶ Work".
+  function modeChipsHtml() {
+    const s = currentSession();
+    const sugg = suggestedModeItem(new Date());
+    const suggId = sugg ? modeOf(sugg) : null;
+    return MODES.slice().sort((a, b) => a.order - b.order).map(m => {
+      const on = !!(s && s.modeId === m.id), isSugg = !on && m.id === suggId;
+      const acc = m.accent || "var(--margin-rule)";
+      return `<button type="button" class="wr-mg-chip${on ? " on" : ""}${isSugg ? " sugg" : ""}" data-mode-chip="${esc(m.id)}" style="--chip-acc:${acc};--chip-on:${m.accent ? accentOnFor(m.accent) : "var(--accent-on, #fff)"}" aria-pressed="${on}" title="${on ? `End ${esc(m.name)}` : isSugg ? `${esc(sugg.title || m.name)} has started — tap to switch on` : `Switch ${esc(m.name)} on`}">${isSugg ? "▶ " : ""}${modeIconHtml(m, 14) || ""}<span>${esc(m.name)}</span></button>`;
+    }).join("");
+  }
   function wrSyncModeGroup() {
     const g = document.getElementById("wrModeGroup");
     if (!g) return;
@@ -50791,13 +50808,7 @@
     const html = `<span class="wr-mg-lbl">${ic}<span>${esc(mode.name)}</span>${sub ? `<span class="wr-mg-sub">· ${esc(sub)}</span>` : ""}</span>${mode.id === "work" ? `<button type="button" class="wr-mg-link" data-sc-open-board>Work day board →</button>` : ""}`;
     const head = g.firstElementChild;
     if (head.innerHTML !== html) head.innerHTML = html;
-    const sugg = suggestedModeItem(new Date());
-    const suggId = sugg ? modeOf(sugg) : null;
-    const chips = MODES.slice().sort((a, b) => a.order - b.order).map(m => {
-      const on = !!(s && s.modeId === m.id), isSugg = !on && m.id === suggId;
-      const acc = m.accent || "var(--margin-rule)";
-      return `<button type="button" class="wr-mg-chip${on ? " on" : ""}${isSugg ? " sugg" : ""}" data-mode-chip="${esc(m.id)}" style="--chip-acc:${acc};--chip-on:${m.accent ? accentOnFor(m.accent) : "var(--accent-on, #fff)"}" aria-pressed="${on}" title="${on ? `End ${esc(m.name)}` : isSugg ? `${esc(sugg.title || m.name)} has started — tap to switch on` : `Switch ${esc(m.name)} on`}">${isSugg ? "▶ " : ""}${modeIconHtml(m, 14) || ""}<span>${esc(m.name)}</span></button>`;
-    }).join("");
+    const chips = modeChipsHtml();
     const row = wrModeGroupChipsEl(g);
     if (chips !== wrMgChipsLastHtml || row.innerHTML !== chips) { row.innerHTML = chips; wrMgChipsLastHtml = chips; }
   }
@@ -53481,16 +53492,18 @@
         // task/family/shop/routine shapes, since those need per-kind completion
         // actions this quiet card has no room for; "Do" here is exactly the tick
         // railTodo already offers, just surfaced where she's already looking.
-        const fits = TODOS.filter(t => !t.done).sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "")).slice(0, 2);
-        const fitsHtml = fits.length ? `<div class="sc-freetime-fits">
-          <div class="sc-freetime-fits-label">Fits in this gap</div>
-          ${fits.map(t => `<div class="sc-freetime-fits-row"><span class="sc-freetime-fits-dot"></span><span class="sc-freetime-fits-name">${esc(t.title)}</span><button type="button" class="sc-freetime-fits-btn" data-sc-freetodo-done="${t.id}">Do →</button></div>`).join("")}
-        </div>` : "";
+        // 2026-09-03 (Linh: "i dont like the open for now page. let me choose mode
+        // instead of choosing to do" -> "the Mode chips first — pick a Mode, then
+        // that Mode's card opens"): the "Fits in this gap" to-do rows are gone
+        // (RETIRED-FEATURES.md §17). The card offers the Mode chips instead --
+        // the same modeChipsHtml() the Mode group head draws; a tap starts that
+        // Mode (toggleModeChip), the running session makes activeMode() non-Home,
+        // this branch stops showing and the Mode's own card is what she sees.
         const freeHtml = `<div class="sc-freetime">
           <div class="sc-freetime-glyph">◌</div>
           <div class="sc-freetime-head">${gap ? `Open until ${esc(minToHM(gap.end))}` : "Open for now"}</div>
           <div class="sc-freetime-sub">${nx ? `Nothing scheduled. ${esc(nxLabel)} starts ${esc(fmtTime(nx.start))}.` : "Nothing else scheduled today."}</div>
-          ${fitsHtml}
+          <div class="sc-freetime-fits"><div class="sc-freetime-fits-label">Choose a Mode</div><div class="wr-mg-chips sc-freetime-chips">${modeChipsHtml()}</div></div>
         </div>`;
         if (mtLastFreeHtml !== freeHtml) { slot.innerHTML = freeHtml; mtLastFreeHtml = freeHtml; }
         const body = document.getElementById("modeTakeoverQueueBody");
