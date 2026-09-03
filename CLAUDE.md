@@ -1189,19 +1189,28 @@ together in one test. `lmComputeRowHeight()` is the reference implementation.
 Applies to every surface in index.html. Supersedes any older Work/Personal-pill or
 event-tag Modes system — where anything elsewhere conflicts with this, this wins.
 
-**The rule, in one line: a Mode is an event. The calendar decides which Mode is active.
-The active Mode reshapes the whole app.**
+**The rule, in one line: a Mode is an event. She decides which Mode is active — the
+calendar only suggests. The active Mode reshapes the whole app.**
 
-1. **One system.** A CBD Work shift is simply an event tagged `work`, activating Work
-   Mode the same way any other tagged block activates its own Mode. No second concept,
-   no second word.
-2. **What decides the active Mode — automatic, from the calendar, in this order:**
-   (a) the longest containing block wins — a Pilates block inside a Work shift doesn't
-   switch the app to Pilates; (b) nothing tagged running right now → neutral default,
-   everything visible — a gap is a real signal, not a leftover state; (c) manual
-   override is allowed and expires on its own — holds until the calendar's next tagged
-   block naturally takes over. No other input decides the active Mode: not time of day
-   alone, not a stored preference, not which page she's on.
+*(Rewritten 2026-09-03 — "make the modes on c22 manual toggle instead of auto", the
+third walk-back in three days after "prevent modes from auto turning on" (09-01) and
+"stop modes from taking over screen and calendar" (09-03). The original rule 2 said
+the calendar decides automatically; it no longer does. RETIRED-FEATURES.md §16.)*
+
+1. **One system.** A CBD Work shift is simply an event tagged `work`; tagging it is
+   what makes Work Mode *offered* during that block. No second concept, no second word.
+2. **What decides the active Mode — her tap, in the Mode group head (Right now panel):**
+   (a) the active Mode is the running session's Mode (`activeMode()` reads
+   `currentSession()`), nothing else — not the calendar, not time of day, not a stored
+   preference; (b) no session → neutral Home, everything visible; (c) the calendar
+   **suggests**: while a tagged block covers now and she hasn't started or finished it
+   today, that Mode's chip glows "▶ Work" (`suggestedModeItem()`) — it never starts
+   itself; (d) a tap on a chip starts it — under a covering block of that Mode it's the
+   block's own session (ends at the block's end, its steps are the plan); anywhere else
+   it's open-ended and runs until she taps the chip again; (e) a tap on another chip
+   while one runs is the swap, explicitly; a new tagged block beginning mid-session
+   only glows, it never swaps or prompts. The event sheet's "Start <Mode> now" row is
+   the same manual start from the other end.
 3. **What an active Mode changes — everything it's entitled to, not one accent token:**
    colour (accent, card backgrounds, borders, surfaces all take the Mode's colour
    family; light/dark stays the user's own theme choice, never flipped by Mode); which
@@ -1231,7 +1240,8 @@ The active Mode reshapes the whole app.**
    any text (colour must answer this)? Is everything on screen relevant to what she's
    doing right now (else §3/§4 is wrong)? Can she exit takeover in one tap and back in
    one tap (else §4 is broken)? Can she read every word on screen (else §6 is broken)?
-   Did she have to do anything to make this happen (if yes, §2 is broken)?
+   Did anything switch a Mode on or off without her tapping it (if yes, §2 is broken —
+   the 2026-09-03 inversion of this test; a block ending is the one allowed auto-end)?
 8. **Applies to new work** — any new page, widget or panel declares which Modes it
    belongs to. "Shows in every Mode" is a deliberate stated choice, not a default to
    fall into.

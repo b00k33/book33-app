@@ -434,3 +434,30 @@ still renders the full list + its own paste box when no Work session is running
 (`scShowsPatients()` is false) — Linh's ask was specifically about the session
 card shown in her screenshots, not this secondary rail card. Flag it to her
 before touching it if it comes up again.
+
+## 16. Sessions starting themselves from the calendar — retired 2026-09-03
+
+Her words: "make the modes on c22 manual toggle instead of auto". Third step of
+the same walk-back: 09-01 "prevent modes from auto turning on" (takeover made
+opt-in, `MT_AUTO_MODES` emptied), 09-03 "stop modes from taking over screen and
+calendar" (filtering opt-in), and now the last automatic piece — the session
+itself. Shown a two-way mock: A "chips; calendar suggests, you tap" vs B "plain
+switches, calendar ignored" — she picked **A**, with a hand-started session
+ending at the covering block's end when there is one.
+
+**Removed:** `syncSessionAutoStart()` and both its callers (the 1s `sessionTick`
+and `renderDay()`). `activeMode()` no longer reads the calendar — it is the
+running session's Mode, else Home. Nothing starts a session but a tap.
+
+**Added:** Mode chips in the Mode group head (`wrSyncModeGroup()`, always shown
+now — the group used to hide with no live member): running = filled, the
+calendar's covering block = dashed, glowing "▶ Work" (`suggestedModeItem()`,
+spent once that block has had a session today), tap = start / tap running = end
+/ tap another = swap (`toggleModeChip()`). `startSession(mode, null)` is now
+legal: `endsAt: null`, `eventId: null`, open-ended, "Running since 9:04".
+
+**Kept:** the event sheet's "Start <Mode> now" row (manual already); auto-END at
+a block's scheduled end for sessions started under a block; plan-complete ends a
+session; `extendSession()`/`bookAnotherSession()`/`moveToNextSession()` still
+unrendered (§12). `activeModeItem()` still scans the calendar — only to feed the
+suggestion and the opt-in filter badge.
