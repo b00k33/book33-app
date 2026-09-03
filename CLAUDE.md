@@ -549,6 +549,16 @@ calibration — full detail in cross-session memory `feedback_code7_calibration`
   "check elsewhere" instinct — trust her real answer over the written first draft.
 - Named live pain points (real, not hypothetical): Day-page quick-add/recurrence, and
   the Repeats picker/All Events page.
+- **Group by what she is doing (2026-09-03, "organise the work widgets together with
+  work mode" → "use the above process to understand what i like").** She reads a
+  status column top-down as *what's on now → what I'm doing inside it → how the day
+  is going → what's left*, and everything about the thing she is doing must sit in
+  ONE place under that thing's name — the active context pulls its widgets to it;
+  the app never organises by widget type. A terse ask + screenshot means: list every
+  surface the concept touches and where each reads its data, find the single cause,
+  regroup (one reader, one door per card), then check what the grouping made
+  redundant nearby and offer those removals as yes/no. A control whose content now
+  lives inside the group loses its own entry point without a question.
 
 ### Precedence — where a specific exception overrides the general rule
 - **Full-bleed pages vs. cap-and-centre.** The page canvas itself is full-bleed at
