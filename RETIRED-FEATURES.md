@@ -379,6 +379,23 @@ Also that day: **Mode takeover and Mode calendar filtering became opt-in**
 her "stop modes from taking over screen and calendar"). Nothing deleted — the
 Focus button, takeover overlay and Mode badge all come back when switched on.
 
+## 13. Session rail icon (⏳) and the Session card's own panel — retired 2026-09-03
+
+Linh, screenshot of the Right now panel: "organise the work widgets together with
+work mode". The Session card no longer has its own icon in `#wrIconRail` or its own
+one-card panel; it mounts inside the combined Right now panel, in the **Mode group**
+(`#wrModeGroup`, `wrModeGroupEl()`/`wrSyncModeGroup()`) together with the Mode card,
+directly under Right now, at both widths (desktop panel and the phone's right
+drawer). A session starting auto-opens the combined panel, not a Session panel.
+Same shape as §11's retirement of the Today/Mode/Shopping icons. Also retired with
+it: the "Work day board →" link inside the card's patients section (one door per
+card — it sits in the group's head now), the Mode card's own name in its title while
+grouped ("To-dos · 0 of 4"; the group head names the Mode), the hero (96px rings +
+card chrome) treatment inside the group, and the panel's separate Today's patients
+card whenever the Session card is already listing them (`scShowsPatients()`); that
+card now reads `wmbPatientList()` like the board and the session card do, instead of
+the older calendar-only reader.
+
 **Desktop/tablet:** none of the CSS above applies past 640px — `.day-step-row`
 already had its own, older, unrelated desktop hide rule (`#dayPage .day-main >
 .section-head .day-step-row { display: none }`, "too many arrows"); `#navMonthBtn`/

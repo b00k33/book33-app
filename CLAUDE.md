@@ -180,6 +180,17 @@ every render into the 9px floor and let the header track balloon.
   handler. Say so if she asks for it.
 - **Right side:** `#deskWidgetRail` 72px, `.wr-panel` at right:72px on `--chrome-tint`;
   `.wr-card` is a white card with a hairline.
+- **Mode group (2026-09-03, "organise the work widgets together with work mode"):**
+  the combined Right now panel's order is Right now → Mode group → Today → Daily
+  cards → Shopping, at both widths (`WR_RIGHTNOW_MEMBERS`; the phone drawer mirrors
+  it in `placeDayDrawers()`). The group (`#wrModeGroup`, `.wr-mode-group`, tinted in
+  the Mode's colour via `--mg-acc`, head = Mode glyph + name, "Work day board →" for
+  Work) holds the real `#daySessionCard` and `#modeAmbientRail` nodes as sections of
+  ONE card; both drop their own card chrome inside it. It is created on demand
+  (`wrModeGroupEl()`), members are placed by `wrModeGroupMount()` (canonical order),
+  `wrSyncModeGroup()` hides it when both members are hidden and is called from both
+  renderers. Trap: the members now sit one level below the panel/drawer body — any
+  "is it in the panel" check must use `contains()`/`closest()`, never `parentElement`.
 - **Phone:** `#navPanel` is a 300px labelled drawer while `dd-drawers-active`
   (`navIconRailRowHtml()` emits `.nir-lbl`); the Calendar/Chapters flyouts take over
   the drawer's own width (left:0, 100%) instead of opening beside a 52px rail; the
