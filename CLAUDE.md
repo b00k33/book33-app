@@ -204,6 +204,16 @@ every render into the 9px floor and let the header track balloon.
   then `bdayActionRows(e, true)`; no numerology (the right rail never carries it).
   The To-do card hides the active Mode's to-dos while the group lists them; Right
   now's NEXT row carries the Mode quick-add "+" and the group has no "Coming up".
+- **Cliniko paste box (2026-09-03 pm, "a text box so i can copy paste my cliniko
+  schedule"):** `wmbPasteFormHtml()` (one collapsed "Paste Cliniko schedule ▾" line →
+  textarea + Today/Tomorrow + Save) is mounted in the Work group's patients section,
+  the panel's Today's patients card and `#wmbPasteSlot` on the Work Day Board;
+  `clinicDayParseText()` reads Cliniko's day-view text (zero-width joiners around the
+  times stripped, "11 – 12pm" meridiem inference, Available/Break/Lunch/Unavailable
+  blocks skipped and named in the result line) and `clinicDaySaveFromText()` writes
+  the same `book33-clinic-day` contract `/patients` writes (+ `phone`). State:
+  `wmbPasteOpen/Draft/Day/Msg`; the draft survives re-renders. Acupuncture patients
+  are C22's; herbal patients are LCM's (her words, 2026-09-03).
 - **Phone:** `#navPanel` is a 300px labelled drawer while `dd-drawers-active`
   (`navIconRailRowHtml()` emits `.nir-lbl`); the Calendar/Chapters flyouts take over
   the drawer's own width (left:0, 100%) instead of opening beside a 52px rail; the
