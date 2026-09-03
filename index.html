@@ -19737,18 +19737,12 @@
   .wmb-paste-dayopt[aria-pressed="true"] { background: var(--margin-rule); color: var(--accent-on, #fff); }
   #wmbPasteSlot { max-width: 720px; margin: 0 auto 16px; }
   #wmbPasteSlot .wmb-paste { margin-top: 0; }
-  /* Right now's NEXT row with the quick-add "+" beside it (Coming up left the Mode group) */
-  .now-row-wrap { display: flex; align-items: center; gap: 8px; }
-  /* the phone drawer gets the same compaction #wrPanelBody's rows have (74px label +
-     34px pip left the name as "T…" once the "+" sat beside it); the name may wrap */
+  /* the phone drawer gets the same compaction #wrPanelBody's rows have; the name may wrap */
   #dayRightDrawerBody .now-row { height: auto; min-height: 48px; padding: 6px 10px; gap: 8px; }
   #dayRightDrawerBody .now-row-pip { width: 26px; height: 26px; font-size: 13px; border-radius: 8px; }
   #dayRightDrawerBody .now-row-label { width: 40px; }
   #dayRightDrawerBody .now-row-answer { font-size: 14px; white-space: normal; }
   #dayRightDrawerBody .now-row-detail { white-space: normal; }
-  .now-row-wrap .now-row { flex: 1 1 auto; min-width: 0; }
-  .now-row-wrap .mar-next-add { width: 32px; height: 32px; border-radius: 999px; }
-  .now-quickadd { margin: 8px 0 0; }
   /* status chip outside #workBoardPage (Session card rows, the panel's patients card) */
   .sc-pat-row .wmb-status, .wr-pat-row .wmb-status {
     flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
@@ -43850,7 +43844,6 @@
     const el = document.getElementById("nowFactsGrid");
     if (!el) return;
     const nx = nextItem(now);
-    const gap = nextFreeGap(now);
     const nowMin = now.getHours() * 60 + now.getMinutes();
     let html = "";
     // NEXT -- only while something is ON. When nothing's on, the hero card's
@@ -43870,48 +43863,16 @@
         detail: `${fmtTime(nx.start)} · in ${fmtDurMin(toMin(nx.start) - nowMin)}`,
         dataAction: "next"
       });
-      // 2026-09-03 (code7 follow-up to the Mode group, her pick "Right now keeps
-      // NEXT, + moves there"): the Mode card's "Coming up" list said the same thing
-      // as this row, so it leaves the group and its quick-add "+" (drop a task on
-      // the next Mode) rides beside this row instead -- same data-mar-next-add /
-      // data-mar-quickadd attributes, so the existing delegate and submit handler
-      // serve it unchanged. Only when the next block is a Mode block.
-      const nxMode = modeOf(nx);
-      if (nxMode && modeById(nxMode)) {
-        const nm = modeById(nxMode);
-        html = `<div class="now-row-wrap">${html}<button type="button" class="mar-next-add" data-mar-next-add="${esc(nxMode)}" aria-expanded="${marQuickAddFor === nxMode}" aria-label="Add a task for ${esc(nm.name)}">${marQuickAddFor === nxMode ? "×" : "+"}</button></div>`
-          + (marQuickAddFor === nxMode ? `<form class="mar-quickadd now-quickadd" data-mar-quickadd="${esc(nxMode)}">
-            <input type="text" class="mar-quickadd-input" placeholder="Add a task for ${esc(nm.name)}…" aria-label="Task for ${esc(nm.name)}">
-          </form>` : "");
-      }
     }
-    // FREE -- her exact rule: shown only when the gap does NOT start now. gap.start
-    // equals nowMin precisely when nothing's on (nextFreeGap's own cursor starts at
-    // nowMin and finds the gap immediately) -- in that case the hero already says
-    // "Free until X at Y", so this row would just repeat it. A real comparison
-    // against now, not a branch on "is anything on".
-    const showFree = gap && gap.start !== nowMin;
-    if (showFree) {
-      const items = dayItemsFor(now).map(e2 => ({ title: e2.title, s: toMin(e2.start), e: itemEndMin(e2) }))
-        .filter(x => x.s != null && x.e != null);
-      const before = items.find(x => x.e === gap.start);
-      html += nowRowHtml({
-        pip: "○", pipBg: "var(--track-neutral-bar)",
-        label: "FREE",
-        answer: fmtDurMin(gap.min),
-        detail: `${fmtTime(minToHM(gap.start))} – ${fmtTime(minToHM(gap.end))}${before ? `, after ${esc(before.title)}` : ""}`,
-        dataAction: "free"
-      });
-    }
+    // 2026-09-03 (Linh, live on her phone: "i dont need this"): the NEXT row's
+    // quick-add "+" and the FREE gap row both retired same-day they shipped --
+    // see RETIRED-FEATURES.md.
     el.innerHTML = html;
     el.querySelectorAll("[data-now-action]").forEach(btn => {
       btn.onclick = () => {
         const action = btn.dataset.nowAction;
         if (action === "next") {
           nowJumpToEvent(nx);
-        } else if (action === "free") {
-          state.anchor = new Date(TODAY); state.view = "day"; render();
-          setTimeout(() => { const sc = document.getElementById("timelineScroll") || document.getElementById("mdTimelineScroll"); if (sc) sc.scrollTop = Math.max(0, gap.start * (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--hour-h")) || 54) / 60 - 60); }, 30);
         }
       };
     });
