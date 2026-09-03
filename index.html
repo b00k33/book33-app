@@ -6097,6 +6097,22 @@
   .lm-untimed-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
   .lm-untimed-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
   .lm-empty { font-size: 12px; color: var(--ink-faint); }
+  /* 2026-09-03 Life Map in-panel editor + block drag */
+  .lm-ed-lbl { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+  .lm-ed-in { width: 100%; box-sizing: border-box; border: 1px solid transparent; border-radius: var(--radius-sm, 10px); padding: 7px 9px; font: inherit; font-size: 13px; color: var(--ink); background: var(--field-bg); }
+  .lm-ed-in:focus { outline: none; border-color: var(--margin-rule); }
+  .lm-ed-in:disabled { opacity: .55; }
+  .lm-ed-times { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lm-ed-scope { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lm-ed-saved { margin-left: 8px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--margin-rule); opacity: 0; transition: opacity .2s ease; }
+  .lm-ed-saved.on { opacity: 1; }
+  .lm-ed-del { border: none; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--danger); cursor: pointer; }
+  .lm-ed-del:hover { text-decoration: underline; }
+  .lm-cell-panel-actions { flex-wrap: wrap; align-items: center; }
+  .lm-cell-filled { cursor: grab; touch-action: none; }
+  .lm-cell-filled.lm-run-end { cursor: ns-resize; }
+  .lm-cell-dragsrc { opacity: .35; }
+  .lm-cell-dragover { outline: 2px solid var(--lm-drag-acc, var(--margin-rule)); outline-offset: -2px; background: color-mix(in oklab, var(--lm-drag-acc, var(--margin-rule)) 35%, transparent) !important; }
   .lm-cell-panel-row { display: flex; flex-direction: column; gap: 8px; }
   .lm-cell-panel-title { font-size: 14px; font-weight: 700; color: var(--ink); }
   .lm-cell-panel-meta { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 7px; }
@@ -23665,6 +23681,79 @@
   // screen on mobile) so a close plays as a real collapse/slide-out instead of the
   // content vanishing first; the next open's innerHTML rebuild below overwrites it
   // before it's ever visible again.
+  // 2026-09-03 (Linh, Life Map screenshot: "let me edit the events here"; picked
+  // "edit right in that panel" + autosave + both scopes + drag-to-move/resize off a
+  // two-way mock): the tap panel IS the editor now. Title / Start / End save the
+  // moment a field is left, Mode chips are always offered (not only for mode-less
+  // items), a routine occurrence carries the same "This day only / The routine"
+  // switch the Day sheet's [data-ovr-scope] panel has, and Delete / Skip this day
+  // sit at the bottom. The full editor is still one tap away ("More…") for
+  // everything the panel doesn't carry (notes, steps, repeat, track).
+  let lmOvrScope = "day";
+  // the contiguous slots THIS item occupies on its day (identity, not Mode -- two
+  // back-to-back same-Mode entries are separate blocks to a drag)
+  function lmItemRun(grid, day, item) {
+    let lo = -1, hi = -1;
+    grid[day].forEach((c, si) => { if (c && c.item === item) { if (lo < 0) lo = si; hi = si; } });
+    return lo < 0 ? null : { lo, hi };
+  }
+  // ONE writer for a block's time (and, for a plain event, its day) -- the panel's
+  // Start/End fields and the grid drag both come through here, so the store rules
+  // live in one place: event -> the EVENTS row; routine occurrence -> a per-day
+  // override (setRtnOvr) or the template when the scope switch says so; recurring
+  // occurrence -> refused (no per-date override exists for those, same as repaint).
+  function lmApplyTimes(edit, item, startMin, endMin, newDateKey) {
+    if (!edit) return "Not editable from Life Map.";
+    if (startMin < 0 || endMin > 1439 || endMin <= startMin) return "That time doesn't fit in the day.";
+    const start = minToTime(startMin), end = minToTime(endMin);
+    if (edit.kind === "event") {
+      edit.ref.start = start; edit.ref.end = end;
+      if (newDateKey) edit.ref.date = newDateKey;
+      saveEvents(EVENTS);
+      return null;
+    }
+    if (edit.kind === "routine") {
+      const p = parseOccId(item.id);
+      if (!p) return "Couldn't find that routine day.";
+      if (newDateKey && newDateKey !== p.date) return "Routines move to another day from Today's sheet.";
+      if (lmOvrScope === "routine") { edit.ref.start = start; edit.ref.end = end; saveRoutines(); }
+      else setRtnOvr(edit.ref.id, p.date, { start, end, dur: undefined });
+      return null;
+    }
+    return "Recurring events: edit the series.";
+  }
+  function lmApplyTitle(edit, item, title) {
+    if (!edit) return;
+    const t = (title || "").trim();
+    if (edit.kind === "event") { edit.ref.title = t; saveEvents(EVENTS); }
+    else if (edit.kind === "routine") {
+      const p = parseOccId(item.id);
+      if (lmOvrScope === "routine") { if (t) edit.ref.title = t; saveRoutines(); }
+      else if (p) setRtnOvr(edit.ref.id, p.date, { title: t && t !== edit.ref.title ? t : undefined });
+    } else if (edit.kind === "recur") { if (t) { edit.ref.title = t; saveRecurringEvents(); } }
+  }
+  // after any write the grid is rebuilt from the stores, so lmPanel.item (a
+  // generatedFor()/ITEMS object from the OLD grid) is stale -- find the block again
+  // by identity (event id / occurrence id) and point the panel at the fresh one.
+  function lmRefreshPanel() {
+    if (!lmPanel || !lmPanel.edit) return;
+    const start = lmWeekStart || startOfWeek(TODAY);
+    const { grid } = lmWeekGrid(start);
+    const wantId = lmPanel.item.id;
+    for (let d = 0; d < 7; d++) {
+      const si = grid[d].findIndex(c => c && c.item && c.item.id === wantId);
+      if (si >= 0) { const cell = grid[d][si]; lmPanel = { type: "view", day: d, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item) }; return; }
+    }
+    lmPanel = null;   // it left the week (moved past Sunday) or was skipped/deleted
+  }
+  let lmSavedFlashTimer = null;
+  function lmSavedFlash() {
+    const el = document.querySelector("#lmCellPanel [data-lm-saved]");
+    if (!el) return;
+    el.textContent = "Saved ✓"; el.classList.add("on");
+    clearTimeout(lmSavedFlashTimer);
+    lmSavedFlashTimer = setTimeout(() => { el.classList.remove("on"); }, 1400);
+  }
   function renderLmCellPanel() {
     const host = document.getElementById("lmCellPanel");
     if (!host) return;
@@ -23673,29 +23762,62 @@
     const { item, mode, edit, day } = lmPanel;
     const endMin = item.start ? itemEndMin(item) : null;
     const timeTxt = item.allDay || !item.start ? "All day" : (endMin != null ? lmTimeRangeShort(item.start, minToTime(endMin)) : fmtTime(item.start));
-    // 2026-08-21 (mode-less items audit, STEP 3): only offer the picker when there's
-    // a real store to write the pick into (matches the Edit button's own `edit` gate
-    // just below) -- generatedFor() items with no backing store (birthdays,
-    // supplements, family tasks, Medical Tracking appointments) have nowhere safe to
-    // persist a mode, so they keep the plain "(no Mode set)" text only, same as today.
-    const showModePicker = mode.id === "home" && !!edit;
+    const timed = !!item.start && !item.allDay;
+    const isRoutine = edit && edit.kind === "routine", isRecur = edit && edit.kind === "recur";
+    const fieldsOff = !edit || isRecur;
+    const occ = isRoutine ? parseOccId(item.id) : null;
+    const hasOvr = isRoutine && occ ? !!rtnOvr(edit.ref, occ.date) : false;
+    const modeChips = edit && MODES.length ? `<div class="lm-chip-row">
+        ${MODES.slice().sort((a, b) => a.order - b.order).map(m => `
+          <button type="button" class="lm-chip" data-lm-pick-mode="${m.id}" aria-pressed="${mode.id === m.id}">
+            <span class="lm-dot" style="background:${m.accent}"></span>${esc(m.name)}
+          </button>`).join("")}
+        <button type="button" class="lm-chip" data-lm-pick-mode="" aria-pressed="${mode.id === "home"}"><span class="lm-dot" style="background:var(--ink-faint)"></span>None</button>
+      </div>` : `<div class="lm-cell-panel-meta"><span class="lm-dot" style="background:${mode.accent || "var(--ink-faint)"}"></span>${esc(mode.name)}${mode.id === "home" ? " (no Mode set)" : ""}</div>`;
     host.innerHTML = `
-      <div class="lm-panel-title">${WD_FULL[day]} · ${timeTxt}</div>
+      <div class="lm-panel-title">${WD_FULL[day]} · ${timeTxt}<span class="lm-ed-saved" data-lm-saved></span></div>
       <div class="lm-cell-panel-row">
-        <div class="lm-cell-panel-title">${item.title ? esc(item.title) : "(untitled)"}</div>
-        <div class="lm-cell-panel-meta"><span class="lm-dot" style="background:${mode.accent || "var(--ink-faint)"}"></span>${mode.emoji ? modeIconHtml(mode, 13) + " " : ""}${esc(mode.name)}${mode.id === "home" ? " (no Mode set)" : ""}</div>
-        ${showModePicker && MODES.length ? `<div class="lm-chip-row">
-          ${MODES.slice().sort((a, b) => a.order - b.order).map(m => `
-            <button type="button" class="lm-chip" data-lm-pick-mode="${m.id}">
-              <span class="lm-dot" style="background:${m.accent}"></span>${m.emoji ? modeIconHtml(m, 13) + " " : ""}${esc(m.name)}
-            </button>`).join("")}
+        ${isRoutine ? `<div class="lm-ed-scope">
+          <button type="button" class="lm-chip" data-lm-scope="day" aria-pressed="${lmOvrScope === "day"}">This day only</button>
+          <button type="button" class="lm-chip" data-lm-scope="routine" aria-pressed="${lmOvrScope === "routine"}">The routine</button>
         </div>` : ""}
+        ${isRecur ? `<div class="lm-empty">Repeats — title and Mode change the whole series; times are edited in the series.</div>` : ""}
+        <label class="lm-ed-lbl">Title<input type="text" class="lm-ed-in" data-lm-ed-field="title" value="${esc(item.title || "")}" maxlength="80"${!edit ? " disabled" : ""}></label>
+        ${timed ? `<div class="lm-ed-times">
+          <label class="lm-ed-lbl">Start<input type="time" class="lm-ed-in" data-lm-ed-field="start" value="${esc(item.start)}"${fieldsOff ? " disabled" : ""}></label>
+          <label class="lm-ed-lbl">End<input type="time" class="lm-ed-in" data-lm-ed-field="end" value="${esc(minToTime(endMin))}"${fieldsOff ? " disabled" : ""}></label>
+        </div>` : ""}
+        <div class="lm-ed-lbl">Mode</div>
+        ${modeChips}
         <div class="lm-cell-panel-actions">
-          ${edit ? `<button type="button" class="btn-save" data-lm-panel-edit>Edit</button>` : `<span class="lm-empty">Not editable from Life Map.</span>`}
+          ${edit ? `<button type="button" class="btn-cancel" data-lm-panel-edit>${isRoutine ? "Routine…" : isRecur ? "Series…" : "More…"}</button>` : `<span class="lm-empty">Not editable from Life Map.</span>`}
+          ${edit && edit.kind === "event" ? `<button type="button" class="lm-ed-del" data-lm-ed-delete>Delete</button>` : ""}
+          ${isRoutine && lmOvrScope === "day" ? `<button type="button" class="lm-ed-del" data-lm-ed-skip>Skip this day</button>` : ""}
+          ${hasOvr ? `<button type="button" class="tab-link" data-lm-ed-revert>Revert to the routine</button>` : ""}
           <button type="button" class="btn-cancel" data-lm-panel-close>Close</button>
         </div>
       </div>`;
   }
+  // field autosave -- 'change' (fires on leaving a text field / picking a time),
+  // never per keystroke, so the grid isn't rebuilt under a half-typed title
+  document.addEventListener("change", e => {
+    const f = e.target.closest("[data-lm-ed-field]");
+    if (!f || !lmPanel || !lmPanel.edit) return;
+    const { item, edit } = lmPanel;
+    const field = f.dataset.lmEdField;
+    let err = null;
+    if (field === "title") lmApplyTitle(edit, item, f.value);
+    else {
+      const sIn = document.querySelector('#lmCellPanel [data-lm-ed-field="start"]'), eIn = document.querySelector('#lmCellPanel [data-lm-ed-field="end"]');
+      const sm = toMin(sIn ? sIn.value : item.start), em = toMin(eIn ? eIn.value : minToTime(itemEndMin(item)));
+      if (sm == null || em == null) return;
+      err = lmApplyTimes(edit, item, sm, em, null);
+    }
+    if (err) { rewardToast(err); renderLmCellPanel(); return; }
+    lmRefreshPanel();
+    renderLifeMap();
+    lmSavedFlash();
+  });
   // Line-drawn SVG icons for the palette strip, same viewBox/stroke convention as the
   // event-form progression rail (stroke="currentColor" so a wrapping element's own
   // `color` tints the whole icon -- see renderLmStrip()) -- STEP 5 explicitly asked
@@ -24561,7 +24683,93 @@
   });
   // non-passive on purpose -- see (1) above; a passive listener can't call
   // preventDefault() in time to stop the browser's own scroll takeover once it starts.
-  document.addEventListener("touchmove", e => { if (lmSelecting) e.preventDefault(); }, { passive: false });
+  document.addEventListener("touchmove", e => { if (lmSelecting || lmDrag) e.preventDefault(); }, { passive: false });
+  // 2026-09-03 (Linh: "let me edit the events here" -> "yes, drag to move and drag
+  // the edge to resize"): a filled block drags when NO tool is armed (armed = the
+  // repaint/erase taps above keep their meaning). Bottom third of the run's last
+  // cell = resize the end; anywhere else = move the whole block, across days for a
+  // plain event, same-day only for a routine occurrence (lmApplyTimes' own rule).
+  // Same elementFromPoint tracking as the paint drag (touch boundary events don't
+  // track a finger reliably); a 6px / different-cell threshold tells a drag from the
+  // tap that opens the panel; the click that trails a real drag is swallowed.
+  // Hardware traps (project memory): touch-action:none on filled cells so the page
+  // never scroll-steals mid-drag, contextmenu suppressed while dragging (Android's
+  // long-press), and the trailing click flag.
+  let lmDrag = null, lmSwallowClick = false;
+  document.addEventListener("pointerdown", e => {
+    if (e.button && e.button !== 0) return;
+    const cell = e.target.closest("[data-lm-filled-cell]");
+    if (!cell || lmArmedMode || lmArmedSticker || e.target.closest(".lm-sticker")) return;
+    const start = lmWeekStart || startOfWeek(TODAY);
+    const { grid } = lmWeekGrid(start);
+    const day = Number(cell.dataset.lmDay), slot = Number(cell.dataset.lmSlot);
+    const c = grid[day][slot];
+    if (!c) return;
+    const run = lmItemRun(grid, day, c.item);
+    if (!run) return;
+    const r = cell.getBoundingClientRect();
+    const onEdge = slot === run.hi && (e.clientY - r.top) > r.height * 0.6;
+    lmDrag = { kind: onEdge ? "resize" : "move", item: c.item, mode: c.mode, edit: lmResolveEdit(c.item), day, slot, lo: run.lo, hi: run.hi, x0: e.clientX, y0: e.clientY, moved: false, tDay: day, tSlot: slot };
+  });
+  function lmDragPreview() {
+    document.querySelectorAll(".lm-cell-dragover").forEach(el => { el.classList.remove("lm-cell-dragover"); el.style.removeProperty("--lm-drag-acc"); });
+    document.querySelectorAll(".lm-cell-dragsrc").forEach(el => el.classList.remove("lm-cell-dragsrc"));
+    if (!lmDrag || !lmDrag.moved) return;
+    const d = lmDrag, acc = d.mode.accent || "var(--ink-faint)";
+    for (let k = d.lo; k <= d.hi; k++) { const el = document.querySelector(`.lm-cell[data-lm-day="${d.day}"][data-lm-slot="${k}"]`); if (el) el.classList.add("lm-cell-dragsrc"); }
+    let lo, hi, day;
+    if (d.kind === "resize") { day = d.day; lo = d.lo; hi = Math.max(d.lo, d.tSlot); }
+    else { const ds = d.tSlot - d.slot; day = d.tDay; lo = d.lo + ds; hi = d.hi + ds; }
+    for (let k = lo; k <= hi; k++) {
+      const el = document.querySelector(`.lm-cell[data-lm-day="${day}"][data-lm-slot="${k}"]`);
+      if (el) { el.classList.add("lm-cell-dragover"); el.style.setProperty("--lm-drag-acc", acc); }
+    }
+  }
+  document.addEventListener("pointermove", e => {
+    if (!lmDrag) return;
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    const cell = under && under.closest && under.closest(".lm-cell[data-lm-day]");
+    if (!lmDrag.moved) {
+      const far = Math.abs(e.clientX - lmDrag.x0) > 6 || Math.abs(e.clientY - lmDrag.y0) > 6;
+      if (!far) return;
+      lmDrag.moved = true;
+    }
+    if (!cell) return;
+    const tDay = Number(cell.dataset.lmDay), tSlot = Number(cell.dataset.lmSlot);
+    if (lmDrag.kind === "resize" && tDay !== lmDrag.day) return;
+    if (tDay === lmDrag.tDay && tSlot === lmDrag.tSlot) return;
+    lmDrag.tDay = tDay; lmDrag.tSlot = tSlot;
+    lmDragPreview();
+  });
+  function lmDragEnd(commit) {
+    const d = lmDrag;
+    lmDrag = null;
+    lmDragPreview();
+    if (!d || !d.moved) return;
+    lmSwallowClick = true;
+    setTimeout(() => { lmSwallowClick = false; }, 400);
+    if (!commit) return;
+    const startMin = toMin(d.item.start), endMin = itemEndMin(d.item);
+    let err = null, msg = "";
+    if (d.kind === "resize") {
+      const newEnd = Math.min(LM_SLOTS[Math.max(d.lo, d.tSlot)] + LM_SLOT_MIN, 1439);
+      err = lmApplyTimes(d.edit, d.item, startMin, newEnd, null);
+      msg = `Now ends ${fmtTime(minToTime(newEnd))}`;
+    } else {
+      const ds = (d.tSlot - d.slot) * LM_SLOT_MIN, dd = d.tDay - d.day;
+      if (ds === 0 && dd === 0) return;
+      const newDate = dd ? keyOf(addDays(lmWeekStart || startOfWeek(TODAY), d.tDay)) : null;
+      err = lmApplyTimes(d.edit, d.item, startMin + ds, endMin + ds, newDate);
+      msg = `Moved to ${dd ? WD_FULL[d.tDay].slice(0, 3) + " " : ""}${fmtTime(minToTime(startMin + ds))}`;
+    }
+    if (err) { rewardToast(err); return; }
+    if (lmPanel && lmPanel.item === d.item) lmRefreshPanel();
+    renderLifeMap();
+    rewardToast(msg);
+  }
+  document.addEventListener("pointerup", () => { if (lmDrag) lmDragEnd(true); });
+  document.addEventListener("pointercancel", () => { if (lmDrag) lmDragEnd(false); });
+  document.addEventListener("contextmenu", e => { if (lmDrag) e.preventDefault(); });
   document.addEventListener("pointerup", () => {
     if (!lmSelecting) return;
     lmSelecting = false;
@@ -24910,6 +25118,9 @@
       lmModesOpen = false; lmModesExpandedId = null; lmModesDraft = null;
       renderLmStrip(); renderLmModesPanel();
     }
+    // a click that trails a real block drag (pointerup fires click on the common
+    // ancestor) must not open/close the panel -- see the drag listeners below
+    if (lmSwallowClick) { lmSwallowClick = false; return; }
     const filled = e.target.closest("[data-lm-filled-cell]");
     if (filled) {
       if (lmArmedMode === "eraser") { lmTryErase(filled); return; }
@@ -24921,8 +25132,37 @@
       // a Mode armed on the strip repaints the tapped occupied cell -- see
       // lmRepaintOccupied just above lmTryErase.
       if (lmArmedMode) { lmRepaintOccupied(cell, day, si, lmArmedMode); return; }
+      lmOvrScope = "day";
       lmPanel = { type: "view", day, item: cell.item, mode: cell.mode, edit: lmResolveEdit(cell.item) };
       renderLmCellPanel();
+      return;
+    }
+    const scopePick = e.target.closest("[data-lm-scope]");
+    if (scopePick && lmPanel) { lmOvrScope = scopePick.dataset.lmScope === "routine" ? "routine" : "day"; renderLmCellPanel(); return; }
+    if (e.target.closest("[data-lm-ed-delete]") && lmPanel && lmPanel.edit && lmPanel.edit.kind === "event") {
+      // the same delete + archive + undo path the eraser uses, via the block's own cell
+      const start = lmWeekStart || startOfWeek(TODAY);
+      const { grid } = lmWeekGrid(start);
+      const run = lmItemRun(grid, lmPanel.day, lmPanel.item);
+      const cellEl = run ? document.querySelector(`[data-lm-filled-cell][data-lm-day="${lmPanel.day}"][data-lm-slot="${run.lo}"]`) : null;
+      lmPanel = null;
+      if (cellEl) lmTryErase(cellEl); else renderLifeMap();
+      return;
+    }
+    if (e.target.closest("[data-lm-ed-skip]") && lmPanel && lmPanel.edit && lmPanel.edit.kind === "routine") {
+      const p = parseOccId(lmPanel.item.id);
+      // same collapse-the-move-as-we-skip rule as the Day sheet's [data-ovr-skip]
+      if (p) setRtnOvr(lmPanel.edit.ref.id, p.date, { skipped: true, movedTo: undefined, start: undefined, end: undefined, dur: undefined });
+      lmPanel = null;
+      renderLifeMap();
+      rewardToast("Skipped for that day");
+      return;
+    }
+    if (e.target.closest("[data-lm-ed-revert]") && lmPanel && lmPanel.edit && lmPanel.edit.kind === "routine") {
+      const p = parseOccId(lmPanel.item.id);
+      if (p) clearRtnOvr(lmPanel.edit.ref.id, p.date);
+      lmRefreshPanel();
+      renderLifeMap();
       return;
     }
     // with no Mode armed, a click on an empty cell does nothing -- but says so,
@@ -24942,9 +25182,12 @@
     if (panelClose) { lmPanel = null; renderLmCellPanel(); return; }
     const pickMode = e.target.closest("[data-lm-pick-mode]");
     if (pickMode && lmPanel && lmPanel.edit) {
-      lmSetItemMode(lmPanel.edit, pickMode.dataset.lmPickMode);
-      lmPanel = null;
+      // "" = None, the same no-mode value the rest of the app reads (modeOf -> null)
+      lmSetItemMode(lmPanel.edit, pickMode.dataset.lmPickMode || "");
+      // 2026-09-03: the panel is the editor now -- it stays open after a pick
+      lmRefreshPanel();
       renderLifeMap();
+      lmSavedFlash();
       return;
     }
     const panelEdit = e.target.closest("[data-lm-panel-edit]");
