@@ -23321,8 +23321,26 @@
     // (the pointerup handler below) is what decides the ONE toast a whole gesture
     // shows, so this just signals "didn't create anything" via a null return.
     if (toMin(e) <= toMin(s)) return null;
+    // 2026-09-03 (Linh: "stop listing it as two events when i paint it in the life
+    // map page"): two taps / a second drag beside an existing painted block of the
+    // same Mode used to store two adjacent events, which the Day view then merged
+    // back with a "×2" badge. A run that touches a painted block (same date, same
+    // Mode, the Mode-name title Life Map paints with) now EXTENDS that block -- on
+    // either side, and bridging two blocks folds them into one.
+    const key = keyOf(d);
+    const painted = ev => ev && ev.date === key && ev.mode === mode.id && ev.kind === "event" && !ev.allDay && ev.title === t && !ev.rtTaskId;
+    const before = EVENTS.find(ev => painted(ev) && ev.end === s);
+    const after = EVENTS.find(ev => painted(ev) && ev.start === e && ev !== before);
+    if (before || after) {
+      const keep = before || after;
+      keep.start = before ? before.start : s;
+      keep.end = after ? after.end : e;
+      if (before && after) EVENTS.splice(EVENTS.indexOf(after), 1);
+      saveEvents(EVENTS);
+      return `${t} now ${lmTimeRangeShort(keep.start, keep.end)} — ${WD_FULL[day].slice(0, 3)} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    }
     EVENTS.push({
-      id: uid(), date: keyOf(d), track: lmInferTrack(mode), title: t,
+      id: uid(), date: key, track: lmInferTrack(mode), title: t,
       icon: mode.emoji || "", kind: "event", allDay: false, start: s, end: e, mode: mode.id,
     });
     saveEvents(EVENTS);
