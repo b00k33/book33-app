@@ -191,6 +191,19 @@ every render into the 9px floor and let the header track balloon.
   `wrSyncModeGroup()` hides it when both members are hidden and is called from both
   renderers. Trap: the members now sit one level below the panel/drawer body — any
   "is it in the panel" check must use `contains()`/`closest()`, never `parentElement`.
+  **Every Mode's group (2026-09-03 pm, her mock + 4 answers):** inside the group the
+  Mode card renders `marGroupHtml()` — the Mode's routine occurrences as tappable
+  `[data-tick-ev]` rows (`.wr-mg-row`) with ELAPSED meta ("✓ 6:41" from the
+  `book33-done-at` map `DONE_AT`, stamped in `toggleDone()`; "Xm in" on open rows,
+  never a lateness word), the hair-wash row's "Nd since", a "leave by" label from
+  `dayCommitments()`, Night/Sleep's Tomorrow lines (first two blocks + first Work
+  block with the clinic count) and in-bed-by (today's Sleep block, else 10pm); to-dos
+  stay chips. Fasting is NOT repeated here (the Today card's meter owns it). The
+  **Birthdays group** (`#wrBdayGroup`, `renderWrBdayGroup()`) is a second card under
+  the Mode group whenever today holds a birthday — person name + "turns N" + relation,
+  then `bdayActionRows(e, true)`; no numerology (the right rail never carries it).
+  The To-do card hides the active Mode's to-dos while the group lists them; Right
+  now's NEXT row carries the Mode quick-add "+" and the group has no "Coming up".
 - **Phone:** `#navPanel` is a 300px labelled drawer while `dd-drawers-active`
   (`navIconRailRowHtml()` emits `.nir-lbl`); the Calendar/Chapters flyouts take over
   the drawer's own width (left:0, 100%) instead of opening beside a 52px rail; the
