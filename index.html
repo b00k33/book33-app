@@ -19692,6 +19692,21 @@
     background: var(--paper); border: none; font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer;
   }
   .wr-bd-acts .bd-pop-row[aria-pressed="true"] { opacity: .55; }
+  /* -- a row the calendar contributed to a pasted day: the word on the board, the
+        glyph in the narrow panel rows (the name never shrinks for it) -- */
+  .wmb-src { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; background: var(--field-bg); color: var(--ink-soft); }
+  .wmb-src-ic { padding: 0; background: none; display: inline-flex; align-items: center; color: var(--ink-faint); }
+  .wmb-src-ic .b33-lic { width: 13px; height: 13px; display: block; }
+  #workBoardPage .wmb-src { background: var(--wmb-line); color: var(--wmb-ink-soft); }
+  /* -- phone drawer: the door to the Work Day Board where the patients card would sit -- */
+  .wr-pat-linkcard { padding: 0; overflow: hidden; }
+  .wr-pat-link {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 12px 16px;
+    border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--margin-rule);
+    cursor: pointer; text-align: left;
+  }
+  .wr-pat-link .b33-lic { width: 16px; height: 16px; flex: none; }
+  .wr-pat-link-arrow { margin-left: auto; }
   /* -- Cliniko paste box (2026-09-03): one collapsed line that opens into a textarea +
         Today/Tomorrow + Save; mounted in the Work group, the panel's patients card and
         the Work Day Board from one wmbPasteFormHtml() -- */
@@ -28355,7 +28370,11 @@
   });
   document.addEventListener("click", e => {
     const jump = e.target.closest("[data-jump-view]");
-    if (jump) { state.view = jump.dataset.jumpView; render(); }
+    // 2026-09-03: several of these buttons render inside the phone's right drawer
+    // ("Open To-do →", "Open Shopping →", the Upkeep legend) -- navigating from
+    // there left the drawer covering the destination page. Close it first, same
+    // as [data-sc-open-board] / [data-wr-go].
+    if (jump) { closeAllDayDrawers(); state.view = jump.dataset.jumpView; render(); }
     // Nutrition page's "↩ <title> · <time>" chip jumps back to the meal's source
     // calendar event.
     const mealJump = e.target.closest("[data-meal-jump]");
@@ -44764,7 +44783,7 @@
       const cur = nowMin >= s && nowMin < e2;
       const seen = e2 <= nowMin || p.status === "completed";
       return `<div class="sc-pat${cur ? " current" : ""}${seen ? " seen" : ""}">
-        <div class="sc-pat-row"><span class="sc-pat-time">${esc(fmtTime(p.start))}</span><span class="sc-pat-name">${esc(p.name || "Patient")}</span>${wmbStatusChip(p.status)}</div>
+        <div class="sc-pat-row"><span class="sc-pat-time">${esc(fmtTime(p.start))}</span><span class="sc-pat-name">${esc(p.name || "Patient")}</span>${wmbSourceChip(p, true)}${wmbStatusChip(p.status)}</div>
         ${p.focus ? `<div class="sc-pat-focus">${esc(p.focus)}</div>` : ""}
       </div>`;
     }).join("") : `<div class="sc-empty">${list.fromImport ? "No patients on today's list" : "Nothing booked in Book33 — paste the day from Cliniko below"}</div>`;
@@ -44791,6 +44810,11 @@
   }
   document.addEventListener("click", e => {
     if (!e.target.closest("[data-sc-open-board]")) return;
+    // 2026-09-03 (found live testing the phone's board link): navigating from a
+    // control INSIDE the right drawer left the drawer open on top of the board --
+    // the destination rendered underneath it, which reads as "nothing happened".
+    // Same class as Trap 17; every phone door out of a drawer closes it first.
+    closeAllDayDrawers();
     state.view = "workBoard";
     render();
   });
@@ -44938,12 +44962,21 @@
   const CLINIC_DAY_KEY = "book33-clinic-day";
   // stale-day guard: a day-old import must never render as if it were today's
   // patients -- see her own "Never render yesterday's patients as today's" rule.
-  function loadClinicDay() {
+  function loadClinicDayFor(dateKey) {
     let raw = null;
     try { raw = JSON.parse(localStorage.getItem(CLINIC_DAY_KEY)); } catch (e) {}
-    if (!raw || typeof raw !== "object" || raw.date !== keyOf(TODAY)) return null;
+    if (!raw || typeof raw !== "object" || raw.date !== dateKey) return null;
     if (!Array.isArray(raw.appointments)) return null;
     return raw;
+  }
+  function loadClinicDay() { return loadClinicDayFor(keyOf(TODAY)); }
+  // 2026-09-03: tomorrow's patient count for the Night group's "Tomorrow" line --
+  // the list she pasted for tomorrow when it exists (the paste box saves Today or
+  // Tomorrow), else the calendar guess. Same reader shape as wmbPatientList().
+  function wmbPatientCountFor(date) {
+    const imp = loadClinicDayFor(keyOf(date));
+    if (imp) return imp.appointments.length;
+    try { return clinicPatientsIn(dayEventsRawFor(date)).filter(o => !o.rtTaskId && !o.ghostSkip && !o.ghostMoved && !WMB_NOT_PATIENT_RE.test(normTitle(o.title))).length; } catch (e) { return 0; }
   }
   // 2026-09-03 (Linh: "can i get a text box so i can copy paste my cliniko
   // schedule for work and have it saved in an organised fashion?"): the paste
@@ -45073,25 +45106,60 @@
   const wmbRevealedKeys = new Set();
   const WMB_PX_PER_MIN = 1.6;
   const WMB_MIN_CARD_H = 46;   // floor so a short appointment/duty stays readable
-  function wmbPatientList() {
-    const clinicDay = loadClinicDay();
-    if (clinicDay) {
-      return { items: clinicDay.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked", focus: a.focus || "", goal: a.goal || "" })), fromImport: true };
-    }
+  // the Work events sitting inside today's CBD Work block, shaped like imported
+  // appointments. her spec: the calendar has no clinical fields at all --
+  // focus/goal stay "" here, same as every other import-only field already does
+  // (see `type` just below), so a briefing card for one of these renders with
+  // no rule and no labels, exactly like today.
+  // Not a patient, even when it sits Work-tracked inside the shift: a routine
+  // occurrence (duties, the commute, a reminder), a skipped/moved ghost, or a block
+  // named like the Cliniko blocks the paste already drops (lunch, break, admin).
+  // Same skip list as clinicDayParseText, so the two sides agree on what a patient is.
+  const WMB_NOT_PATIENT_RE = /^(available|break|lunch|unavailable|admin|desk|cleaner)\b/i;
+  function wmbCalendarPatients() {
     let raw = [];
     try { raw = clinicPatientsIn(dayEventsRawFor(TODAY)); } catch (e) {}
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    return {
-      // her spec: the calendar fallback has no clinical fields at all --
-      // focus/goal stay "" here, same as every other import-only field already does
-      // (see `type` just below), so a briefing card for one of these renders with
-      // no rule and no labels, exactly like today.
-      items: raw.map(o => {
-        const em = itemEndMin(o);
-        return { start: o.start, end: em != null ? minToTime(em) : o.start, name: o.title, type: o.category || "", status: em != null && em <= nowMin ? "completed" : "booked", focus: "", goal: "" };
-      }),
-      fromImport: false,
-    };
+    return raw.filter(o => !o.rtTaskId && !o.ghostSkip && !o.ghostMoved && !WMB_NOT_PATIENT_RE.test(normTitle(o.title))).map(o => {
+      const em = itemEndMin(o);
+      return { start: o.start, end: em != null ? minToTime(em) : o.start, name: o.title, type: o.category || "", status: em != null && em <= nowMin ? "completed" : "booked", focus: "", goal: "", source: "calendar" };
+    });
+  }
+  function wmbPatientList() {
+    const clinicDay = loadClinicDay();
+    if (clinicDay) {
+      const items = clinicDay.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked", focus: a.focus || "", goal: a.goal || "", source: "import" }));
+      // 2026-09-03 (Linh's pick, "Merge the calendar in"): a walk-in booked into
+      // Book33 AFTER the paste used to be invisible -- the saved list won
+      // wholesale. Any Work event inside the shift the import doesn't already
+      // name joins it, marked as coming from the calendar. "Already names" =
+      // the same start, or the same person (normTitle, so a decorated title
+      // like "🧷 Tracy Collins" still matches) within 90 minutes of her imported
+      // slot -- Cliniko's time can differ from the block she dropped on the
+      // calendar, but a second visit hours later is a real second row.
+      const byName = new Map();
+      items.forEach(a => { const k = normTitle(a.name); if (!byName.has(k)) byName.set(k, []); byName.get(k).push(toMin(a.start)); });
+      const haveStart = new Set(items.map(a => a.start));
+      wmbCalendarPatients().forEach(c => {
+        if (haveStart.has(c.start)) return;
+        const near = (byName.get(normTitle(c.name)) || []).some(m => Math.abs(m - toMin(c.start)) <= 90);
+        if (near) return;
+        items.push(c);
+      });
+      items.sort((a, b) => toMin(a.start) - toMin(b.start));
+      return { items, fromImport: true };
+    }
+    return { items: wmbCalendarPatients(), fromImport: false };
+  }
+  // marks a row the calendar contributed to a pasted day. The word fits the
+  // board; the narrow panel rows take the glyph instead, because the standing law
+  // is that the NAME is never abbreviated by the layout and everything beside it
+  // may be.
+  function wmbSourceChip(p, compact) {
+    if (!p || p.source !== "calendar") return "";
+    return compact
+      ? `<span class="wmb-src wmb-src-ic" title="Added from your calendar" aria-label="Added from your calendar">${b33LineIcon("calendar")}</span>`
+      : `<span class="wmb-src">calendar</span>`;
   }
   // Briefing below
   // 800px, Timeline at/above it, UNTIL she taps a button -- then her pick wins at
@@ -45194,7 +45262,7 @@
         const isCurrent = nowMin >= s && nowMin < e2;
         const isSeen = e2 <= nowMin || p.status === "completed";
         return `<div class="wmb-card wmb-patient${isSeen ? " seen" : ""}${isCurrent ? " current" : ""}" style="${posStyle(p.start, p.end)}">
-        <div class="wmb-trow"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span><span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
+        <div class="wmb-trow"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span>${wmbSourceChip(p)}<span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
         <div class="wmb-name">${esc(p.name || "Patient")}</div>
         ${p.type ? `<div class="wmb-type">${esc(p.type)}</div>` : ""}
       </div>`;
@@ -45226,7 +45294,7 @@
           const revealKey = `${p.name || ""}@${p.start}`;
           const isRevealed = wmbRevealedKeys.has(revealKey);
           out += `<div class="wmb-bcard${isSeen ? " seen" : ""}${isCurrent ? " current" : ""}${isRevealed ? " revealed" : ""}" id="${cardId}">
-        <div class="wmb-btop"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span>${isCurrent ? `<span class="wmb-bnow">Now</span>` : ""}<span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
+        <div class="wmb-btop"><span class="wmb-time">${esc(fmtTime(p.start))}${p.end ? `–${esc(fmtTime(p.end))}` : ""}</span>${isCurrent ? `<span class="wmb-bnow">Now</span>` : ""}${wmbSourceChip(p)}<span class="wmb-status ${esc(p.status)}">${esc(p.status)}</span></div>
         <div class="wmb-name">${esc(p.name || "Patient")}</div>
         ${p.type ? `<div class="wmb-type">${esc(p.type)}${p.end ? ` · ${e2 - s} min` : ""}</div>` : ""}
         ${brief}
@@ -49509,6 +49577,7 @@
     setMode: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.4"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
     install: '<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/>',
   };
   function b33LineIcon(key) {
     const d = B33_LINE_ICONS[key];
@@ -49616,7 +49685,7 @@
       const nudge = list.fromImport ? "" : `<button type="button" class="rail-info patients-nudge" aria-label="How to get the real list">ⓘ<span class="nudge-pop">Paste the day from Cliniko below, or ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list and summarise each patient's treatment focus.</span></button>`;
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's patients · ${pats.length}${list.fromImport ? "" : " (calendar guess)"}${nudge}</span>
-        ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(p.name || "Patient")}</span>${wmbStatusChip(p.status)}</div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
+        ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(p.name || "Patient")}</span>${wmbSourceChip(p, true)}${wmbStatusChip(p.status)}</div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
         ${wmbPasteFormHtml()}
       </div>`;
     }
@@ -50115,6 +50184,12 @@
   // "never reopens pre-expanded" guard the old selection had, her own requirement).
   let wrMobileInsightsOpen = false;
   const wrCardProbe = document.createElement("div");
+  // the phone stack's stand-in for an empty patients card (see nonEmpty below) --
+  // reuses [data-sc-open-board], the same verified delegate the Mode group's own
+  // "Work day board" link goes through.
+  function wrPatientsBoardLinkHtml() {
+    return `<div class="wr-card wr-pat-linkcard"><button type="button" class="wr-pat-link" data-sc-open-board>${b33LineIcon("calendar")}<span>Work day board</span><span class="wr-pat-link-arrow" aria-hidden="true">→</span></button></div>`;
+  }
   function wrCardHtmlIsEmpty(html) {
     wrCardProbe.innerHTML = html;
     const hasStub = !!wrCardProbe.querySelector(".wr-pat-empty");
@@ -50127,7 +50202,25 @@
     // session, open or shut, so renders happen while shut too -- each one resets the
     // Insights group so the NEXT open never shows it pre-expanded.
     if (!dayRightDrawerIsOpen()) wrMobileInsightsOpen = false;
-    const nonEmpty = id => { const h = wrCardHtml(id); return h && !wrCardHtmlIsEmpty(h) ? h : ""; };
+    // 2026-09-03 (her answer, "include link to board"): with nothing booked and no
+    // Work session, the patients card is dropped here as empty -- which took the
+    // paste box with it, on the one device and the one moment (an evening, pasting
+    // tomorrow's list) she'd reach for it. Rather than forcing an empty card back
+    // into the drawer, its slot carries a one-line door to the Work Day Board,
+    // where the box always lives. Silent while a Work session is already listing
+    // patients: wrCardHtml returns "" then, and the group's head has the same door.
+    // ...and silent whenever the Mode group's head already shows the same door --
+    // that head follows the SESSION's Mode or, with none running, the active Mode
+    // (wrSyncModeGroup), so a Work block with its session already ended would
+    // otherwise show two "Work day board" doors in one drawer.
+    const sNow = currentSession();
+    const workDoorShown = ((sNow ? sNow.modeId : activeMode().id) === "work") && !mtActiveTakeoverModeId();
+    const nonEmpty = id => {
+      const h = wrCardHtml(id);
+      if (h && !wrCardHtmlIsEmpty(h)) return h;
+      if (id === "railPatients" && h && !workDoorShown) return wrPatientsBoardLinkHtml();
+      return "";
+    };
     // cardOrdered is already wrRankedIds()-ordered and Arrange-filtered by the caller
     const dailyHtml = cardOrdered.filter(id => WR_GROUP_DAILY.includes(id)).map(nonEmpty).filter(Boolean).join("");
     const insightHtml = cardOrdered.filter(id => WR_GROUP_INSIGHTS.includes(id)).map(nonEmpty).filter(Boolean);
@@ -50213,6 +50306,8 @@
   document.addEventListener("click", e => {
     const go = e.target.closest("[data-wr-go]");
     if (!go) return;
+    // closes the drawer first, same reason as [data-sc-open-board] above
+    closeAllDayDrawers();
     state.view = go.dataset.wrGo; render();
   });
   function wrModeGroupEl() {
@@ -53120,16 +53215,17 @@
       try {
         const all = dayEventsRawFor(tm).filter(e => e.start && !e.allDay).sort((a, b) => toMin(a.start) - toMin(b.start));
         tItems = all.slice(0, 2);
-        // the first Work block always makes the cut (it carries the clinic count)
-        const w = all.find(e => modeOf(e) === "work");
+        // the first Work BLOCK (not a Work-tagged routine like the commute) always
+        // makes the cut -- it carries the clinic count
+        const w = all.find(e => modeOf(e) === "work" && !e.rtTaskId);
         if (w && !tItems.includes(w)) tItems.push(w);
       } catch (e) {}
-      try { pats = clinicPatientsIn(dayEventsRawFor(tm)).length; } catch (e) {}
+      pats = wmbPatientCountFor(tm);
       let bed = SLEEP_START_MIN;
       try { const sb = dayEventsRawFor(TODAY).find(e => e.start && !e.allDay && modeOf(e) === "sleep"); if (sb) bed = toMin(sb.start); } catch (e) {}
       tomorrowHtml = `<div class="wr-mg-sec"><span>Tomorrow</span><span>${WD_FULL[(tm.getDay() + 6) % 7].slice(0, 3)} ${tm.getDate()} ${MON_SHORT[tm.getMonth()]}</span></div>
         <div class="wr-mg-rows">
-          ${tItems.map(e => `<div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(e.start))}</span><span class="wr-mg-name">${esc(e.title)}</span>${modeOf(e) === "work" && pats ? `<span class="wr-mg-meta">${pats} patient${pats === 1 ? "" : "s"}</span>` : ""}</div>`).join("")}
+          ${tItems.map(e => `<div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(e.start))}</span><span class="wr-mg-name">${esc(e.title)}</span>${modeOf(e) === "work" && !e.rtTaskId && pats ? `<span class="wr-mg-meta">${pats} patient${pats === 1 ? "" : "s"}</span>` : ""}</div>`).join("")}
           <div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(minToHM(bed)))}</span><span class="wr-mg-name">In bed</span>${bed > nowMin ? `<span class="wr-mg-meta">in ${fmtDurMin(bed - nowMin)}</span>` : ""}</div>
         </div>`;
     }
