@@ -19658,6 +19658,18 @@
   }
   .wr-mode-group .sc-pat, .wr-mode-group .mar-chip, .wr-mode-group .mar-next-add { background: var(--paper); }
   .wr-mode-group .sc-pat.current { background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); }
+  /* Right now's NEXT row with the quick-add "+" beside it (Coming up left the Mode group) */
+  .now-row-wrap { display: flex; align-items: center; gap: 8px; }
+  /* the phone drawer gets the same compaction #wrPanelBody's rows have (74px label +
+     34px pip left the name as "T…" once the "+" sat beside it); the name may wrap */
+  #dayRightDrawerBody .now-row { height: auto; min-height: 48px; padding: 6px 10px; gap: 8px; }
+  #dayRightDrawerBody .now-row-pip { width: 26px; height: 26px; font-size: 13px; border-radius: 8px; }
+  #dayRightDrawerBody .now-row-label { width: 40px; }
+  #dayRightDrawerBody .now-row-answer { font-size: 14px; white-space: normal; }
+  #dayRightDrawerBody .now-row-detail { white-space: normal; }
+  .now-row-wrap .now-row { flex: 1 1 auto; min-width: 0; }
+  .now-row-wrap .mar-next-add { width: 32px; height: 32px; border-radius: 999px; }
+  .now-quickadd { margin: 8px 0 0; }
   /* status chip outside #workBoardPage (Session card rows, the panel's patients card) */
   .sc-pat-row .wmb-status, .wr-pat-row .wmb-status {
     flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
@@ -43756,6 +43768,20 @@
         detail: `${fmtTime(nx.start)} · in ${fmtDurMin(toMin(nx.start) - nowMin)}`,
         dataAction: "next"
       });
+      // 2026-09-03 (code7 follow-up to the Mode group, her pick "Right now keeps
+      // NEXT, + moves there"): the Mode card's "Coming up" list said the same thing
+      // as this row, so it leaves the group and its quick-add "+" (drop a task on
+      // the next Mode) rides beside this row instead -- same data-mar-next-add /
+      // data-mar-quickadd attributes, so the existing delegate and submit handler
+      // serve it unchanged. Only when the next block is a Mode block.
+      const nxMode = modeOf(nx);
+      if (nxMode && modeById(nxMode)) {
+        const nm = modeById(nxMode);
+        html = `<div class="now-row-wrap">${html}<button type="button" class="mar-next-add" data-mar-next-add="${esc(nxMode)}" aria-expanded="${marQuickAddFor === nxMode}" aria-label="Add a task for ${esc(nm.name)}">${marQuickAddFor === nxMode ? "×" : "+"}</button></div>`
+          + (marQuickAddFor === nxMode ? `<form class="mar-quickadd now-quickadd" data-mar-quickadd="${esc(nxMode)}">
+            <input type="text" class="mar-quickadd-input" placeholder="Add a task for ${esc(nm.name)}…" aria-label="Task for ${esc(nm.name)}">
+          </form>` : "");
+      }
     }
     // FREE -- her exact rule: shown only when the gap does NOT start now. gap.start
     // equals nowMin precisely when nothing's on (nextFreeGap's own cursor starts at
@@ -49412,7 +49438,16 @@
       // label, a "+N more" when there's more than fits), but linking to the real To-do
       // page rather than pileupBox's in-place expand, per her explicit spec ("+N more
       // that links to the full To-do page").
-      const pending = TODOS.filter(t => !t.done);
+      // 2026-09-03 (code7 follow-up to the Mode group, her "Yes, hide them there"):
+      // while the panel's Mode card is listing the active Mode's own to-dos, this
+      // card shows only the OTHER ones -- the same to-do was reading twice in one
+      // column. Same visibility signal the group uses (the Mode card's hidden flag).
+      // Computed, not read off the DOM: this card can paint before the Mode card's
+      // own render sets its hidden flag on a fresh load. Same condition
+      // renderModeAmbientRail() shows itself on (any real Mode, no takeover).
+      const amT = activeMode();
+      const groupedModeId = amT.id !== MODE_HOME.id && !mtActiveTakeoverModeId() ? amT.id : null;
+      const pending = TODOS.filter(t => !t.done && (!groupedModeId || modeOf(t) !== groupedModeId));
       const shown = pending.slice(0, 5);
       const hiddenCount = pending.length - shown.length;
       // .wr-pile-row/.wr-pile-tick/.wr-pile-name/.wr-pile-edit reused verbatim from
@@ -50384,6 +50419,7 @@
     saveTodos(TODOS);
     marQuickAddFor = null;
     renderDay();
+    renderNow(); // the NEXT-row form closes on submit, not on the card's next tick
   });
   document.addEventListener("click", e => {
     if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn, #wrArrangeBtnM")) {
@@ -52758,7 +52794,10 @@
       return `<span class="mar-chip ${cls}">${x.done ? "✓ " : ""}${esc(x.title)}</span>`;
     }).join("") : `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>`;
     const focusBtn = mtManualEligible(am.id) ? `<button type="button" class="mar-focus-btn" data-mar-focus>Focus</button>` : "";
-    const upcoming = mtUpcomingModes();
+    // 2026-09-03: inside the Mode group, "Coming up" is gone -- Right now's NEXT row
+    // already names the next Mode and now carries the quick-add "+" itself (see
+    // renderNowFacts). Standalone (no group) the list stays.
+    const upcoming = inGroup ? [] : mtUpcomingModes();
     const nextHtml = upcoming.length ? `
       <div class="mar-next">
         <div class="mar-next-lbl">Coming up</div>
@@ -52824,6 +52863,10 @@
       const mId = marNextAdd.dataset.marNextAdd;
       marQuickAddFor = marQuickAddFor === mId ? null : mId;
       renderDay();
+      // 2026-09-03: the "+" also lives on Right now's NEXT row now, which repaints on
+      // its own clock (renderNow), not on renderDay -- repaint it here so the form
+      // opens on the tap, not up to a minute later.
+      renderNow();
       if (marQuickAddFor) {
         const input = document.querySelector(`[data-mar-quickadd="${marQuickAddFor}"] .mar-quickadd-input`);
         if (input) input.focus();
