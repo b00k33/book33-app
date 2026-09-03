@@ -19645,6 +19645,21 @@
   }
   :root[data-theme="dark"] .wr-mg-lbl { color: color-mix(in oklab, var(--mg-acc, var(--margin-rule)) 60%, #FFFFFF); }
   .wr-mg-lbl .mode-ic { width: 16px; height: 16px; display: block; }
+  .wr-mg-sub { font-weight: 500; letter-spacing: 0; text-transform: none; opacity: .8; }
+  /* 2026-09-03 manual Modes: the chips row under the group head */
+  .wr-mg-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .wr-mg-chip {
+    display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px;
+    border-radius: 999px; border: 1px solid var(--note-line); color: var(--ink-faint); background: var(--paper); cursor: pointer; white-space: nowrap;
+  }
+  .wr-mg-chip .mode-ic { width: 14px; height: 14px; display: block; }
+  .wr-mg-chip.on { background: var(--chip-acc, var(--margin-rule)); border-color: var(--chip-acc, var(--margin-rule)); color: var(--chip-on, #fff); }
+  .wr-mg-chip.sugg { border-style: dashed; border-color: var(--chip-acc, var(--margin-rule)); color: var(--ink); animation: wrChipGlow 1.6s ease-in-out infinite; }
+  @keyframes wrChipGlow {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--chip-acc, var(--margin-rule)) 45%, transparent); }
+    50% { box-shadow: 0 0 0 5px color-mix(in oklab, var(--chip-acc, var(--margin-rule)) 0%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) { .wr-mg-chip.sugg { animation: none; } }
   .wr-mg-link { border: none; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--margin-rule); cursor: pointer; white-space: nowrap; }
   .wr-mg-link:hover { text-decoration: underline; }
   .wr-mode-group .session-card, .wr-mode-group .session-card.session-hero { margin-top: 0; padding: 0; border-top: none; border-radius: 0; background: transparent; }
@@ -37501,7 +37516,6 @@
     renderOcPrompts();   // after renderTimeline — reads the TL_ITEMS_BY_ID it just filled
     renderFastEverywhere();
     renderBodyWidget();
-    syncSessionAutoStart();   // before renderSessionCard so a fresh render (load/date-nav) doesn't wait for the 1s tick
     // 2026-08-31 (auto-advance): a session already at Time's up the moment this
     // render runs (a fresh page load/reload, or navigating back to today) never
     // fires a "just transitioned" sessionTick -- end it right here instead of
@@ -43641,9 +43655,28 @@
     });
     return best;
   }
+  // 2026-09-03 (Linh: "make the modes on c22 manual toggle instead of auto",
+  // picked "chips; calendar suggests, you tap" off a two-way mock): the active
+  // Mode is the one SHE switched on -- the running session -- never the calendar.
+  // activeModeItem() above keeps scanning the calendar, but its only job now is
+  // suggestedModeItem() below: the chip that glows in the Mode group head.
   function activeMode(now) {
+    const s = currentSession();
+    return (s && modeById(s.modeId)) || MODE_HOME;
+  }
+  // the tagged block covering "now" whose Mode she hasn't started (or finished)
+  // today -- shown as a glowing "▶ Work" chip, never started for her. Once any
+  // session exists for that exact block today, live or ended, the suggestion is
+  // spent (same one-shot rule the old auto-start used, so an ended block doesn't
+  // nag for the rest of its hour).
+  function suggestedModeItem(now) {
     const item = activeModeItem(now);
-    return item ? modeById(modeOf(item)) : MODE_HOME;
+    if (!item) return null;
+    const s = currentSession();
+    if (s && s.modeId === modeOf(item)) return null;
+    const today = keyOf(TODAY);
+    if (SESSIONS.some(x => x.eventId === item.id && x.date === today)) return null;
+    return item;
   }
   // four small facts for the "Right now" landing
   // screen. Kept deliberately separate from activeModeItem() just above rather than
@@ -44393,8 +44426,10 @@
   // finished this week") has real history to read without a second key --
   // "one at a time" means at most one record ever has no endedAt.
   function currentSession() { return SESSIONS.find(s => !s.endedAt) || null; }
-  function sessionTotalMs(s) { return Math.max(0, s.endsAt - s.startedAt); }
-  function sessionRemainingMs(s) { return Math.max(0, s.endsAt - Date.now()); }
+  // endsAt == null (2026-09-03) = an open-ended session she started by hand with
+  // no covering block -- never "expires", so remaining is Infinity, not 0.
+  function sessionTotalMs(s) { return s.endsAt == null ? 0 : Math.max(0, s.endsAt - s.startedAt); }
+  function sessionRemainingMs(s) { return s.endsAt == null ? Infinity : Math.max(0, s.endsAt - Date.now()); }
   function sessionIsActive() { return !!currentSession(); }
   // startedAt/endsAt are real epoch ms (not HH:MM strings) so the countdown
   // is a plain subtraction every tick, no per-tick date parsing.
@@ -44404,10 +44439,12 @@
   // job below -- a "round 2" of the same block keeps its ORIGINAL length, not the
   // block's now-already-passed clock end time, which would read as instantly expired).
   function startSession(mode, coveringEvent, durationMs) {
-    if (currentSession()) return;   // never a silent swap -- the mode-swap prompt is a later stage's job
+    if (currentSession()) return;   // never a silent swap -- toggleModeChip ends the old one first, explicitly
     let endsAt;
     if (durationMs != null) {
       endsAt = Date.now() + durationMs;
+    } else if (!coveringEvent) {
+      endsAt = null;   // 2026-09-03: started by hand with no block -- runs until she ends it
     } else {
       const endMin = itemEndMin(coveringEvent);
       if (endMin != null) {
@@ -44415,13 +44452,13 @@
         d.setHours(Math.floor(endMin / 60), endMin % 60, 0, 0);
         endsAt = d.getTime();
       } else {
-        endsAt = Date.now() + 25 * 60000;   // no resolvable end -- fallback only, never hit by a real timed block
+        endsAt = null;   // a block with no resolvable end behaves like a hand-started one
       }
     }
-    const planIds = Array.isArray(coveringEvent.steps)
+    const planIds = coveringEvent && Array.isArray(coveringEvent.steps)
       ? coveringEvent.steps.map((s, i) => `${coveringEvent.id}::step::${i}`) : [];
     SESSIONS.push({
-      id: uid(), modeId: mode.id, eventId: coveringEvent.id, date: keyOf(TODAY),
+      id: uid(), modeId: mode.id, eventId: coveringEvent ? coveringEvent.id : null, date: keyOf(TODAY),
       startedAt: Date.now(), endsAt, extendedMin: 0,
       planIds, extras: [], endedAt: null,
     });
@@ -44481,32 +44518,32 @@
     startSession(mode, item, dur);
   }
   function moveToNextSession() { endSession(); }
-  // §3 "Sessions start automatically on entering the block. Never press
-  // start." -- called from the existing 30s wmTick cadence (see that
-  // function's own call to this, below), not a second interval. Reuses
-  // activeModeItem (the exact same scan activeMode() itself runs) to get the
-  // real covering event, rather than re-deriving it -- her §1.3 rule ("if
-  // this logic appears twice anywhere, it's wrong") applies here too, not
-  // just to activeMode's own definition. Only ever starts a session when
-  // NONE is currently running; if a different mode's block starts while one
-  // is already active, this deliberately does nothing -- stage 4 owns the
-  // swap-prompt, and guessing its behaviour here would risk a silent swap,
-  // exactly what her spec forbids.
-  function syncSessionAutoStart() {
-    if (currentSession()) return;
-    const item = activeModeItem(new Date());
-    if (!item) return;
-    // "starts automatically on ENTERING the block" -- a completed plan ends the session
-    // (below) while the same block may still be covering "now" for another hour; without
-    // this check the very next tick sees no current session, re-enters, instantly re-
-    // completes (plan's already all ticked), and loops forever. Once any session -- live
-    // or finished -- exists for this exact event today, auto-start has already done its
-    // one job for that occurrence; re-starting the SAME finished block is stage 4's
-    // "book another" action, never an automatic decision.
-    const today = keyOf(TODAY);
-    if (SESSIONS.some(s => s.eventId === item.id && s.date === today)) return;
-    startSession(modeById(modeOf(item)), item);
+  // 2026-09-03: syncSessionAutoStart() is gone -- sessions no longer start
+  // themselves on entering a tagged block (RETIRED-FEATURES.md §16). The one way
+  // in is a tap: a Mode chip in the Mode group head (toggleModeChip, below
+  // wrSyncModeGroup) or the event sheet's "Start <Mode> now" row. A chip tap
+  // under a covering block of that Mode starts the block's own session (ends at
+  // the block's end, plan = its steps); anywhere else it starts an open-ended
+  // one that runs until she taps the chip again.
+  function toggleModeChip(modeId) {
+    const s = currentSession();
+    if (s && s.modeId === modeId) { endSession(); }
+    else {
+      const mode = modeById(modeId);
+      if (!mode) return;
+      if (s) endSession();   // an explicit tap on another chip IS the swap
+      const item = activeModeItem(new Date());
+      startSession(mode, item && modeOf(item) === modeId ? item : null);
+    }
+    applyModeAccent(true);
+    if (state.view === "day") renderDay(); else render();
   }
+  document.addEventListener("click", e => {
+    const chip = e.target.closest("[data-mode-chip]");
+    if (!chip) return;
+    e.preventDefault();
+    toggleModeChip(chip.dataset.modeChip);
+  });
   // fmt: total<60min -> M:SS ("24:35 of 25:00 left"), else H:MM (her own
   // example, "1:12 of 2:00 left" -- a 2-HOUR block, not 2 minutes; a real
   // calendar mode block is normally well over an hour).
@@ -44629,6 +44666,10 @@
     </div>`;
   }
   function sessionCountdownText(s) {
+    if (s.endsAt == null) {
+      const d = new Date(s.startedAt);
+      return `Running since ${fmtTime(`${d.getHours()}:${d.getMinutes()}`)} · tap the chip to end`;
+    }
     const rem = sessionRemainingMs(s);
     return rem > 0 ? `${sessionTimeFmt(rem)} of ${sessionTimeFmt(sessionTotalMs(s))} left` : "Time's up";
   }
@@ -44732,7 +44773,7 @@
         </div>
       </div>
       <div class="sc-list-label">The plan</div>
-      <div class="sc-list">${planRows || `<div class="sc-empty">No checklist on this block</div>`}</div>
+      <div class="sc-list">${planRows || `<div class="sc-empty">${s.eventId ? "No checklist on this block" : "Started by hand — no block, no checklist"}</div>`}</div>
       ${scWorkBoardHtml(mode)}
       ${extrasSectionHtml}
       ${streak ? `<div class="sc-streak">${esc(streak)}</div>` : ""}
@@ -44869,7 +44910,9 @@
     // this check fires, so a session she's extended never auto-ends here.
     const sBefore = currentSession();
     if (sBefore && sessionRemainingMs(sBefore) === 0) endSession();
-    syncSessionAutoStart();
+    // 2026-09-03: no auto-start here any more (RETIRED §16) -- but the head's
+    // suggestion chip still has to appear/clear as blocks begin and end.
+    if (state.view === "day") wrSyncModeGroup();
     if (state.view !== "day") return;
     // Modes law rule 4: every second, not just on a full renderDay()
     // pass -- so a session that ends mid-takeover (the plan finishing, see
@@ -50302,25 +50345,46 @@
   }
   // canonical inner order: head · Session card · Mode card (append order alone
   // would put a late-arriving Session card -- a takeover just ended -- last).
+  // the chips row sits right under the head; the Session card mounts after BOTH
+  function wrModeGroupChipsEl(group) {
+    let row = group.querySelector(":scope > .wr-mg-chips");
+    if (!row) { row = document.createElement("div"); row.className = "wr-mg-chips"; group.firstElementChild.after(row); }
+    return row;
+  }
   function wrModeGroupMount(group, el) {
-    if (el.id === "daySessionCard") group.firstElementChild.after(el);
+    if (el.id === "daySessionCard") wrModeGroupChipsEl(group).after(el);
     else group.appendChild(el);
   }
+  // 2026-09-03 (manual Modes, RETIRED §16): the group is always shown -- its head
+  // is where the Mode chips live, so it has a job even with no session and no
+  // ambient card. Running chip = filled; the calendar's suggestion = dashed and
+  // glowing "▶ Work"; tap any chip to start it, tap the running one to end it.
+  let wrMgChipsLastHtml = null;
   function wrSyncModeGroup() {
     const g = document.getElementById("wrModeGroup");
     if (!g) return;
-    const live = WR_MODE_GROUP_IDS.map(id => document.getElementById(id)).filter(el => el && el.parentElement === g && !el.hidden);
-    g.hidden = !live.length;
-    if (!live.length) return;
-    // the running session's Mode names the group (that is whose card it is); with
-    // no session the ambient card's active Mode does.
+    g.hidden = false;
     const s = currentSession();
-    const mode = (s && modeById(s.modeId)) || activeMode();
+    const mode = activeMode();
     g.style.setProperty("--mg-acc", mode.accent || "var(--margin-rule)");
     const ic = modeIconHtml(mode, 16) || modeEmojiHtml(mode);
-    const html = `<span class="wr-mg-lbl">${ic}<span>${esc(mode.name)}</span></span>${mode.id === "work" ? `<button type="button" class="wr-mg-link" data-sc-open-board>Work day board →</button>` : ""}`;
+    let sub = "";
+    if (s) {
+      if (s.endsAt == null) sub = "on";
+      else { const d = new Date(s.endsAt); sub = `until ${fmtTime(`${d.getHours()}:${d.getMinutes()}`)}`; }
+    }
+    const html = `<span class="wr-mg-lbl">${ic}<span>${esc(mode.name)}</span>${sub ? `<span class="wr-mg-sub">· ${esc(sub)}</span>` : ""}</span>${mode.id === "work" ? `<button type="button" class="wr-mg-link" data-sc-open-board>Work day board →</button>` : ""}`;
     const head = g.firstElementChild;
     if (head.innerHTML !== html) head.innerHTML = html;
+    const sugg = suggestedModeItem(new Date());
+    const suggId = sugg ? modeOf(sugg) : null;
+    const chips = MODES.slice().sort((a, b) => a.order - b.order).map(m => {
+      const on = !!(s && s.modeId === m.id), isSugg = !on && m.id === suggId;
+      const acc = m.accent || "var(--margin-rule)";
+      return `<button type="button" class="wr-mg-chip${on ? " on" : ""}${isSugg ? " sugg" : ""}" data-mode-chip="${esc(m.id)}" style="--chip-acc:${acc};--chip-on:${m.accent ? accentOnFor(m.accent) : "var(--accent-on, #fff)"}" aria-pressed="${on}" title="${on ? `End ${esc(m.name)}` : isSugg ? `${esc(sugg.title || m.name)} has started — tap to switch on` : `Switch ${esc(m.name)} on`}">${isSugg ? "▶ " : ""}${modeIconHtml(m, 14) || ""}<span>${esc(m.name)}</span></button>`;
+    }).join("");
+    const row = wrModeGroupChipsEl(g);
+    if (chips !== wrMgChipsLastHtml || row.innerHTML !== chips) { row.innerHTML = chips; wrMgChipsLastHtml = chips; }
   }
   function renderWrPanel() {
     const panel = document.getElementById("wrPanel");
