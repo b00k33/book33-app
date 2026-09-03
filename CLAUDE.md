@@ -149,6 +149,34 @@ Trap found on the way: `lmComputeRowHeight()` must read the ROW gap only — the
 `rowGap || columnGap` fallback read the 6px column gap once row gap became 0, pushed
 every render into the 9px floor and let the header track balloon.
 
+### Life Map editing (2026-09-03, "let me edit the events here" + 4 answers)
+Her picks: edit **in the tap panel** (not the Day sheet), **autosave**, offer **both**
+scopes for a routine, and **yes** to drag-to-move / drag-the-edge-to-resize.
+- `renderLmCellPanel()` is the editor: Title / Start / End (`[data-lm-ed-field]`,
+  saved on `change` via one document delegate — never per keystroke, the grid rebuild
+  would eat a half-typed title), Mode chips always offered incl. None (a pick keeps
+  the panel open now), a routine occurrence gets `[data-lm-scope]` This day only / The
+  routine (`lmOvrScope`, reset to "day" on every open), Delete (events — the eraser's
+  own `lmTryErase` path, with its undo), Skip this day / Revert to the routine
+  (routines), "More…/Routine…/Series…" still opens the full editor.
+- **One time-writer**: `lmApplyTimes(edit, item, startMin, endMin, newDateKey)` —
+  event → the EVENTS row (day change allowed); routine → `setRtnOvr` per-day, or the
+  template when scope is "routine", same-day only; recurring → refused (no per-date
+  override exists). Both the fields and the drag call it. `lmApplyTitle` likewise.
+- After any write `lmRefreshPanel()` re-finds the block by id in the fresh grid
+  (lmPanel.item is always a stale generated object otherwise) — the panel closes
+  itself only when the block left the week or was skipped/deleted.
+- **Drag** (`lmDrag`, its own pointerdown/move/up/cancel set): only with NO tool
+  armed — an armed Mode/eraser/sticker keeps today's tap meaning. Bottom 40% of the
+  run's last cell = resize (`ns-resize` cursor), elsewhere = move (`grab`); 6px or a
+  different cell is the threshold; preview = `.lm-cell-dragsrc` dims the origin,
+  `.lm-cell-dragover` outlines the target in the Mode's colour; a trailing click is
+  swallowed (`lmSwallowClick`). Hardware traps handled per project memory:
+  `touch-action:none` on filled cells, `touchmove` preventDefault while dragging,
+  `contextmenu` suppressed mid-drag. A run is the ITEM's own cells (`lmItemRun`,
+  identity), not the merged same-Mode run the face draws — two back-to-back Sleep
+  entries drag separately.
+
 ### What the first pass built (2026-09-02) — where design45 lives in index.html
 - **Tokens:** `:root[data-theme="light"]`, the two dark blocks (media + explicit), the
   `:root[data-desk-day][data-theme="light"]` desktop-Day override (it outranks the
