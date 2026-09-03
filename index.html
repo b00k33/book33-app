@@ -19692,6 +19692,27 @@
     background: var(--paper); border: none; font: inherit; font-size: 13px; color: var(--ink); text-align: left; cursor: pointer;
   }
   .wr-bd-acts .bd-pop-row[aria-pressed="true"] { opacity: .55; }
+  /* -- Cliniko paste box (2026-09-03): one collapsed line that opens into a textarea +
+        Today/Tomorrow + Save; mounted in the Work group, the panel's patients card and
+        the Work Day Board from one wmbPasteFormHtml() -- */
+  .wmb-paste { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .wmb-paste-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .wmb-paste-toggle { border: none; background: none; padding: 4px 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--margin-rule); cursor: pointer; }
+  .wmb-paste-toggle:hover { text-decoration: underline; }
+  .wmb-paste-msg { font-size: 12px; color: var(--ink-soft); flex: 1 1 100%; }
+  .wmb-paste-form { display: flex; flex-direction: column; gap: 8px; }
+  .wmb-paste-ta {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; line-height: var(--lh-read); color: var(--ink);
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 8px 12px; resize: vertical; min-height: 96px;
+  }
+  .wmb-paste-ta:focus { outline: none; border-color: var(--margin-rule); }
+  .wmb-paste-ta::placeholder { color: var(--ink-faint); }
+  .wmb-paste-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .wmb-paste-day { display: inline-flex; border: 1px solid var(--note-line); border-radius: 999px; overflow: hidden; background: var(--paper); }
+  .wmb-paste-dayopt { border: none; background: none; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+  .wmb-paste-dayopt[aria-pressed="true"] { background: var(--margin-rule); color: var(--accent-on, #fff); }
+  #wmbPasteSlot { max-width: 720px; margin: 0 auto 16px; }
+  #wmbPasteSlot .wmb-paste { margin-top: 0; }
   /* Right now's NEXT row with the quick-add "+" beside it (Coming up left the Mode group) */
   .now-row-wrap { display: flex; align-items: center; gap: 8px; }
   /* the phone drawer gets the same compaction #wrPanelBody's rows have (74px label +
@@ -20992,6 +21013,7 @@
       <h1 id="wmbTitle">Work Day Board</h1>
       <div class="wmb-stats" id="wmbStats"></div>
     </div>
+    <div id="wmbPasteSlot"></div>
     <div id="wmbEmpty" class="wmb-empty" hidden>No CBD Work shift today — nothing to board.</div>
     <div id="wmbBody" hidden>
       <div class="wmb-fallback-note" id="wmbFallbackNote" hidden></div>
@@ -44745,11 +44767,12 @@
         <div class="sc-pat-row"><span class="sc-pat-time">${esc(fmtTime(p.start))}</span><span class="sc-pat-name">${esc(p.name || "Patient")}</span>${wmbStatusChip(p.status)}</div>
         ${p.focus ? `<div class="sc-pat-focus">${esc(p.focus)}</div>` : ""}
       </div>`;
-    }).join("") : `<div class="sc-empty">${list.fromImport ? "No patients on today's list" : "Nothing booked in Book33 — run /patients for the real list"}</div>`;
+    }).join("") : `<div class="sc-empty">${list.fromImport ? "No patients on today's list" : "Nothing booked in Book33 — paste the day from Cliniko below"}</div>`;
     // 2026-09-03: the "Work day board →" link moved up to the Mode group's head
     // (wrSyncModeGroup) -- one door per card, not one per section.
     return `<div class="sc-list-label sc-pats-label"><span>Today's patients · ${pats.length}${list.fromImport ? "" : " (calendar guess)"}</span></div>
-      <div class="sc-pats">${rows}</div>`;
+      <div class="sc-pats">${rows}</div>
+      ${wmbPasteFormHtml()}`;
   }
   // The combined panel's own Today's patients card (wrCardHtml "railPatients")
   // hides while the Session card is already showing the list -- same rows twice
@@ -44922,6 +44945,113 @@
     if (!Array.isArray(raw.appointments)) return null;
     return raw;
   }
+  // 2026-09-03 (Linh: "can i get a text box so i can copy paste my cliniko
+  // schedule for work and have it saved in an organised fashion?"): the paste
+  // path into the SAME book33-clinic-day store /patients writes -- no network, no
+  // second store. She copies the day from Cliniko's calendar (its text comes out as
+  // "10 – 11am<tab>" / " 5. Subsequent Acupuncture (60 mins) - LINH ONLY" /
+  // "Tracy Collins" / "61451408828" per block, with "Available" / "Break" blocks on
+  // the time line itself) and pastes it into a box on the Work Day Board, in the
+  // Work group and on the panel's Today's patients card -- one form, one delegate.
+  // Parsed into the import contract (start/end 24h, patient, type without its
+  // numbering, status booked) plus the phone, which the readers ignore but keep.
+  // A block whose first line is Available / Break / Lunch / Unavailable is skipped
+  // and named back in the result line, so nothing vanishes silently.
+  function clinicDayParseText(text) {
+    // strip the zero-width joiners Cliniko wraps its time labels in, and NBSPs
+    const clean = String(text || "").replace(/[​-‍﻿ ]/g, " ");
+    const lines = clean.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const timeRe = /^(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*[–—-]\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(.*)$/i;
+    const toM = (t, mer) => { const parts = t.split(":").map(Number); let h = parts[0]; const m = parts[1] || 0; if (mer === "pm" && h < 12) h += 12; if (mer === "am" && h === 12) h = 0; return h * 60 + m; };
+    const blocks = []; let cur = null;
+    lines.forEach(line => {
+      const m = line.match(timeRe);
+      if (m) {
+        const endMer = (m[4] || m[2] || "pm").toLowerCase();
+        let startMer = (m[2] || endMer).toLowerCase();
+        let s = toM(m[1], startMer), e = toM(m[3], endMer);
+        // "11 – 12pm": the start inherits the end's meridiem unless that puts it after the end
+        if (!m[2] && s >= e) { startMer = startMer === "pm" ? "am" : "pm"; s = toM(m[1], startMer); }
+        if (s >= e) e = s + 30;
+        cur = { start: minToTime(s), end: minToTime(e), rest: [] };
+        const label = (m[5] || "").trim();
+        if (label) cur.rest.push(label);
+        blocks.push(cur);
+        return;
+      }
+      if (cur) cur.rest.push(line);
+    });
+    const appointments = [], skipped = [];
+    blocks.forEach(b => {
+      const ls = b.rest;
+      const first = ls[0] || "";
+      if (!ls.length || /^(available|break|lunch|unavailable)\b/i.test(first)) { skipped.push(`${fmtTime(b.start)} ${first || "empty"}`.trim()); return; }
+      const phoneIdx = ls.findIndex(l => /^\+?\d[\d ]{7,}$/.test(l));
+      const typeIdx = ls.findIndex(l => /^\d+\.\s/.test(l));
+      const name = ls.find((l, i) => i !== phoneIdx && i !== typeIdx) || "";
+      if (!name) { skipped.push(`${fmtTime(b.start)} (no name)`); return; }
+      const a = { start: b.start, end: b.end, patient: name, type: typeIdx >= 0 ? ls[typeIdx].replace(/^\d+\.\s*/, "").trim() : "", status: "booked" };
+      if (phoneIdx >= 0) a.phone = ls[phoneIdx].replace(/\s+/g, "");
+      appointments.push(a);
+    });
+    return { appointments, skipped };
+  }
+  let wmbPasteOpen = false, wmbPasteDraft = "", wmbPasteDay = null, wmbPasteMsg = "";
+  // default day: today, or tomorrow once the evening has come (she pastes the next
+  // day's list after work) -- the toggle stays visible either way
+  function wmbPasteDayKey() {
+    if (!wmbPasteDay) wmbPasteDay = new Date().getHours() >= 18 ? "tomorrow" : "today";
+    return keyOf(wmbPasteDay === "tomorrow" ? addDays(TODAY, 1) : TODAY);
+  }
+  function clinicDaySaveFromText(text, dateKey) {
+    const parsed = clinicDayParseText(text);
+    if (!parsed.appointments.length) return { ok: false, msg: "Nothing recognised — copy the day's list from Cliniko (times, types, names) and paste it whole." };
+    parsed.appointments.sort((a, b) => toMin(a.start) - toMin(b.start));
+    try { localStorage.setItem(CLINIC_DAY_KEY, JSON.stringify({ date: dateKey, appointments: parsed.appointments, source: "paste", savedAt: Date.now() })); } catch (e) { return { ok: false, msg: "Couldn't save — storage is full." }; }
+    const d = parseKey(dateKey);
+    const n = parsed.appointments.length;
+    const when = `${WD_FULL[(d.getDay() + 6) % 7].slice(0, 3)} ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
+    return { ok: true, msg: `${n} patient${n === 1 ? "" : "s"} saved for ${when}${parsed.skipped.length ? ` · skipped ${parsed.skipped.join(", ")}` : ""}` };
+  }
+  function wmbPasteFormHtml() {
+    const dayKey = wmbPasteDayKey();
+    return `<div class="wmb-paste${wmbPasteOpen ? " open" : ""}">
+      <div class="wmb-paste-head">
+        <button type="button" class="wmb-paste-toggle" data-wmb-paste-toggle aria-expanded="${wmbPasteOpen}">${wmbPasteOpen ? "Paste Cliniko schedule ▴" : "Paste Cliniko schedule ▾"}</button>
+        ${wmbPasteMsg ? `<span class="wmb-paste-msg">${esc(wmbPasteMsg)}</span>` : ""}
+      </div>
+      ${wmbPasteOpen ? `<form class="wmb-paste-form" data-wmb-paste-form>
+        <textarea class="wmb-paste-ta" rows="6" placeholder="Copy the day from Cliniko's calendar and paste it here — times, types, names. Available and Break blocks are skipped." aria-label="Cliniko schedule">${esc(wmbPasteDraft)}</textarea>
+        <div class="wmb-paste-row">
+          <div class="wmb-paste-day" role="group" aria-label="Which day">
+            <button type="button" class="wmb-paste-dayopt" data-wmb-paste-day="today" aria-pressed="${wmbPasteDay === "today"}">Today</button>
+            <button type="button" class="wmb-paste-dayopt" data-wmb-paste-day="tomorrow" aria-pressed="${wmbPasteDay === "tomorrow"}">Tomorrow</button>
+          </div>
+          <button type="submit" class="btn-save">Save ${dayKey === keyOf(TODAY) ? "today's" : "tomorrow's"} list</button>
+        </div>
+      </form>` : ""}
+    </div>`;
+  }
+  document.addEventListener("click", e => {
+    const tog = e.target.closest("[data-wmb-paste-toggle]");
+    if (tog) { wmbPasteOpen = !wmbPasteOpen; wmbPasteMsg = ""; render(); if (wmbPasteOpen) setTimeout(() => { const ta = document.querySelector(".wmb-paste-ta"); if (ta) ta.focus(); }, 0); return; }
+    const day = e.target.closest("[data-wmb-paste-day]");
+    if (day) { wmbPasteDay = day.dataset.wmbPasteDay; render(); return; }
+  });
+  document.addEventListener("input", e => {
+    const ta = e.target.closest(".wmb-paste-ta");
+    if (ta) wmbPasteDraft = ta.value;
+  });
+  document.addEventListener("submit", e => {
+    const form = e.target.closest("[data-wmb-paste-form]");
+    if (!form) return;
+    e.preventDefault();
+    const ta = form.querySelector(".wmb-paste-ta");
+    const res = clinicDaySaveFromText(ta ? ta.value : wmbPasteDraft, wmbPasteDayKey());
+    wmbPasteMsg = res.msg;
+    if (res.ok) { wmbPasteOpen = false; wmbPasteDraft = ""; }
+    render();
+  });
   // today's CBD Work occurrence, if any -- same track+title match isClinicBlock/
   // clinicPatientsIn already use, just exposed here so both the mode check and the
   // board can share one lookup instead of two slightly-different copies.
@@ -44984,6 +45114,10 @@
     const emptyEl = document.getElementById("wmbEmpty");
     const bodyEl = document.getElementById("wmbBody");
     const cbd = todayCbdBlock();
+    // the paste box sits above both states -- a pasted list is worth saving even on a
+    // day the calendar has no CBD Work block yet (the Work group still shows it)
+    const pasteSlot = document.getElementById("wmbPasteSlot");
+    if (pasteSlot) { const ph = wmbPasteFormHtml(); if (pasteSlot.innerHTML !== ph) pasteSlot.innerHTML = ph; }
     if (!cbd) { emptyEl.hidden = false; bodyEl.hidden = true; document.getElementById("wmbStats").innerHTML = ""; return; }
     emptyEl.hidden = true; bodyEl.hidden = false;
     const shiftStart = toMin(cbd.start);
@@ -44996,7 +45130,7 @@
     patients.sort((a, b) => toMin(a.start) - toMin(b.start));
     const fallbackNote = document.getElementById("wmbFallbackNote");
     fallbackNote.hidden = fromImport;
-    if (!fromImport) fallbackNote.textContent = "Showing Book33 events — run /patients to pull today's real list.";
+    if (!fromImport) fallbackNote.textContent = "Showing Book33 events — paste the day from Cliniko above, or run /patients for the real list.";
 
     const viewMode = wmbBoardViewMode();
     document.querySelectorAll("#wmbViewToggle .evl-view-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.wmbView === viewMode)));
@@ -49479,10 +49613,11 @@
       let list;
       try { list = wmbPatientList(); } catch (e) { list = { items: [], fromImport: false }; }
       const pats = list.items.slice().sort((a, b) => toMin(a.start) - toMin(b.start));
-      const nudge = list.fromImport ? "" : `<button type="button" class="rail-info patients-nudge" aria-label="Ask Claude: /patients">ⓘ<span class="nudge-pop">Ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list from Zanda/Cliniko and summarise each patient's treatment focus.</span></button>`;
+      const nudge = list.fromImport ? "" : `<button type="button" class="rail-info patients-nudge" aria-label="How to get the real list">ⓘ<span class="nudge-pop">Paste the day from Cliniko below, or ask me in Claude Code: <strong>/patients</strong> — I'll pull today's real list and summarise each patient's treatment focus.</span></button>`;
       return `<div class="wr-card" data-wr-id="${id}"><span class="wr-grip">⋮⋮</span>
         <span class="wr-label">Today's patients · ${pats.length}${list.fromImport ? "" : " (calendar guess)"}${nudge}</span>
         ${pats.length ? pats.map(p => `<div class="wr-pat-row"><span class="wr-pat-time">${esc(fmtTime(p.start))}</span><span class="wr-pat-name">${esc(p.name || "Patient")}</span>${wmbStatusChip(p.status)}</div>`).join("") : `<div class="wr-pat-empty">Nothing booked this day.</div>`}
+        ${wmbPasteFormHtml()}
       </div>`;
     }
     if (id === "railTodo") {
