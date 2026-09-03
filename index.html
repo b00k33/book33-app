@@ -2825,6 +2825,9 @@
   .mar-chip.mar-done { color: var(--ink-faint); text-decoration: line-through; opacity: .7; }
   .mar-chip.mar-current { border-color: var(--margin-rule); color: var(--ink); font-weight: 700; background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); }
   .mar-empty { font-size: 12px; color: var(--ink-faint); margin-top: 10px; }
+  /* .mar-quickadd's own 60px left margin lined it up under the old "Coming up"
+     time column; inside the Mode group the add line is full width */
+  .mar-quickadd.wr-mg-add { margin: 8px 0 0; }
   /* 2026-08-28 (Mode widget "Coming up"): a plain in-flow list under the strip, same
      shape as .sc-row-wrap above -- no popover, this panel is already a narrow column. */
   .mar-next { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--note-line); }
@@ -51051,8 +51054,12 @@
     TODOS.push({ id: uid(), title, track: "personal", category: "", mode: mId, note: "", done: false, createdAt: keyOf(TODAY) });
     saveTodos(TODOS);
     marQuickAddFor = null;
+    const inGroup = form.classList.contains("wr-mg-add");
     renderDay();
     renderNow(); // the NEXT-row form closes on submit, not on the card's next tick
+    // the Mode group's own add line stays put after a submit -- give focus back so
+    // she can type the next one straight away (the rebuild replaced the input)
+    if (inGroup) { const next = document.querySelector(`.wr-mg-add[data-mar-quickadd="${mId}"] input`); if (next) next.focus(); }
   });
   document.addEventListener("click", e => {
     if (wrArrangeOpen && !e.target.closest(".wr-arrange-pop") && !e.target.closest("#wrArrangeBtn, #wrArrangeBtnM")) {
@@ -53527,9 +53534,17 @@
       return `<span class="mar-chip ${cls}">${t.done ? "✓ " : ""}${esc(t.title)}</span>`;
     }).join("");
     const rowsHtml = occs.length ? `<div class="wr-mg-sec"><span>${secLabel} · ${occDone} of ${occs.length}</span><span>${esc(leave)}${!todos.length ? focusBtn : ""}</span></div><div class="wr-mg-rows">${rows}</div>` : "";
-    const todosHtml = todos.length
-      ? `<div class="mar-head"><span class="mar-title">To-dos · ${todoDone} of ${todos.length}</span>${focusBtn}</div><div class="mar-strip">${chips}</div>`
-      : (!occs.length ? `<div class="mar-head"><span class="mar-title">To-dos · 0 of 0</span>${focusBtn}</div><div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>` : "");
+    // 2026-09-03 (Linh, twice: "how do i add more todos for the work mode" /
+    // "how to quickly add to dos straight into modes so it shows up in modes"):
+    // the group's To-dos section always shows, with its own add line -- typed
+    // here, the to-do is tagged to THIS Mode (the same [data-mar-quickadd] submit
+    // delegate the old "Coming up" + used, so it's the same TODOS row shape).
+    const addHtml = `<form class="mar-quickadd wr-mg-add" data-mar-quickadd="${esc(am.id)}">
+        <input type="text" class="mar-quickadd-input" placeholder="Add a to-do for ${esc(am.name)}…" aria-label="Add a to-do for ${esc(am.name)}" maxlength="120">
+      </form>`;
+    const todosHtml = `<div class="mar-head"><span class="mar-title">To-dos · ${todoDone} of ${todos.length}</span>${(todos.length || !occs.length) ? focusBtn : ""}</div>` +
+      (todos.length ? `<div class="mar-strip">${chips}</div>` : (!occs.length ? `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>` : "")) +
+      addHtml;
     return rowsHtml + tomorrowHtml + todosHtml;
   }
   document.addEventListener("click", e => {
