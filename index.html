@@ -27511,19 +27511,47 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || occId.charAt(occId.length - 11) !== "-") return null;
     return { taskId: occId.slice(3, -11), date };
   }
-  function rtnOvr(t, dateKey) { return (t && t.overrides && t.overrides[dateKey]) || null; }
-  // merge patch into overrides[dateKey]; undefined/null/"" values DELETE that field,
-  // an emptied override is removed entirely (that's what "Revert to the routine" is)
-  function setRtnOvr(taskId, dateKey, patch) {
+  // layerIdx (2026-09-07, "when i drag and drop the travel blocks it reverts back"):
+  // a multi-layer routine with two schedule layers landing on the same day (see
+  // "Train has 4 weekly schedule layers" below) renders one block per layer, but
+  // until now they all shared this ONE per-day override -- only the primary layer's
+  // block ever read it, so dragging any OTHER layer's block wrote an override
+  // nothing displayed, and it visibly snapped back. Her explicit call: each same-day
+  // block should carry its own time. layerIdx (the layer's own stable index in
+  // t.schedules, not its position among that day's matches) addresses a SPECIFIC
+  // extra layer's override, nested under day.layers so the primary override (still
+  // the plain day object itself, layerIdx omitted) is completely unaffected.
+  function rtnOvr(t, dateKey, layerIdx) {
+    const day = (t && t.overrides && t.overrides[dateKey]) || null;
+    if (!day) return null;
+    if (layerIdx == null) return day;
+    return (day.layers && day.layers[layerIdx]) || null;
+  }
+  // merge patch into overrides[dateKey] (or, with layerIdx given, into that day's own
+  // overrides[dateKey].layers[layerIdx] instead); undefined/null/"" values DELETE that
+  // field, an emptied override is removed entirely (that's what "Revert to the
+  // routine" is)
+  function setRtnOvr(taskId, dateKey, patch, layerIdx) {
     const t = ROUTINE_TASKS.find(x => x.id === taskId);
     if (!t || !dateKey) return;
     t.overrides = t.overrides || {};
-    const cur = t.overrides[dateKey] || {};
-    Object.keys(patch).forEach(k => {
-      if (patch[k] === undefined || patch[k] === null || patch[k] === "") delete cur[k];
-      else cur[k] = patch[k];
-    });
-    if (Object.keys(cur).length) t.overrides[dateKey] = cur; else delete t.overrides[dateKey];
+    const day = t.overrides[dateKey] || {};
+    if (layerIdx == null) {
+      Object.keys(patch).forEach(k => {
+        if (patch[k] === undefined || patch[k] === null || patch[k] === "") delete day[k];
+        else day[k] = patch[k];
+      });
+    } else {
+      day.layers = day.layers || {};
+      const cur = day.layers[layerIdx] || {};
+      Object.keys(patch).forEach(k => {
+        if (patch[k] === undefined || patch[k] === null || patch[k] === "") delete cur[k];
+        else cur[k] = patch[k];
+      });
+      if (Object.keys(cur).length) day.layers[layerIdx] = cur; else delete day.layers[layerIdx];
+      if (!Object.keys(day.layers).length) delete day.layers;
+    }
+    if (Object.keys(day).length) t.overrides[dateKey] = day; else delete t.overrides[dateKey];
     if (t.overrides && !Object.keys(t.overrides).length) delete t.overrides;
     saveRoutines();
   }
@@ -29039,11 +29067,22 @@
     // 6-7pm layer never rendered on any of those days because an earlier layer
     // (9am or the 1pm Wed layer) always matched first; its Sat 2-3pm layer was lost
     // the same way. This pass adds a block for each EXTRA matching layer the loop
-    // above didn't use (extra blocks reuse the SAME occId as the primary one --
-    // Linh's explicit choice, "shared status" over independent per-session
-    // tracking: ticking, skipping, resizing, or moving any one of a routine's
-    // same-day blocks affects the whole routine for that day, exactly as it always
-    // has, just with every scheduled time now actually showing up).
+    // above didn't use.
+    // 2026-09-07 ("when i drag and drop the travel blocks it reverts back"): extra
+    // blocks used to reuse the SAME occId as the primary one, sharing its one
+    // per-day override -- only the primary block's render ever read it, so dragging
+    // an EXTRA layer's block wrote an override nothing displayed, and it visibly
+    // snapped back on the very next render. Her explicit answer when asked: each
+    // same-day block should carry its OWN time. Each extra layer now gets its own
+    // occId (rt-<taskId>~L<schedIdx>-<date> -- schedIdx is the layer's stable index
+    // in t.schedules, not its position within `hits`, so it survives another layer
+    // elsewhere in the array starting/stopping matching on some other date) and its
+    // own slot in day.layers[schedIdx] (see setRtnOvr's layerIdx param) -- ticking/
+    // skipping/resizing a routine as a WHOLE still goes through the primary
+    // occurrence exactly as before (Linh's separate, still-standing "shared status"
+    // choice for those); only per-block dragging is now independent, since that's
+    // the one interaction where grabbing a SPECIFIC visible block and having it
+    // move a DIFFERENT one is simply broken, not a shared-status design.
     // a day with an old per-day override sitting on it (t.overrides
     // [date].start -- e.g. left over from once dragging or resizing that block,
     // back before this multi-layer pass existed) still bailed out of this WHOLE
@@ -29051,8 +29090,9 @@
     // OTHER layer's block again, same symptom as the original bug just one layer
     // deeper. ovr.start no longer bails here: the primary block above still
     // honours it exactly as before (unchanged), this pass now always draws the
-    // OTHER matching layers at their own natural times alongside it. Only a
-    // genuine skip or move-to-another-day still bails below -- those really do
+    // OTHER matching layers at their own natural times (or their own layer
+    // override, if one's been dragged) alongside it. Only a genuine skip or
+    // move-to-another-day on the PRIMARY still bails below -- those really do
     // replace the day with a single ghost, so a per-layer split has nothing left
     // to attach to.
     // Deliberately narrow, skipped entirely when:
@@ -29068,31 +29108,37 @@
       if (t.anchorTo && chainAnchorOf(t)) return;
       const ovr = rtnOvr(t, k);
       if (ovr && (ovr.skipped || (ovr.movedTo && ovr.movedTo !== k))) return;
-      const hits = t.schedules.filter(l => layerOccursOn(l, date));
+      const hits = t.schedules
+        .map((l, schedIdx) => ({ l, schedIdx }))
+        .filter(({ l }) => layerOccursOn(l, date));
       if (hits.length < 2) return;
       const subs = Array.isArray(t.subtasks) ? t.subtasks.filter(s => s && s.text) : [];
-      const occId = `rt-${t.id}-${k}`;
       const effTitle = ovr && ovr.title ? ovr.title : t.title;
       const occNote = ovr && ovr.note != null ? ovr.note : null;
       // hits[0] is exactly what the primary loop's own .find() already rendered --
-      // every OTHER matching layer gets a block here.
-      hits.slice(1).forEach(layer => {
+      // every OTHER matching layer gets a block here, each independently movable.
+      hits.slice(1).forEach(({ l: layer, schedIdx }) => {
         if (!layer.start) return;
-        const sMin = timeToMin(layer.start);
+        const lovr = rtnOvr(t, k, schedIdx);
+        const sMin = lovr && lovr.start ? timeToMin(lovr.start) : timeToMin(layer.start);
         let effEnd;
         if (subs.length) {
-          const total = ovr && ovr.dur ? ovr.dur : routineDurMin(t, date);
+          const total = lovr && lovr.dur ? lovr.dur : routineDurMin(t, date);
           effEnd = minToTime(Math.min(sMin + total, 1439));
         } else {
-          effEnd = layer.end || (t.durationMin ? minToTime(Math.min(sMin + t.durationMin, 1439)) : "");
+          const naturalEnd = layer.end || (t.durationMin ? minToTime(Math.min(timeToMin(layer.start) + t.durationMin, 1439)) : "");
+          effEnd = lovr && lovr.start
+            ? (lovr.dur ? minToTime(Math.min(sMin + lovr.dur, 1439)) : (lovr.end || naturalEnd))
+            : naturalEnd;
         }
         out.push({
-          id: occId, generated: true, date: k, hasOvr: !!ovr,
+          id: `rt-${t.id}~L${schedIdx}-${k}`, generated: true, date: k, hasOvr: !!lovr,
           track: t.track, category: t.category || "Routine", title: effTitle,
           note: occNote != null ? occNote : t.note, freq: t.freq,
           kind: subs.length ? "routine" : undefined, allDay: false, fromRoutine: true,
-          start: layer.start, end: effEnd,
-          steps: subs.length ? subs : undefined, rtTaskId: t.id, fitLink: t.fitLink || null, linkInfo: linkInfo(t),
+          start: minToTime(sMin), end: effEnd,
+          steps: subs.length ? subs : undefined, rtTaskId: t.id, schedLayerIndex: schedIdx,
+          fitLink: t.fitLink || null, linkInfo: linkInfo(t),
         });
       });
     });
@@ -31704,10 +31750,17 @@
       // undefined fields), so the override shrinks back to a plain time nudge.
       const p = parseOccId(e.id);
       if (!p) return;
+      // e.schedLayerIndex (2026-09-07, "the travel blocks revert back"): set only on
+      // an EXTRA same-day layer's occurrence (see generatedFor's multi-layer pass) —
+      // undefined for the primary occurrence, so setRtnOvr's layerIdx param is a
+      // no-op there and this is unchanged for every routine that isn't multi-layer.
+      // Passing it here is what makes each same-day block keep its own dragged time
+      // instead of writing into the primary's override, which nothing but the
+      // primary block ever read.
       setRtnOvr(e.rtTaskId, p.date, {
         start: timeStr, end, dur: undefined,
         movedTo: dateKey !== p.date ? dateKey : undefined,
-      });
+      }, e.schedLayerIndex);
       // already-ticked-done routine occurrence carries a linked FIT_LOG session (see
       // applyFitLink) — move it along too, or her fitness history would silently stay
       // pinned to the day she moved the occurrence AWAY from.
