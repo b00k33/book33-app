@@ -94,9 +94,12 @@ tappable — a chip opens its own sheet in place, never a page jump (the 2026-09
 birthday-tap rule).
 
 ### Every commit
-Confirm before pushing (her standing ALWAYS-ASK rule) and before deleting data. Report
-what changed plus the one-line undo. **Any commit that touches layout runs the mobile
-report in `MEASURING.md` and pastes the results.** A rule nobody measures is a wish.
+Push straight to `main` after committing — no confirmation needed (2026-09-10, "always
+push" / "push live without needing my permission" — this repo joins C7/LCM's existing
+auto-push list; the old commit-then-ask-before-push rule is gone). Still confirm before
+deleting data. Report what changed plus the one-line undo. **Any commit that touches
+layout runs the mobile report in `MEASURING.md` and pastes the results.** A rule nobody
+measures is a wish.
 
 ### Her 11 answers for the first build pass (2026-09-02) — these are decisions, not options
 1. **Both themes.** Night gets a dark translation of the same system (dark cards on
@@ -695,12 +698,16 @@ CHECK → SHOW. Diagnose what's actually wrong before touching anything; don't r
 everything just because you can — preserve what already works. When given a screenshot,
 report WHAT'S WRONG / WHY / WHAT YOU'D CHANGE / WHY IT'S BETTER before building the mock.
 
-**APPROVAL GATE — the one hard process rule.** For a significant visual change, show
-the mock/preview and get her go-ahead BEFORE pushing live. This is a genuine, deliberate
-carve-out from the standing book33-app auto-push override (cross-session memory
-`feedback_check_before_upload`) — see that memory's own 2026-08-31 entry for exactly
-where the line sits between "new change, show first" and "already-agreed correction,
-keep auto-pushing."
+**APPROVAL GATE — still real, reshaped by the 2026-09-10 auto-push override.** Book33/
+book33-app is now full auto-push (commit, verify, push `main`, no waiting for a "go") —
+see "Every commit" above and cross-session memory `feedback_check_before_upload`'s
+2026-09-10 entry. That removes the WAITING-to-push step; it does not remove showing her
+the shape of a significant, not-yet-agreed visual change before building/shipping it —
+same distinction the C7 and LCM Pharmacy auto-push overrides both preserve. For a
+significant visual change she hasn't already seen: show the mock/preview and get her
+go-ahead on the DIRECTION first, same as always; once she's approved a direction (or the
+work is a correction to something already agreed), implement, verify, and push straight
+through without a separate push-confirmation step.
 
 **Design judgement, not order-taking.** If a request would make the interface worse:
 name the problem, explain the trade-off briefly, recommend the better option, then let
