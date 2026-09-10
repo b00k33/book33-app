@@ -3964,6 +3964,16 @@
   .tl-detail-move-head { display: flex; align-items: center; gap: 12px; }
   .tl-detail-move-head span { font-size: 11px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; }
   .tl-detail-move-row { display: flex; gap: 8px; }
+  /* Quick day picks (Tomorrow/Next week) above the New date field -- 2026-09-10, "make
+     it easy". Stacked, not beside the field: two pills + a date input all in one row
+     would crowd a 360px sheet. Reuses .track-opt's pill/aria-pressed language (already
+     proven in the To-do scheduler's own Today/Tomorrow pills) minus its track-colour
+     dot, which means nothing here -- same escape hatch .todo-tag-popover .track-opt
+     already uses for the same reason. */
+  .tl-move-daterow { flex-direction: column; align-items: stretch; }
+  .tl-move-quickdate { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tl-move-quickdate .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
+  .tl-move-quickdate .track-opt::before { display: none; }
   /* 2026-08-15 fix (B2 + A2): the Move/Reschedule panel's field and its two buttons
      were the last OUTLINED controls in the §6 sheet, which §0 forbids outright ("No
      outlined pills, fields or buttons anywhere in this build") — the buttons in
@@ -33129,7 +33139,13 @@
     // into the action row. fitcal keeps the toggle: there's no separate form for it to
     // navigate to (Time/Duration/Location ARE the sheet), so its own Edit cell still
     // toggles this panel open/closed.
-    const routineTodayFieldsHtml = hasRtnExtras ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields">
+    // 2026-09-10 (Linh: "duplicate is not working for me... make it easy"): hidden
+    // while Reschedule/Duplicate is open -- this section (scope toggle, Title, Start/
+    // End, note, Save/Skip) has nothing to do with either action, and unconditionally
+    // showing it was what pushed the actual Reschedule/Duplicate panel below the sheet's
+    // fold in the first place (see moveToggle's own scroll-into-view fix). `hidden`,
+    // not omitted, so nothing about its own open/closed sub-state is lost.
+    const routineTodayFieldsHtml = hasRtnExtras ? `<div class="tl-detail-extra tl-detail-editfields" id="tlDetailEditFields"${tlDetailPanel === "move" || tlDetailPanel === "copy" ? " hidden" : ""}>
         ${scopeHtml}
         <textarea class="tl-rtn-note" data-rtn-note="${e.id}" placeholder="Note for today only" rows="2">${esc(e.note || "")}</textarea>
       </div>` : "";
@@ -33194,6 +33210,21 @@
                input, which supplies ink, radius, padding and focus ring as well as fill. -->
           <input type="${type}" class="${cls} field-bare" id="${id}" value="${esc(value || "")}" aria-label="${esc(label)}"${extra || ""}>
         </label>`;
+    // Quick day picks beside New date -- her ask, 2026-09-10 ("duplicate is not working
+    // for me... i just want to make a duplicate of this event for another time. make it
+    // easy"): the field alone meant opening the full month-picker sheet for the single
+    // most common case, a day-shift. Same idiom as the To-do quick-scheduler's Today/
+    // Tomorrow pills (todoSchedHtml) -- reads the field's own live value first (mid-
+    // interaction, after she's already touched it), falling back to e.date on first
+    // paint, so picking a quick day then nudging the time doesn't lose the pick on a
+    // scope-toggle re-render. Shared by Reschedule and Duplicate -- same friction either
+    // way, not just the one she happened to hit.
+    const curMoveDateKey = document.getElementById("tlMoveDate")?.value || e.date;
+    const moveRefDate = parseKey(e.date);
+    const quickDateHtml = [[1, "Tomorrow"], [7, "Next week"]].map(([n, label]) => {
+      const k = keyOf(addDays(moveRefDate, n));
+      return `<button type="button" class="track-opt" data-tl-move-quickdate="${esc(k)}" aria-pressed="${String(curMoveDateKey === k)}">${label}</button>`;
+    }).join("");
     const moveHtml = canMove && movePanelOpen ? `<div class="tl-detail-extra tl-detail-move" id="tlDetailMove">
         <div class="tl-detail-move-head">
           <span>${copyOpen ? "Add to another day" : "Move this day"}</span>
@@ -33204,7 +33235,10 @@
           <button type="button" class="ovr-scope-opt" data-move-scope="routine" aria-pressed="${!moveDayScope}">The routine<span class="sub">${esc(schedLbl)}</span></button>
         </div>
         <div class="tl-move-hint">${esc(moveScopeHint(e, rtnT, occDateD, moveDayScope))}</div>` : ""}
-        ${moveDayScope ? `<div class="tl-detail-move-row">${moveField("tlMoveDate", "tl-move-date", "date", "New date", e.date, ` data-mp-today="1"`)}</div>` : ""}
+        ${moveDayScope ? `<div class="tl-detail-move-row tl-move-daterow">
+          <div class="tl-move-quickdate">${quickDateHtml}</div>
+          ${moveField("tlMoveDate", "tl-move-date", "date", "New date", curMoveDateKey, ` data-mp-today="1"`)}
+        </div>` : ""}
         <div class="tl-detail-move-row">
           ${moveField("tlMoveTime", "tl-move-time", "time", "Starts", moveDayScope ? e.start : (rtnT && rtnT.start) || e.start)}
           ${moveField("tlMoveEnd", "tl-move-time", "time", "Ends", moveDayScope ? (e.end || (e.start ? minToTime(itemEndMin(e)) : "")) : ((rtnT && rtnT.end) || e.end || ""))}
@@ -34223,6 +34257,27 @@
       tlDetailPanel = tlDetailPanel === want ? null : want;
       tlMoveScope = "day";
       refreshOpenTlDetail();
+      // 2026-09-10 (Linh: "duplicate is not working for me"): it wasn't -- the panel
+      // opened correctly every time, just below a routine occurrence's own always-on
+      // Title/scope editor (routineTodayFieldsHtml, now hidden while this is open, see
+      // its own comment), off the bottom of a normal-height sheet with nothing to carry
+      // the eye down to it. Confirmed live: the panel existed in the DOM, visible,
+      // ~780px down. Scroll it into view the instant it opens instead of only once a
+      // field inside it gains focus (the existing #tlDetailBody focusin handler further
+      // down) — that one never fires if she never finds the field to focus in the first
+      // place.
+      if (tlDetailPanel === want) document.getElementById("tlDetailMove")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+    const quickDateBtn = e.target.closest("[data-tl-move-quickdate]");
+    if (quickDateBtn) {
+      e.stopPropagation();
+      const dateEl = document.getElementById("tlMoveDate");
+      if (dateEl) {
+        dateEl.value = quickDateBtn.dataset.tlMoveQuickdate;
+        dateEl.dispatchEvent(new Event("input", { bubbles: true }));
+        dateEl.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       return;
     }
     // the panel's own Cancel — its own attribute, not data-tl-toggle-move: a bare toggle
@@ -34453,7 +34508,9 @@
     // #tlDetailBody and #tlDetailHeadActions are two separate elements/listeners.
     // 2026-08-15 (§6 review): intent-carrying now — "copy" from "＋ Add to another day",
     // "move" from "Move this day" — so the two rows stop opening the identical panel.
-    // Kept byte-identical to the body listener's own copy of this branch.
+    // Kept byte-identical to the body listener's own copy of this branch (including the
+    // 2026-09-10 scroll-into-view fix -- "duplicate is not working for me", see that
+    // copy's own comment).
     const moveToggle = e.target.closest("[data-tl-toggle-move]");
     if (moveToggle) {
       e.stopPropagation();
@@ -34461,6 +34518,7 @@
       tlDetailPanel = tlDetailPanel === want ? null : want;
       tlMoveScope = "day";
       refreshOpenTlDetail();
+      if (tlDetailPanel === want) document.getElementById("tlDetailMove")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
     const startModeBtn = e.target.closest("[data-tl-start-mode]");
