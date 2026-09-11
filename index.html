@@ -6362,6 +6362,26 @@
   .todo-tag-popover .track-opt { flex: 0 0 auto; border-radius: 999px; padding: 6px 12px; }
   .todo-tag-popover .track-opt::before { display: none; }
 
+  /* "Needs you" (2026-09-11) -- reads the active Mode, not a pinned+stale blend; see
+     todoNeedsYouHtml(). --tg-acc mirrors .todo-grp's own convention (the Mode's accent). */
+  .todo-needsyou { margin-bottom: 16px; padding: 14px; border-radius: 14px; border: 1px solid var(--note-line); background: color-mix(in oklab, var(--tg-acc, var(--accent-seed)) 6%, var(--paper)); }
+  .todo-ny-head { display: flex; align-items: center; margin-bottom: 8px; }
+  .todo-ny-lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tg-acc, var(--accent-seed)); }
+  .todo-ny-n { margin-left: auto; font-size: 11px; color: var(--ink-soft); }
+  .todo-ny-chips { display: flex; flex-direction: column; gap: 6px; }
+  .todo-ny-chip { background: var(--paper); border: 1px solid var(--note-line); border-radius: 10px; padding: 9px 10px; cursor: pointer; }
+  .todo-ny-chip-top { display: flex; align-items: center; gap: 8px; }
+  .todo-ny-chip-why { font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; flex: none; }
+  .todo-ny-chip-t { font-size: 13px; font-weight: 600; color: var(--ink); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .todo-ny-chip-car { font-size: 12px; color: var(--ink-faint); transition: transform .15s; flex: none; }
+  .todo-ny-chip.open .todo-ny-chip-car { transform: rotate(90deg); }
+  .todo-ny-chip-acts { display: none; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--note-line); }
+  .todo-ny-chip.open .todo-ny-chip-acts { display: flex; }
+  .todo-ny-act { flex: 1; text-align: center; font: inherit; font-size: 11.5px; font-weight: 700; padding: 7px 0; border-radius: 8px; border: 1px solid var(--note-line); background: var(--field-bg); color: var(--ink-soft); cursor: pointer; }
+  .todo-ny-act:hover { border-color: var(--accent-seed); color: var(--accent-seed); }
+  .todo-ny-act.done:hover { border-color: var(--gold-bright); color: var(--gold-bright); }
+  .todo-ny-aging { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--note-line); font-size: 11px; font-weight: 600; color: var(--ink-faint); }
+
   /* Orders & deliveries -- own class names throughout, even though the interaction
      MODEL (one popover open at a time, in-flow directly under the row, outside-tap
      closes) is copied from the to-do tag popover just above. */
@@ -64108,6 +64128,52 @@
   let todoDoneOpen = false, todoMenuOpen = false, todoSched = null, todoGroupAddFor = null;
   // explicit choice wins; otherwise an empty group starts collapsed, a full one open
   function todoIsCollapsed(key, empty) { return todoCollapsed[key] !== undefined ? !!todoCollapsed[key] : empty; }
+  // "Needs you" (2026-09-11, "tie needs you to the mode -- calendar mode atm is work,
+  // show the work to dos"): tap-to-reveal chip open state, its own var -- separate from
+  // todoActionsFor since this is a different row shape with different actions (Done/Snooze).
+  let todoNeedsYouOpenId = null;
+  const TODO_NEEDSYOU_STALE_DAYS = 14;
+  function todoAgeDays(t) { return t.createdAt ? Math.round((TODAY - parseKey(t.createdAt)) / 86400000) : null; }
+  function todoIsSnoozed(t) { return !!t.snoozedUntil && t.snoozedUntil > keyOf(TODAY); }
+  // needsYou reads the calendar's REAL active Mode, same signal renderTimeline()/
+  // renderTodoPage() already resolve via activeMode() -- not a separate guess. A real
+  // Mode active -> that Mode's own open to-dos; Home (no Mode active) -> pinned only,
+  // never the old mixed pinned+active+stale blend (that was the bug: everything read as
+  // one undifferentiated row). agingElsewhere is a SEPARATE, quieter signal -- never
+  // merged into the same chips, so "what I'm doing" and "what I'm avoiding" stay distinct.
+  function todoNeedsYouCompute(am, openAll) {
+    const inMode = am.id !== "home";
+    const needsYou = openAll.filter(t => !todoIsSnoozed(t) && (inMode ? t.mode === am.id : !!t.pinned));
+    const agingElsewhere = openAll.filter(t => !needsYou.includes(t) && !todoIsSnoozed(t) && todoAgeDays(t) !== null && todoAgeDays(t) >= TODO_NEEDSYOU_STALE_DAYS);
+    return { inMode, needsYou, agingElsewhere };
+  }
+  function todoNeedsYouHtml(am, openAll) {
+    const { inMode, needsYou, agingElsewhere } = todoNeedsYouCompute(am, openAll);
+    if (!needsYou.length && !agingElsewhere.length) return "";
+    const chip = t => {
+      const open = todoNeedsYouOpenId === t.id;
+      const why = t.pinned ? { label: "Pinned", color: "var(--accent-seed)" } : { label: am.name, color: am.accent || "var(--ink-soft)" };
+      return `<div class="todo-ny-chip${open ? " open" : ""}" data-todo-ny-toggle="${t.id}">
+        <div class="todo-ny-chip-top">
+          <span class="todo-ny-chip-why" style="color:${esc(why.color)}">${esc(why.label)}</span>
+          <span class="todo-ny-chip-t">${esc(t.title)}</span>
+          <span class="todo-ny-chip-car">›</span>
+        </div>
+        ${open ? `<div class="todo-ny-chip-acts">
+          <button type="button" class="todo-ny-act done" data-todo-ny-act="done" data-id="${t.id}">✓ Done</button>
+          <button type="button" class="todo-ny-act" data-todo-ny-act="snooze" data-id="${t.id}">⏰ Snooze 3d</button>
+        </div>` : ""}
+      </div>`;
+    };
+    const agingLine = agingElsewhere.length
+      ? `<div class="todo-ny-aging">Also aging elsewhere: ${agingElsewhere.map(t => `${esc(t.title)} (${esc((MODES.find(m => m.id === t.mode) || {}).name || "No mode")}, ${todoAgeDays(t)}d)`).join(" · ")}</div>`
+      : "";
+    return `<div class="todo-needsyou" style="--tg-acc:${esc(am.accent || "var(--accent-seed)")}">
+      <div class="todo-ny-head"><span class="todo-ny-lbl">Needs you${inMode ? ` · ${esc(am.name)}` : ""}</span><span class="todo-ny-n">${needsYou.length} open</span></div>
+      ${needsYou.length ? `<div class="todo-ny-chips">${needsYou.map(chip).join("")}</div>` : `<div class="todo-grp-empty">Nothing of ${esc(am.name)}'s waiting right now.</div>`}
+      ${agingLine}
+    </div>`;
+  }
   function todoDayLabel(dateKey) {
     if (dateKey === keyOf(TODAY)) return "today";
     if (dateKey === keyOf(addDays(TODAY, 1))) return "tomorrow";
@@ -64229,7 +64295,7 @@
         <button type="button" class="todo-done-head" data-todo-done-toggle aria-expanded="${String(todoDoneOpen)}">Done · ${doneAll.length} <span class="todo-grp-chev">${todoDoneOpen ? "⌃" : "⌄"}</span></button>
         ${todoDoneOpen ? `<div class="todo-flat">${doneAll.map(t => todoRowHtml(t, { showMode: true })).join("")}</div>` : ""}
       </div>` : "";
-    host.innerHTML = body + doneHtml;
+    host.innerHTML = todoNeedsYouHtml(am, openAll) + body + doneHtml;
     const menu = document.getElementById("todoMenuPop");
     if (menu) {
       menu.hidden = !todoMenuOpen;
@@ -64287,6 +64353,20 @@
     convertingTodoId = id;
   }
   document.getElementById("todoList").addEventListener("click", e => {
+    const nyAct = e.target.closest("[data-todo-ny-act]");
+    if (nyAct) {
+      const t = TODOS.find(x => x.id === nyAct.dataset.id);
+      if (t) {
+        if (nyAct.dataset.todoNyAct === "done") { t.done = true; }
+        else { t.snoozedUntil = keyOf(addDays(TODAY, 3)); }
+        saveTodos(TODOS);
+      }
+      todoNeedsYouOpenId = null;
+      renderTodoPage(); renderDeskWidgetRail();
+      return;
+    }
+    const nyToggle = e.target.closest("[data-todo-ny-toggle]");
+    if (nyToggle) { const id = nyToggle.dataset.todoNyToggle; todoNeedsYouOpenId = todoNeedsYouOpenId === id ? null : id; renderTodoPage(); return; }
     const grpT = e.target.closest("[data-todo-grp-toggle]");
     if (grpT) { const k = grpT.dataset.todoGrpToggle; todoCollapsed[k] = !grpT.closest(".todo-grp").classList.contains("collapsed"); saveTodoCollapsed(); renderTodoPage(); return; }
     const grpAdd = e.target.closest("[data-todo-grp-add]");
