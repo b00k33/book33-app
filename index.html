@@ -29178,6 +29178,7 @@
           start: minToTime(sMin),
           end: ovr && ovr.end && !ovr.dur ? ovr.end : minToTime(Math.min(sMin + total, 1439)),
           steps: subs, rtTaskId: t.id, fitLink: t.fitLink || null, linkInfo: linkInfo(t),
+          locPath: Array.isArray(t.locPath) ? t.locPath : [],
           fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
           deadlineMin, deadlineLabel: deadlineMin != null ? (t.deadlineLabel || t.title) : undefined,
         });
@@ -29199,6 +29200,7 @@
           // routines born from quick-add can carry a time ("pilates every tuesday 7pm")
           // — those render on the timeline instead of the all-day rail
           allDay: !start, start, end: (ovrEnd || effEnd) || "", fitLink: t.fitLink || null, linkInfo: linkInfo(t),
+          locPath: Array.isArray(t.locPath) ? t.locPath : [],
           fromChain: chainAnchorOccId ? t.id : undefined, chainAnchorOccId,
           deadlineMin, deadlineLabel: deadlineMin != null ? (t.deadlineLabel || t.title) : undefined,
         });
@@ -58979,8 +58981,15 @@
     const { icon, rest } = splitRtnIconTitle(task.title);
     fTitle.value = icon ? `${icon} ${rest}` : rest;
     state.track = task.track; syncTrack(); trackManuallySet = true;
-    formWho = "me"; syncWho();   // ROUTINE_TASKS has no who/locPath concept -- same as #rtnAddForm
-    fLoc.value = "";
+    formWho = "me"; syncWho();   // ROUTINE_TASKS still has no who (partner-assignment) concept
+    // 2026-09-15 (fixing the Conversation Guide's "add a location" dead end):
+    // was hardcoded "" with a comment claiming routines have no locPath concept
+    // either -- Where was shown, editable and looked like it worked, but
+    // buildRoutineFromCurrentForm() never read it back, so anything typed here
+    // silently vanished on Save. Now prefills like the plain-event form does
+    // (search "fLoc.value = (ev.locPath" for its twin) and buildRoutineFromCurrentForm
+    // actually saves it -- see that function's own matching fix.
+    fLoc.value = (task.locPath || []).join(" > ");
     formKind = "event"; syncKind();
     fCat.value = task.category || "";
     formSelectedMode = task.mode || ""; fModePickerExpanded = false; renderFModePicker();
@@ -62987,6 +62996,15 @@
     if (mode) task.mode = mode;
     if (goalVal) task.goal = goalVal;
     if (start) task.start = start;
+    // 2026-09-15 (fixing the Conversation Guide's "add a location" dead end):
+    // ROUTINE_TASKS now carries a location -- generatedFor()'s two routine-
+    // occurrence branches (search "kind: \"routine\", allDay: false, fromRoutine")
+    // copy it onto each day's occurrence the same way they already copy
+    // category/note/fitLink, so locOf(e) resolves for a routine occurrence just
+    // like it always has for a plain event. This is the write half;
+    // openEventFormForRoutine()'s matching prefill fix is the read half.
+    const locVal = parseLocPath(fLoc.value);
+    if (locVal.length) task.locPath = locVal;
     const subtasks = readRtnSubs(fSubList);
     // 2026-09-01: Set-total/From-steps toggle is back (search fSubDurMode's own
     // declaration) -- steps' own minutes decide the length once any exist,
@@ -63141,19 +63159,17 @@
     // streak silently empties"). Write-then-remove, in that order -- if the
     // routine build fails validation (buildRoutineFromCurrentForm returns null,
     // e.g. an empty weekly pattern), the event must still be there.
-    // ROUTINE_TASKS has no location or partner-assignment concept (see
-    // openEventFormForRoutine()'s own "no who/locPath concept" comment) -- an
-    // event holding either is the one thing this move can't carry silently, so
-    // Save says so and lets her decide rather than dropping it without asking.
+    // ROUTINE_TASKS still has no partner-assignment concept (2026-09-15: it DOES
+    // now carry a location -- see buildRoutineFromCurrentForm()'s own fix -- so
+    // this warning no longer mentions location, only the one thing that still
+    // can't carry over silently) -- an event holding a partner assignment is
+    // what Save now warns about, rather than dropping it without asking.
     if (fRepeatChoice !== "none" && eventEditId && !editingRoutineId) {
       const ev = EVENTS.find(x => x.id === eventEditId);
       if (!ev) return;
-      const loc = parseLocPath(fLoc.value);
       const partnerAssigned = !!(ev.who && ev.who !== "me");
       let msg = "This will become a repeating event.";
-      if (loc.length && partnerAssigned) msg += " Its location and partner assignment won't carry over — repeating events don't have either.";
-      else if (loc.length) msg += " Its location won't carry over — repeating events don't have one.";
-      else if (partnerAssigned) msg += " Its partner assignment won't carry over — repeating events don't have one.";
+      if (partnerAssigned) msg += " Its partner assignment won't carry over — repeating events don't have one.";
       if (!confirm(msg)) return;
       // capture the id now -- closeForm() (called a few lines below) resets both
       // eventEditId and editingRoutineId to null, and the undo closure below runs
