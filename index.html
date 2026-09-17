@@ -4014,21 +4014,19 @@
   .tl-guide-log-row { display: flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; }
   .tl-guide-log-date { font-variant-numeric: tabular-nums; color: var(--ink-faint); flex: none; }
   .tl-guide-log-note { color: var(--ink-faint); font-style: italic; overflow-wrap: anywhere; }
-  .tl-guide-empty {
-    display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; font-size: 12.5px; font-weight: 600;
-    color: var(--ink-soft); background: color-mix(in oklab, var(--accent-seed) 5%, var(--paper)); border: 1px dashed var(--note-line);
-    cursor: pointer; }
-  .tl-guide-empty:hover { border-color: var(--accent-seed); color: var(--accent-seed); }
-  /* 2026-09-15 — the no-location state: a quiet fixture (not a button itself,
-     since the icon+text carry no action of their own) with one small trailing
-     button that routes to Edit's own "Where" field. */
-  .tl-guide-noplace { display: flex; align-items: center; gap: 8px; }
-  .tl-guide-noplace-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink-faint); font-style: italic; overflow-wrap: anywhere; }
-  .tl-guide-noplace-btn {
-    flex: none; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
-    font: inherit; font-size: 11.5px; font-weight: 700; padding: 6px 14px; white-space: nowrap;
-    border: 1px solid var(--note-line); border-radius: 999px; background: var(--paper); color: var(--ink-soft); cursor: pointer; }
-  .tl-guide-noplace-btn:hover { border-color: var(--accent-seed); color: var(--accent-seed); }
+  /* 2026-09-17 (synth22): an ephemeral draft's Opener/Small talk/Closer are now
+     inline-editable text inputs, same visual language as the Remember field
+     right below them -- no separate "add"/"no place" states any more (every
+     event gets this card, see eventGuideContext/guideWorthShowing). */
+  .tl-guide-draft-input {
+    width: 100%; box-sizing: border-box; padding: 8px 10px; font: inherit; font-size: 12.5px;
+    border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink); }
+  .tl-guide-draft-save {
+    align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+    font: inherit; font-size: 11.5px; font-weight: 700; padding: 6px 18px;
+    border: none; border-radius: 999px; background: var(--margin-rule); color: var(--accent-on); cursor: pointer; }
+  /* .tl-guide-form* below stays live -- the C3 library page's own New/Edit guide
+     editor (renderGuidesPage) still uses this exact shape. */
   .tl-guide-form { display: flex; flex-direction: column; gap: 10px; }
   .tl-guide-form-title { font-size: 12px; font-weight: 700; color: var(--ink); }
   .tl-guide-form-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-faint); }
@@ -4344,6 +4342,16 @@
     border: none; background: none; padding: 0 0 0 6px; font-size: 13px; line-height: 1; cursor: pointer;
     position: relative; z-index: 1; flex: none;
   }
+  /* 2026-09-17 (synth22, "right when you mark the event done") -- the debrief
+     popover a tick opens for a conversation-worthy event, same fixed/z-index/
+     radius/shadow recipe as .travel-peek-pop just above. */
+  .guide-debrief-pop {
+    position: fixed; z-index: 300; width: min(230px, calc(100vw - 32px));
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
+    box-shadow: var(--page-shadow); padding: 12px 14px;
+    max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .guide-debrief-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
   .df-num { display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding-right: 16px; border-right: 1px solid var(--note-line); min-width: 78px; }
   .df-n { font-family: var(--font-display); font-size: 46px; line-height: 1; color: var(--margin-rule); font-variant-numeric: tabular-nums; }
@@ -31094,12 +31102,88 @@
   // specific place named ("Lift" inside "Home › Lift", or a bare "Kebab shop")
   // -- so a guide doesn't need the whole path repeated to match it.
   const guideByPlace = place => place
-    ? GUIDES.find(g => g.place.toLowerCase() === String(place).toLowerCase())
+    ? GUIDES.find(g => g.place && g.place.toLowerCase() === String(place).toLowerCase())
     : null;
+  // 2026-09-17 (synth22, "match by person too, fall back to ad-hoc"): a guide can
+  // now also be keyed to a PERSON (g.person) instead of a place -- events have no
+  // formal attendee field, so the match is a whole-word, case-insensitive search
+  // for a known name inside the event's own title ("Coffee with Sarah" matches a
+  // guide whose person is "Sarah"). "Known" = anyone already in PEOPLE, or anyone
+  // who already has a guide keyed to them -- never a guess at an unknown word.
+  const guideByPerson = name => name
+    ? GUIDES.find(g => g.person && g.person.toLowerCase() === String(name).toLowerCase())
+    : null;
+  function personNameInTitle(title) {
+    if (!title) return null;
+    const known = new Set();
+    PEOPLE.forEach(p => p.name && known.add(p.name));
+    GUIDES.forEach(g => g.person && known.add(g.person));
+    for (const name of known) {
+      const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      if (re.test(title)) return name;
+    }
+    return null;
+  }
+  // place first (the original, most specific match), then person -- a real saved
+  // guide only, same contract as before this date; null means "nothing saved yet",
+  // not "nothing to prep" -- see eventGuideContext below for the ad-hoc fallback.
   const guideForEvent = e => {
     const path = locOf(e);
-    return path.length ? guideByPlace(path[path.length - 1]) : null;
+    const byPlace = path.length ? guideByPlace(path[path.length - 1]) : null;
+    if (byPlace) return byPlace;
+    return guideByPerson(personNameInTitle(e.title));
   };
+  // 2026-09-17 (synth22, "every event needs conversation preparation and debrief"
+  // + "make it seamless"): the generalized version every render site should call
+  // instead of guideForEvent -- ALWAYS returns a guide-shaped object, never null,
+  // so Plan/Live/Wrapup/History can render for literally any event. When nothing
+  // is saved yet it returns an unsaved EPHEMERAL draft keyed off the event's own
+  // place/person, blank fields ready to fill in on the spot. guideWorthShowing
+  // decides whether that draft is worth putting on screen at all -- an empty one
+  // on a solo routine (Sleep, skincare) renders nothing, per her "seamless, not
+  // more clicking" instruction; a real guide, or a draft with a place/person to
+  // hang a quiet "+ Add" prompt on, still shows.
+  function eventGuideContext(e) {
+    const real = guideForEvent(e);
+    if (real) return real;
+    const path = locOf(e);
+    return {
+      id: null, ephemeral: true,
+      place: path.length ? path[path.length - 1] : "",
+      person: personNameInTitle(e.title) || "",
+      icon: "💬", open: "", chat: "", close: "", remember: "", log: [],
+    };
+  }
+  const guideWorthShowing = g => !!(g && (g.open || g.chat || g.close || g.remember || (g.log && g.log.length)));
+  // promotes an ephemeral draft into a real, persisted GUIDES entry the moment it
+  // earns its first real content -- the library builds itself from lived
+  // debriefs instead of needing separate setup (her explicit "seamless" design).
+  // A no-op returning the same object for an already-real guide, so every save
+  // path can call this unconditionally rather than checking .ephemeral itself.
+  function promoteEphemeralGuide(g) {
+    if (!g || !g.ephemeral) return g;
+    const real = { id: uid(), place: g.place || "", person: g.person || "", icon: g.icon || "💬",
+      open: g.open || "", chat: g.chat || "", close: g.close || "", remember: g.remember || "",
+      log: g.log && g.log.length ? g.log.slice() : [] };
+    GUIDES.push(real);
+    saveGuides();
+    return real;
+  }
+  // every guide-log/remember/draft-save click handler below carries a "ref" string
+  // in its data attribute rather than a raw GUIDES id -- either a real id, or the
+  // "eph:<eventId>" sentinel a render pass emits for an unsaved ephemeral draft
+  // (see eventGuideContext/guideRowHtml). This is the one place that turns either
+  // shape back into a real, persisted guide, promoting on first use -- so every
+  // handler can call it unconditionally instead of re-deriving the ephemeral case
+  // itself.
+  function resolveGuideRef(ref) {
+    if (!ref) return null;
+    if (ref.indexOf("eph:") === 0) {
+      const ev = TL_ITEMS_BY_ID[ref.slice(4)];
+      return ev ? promoteEphemeralGuide(eventGuideContext(ev)) : null;
+    }
+    return GUIDES.find(x => x.id === ref) || null;
+  }
 
   const GUIDE_OUTCOMES = [
     { id: "good", label: "Good chat", icon: "😊" },
@@ -33354,11 +33438,6 @@
   // same survive-refresh reason as tlOvrScope above. openTlDetail() resets it so
   // every freshly-opened item starts collapsed, matching "less busy by default".
   let tlGuideOpenId = null;
-  // whether the inline "add a guide for this place" mini-form is showing, and its
-  // in-progress field values -- also reset on openTlDetail() so a half-filled
-  // draft never leaks from one event's sheet into another's.
-  let tlGuideCreating = false;
-  let tlGuideDraft = null;
   // which guide's Remember field is mid-edit (kept separate from the dated
   // outcome log below it -- Remember is one curated line, not another entry).
   let tlGuideRememberEditId = null;
@@ -33502,80 +33581,64 @@
     // above it.
     const fitLinkHtml = e.fitLink ? `<div class="tl-detail-fitlink">🏋 Ticking this off also logs a ${esc(e.fitLink)} session</div>` : "";
     const plainNoteHtml = (!hasRtnExtras && e.note) ? `<div class="tl-detail-row tl-detail-row-note">${glyphHtml("📝", "tl-detail-em")}<span class="tl-detail-note-text">${esc(e.note)}</span></div>` : "";
-    // 2026-09-14 (Conversation Guide): the matched place-guide, if any -- collapsed
-    // by default (icon + place + last-time's tone nudge + the outcome chips, all
-    // usable without expanding, so logging never costs an extra tap), expanding on
-    // tap to the full Opener/Small talk/Closer + Remember + recent log history. A
-    // place with no guide yet shows a quiet add-prompt instead of nothing, since
-    // guides are meant to be BUILT from real places over time (her decision:
-    // "quick-add from an event, plus a library page"), not pre-populated for her.
-    const guidePlace = path.length ? path[path.length - 1] : "";
-    const guideMatch = guidePlace ? guideByPlace(guidePlace) : null;
-    const guideOpen = !!(guideMatch && tlGuideOpenId === guideMatch.id);
-    const guideNudge = guideMatch ? guideNudgeText(guideMatch) : "";
-    const guideRememberEditing = !!(guideMatch && tlGuideRememberEditId === guideMatch.id);
-    const guideRememberHtml = guideMatch ? `<div class="tl-guide-line tl-guide-remember">
+    // 2026-09-17 (synth22, "every event needs conversation preparation and
+    // debrief" + "match by person too, fall back to ad-hoc" + "make it seamless"):
+    // REWRITTEN from the original place-only version (2026-09-14) -- eventGuideContext
+    // now resolves EVERY event to a guide-shaped object (place match -> person match
+    // -> a blank ephemeral draft), so this card can render for any event, not just
+    // ones with a matching place already in the library. guideWorthShowing keeps it
+    // OFF a solo routine with no place/person and nothing logged yet (Sleep,
+    // skincare) -- zero clutter, per her "seamless, not more clicking" instruction.
+    // The Opener/Small talk/Closer fields are inline-editable the first time (the
+    // ephemeral case) and read-only once a real guide already has content -- editing
+    // an established guide's script stays the C3 library page's job, so this card
+    // doesn't grow two competing editors for the same fields.
+    const guideCtx = eventGuideContext(e);
+    const guideRef = guideCtx.id || ("eph:" + e.id);
+    const guideOpen = tlGuideOpenId === guideRef;
+    const guideShow = guideWorthShowing(guideCtx) || !!guideCtx.place || !!guideCtx.person;
+    const guideNudge = !guideCtx.ephemeral ? guideNudgeText(guideCtx) : "";
+    const guideRememberEditing = tlGuideRememberEditId === guideRef;
+    const guideHeadLabel = guideCtx.place || guideCtx.person || "This one";
+    const guideRememberHtml = guideShow ? `<div class="tl-guide-line tl-guide-remember">
         <span class="tl-guide-label">Remember</span>
         ${guideRememberEditing
-          ? `<span class="tl-guide-remember-edit-wrap"><textarea rows="2" class="tl-guide-remember-input" data-guide-remember-input="${guideMatch.id}" placeholder="Anything to keep in mind about this place">${esc(guideMatch.remember || "")}</textarea><button type="button" class="tl-guide-remember-save" data-guide-remember-save="${guideMatch.id}">Save</button></span>`
-          : `<button type="button" class="tl-guide-remember-btn" data-guide-remember-open="${guideMatch.id}">${guideMatch.remember ? esc(guideMatch.remember) : "+ Add something to remember about this place"}</button>`}
+          ? `<span class="tl-guide-remember-edit-wrap"><textarea rows="2" class="tl-guide-remember-input" data-guide-remember-input="${guideRef}" placeholder="Anything to keep in mind">${esc(guideCtx.remember || "")}</textarea><button type="button" class="tl-guide-remember-save" data-guide-remember-save="${guideRef}">Save</button></span>`
+          : `<button type="button" class="tl-guide-remember-btn" data-guide-remember-open="${guideRef}">${guideCtx.remember ? esc(guideCtx.remember) : "+ Add something to remember"}</button>`}
       </div>` : "";
-    const guideLogHtml = guideMatch && guideMatch.log && guideMatch.log.length
-      ? `<div class="tl-guide-log">${guideMatch.log.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3).map(l => {
+    const guideLogHtml = guideCtx.log && guideCtx.log.length
+      ? `<div class="tl-guide-log">${guideCtx.log.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).slice(0, 3).map(l => {
           const o = GUIDE_OUTCOMES.find(x => x.id === l.outcome);
           return `<div class="tl-guide-log-row"><span class="tl-guide-log-date">${esc(l.date)}</span><span class="tl-guide-log-outcome">${o ? o.icon : ""} ${o ? esc(o.label) : ""}</span>${l.note ? `<span class="tl-guide-log-note">${esc(l.note)}</span>` : ""}</div>`;
         }).join("")}</div>` : "";
-    const guideBodyHtml = guideMatch && guideOpen ? `<div class="tl-guide-body">
-        <div class="tl-guide-line"><span class="tl-guide-label">Opener</span>${esc(guideMatch.open || "")}</div>
-        <div class="tl-guide-line"><span class="tl-guide-label">Small talk</span>${esc(guideMatch.chat || "")}</div>
-        <div class="tl-guide-line"><span class="tl-guide-label">Closer</span>${esc(guideMatch.close || "")}</div>
+    const guideScriptHtml = guideCtx.ephemeral
+      ? `<div class="tl-guide-line"><span class="tl-guide-label">Opener</span><input type="text" class="tl-guide-draft-input" data-guide-draft-field="open" placeholder="e.g. Good morning — a brief nod is plenty."></div>
+        <div class="tl-guide-line"><span class="tl-guide-label">Small talk</span><input type="text" class="tl-guide-draft-input" data-guide-draft-field="chat" placeholder="What's usually safe to say"></div>
+        <div class="tl-guide-line"><span class="tl-guide-label">Closer</span><input type="text" class="tl-guide-draft-input" data-guide-draft-field="close" placeholder="How to wrap it up"></div>
+        <button type="button" class="tl-guide-draft-save" data-guide-draft-save="${guideRef}">Save</button>`
+      : `<div class="tl-guide-line"><span class="tl-guide-label">Opener</span>${esc(guideCtx.open || "")}</div>
+        <div class="tl-guide-line"><span class="tl-guide-label">Small talk</span>${esc(guideCtx.chat || "")}</div>
+        <div class="tl-guide-line"><span class="tl-guide-label">Closer</span>${esc(guideCtx.close || "")}</div>`;
+    const guideBodyHtml = guideShow && guideOpen ? `<div class="tl-guide-body">
+        ${guideScriptHtml}
         ${guideRememberHtml}
         ${guideLogHtml}
       </div>` : "";
-    const guideChipsHtml = guideMatch ? `<div class="tl-guide-log-input-row">
-        <input type="text" class="tl-guide-note-input" data-guide-note-for="${guideMatch.id}" placeholder="Optional note…" maxlength="140">
+    const guideChipsHtml = guideShow ? `<div class="tl-guide-log-input-row">
+        <input type="text" class="tl-guide-note-input" data-guide-note-for="${guideRef}" placeholder="Optional note…" maxlength="140">
       </div>
       <div class="tl-guide-chips">${GUIDE_OUTCOMES.map(o =>
-        `<button type="button" class="tl-guide-chip" data-guide-log="${guideMatch.id}" data-outcome="${o.id}">${o.icon} ${esc(o.label)}</button>`
+        `<button type="button" class="tl-guide-chip" data-guide-log="${guideRef}" data-outcome="${o.id}">${o.icon} ${esc(o.label)}</button>`
       ).join("")}</div>` : "";
-    const guideRowHtml = guideMatch ? `<div class="tl-detail-guide">
-        <button type="button" class="tl-guide-head" data-guide-toggle="${guideMatch.id}" aria-expanded="${guideOpen}">
-          <span class="tl-guide-icon">${guideMatch.icon || "💬"}</span>
-          <span class="tl-guide-headtext"><span class="tl-guide-place">${esc(guideMatch.place)}</span>${guideNudge ? `<span class="tl-guide-nudge">${esc(guideNudge)}</span>` : ""}</span>
+    const guideRowHtml = guideShow ? `<div class="tl-detail-guide">
+        <button type="button" class="tl-guide-head" data-guide-toggle="${guideRef}" aria-expanded="${guideOpen}">
+          <span class="tl-guide-icon">${guideCtx.icon || "💬"}</span>
+          <span class="tl-guide-headtext"><span class="tl-guide-place">${esc(guideHeadLabel)}</span>${guideNudge ? `<span class="tl-guide-nudge">${esc(guideNudge)}</span>` : ""}</span>
           <span class="tl-guide-chev">${guideOpen ? "▾" : "▸"}</span>
         </button>
         ${guideChipsHtml}
         ${guideBodyHtml}
-      </div>` : (guidePlace ? (tlGuideCreating ? `<div class="tl-detail-guide tl-guide-form">
-            <div class="tl-guide-form-title">New guide for ${esc(guidePlace)}</div>
-            <label class="tl-guide-form-field"><span>Opener</span><textarea rows="2" data-guide-draft="open" placeholder="e.g. Good morning — a brief nod is plenty.">${esc((tlGuideDraft && tlGuideDraft.open) || "")}</textarea></label>
-            <label class="tl-guide-form-field"><span>Small talk</span><textarea rows="2" data-guide-draft="chat" placeholder="What's usually safe to say">${esc((tlGuideDraft && tlGuideDraft.chat) || "")}</textarea></label>
-            <label class="tl-guide-form-field"><span>Closer</span><textarea rows="2" data-guide-draft="close" placeholder="How to wrap it up">${esc((tlGuideDraft && tlGuideDraft.close) || "")}</textarea></label>
-            <label class="tl-guide-form-field"><span>Remember</span><textarea rows="2" data-guide-draft="remember" placeholder="Optional — anything to keep in mind">${esc((tlGuideDraft && tlGuideDraft.remember) || "")}</textarea></label>
-            <div class="tl-guide-form-actions">
-              <button type="button" class="tl-guide-form-cancel" data-guide-cancel="1">Cancel</button>
-              <button type="button" class="tl-guide-form-save" data-guide-save="1">Save guide</button>
-            </div>
-          </div>` : `<button type="button" class="tl-detail-guide tl-guide-empty" data-guide-add="${esc(guidePlace)}">${glyphHtml("💬", "tl-detail-em")}<span>Add a conversation guide for ${esc(guidePlace)}</span></button>`
-      ) : (() => {
-        // 2026-09-15 (Linh: "include small card regardless of location, which
-        // changes from location"): the card no longer disappears when an event
-        // has no place at all -- it stays a visible, discoverable fixture of the
-        // sheet, and its own content is what changes with the location (matched
-        // guide / add-a-guide / this no-place prompt). Reuses the exact same
-        // Edit-button routing deskEditAttr uses further down (data-edit for a
-        // plain event, data-rt-open for a routine occurrence, data-tl-toggle-edit
-        // for fitcal) rather than a new control, since Edit's own "Where" field
-        // (fLoc) is already the one place a location gets typed.
-        const guideEditAttr = !e.generated ? `data-edit="${e.id}"`
-          : e.rtTaskId ? `data-rt-open="${e.rtTaskId}"`
-          : e.id.indexOf("fitcal-") === 0 ? "data-tl-toggle-edit" : "";
-        return `<div class="tl-detail-guide tl-guide-noplace">
-          <span class="tl-guide-icon">💬</span>
-          <span class="tl-guide-noplace-text">Add a location to attach a conversation guide</span>
-          ${guideEditAttr ? `<button type="button" class="tl-guide-noplace-btn" ${guideEditAttr}>Add location</button>` : ""}
-        </div>`;
-      })());
+      </div>` : "";
     const fitResolved = resolveFitSessionFor(e);
     const fs = fitResolved && fitResolved.sess;
     // The star rating stays OUT of this panel, in the default view -- only the
@@ -34164,8 +34227,6 @@
     tlOvrScope = "day";
     tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
     tlGuideOpenId = null;
-    tlGuideCreating = false;
-    tlGuideDraft = null;
     tlGuideRememberEditId = null;
     tlProfileStage = "plan";
     animateSheetOpen(document.getElementById("tlDetailOverlay"));
@@ -34281,18 +34342,19 @@
     const timeRow = `<div class="tl-detail-row">${glyphHtml("🕐", "tl-detail-em")}<span>${timeLabel}</span></div>`;
     const stepsHtml = tlProfileStepsHtml(e);
     if (!guideMatch) return `${timeRow}${stepsHtml || `<div class="tl-profile-empty">Nothing to check off for this one.</div>`}`;
+    const guideRef = guideMatch.id || ("eph:" + e.id);
     const whereRow = path.length ? `<div class="tl-detail-row tl-detail-row-where">${glyphHtml("📍", "tl-detail-em")}<span>${path.map(esc).join(" › ")}</span></div>` : "";
     const nudge = guideNudgeText(guideMatch);
     const openerHtml = `<div class="tl-detail-guide">
         <div class="tl-guide-line"><span class="tl-guide-label">Opener</span>${esc(guideMatch.open || "")}</div>
         ${nudge ? `<div class="tl-guide-nudge">${esc(nudge)}</div>` : ""}
       </div>`;
-    const rememberEditing = tlGuideRememberEditId === guideMatch.id;
+    const rememberEditing = tlGuideRememberEditId === guideRef;
     const rememberHtml = `<div class="tl-guide-line tl-guide-remember">
         <span class="tl-guide-label">Remember</span>
         ${rememberEditing
-          ? `<span class="tl-guide-remember-edit-wrap"><textarea rows="2" class="tl-guide-remember-input" data-guide-remember-input="${guideMatch.id}" placeholder="Anything to keep in mind about this place">${esc(guideMatch.remember || "")}</textarea><button type="button" class="tl-guide-remember-save" data-guide-remember-save="${guideMatch.id}">Save</button></span>`
-          : `<button type="button" class="tl-guide-remember-btn" data-guide-remember-open="${guideMatch.id}">${guideMatch.remember ? esc(guideMatch.remember) : "+ Add something to remember about this place"}</button>`}
+          ? `<span class="tl-guide-remember-edit-wrap"><textarea rows="2" class="tl-guide-remember-input" data-guide-remember-input="${guideRef}" placeholder="Anything to keep in mind">${esc(guideMatch.remember || "")}</textarea><button type="button" class="tl-guide-remember-save" data-guide-remember-save="${guideRef}">Save</button></span>`
+          : `<button type="button" class="tl-guide-remember-btn" data-guide-remember-open="${guideRef}">${guideMatch.remember ? esc(guideMatch.remember) : "+ Add something to remember"}</button>`}
       </div>`;
     return `${timeRow}${whereRow}${stepsHtml}${openerHtml}${rememberHtml}`;
   }
@@ -34318,11 +34380,12 @@
     const done = isDone(e.id);
     const doneBtn = `<button type="button" class="tl-profile-done-btn" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>✓ ${done ? "Done" : "Mark done"}</button>`;
     if (!guideMatch) return doneBtn;
+    const guideRef = guideMatch.id || ("eph:" + e.id);
     const chipsHtml = `<div class="tl-guide-log-input-row">
-        <input type="text" class="tl-guide-note-input" data-guide-note-for="${guideMatch.id}" placeholder="Optional note…" maxlength="140">
+        <input type="text" class="tl-guide-note-input" data-guide-note-for="${guideRef}" placeholder="Optional note…" maxlength="140">
       </div>
       <div class="tl-guide-chips">${GUIDE_OUTCOMES.map(o =>
-        `<button type="button" class="tl-guide-chip" data-guide-log="${guideMatch.id}" data-outcome="${o.id}">${o.icon} ${esc(o.label)}</button>`
+        `<button type="button" class="tl-guide-chip" data-guide-log="${guideRef}" data-outcome="${o.id}">${o.icon} ${esc(o.label)}</button>`
       ).join("")}</div>`;
     return `<div class="tl-detail-guide">
         <div class="tl-guide-line"><span class="tl-guide-label">Closer</span>${esc(guideMatch.close || "")}</div>
@@ -34349,7 +34412,15 @@
   }
   function renderTlProfile(e) {
     const path = locOf(e);
-    const guideMatch = guideForEvent(e);
+    // 2026-09-17 (synth22): eventGuideContext (place -> person -> ephemeral draft)
+    // instead of the real-only guideForEvent, same generalization as the main
+    // detail sheet -- gated by guideWorthShowing so a still-blank ephemeral draft
+    // on a solo routine doesn't grow empty Opener/Closer/chip rows here either.
+    // Filling in an ephemeral draft's script fields is the main detail sheet's
+    // job (it has the inline editor); once promoted, this view picks it up same
+    // as any other real guide.
+    const guideCtxFull = eventGuideContext(e);
+    const guideMatch = (guideWorthShowing(guideCtxFull) || guideCtxFull.place || guideCtxFull.person) ? guideCtxFull : null;
     const isRtnOcc = !!(e.fromRoutine && e.rtTaskId && parseOccId(e.id));
     const rtnT = isRtnOcc ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
     document.getElementById("tlProfileStages").innerHTML = TL_PROFILE_STAGES.map(s =>
@@ -34405,10 +34476,12 @@
     const guideLogBtn = e.target.closest("[data-guide-log]");
     if (guideLogBtn) {
       e.stopPropagation();
-      const id = guideLogBtn.dataset.guideLog;
-      const outcome = guideLogBtn.dataset.outcome;
-      const noteInput = guideLogBtn.closest(".tl-detail-guide")?.querySelector(".tl-guide-note-input");
-      addGuideLog(id, outcome, noteInput ? noteInput.value.trim() : "");
+      const g = resolveGuideRef(guideLogBtn.dataset.guideLog);
+      if (g) {
+        const outcome = guideLogBtn.dataset.outcome;
+        const noteInput = guideLogBtn.closest(".tl-detail-guide")?.querySelector(".tl-guide-note-input");
+        addGuideLog(g.id, outcome, noteInput ? noteInput.value.trim() : "");
+      }
       refreshOpenTlProfile();
       refreshOpenTlDetail();
       return;
@@ -34423,8 +34496,7 @@
     const remSaveBtn = e.target.closest("[data-guide-remember-save]");
     if (remSaveBtn) {
       e.stopPropagation();
-      const id = remSaveBtn.dataset.guideRememberSave;
-      const g = GUIDES.find(x => x.id === id);
+      const g = resolveGuideRef(remSaveBtn.dataset.guideRememberSave);
       const input = remSaveBtn.closest(".tl-guide-remember")?.querySelector(".tl-guide-remember-input");
       if (g) { g.remember = input ? input.value.trim() : ""; saveGuides(); }
       tlGuideRememberEditId = null;
@@ -34847,19 +34919,21 @@
     const guideToggleBtn = e.target.closest("[data-guide-toggle]");
     if (guideToggleBtn) {
       e.stopPropagation();
-      const id = guideToggleBtn.dataset.guideToggle;
-      tlGuideOpenId = tlGuideOpenId === id ? null : id;
+      const ref = guideToggleBtn.dataset.guideToggle;
+      tlGuideOpenId = tlGuideOpenId === ref ? null : ref;
       refreshOpenTlDetail();
       return;
     }
     const guideLogBtn = e.target.closest("[data-guide-log]");
     if (guideLogBtn) {
       e.stopPropagation();
-      const id = guideLogBtn.dataset.guideLog;
-      const outcome = guideLogBtn.dataset.outcome;
-      const noteInput = guideLogBtn.closest(".tl-detail-guide")?.querySelector(".tl-guide-note-input");
-      addGuideLog(id, outcome, noteInput ? noteInput.value.trim() : "");
-      tlGuideOpenId = id;   // show the freshly-logged entry straight away
+      const g = resolveGuideRef(guideLogBtn.dataset.guideLog);
+      if (g) {
+        const outcome = guideLogBtn.dataset.outcome;
+        const noteInput = guideLogBtn.closest(".tl-detail-guide")?.querySelector(".tl-guide-note-input");
+        addGuideLog(g.id, outcome, noteInput ? noteInput.value.trim() : "");
+        tlGuideOpenId = g.id;   // show the freshly-logged entry straight away
+      }
       refreshOpenTlDetail();
       return;
     }
@@ -34873,45 +34947,30 @@
     const guideRemSaveBtn = e.target.closest("[data-guide-remember-save]");
     if (guideRemSaveBtn) {
       e.stopPropagation();
-      const id = guideRemSaveBtn.dataset.guideRememberSave;
-      const g = GUIDES.find(x => x.id === id);
+      const g = resolveGuideRef(guideRemSaveBtn.dataset.guideRememberSave);
       const input = guideRemSaveBtn.closest(".tl-guide-remember")?.querySelector(".tl-guide-remember-input");
-      if (g) { g.remember = input ? input.value.trim() : ""; saveGuides(); }
+      if (g) { g.remember = input ? input.value.trim() : ""; saveGuides(); tlGuideOpenId = g.id; }
       tlGuideRememberEditId = null;
       refreshOpenTlDetail();
       return;
     }
-    const guideAddBtn = e.target.closest("[data-guide-add]");
-    if (guideAddBtn) {
+    // 2026-09-17 (synth22): replaces the old separate tlGuideCreating/tlGuideDraft
+    // "New guide" form -- an ephemeral draft's Opener/Small talk/Closer are now
+    // inline-editable the moment the card is expanded (see guideScriptHtml in
+    // renderTlDetailBody), so there's no separate create step. Saving here
+    // promotes the draft into a real GUIDES entry via resolveGuideRef the same
+    // way a chip tap or a remember-save already does.
+    const guideDraftSaveBtn = e.target.closest("[data-guide-draft-save]");
+    if (guideDraftSaveBtn) {
       e.stopPropagation();
-      tlGuideCreating = true;
-      tlGuideDraft = { open: "", chat: "", close: "", remember: "" };
-      refreshOpenTlDetail();
-      return;
-    }
-    const guideCancelBtn = e.target.closest("[data-guide-cancel]");
-    if (guideCancelBtn) {
-      e.stopPropagation();
-      tlGuideCreating = false;
-      tlGuideDraft = null;
-      refreshOpenTlDetail();
-      return;
-    }
-    const guideSaveBtn = e.target.closest("[data-guide-save]");
-    if (guideSaveBtn) {
-      e.stopPropagation();
-      const form = guideSaveBtn.closest(".tl-guide-form");
-      const field = name => (form?.querySelector(`[data-guide-draft="${name}"]`)?.value || "").trim();
-      const item = TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
-      const place = item ? locOf(item).slice(-1)[0] : "";
-      if (place) {
-        const g = { id: uid(), place, icon: "💬", open: field("open"), chat: field("chat"), close: field("close"), remember: field("remember"), log: [] };
-        GUIDES.push(g);
+      const wrap = guideDraftSaveBtn.closest(".tl-guide-body");
+      const field = name => (wrap?.querySelector(`[data-guide-draft-field="${name}"]`)?.value || "").trim();
+      const g = resolveGuideRef(guideDraftSaveBtn.dataset.guideDraftSave);
+      if (g) {
+        g.open = field("open"); g.chat = field("chat"); g.close = field("close");
         saveGuides();
         tlGuideOpenId = g.id;
       }
-      tlGuideCreating = false;
-      tlGuideDraft = null;
       refreshOpenTlDetail();
       return;
     }
@@ -58687,8 +58746,25 @@
     if (tickEv) {
       const willBeOn = tickEv.dataset.on !== "true";
       celebrateIfDone(tickEv, willBeOn);   // reads the still-attached node's position before renderDay() replaces it
-      tickTask(tickEv.dataset.tickEv, willBeOn, tickEv.dataset.fitLink, tickEv.dataset.fitDate);
+      const tickedId = tickEv.dataset.tickEv;
+      // 2026-09-17 (synth22, "when i mark it done, prompt debrief" -- her pick,
+      // "right when you mark the event done"): captured BEFORE renderDay() below
+      // replaces this node, same reason celebrateIfDone reads its rect first.
+      // Only for an event that already has something worth prepping for (a real
+      // guide, or a place/person a draft could key off) -- a routine with no
+      // place/person signal (Sleep, skincare) never gets this either, matching
+      // guideRowHtml's own visibility gate so debrief and prep agree on which
+      // events are "conversation events" and which aren't.
+      const tickedEv = willBeOn ? TL_ITEMS_BY_ID[tickedId] : null;
+      const tickedGuideCtx = tickedEv ? eventGuideContext(tickedEv) : null;
+      const debriefWorthy = tickedGuideCtx && (guideWorthShowing(tickedGuideCtx) || tickedGuideCtx.place || tickedGuideCtx.person);
+      // renderDay() below replaces this node synchronously (same reason
+      // celebrateIfDone above reads its rect first) -- capture the anchor point
+      // now, pass plain numbers, never the element itself.
+      const tickRect = debriefWorthy ? tickEv.getBoundingClientRect() : null;
+      tickTask(tickedId, willBeOn, tickEv.dataset.fitLink, tickEv.dataset.fitDate);
       renderDay();
+      if (debriefWorthy) openGuideDebriefPop(tickRect, tickedId);
       return;
     }
     // edit a hand-written event — or, when the id matches a recurring-event
@@ -61914,6 +61990,68 @@
     renderTravelPeek();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeTravelPeek(); });
+  // 2026-09-17 (synth22, "when i mark it done, prompt debrief" -- her pick "right
+  // when you mark the event done"): a tick on a conversation-worthy event (see
+  // the debriefWorthy check in the main tick delegate, search "eventGuideContext")
+  // opens this small popover instead of the full detail sheet -- one outcome-chip
+  // tap logs it and closes, no note field, no navigation. Same
+  // hoisted-to-body/fixed-position/outside-click-or-Escape-closes shape as
+  // .travel-peek-pop just above, for the same reason (the tick system's own
+  // change/re-render machinery would otherwise destroy a popover living inside
+  // the normal render tree mid-interaction).
+  function renderGuideDebriefPop() {
+    const pop = document.querySelector(".guide-debrief-pop");
+    if (!pop || !state.guideDebriefEventId) return;
+    const ev = TL_ITEMS_BY_ID[state.guideDebriefEventId];
+    if (!ev) { closeGuideDebriefPop(); return; }
+    const g = eventGuideContext(ev);
+    const label = g.place || g.person || ev.title;
+    pop.innerHTML = `
+      <div class="guide-debrief-title">💬 How did it go — ${esc(label)}?</div>
+      <div class="tl-guide-chips">${GUIDE_OUTCOMES.map(o =>
+        `<button type="button" class="tl-guide-chip" data-guide-debrief-log="${o.id}">${o.icon} ${esc(o.label)}</button>`
+      ).join("")}</div>`;
+  }
+  function openGuideDebriefPop(rect, eventId) {
+    if (!rect) return;
+    let pop = document.querySelector(".guide-debrief-pop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "guide-debrief-pop";
+      document.body.appendChild(pop);
+    }
+    pop.style.left = `${Math.round(Math.max(12, Math.min(rect.left, window.innerWidth - 250)))}px`;
+    pop.style.top = `${Math.round(Math.min(rect.bottom + 8, window.innerHeight - 160))}px`;
+    state.guideDebriefEventId = eventId;
+    renderGuideDebriefPop();
+  }
+  function closeGuideDebriefPop() {
+    if (!state.guideDebriefEventId) return;
+    state.guideDebriefEventId = null;
+    const pop = document.querySelector(".guide-debrief-pop");
+    if (pop) pop.remove();
+  }
+  document.addEventListener("click", e => {
+    // A tick that just opened the popover (see the #wrap delegate's data-tick-ev
+    // branch, search "debriefWorthy") is an ancestor listener that already ran
+    // by the time this bubbles here -- without this guard, the SAME click that
+    // opens the popover also satisfies "outside click" below (the popover node
+    // didn't exist yet when the click started) and closes it immediately.
+    if (e.target.closest("[data-tick-ev]")) return;
+    const chip = e.target.closest("[data-guide-debrief-log]");
+    if (chip) {
+      const eventId = state.guideDebriefEventId;
+      const ev = eventId && TL_ITEMS_BY_ID[eventId];
+      if (ev) {
+        const g = promoteEphemeralGuide(eventGuideContext(ev));
+        addGuideLog(g.id, chip.dataset.guideDebriefLog, "");
+      }
+      closeGuideDebriefPop();
+      return;
+    }
+    if (state.guideDebriefEventId && !e.target.closest(".guide-debrief-pop")) closeGuideDebriefPop();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeGuideDebriefPop(); });
   // 2026-08-17 (Book33 — rail widgets brief): delegated so every .patients-nudge
   // trigger toggles itself (was #patientsNudge-only) -- #railPatNudge (the "Today's
   // patients" rail card's copy) rides this for free, same reason every other rail
