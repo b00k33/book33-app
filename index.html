@@ -20698,7 +20698,7 @@
       <h1>Kitchen</h1>
     </div>
 
-    <div class="section-head"><h2>Tonight's suggestion</h2><span class="rule"></span></div>
+    <div class="section-head"><h2>Dinner tonight</h2><span class="rule"></span></div>
     <div id="dinnerSuggestion"></div>
 
     <div class="section-head" style="margin-top:32px"><h2>This week's meals</h2><span class="rule"></span></div>
@@ -20788,7 +20788,7 @@
     <div id="recipeList"></div>
 
     <div class="section-head" style="margin-top:32px"><h2>Go-to takeout</h2><span class="rule"></span></div>
-    <div class="span-note" style="display:block;margin-bottom:16px">Fallback for a fast, tired night — tap one in Tonight's suggestion to log it as eating out. Tagged Home or Work so the right list shows up wherever you are today.</div>
+    <div class="span-note" style="display:block;margin-bottom:16px">Fallback for a fast, tired night — tap one in Dinner tonight to log it as eating out. Tagged Home or Work so the right list shows up wherever you are today.</div>
     <div class="add-row" id="takeoutAddRow">
       <button class="add-btn" id="takeoutAddBtn">+ Add a place</button>
     </div>
@@ -40759,14 +40759,32 @@
       </div>
     </div>`;
   }
-  // showActions=false (the Today-page echo) drops the "Show another" cycling button —
-  // it carries a bare #dinnerNextBtn id the click handler looks up by closest(), and
-  // state.dinnerSuggestIdx is a single shared index, not per-host, so cycling from a
-  // second host would leave whichever host isn't showing stale. The Today page just
-  // shows tonight's current pick; cycling through options still happens on Food. The
-  // takeout strip has no such conflict (it's a direct commit, not a cycle) so it
-  // renders on both hosts.
+  // 2026-09-17 (ask28, "what to eat tonight" named directly as a decision the app
+  // should already make): the #1 fridge/cycle/energy match now WRITES itself into
+  // MEALPLAN the first time anything asks for tonight's dinner, instead of only ever
+  // existing as a live-recomputed candidate she had to look at and accept. Once
+  // committed it's a normal planned entry -- stable across re-renders and re-opens,
+  // same path a manual week-plan pick already used. Idempotent: does nothing once
+  // something (this, or her) has already decided tonight.
+  function ensureTonightAutoDecided() {
+    if (!RECIPES.length) return;
+    if (mealEntryFor(keyOf(TODAY))) return;
+    const ranked = rankedRecipeMatches();
+    if (!ranked.length) return;
+    const idx = ((state.dinnerSuggestIdx % ranked.length) + ranked.length) % ranked.length;
+    MEALPLAN[keyOf(TODAY)] = ranked[idx].recipe.id;
+    saveMealPlan();
+    syncShoppingWithMealPlan();
+  }
+  // showActions=false (the Today-page echo) drops the "Change dinner" button — it
+  // carries a bare #dinnerNextBtn id the click handler looks up by closest(), and
+  // state.dinnerSuggestIdx is a single shared index, not per-host, so changing it from
+  // a second host would leave whichever host isn't showing stale. The Today page just
+  // shows tonight's decided dinner; changing it still happens on Food. The takeout
+  // strip has no such conflict (it's a direct commit, not a cycle) so it renders on
+  // both hosts.
   function dinnerSuggestionHTML(showActions) {
+    ensureTonightAutoDecided();
     const qi = cycleQuickInfo(TODAY);
     const cycleLine = qi
       ? `<div class="dinner-cycle-line">Today: <b>CD${qi.cd}</b>${qi.info ? ` · ${qi.info.icon} ${qi.info.label}` : ""}${qi.info ? ` — ${esc(qi.info.nutrition)}` : ""}</div>`
@@ -40781,34 +40799,27 @@
     if (!RECIPES.length) {
       return `<div class="dinner-card">${cycleLine}<div class="fridge-empty">Add a recipe below and I'll match it against what's in the fridge.</div>${takeoutStripHtml()}</div>`;
     }
-    // a dinner planned for tonight in the week plan takes the spotlight;
-    // "Show another" still browses the fridge-ranked suggestions
-    const plannedTonight = tonightEntry && tonightEntry.type === "recipe" ? tonightEntry.recipe : null;
-    let m, badge = "", cycled = false;
-    if (plannedTonight && state.dinnerSuggestIdx === 0) {
-      m = matchRecipe(plannedTonight, fridgeAvailableNames());
-      badge = `<div class="dinner-planned-badge">📌 Planned tonight</div>`;
-    } else {
-      const ranked = rankedRecipeMatches();
-      const idx = ((state.dinnerSuggestIdx % ranked.length) + ranked.length) % ranked.length;
-      m = ranked[idx];
-      cycled = true;
-    }
+    // ensureTonightAutoDecided above means this is now ALWAYS a decided plan by the
+    // time we get here (auto-picked just now, or already planned/decided earlier) --
+    // never a live, not-yet-committed guess she has to evaluate.
+    const decided = tonightEntry.recipe;
+    const m = matchRecipe(decided, fridgeAvailableNames());
     const recipeTags = m.recipe.tags || [];
     const tagChips = recipeTags.length || m.recipe.effort
       ? `<div class="dinner-recipe-tags">${recipeTags.map(t => `<span class="dinner-tag-chip">${RECIPE_TAG_ICON[t]} ${RECIPE_TAG_LABEL[t]}</span>`).join("")}${m.recipe.effort ? `<span class="dinner-tag-chip">${m.recipe.effort === "quick" ? "⚡ Quick" : "🍳 Involved"}</span>` : ""}</div>`
       : "";
     // only claims a reason when this pick actually earned it, so it never reads as a
-    // coincidence dressed up as intelligence
+    // coincidence dressed up as intelligence -- reflects whatever's actually decided,
+    // not just a freshly-cycled pick, since a prior day's plan can still match today.
     let reason = "";
-    if (cycled && qi && qi.info && (PHASE_NUTRIENT_TAGS[qi.phase] || []).some(t => recipeTags.includes(t))) {
+    if (qi && qi.info && (PHASE_NUTRIENT_TAGS[qi.phase] || []).some(t => recipeTags.includes(t))) {
       reason = `<div class="dinner-reason">🎯 Matches today's ${esc(qi.info.label.toLowerCase())} nutrition focus</div>`;
-    } else if (cycled && isLowEnergyDay(TODAY) && m.recipe.effort === "quick") {
+    } else if (isLowEnergyDay(TODAY) && m.recipe.effort === "quick") {
       reason = `<div class="dinner-reason">⚡ Picked quick — today's a lower-energy day</div>`;
     }
     return `<div class="dinner-card">
       ${cycleLine}
-      ${badge}
+      <div class="dinner-planned-badge">📌 Tonight's dinner</div>
       <div class="dinner-recipe-name">${esc(m.recipe.name)}</div>
       ${tagChips}
       ${reason}
@@ -40816,7 +40827,7 @@
       ${m.missing.length ? `<div class="dinner-missing">Missing: ${m.missing.map(esc).join(", ")}</div>`
         : `<div class="dinner-missing" style="color:var(--ink)">Everything's on hand.</div>`}
       ${m.recipe.notes ? `<div class="dinner-notes">${esc(m.recipe.notes)}</div>` : ""}
-      ${showActions && (RECIPES.length > 1 || plannedTonight) ? `<div class="dinner-actions"><button type="button" class="add-btn" id="dinnerNextBtn">Show another →</button></div>` : ""}
+      ${showActions && RECIPES.length > 1 ? `<div class="dinner-actions"><button type="button" class="add-btn" id="dinnerNextBtn">Change dinner</button></div>` : ""}
       ${takeoutStripHtml()}
     </div>`;
   }
@@ -49798,8 +49809,21 @@
   });
 
   /* ---- recipes + dinner suggestion ---- */
+  // "Change dinner" commits the next ranked pick immediately (not a live preview she
+  // still has to accept) -- same decided-by-default contract as ensureTonightAutoDecided,
+  // just re-run on demand instead of only once per day.
   document.getElementById("dinnerSuggestion").addEventListener("click", e => {
-    if (e.target.closest("#dinnerNextBtn")) { state.dinnerSuggestIdx++; renderDinnerSuggestion(); }
+    if (e.target.closest("#dinnerNextBtn")) {
+      state.dinnerSuggestIdx++;
+      const ranked = rankedRecipeMatches();
+      if (ranked.length) {
+        const idx = ((state.dinnerSuggestIdx % ranked.length) + ranked.length) % ranked.length;
+        MEALPLAN[keyOf(TODAY)] = ranked[idx].recipe.id;
+        saveMealPlan();
+        syncShoppingWithMealPlan();
+      }
+      renderDinnerSuggestion();
+    }
   });
   /* ---- week dinner plan ---- */
   document.getElementById("mealPlan").addEventListener("change", e => {
