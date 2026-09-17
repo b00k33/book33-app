@@ -10508,6 +10508,15 @@
   .dinner-missing { font-size: 13px; color: var(--warn); margin-top: 8px; }
   .dinner-notes { font-size: 13px; color: var(--ink-faint); font-style: italic; margin-top: 8px; }
   .dinner-actions { margin-top: 12px; }
+  .dinner-recipe-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .dinner-tag-chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 999px; background: var(--field-bg); color: var(--ink-soft);
+  }
+  .dinner-reason { font-size: 13px; color: var(--margin-rule); margin-top: 8px; }
+  .dinner-takeout { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--note-line); }
+  .dinner-takeout-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); margin-bottom: 8px; }
+  .dinner-takeout-chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .recipe-row { border-top: 1px solid var(--note-line); padding: 12px 0; display: flex; align-items: flex-start; gap: 12px; }
   .recipe-row:first-child { border-top: none; }
   .recipe-row .info { flex: 1; min-width: 0; }
@@ -20750,12 +20759,60 @@
         <label for="recipeNotes">Notes <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
         <input type="text" id="recipeNotes" placeholder="Method, timing, anything worth remembering" autocomplete="off">
       </div>
+      <div class="field full">
+        <label>Nutrient tags <span style="text-transform:none;letter-spacing:0">(optional — matches it to your cycle)</span></label>
+        <div class="lm-chip-row" id="recipeTagChips">
+          <button type="button" class="lm-chip" data-recipe-tag="iron" aria-pressed="false">🥩 Iron</button>
+          <button type="button" class="lm-chip" data-recipe-tag="calcium" aria-pressed="false">🥛 Calcium</button>
+          <button type="button" class="lm-chip" data-recipe-tag="magnesium" aria-pressed="false">🌰 Magnesium</button>
+          <button type="button" class="lm-chip" data-recipe-tag="warming" aria-pressed="false">🔥 Warming</button>
+          <button type="button" class="lm-chip" data-recipe-tag="antioxidant" aria-pressed="false">🫐 Antioxidant</button>
+        </div>
+      </div>
+      <div class="field full">
+        <label>Effort <span style="text-transform:none;letter-spacing:0">(optional — for low-energy days)</span></label>
+        <div class="lm-chip-row" id="recipeEffortChips">
+          <button type="button" class="lm-chip" data-recipe-effort="quick" aria-pressed="false">⚡ Quick &amp; easy</button>
+          <button type="button" class="lm-chip" data-recipe-effort="involved" aria-pressed="false">🍳 More involved</button>
+        </div>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn-cancel" id="recipeCancelBtn">Cancel</button>
         <button type="submit" class="btn-save" id="recipeSubmitBtn">Add recipe</button>
       </div>
     </form>
     <div id="recipeList"></div>
+
+    <div class="section-head" style="margin-top:32px"><h2>Go-to takeout</h2><span class="rule"></span></div>
+    <div class="span-note" style="display:block;margin-bottom:16px">Fallback for a fast, tired night — tap one in Tonight's suggestion to log it as eating out. Tagged Home or Work so the right list shows up wherever you are today.</div>
+    <div class="add-row" id="takeoutAddRow">
+      <button class="add-btn" id="takeoutAddBtn">+ Add a place</button>
+    </div>
+    <form class="add-form" id="takeoutAddForm" hidden>
+      <div class="addform-head-saveonly full">
+        <button type="submit" class="addform-head-save" id="takeoutTopSaveBtn">Save</button>
+      </div>
+      <div class="field full">
+        <label for="takeoutName">Name</label>
+        <input type="text" id="takeoutName" autocomplete="off" required>
+      </div>
+      <div class="field full">
+        <label>Near</label>
+        <div class="lm-chip-row" id="takeoutTagChips">
+          <button type="button" class="lm-chip" data-takeout-tag="home" aria-pressed="false">🏠 Home</button>
+          <button type="button" class="lm-chip" data-takeout-tag="work" aria-pressed="false">🩺 Work</button>
+        </div>
+      </div>
+      <div class="field full">
+        <label for="takeoutNote">Note <span style="text-transform:none;letter-spacing:0">(optional)</span></label>
+        <input type="text" id="takeoutNote" placeholder="Usual order, phone number, anything worth remembering" autocomplete="off">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" id="takeoutCancelBtn">Cancel</button>
+        <button type="submit" class="btn-save" id="takeoutSubmitBtn">Add place</button>
+      </div>
+    </form>
+    <div id="takeoutList"></div>
   </div>
 
   <!-- ================= NUTRITION ================= -->
@@ -29242,6 +29299,21 @@
     if (mealDel && confirm("Delete this meal log?")) deleteMealEntry(mealDel.dataset.mealDate, mealDel.dataset.mealDelete);
     const mealArchRestore = e.target.closest("[data-meal-archive-restore]");
     if (mealArchRestore) { restoreMealFromArchive(mealArchRestore.dataset.mealArchiveRestore); renderRtnArchive(); }
+    // one-tap go-to-takeout pick (dinner suggestion card, Today or Food) -- logs
+    // tonight's dinner as eating out there, same {out,note} shape the meal-plan
+    // dropdown's own "🍽 Eating out" option writes.
+    const takeoutPick = e.target.closest("[data-takeout-pick]");
+    if (takeoutPick) {
+      MEALPLAN[keyOf(TODAY)] = { out: true, note: takeoutPick.dataset.takeoutPick };
+      saveMealPlan();
+      syncShoppingWithMealPlan();
+      state.dinnerSuggestIdx = 0;
+      renderDinnerSuggestion();
+      renderTodayFood();
+      renderMealPlan();
+      if (state.view === "week") renderWeekRows(startOfWeek(state.weekAnchor));
+      if (state.view === "day") renderShopping(state.anchor);
+    }
     // A birthday or belled person-date anywhere in the calendar (Day ribbon, Week/Month
     // chip) opens that person's profile on the People page. openPersonProfile is
     // defined further down (function declaration, hoisted).
@@ -32610,12 +32682,24 @@
   // and returns the patients within its own span — the shared read behind the
   // widget rail's patients card and the legacy rail, so neither invents a
   // second definition of "is this a patient".
+  // shared "is this the CBD Work block" test -- clinicPatientsIn and the go-to-
+  // takeout list's near-work/near-home pick (isWorkLocationToday, food section)
+  // both need it; one definition keeps them from drifting apart.
+  function cbdWorkOccurrenceIn(all) {
+    return all.find(o => o.track === "work" && o.start != null && normTitle(o.title) === "cbd work");
+  }
   function clinicPatientsIn(all) {
-    const cbd = all.find(o => o.track === "work" && o.start != null && normTitle(o.title) === "cbd work");
+    const cbd = cbdWorkOccurrenceIn(all);
     if (!cbd) return [];
     const cs = toMin(cbd.start), ce = itemEndMin(cbd);
     if (cs === null || ce === null) return [];
     return clinicApptItems(all, cs, ce, cbd);
+  }
+  // "today's location" for the takeout list's fixed home/work tag ("fixed tag,
+  // based on today's location") -- true on a day with a real CBD Work block on the
+  // calendar, same structural signal clinicPatientsIn already reads.
+  function isWorkLocationToday() {
+    return !!cbdWorkOccurrenceIn(dayEventsRawFor(TODAY));
   }
   // 2026-08-23 ("merge truly back-to-back same-named blocks"), loosened 2026-08-24
   // ("same-named events on one day aren't all merging"): collapses a RUN of same-
@@ -40257,6 +40341,33 @@
   function saveRecipes() { try { localStorage.setItem(RECIPES_KEY, JSON.stringify(RECIPES)); } catch (e) {} }
   let RECIPES = loadRecipes();
 
+  // 2026-09-17 (synth22, "i need food based on nutrition e.g. cd1-7 ... iron calcium
+  // nutrient dense rich foods"): a recipe optionally carries which of these it's rich
+  // in, plus how much effort it takes — both feed the ranking below, neither is
+  // required (an untagged recipe still ranks, just without the phase/effort boost).
+  const RECIPE_TAGS = [
+    { id: "iron", label: "Iron", icon: "🥩" },
+    { id: "calcium", label: "Calcium", icon: "🥛" },
+    { id: "magnesium", label: "Magnesium", icon: "🌰" },
+    { id: "warming", label: "Warming", icon: "🔥" },
+    { id: "antioxidant", label: "Antioxidant", icon: "🫐" },
+  ];
+  const RECIPE_TAG_ICON = Object.fromEntries(RECIPE_TAGS.map(t => [t.id, t.icon]));
+  const RECIPE_TAG_LABEL = Object.fromEntries(RECIPE_TAGS.map(t => [t.id, t.label]));
+
+  // go-to takeout/delivery places — the fallback for a fast, tired night ("mon-wed i
+  // have more energy... thu fri sat sun i am fatigued... i need foods fast and easy
+  // to make or places to get food that meets my needs"). Each place carries a FIXED
+  // near-home/near-work tag (her call, "fixed tag, based on today's location" — the
+  // place doesn't move, which list shows is what changes per day).
+  const TAKEOUT_KEY = "book33-takeout";
+  function loadTakeout() {
+    try { const v = JSON.parse(localStorage.getItem(TAKEOUT_KEY)); if (Array.isArray(v)) return v; } catch (e) {}
+    return [];
+  }
+  function saveTakeout() { try { localStorage.setItem(TAKEOUT_KEY, JSON.stringify(TAKEOUT)); } catch (e) {} }
+  let TAKEOUT = loadTakeout();
+
   // one-time seed: the chunky beef & red wine meat pie
   (function seedMeatPie() {
     const FLAG = "book33-seed-meatpie1";
@@ -40291,9 +40402,49 @@
     const missing = recipe.ingredients.filter(ing => !have.includes(ing));
     return { recipe, haveCount: have.length, missing, pct: recipe.ingredients.length ? have.length / recipe.ingredients.length : 0 };
   }
+  // Mon-Wed she has more energy to cook something real; Thu-Sun ("thu fri sat sun i
+  // am fatigued... i need foods fast and easy") the ranking leans toward whatever's
+  // tagged quick, and the takeout strip (takeoutStripHtml) joins the card.
+  function isLowEnergyDay(d) {
+    const dow = d.getDay(); // Sun=0 .. Sat=6
+    return dow === 0 || dow >= 4;
+  }
+  // "haven't had it in a while" tie-break — most recent PAST date this recipe was
+  // actually planned, across both meal stores (only the string/recipe-id shape
+  // counts, never {out}/{custom}). Never-planned sorts first (Infinity) — same
+  // "surface what's been neglected" instinct variety is for.
+  function recipeDaysSinceLast(recipeId) {
+    const todayKey = keyOf(TODAY);
+    let last = null;
+    [MEALPLAN, LUNCHPLAN].forEach(store => {
+      Object.keys(store).forEach(k => {
+        if (k > todayKey || store[k] !== recipeId) return;
+        if (!last || k > last) last = k;
+      });
+    });
+    return last ? dayDiff(TODAY, parseKey(last)) : Infinity;
+  }
   function rankedRecipeMatches() {
     const avail = fridgeAvailableNames();
-    return RECIPES.map(r => matchRecipe(r, avail)).sort((a, b) => b.pct - a.pct || b.haveCount - a.haveCount);
+    const qi = cycleQuickInfo(TODAY);
+    const phaseTags = qi && qi.phase ? (PHASE_NUTRIENT_TAGS[qi.phase] || []) : [];
+    const wantQuick = isLowEnergyDay(TODAY);
+    return RECIPES.map(r => {
+      const m = matchRecipe(r, avail);
+      const tags = r.tags || [];
+      return {
+        ...m,
+        nutrientHit: phaseTags.some(t => tags.includes(t)),
+        effortHit: !wantQuick || r.effort === "quick",
+        daysSinceLast: recipeDaysSinceLast(r.id),
+      };
+    }).sort((a, b) =>
+      b.pct - a.pct ||
+      (b.nutrientHit - a.nutrientHit) ||
+      (wantQuick ? (b.effortHit - a.effortHit) : 0) ||
+      b.daysSinceLast - a.daysSinceLast ||
+      b.haveCount - a.haveCount
+    );
   }
 
   /* ---- the week's dinner plan → shopping list generator ---- */
@@ -40476,6 +40627,7 @@
     renderDinnerSuggestion();
     renderMealPlan();
     renderRecipesList();
+    renderTakeoutList();
   }
 
   // a small guess at what an ingredient is, purely for a friendlier icon — never
@@ -40509,11 +40661,28 @@
     </div>`).join("");
   }
 
+  // the takeout fallback strip — only on a low-energy day, and only once there's
+  // actually a place tagged for wherever she is today; silent otherwise rather than
+  // showing an empty "nothing near you" line.
+  function takeoutStripHtml() {
+    if (!isLowEnergyDay(TODAY) || !TAKEOUT.length) return "";
+    const nearWork = isWorkLocationToday();
+    const places = TAKEOUT.filter(t => t.tag === (nearWork ? "work" : "home"));
+    if (!places.length) return "";
+    return `<div class="dinner-takeout">
+      <div class="dinner-takeout-lbl">Or, ${nearWork ? "near work" : "near home"} tonight</div>
+      <div class="dinner-takeout-chips">
+        ${places.map(t => `<button type="button" class="lm-chip" data-takeout-pick="${esc(t.name)}">${nearWork ? "🩺" : "🏠"} ${esc(t.name)}</button>`).join("")}
+      </div>
+    </div>`;
+  }
   // showActions=false (the Today-page echo) drops the "Show another" cycling button —
   // it carries a bare #dinnerNextBtn id the click handler looks up by closest(), and
   // state.dinnerSuggestIdx is a single shared index, not per-host, so cycling from a
   // second host would leave whichever host isn't showing stale. The Today page just
-  // shows tonight's current pick; cycling through options still happens on Food.
+  // shows tonight's current pick; cycling through options still happens on Food. The
+  // takeout strip has no such conflict (it's a direct commit, not a cycle) so it
+  // renders on both hosts.
   function dinnerSuggestionHTML(showActions) {
     const qi = cycleQuickInfo(TODAY);
     const cycleLine = qi
@@ -40527,12 +40696,12 @@
       </div>`;
     }
     if (!RECIPES.length) {
-      return `<div class="dinner-card">${cycleLine}<div class="fridge-empty">Add a recipe below and I'll match it against what's in the fridge.</div></div>`;
+      return `<div class="dinner-card">${cycleLine}<div class="fridge-empty">Add a recipe below and I'll match it against what's in the fridge.</div>${takeoutStripHtml()}</div>`;
     }
     // a dinner planned for tonight in the week plan takes the spotlight;
     // "Show another" still browses the fridge-ranked suggestions
     const plannedTonight = tonightEntry && tonightEntry.type === "recipe" ? tonightEntry.recipe : null;
-    let m, badge = "";
+    let m, badge = "", cycled = false;
     if (plannedTonight && state.dinnerSuggestIdx === 0) {
       m = matchRecipe(plannedTonight, fridgeAvailableNames());
       badge = `<div class="dinner-planned-badge">📌 Planned tonight</div>`;
@@ -40540,16 +40709,32 @@
       const ranked = rankedRecipeMatches();
       const idx = ((state.dinnerSuggestIdx % ranked.length) + ranked.length) % ranked.length;
       m = ranked[idx];
+      cycled = true;
+    }
+    const recipeTags = m.recipe.tags || [];
+    const tagChips = recipeTags.length || m.recipe.effort
+      ? `<div class="dinner-recipe-tags">${recipeTags.map(t => `<span class="dinner-tag-chip">${RECIPE_TAG_ICON[t]} ${RECIPE_TAG_LABEL[t]}</span>`).join("")}${m.recipe.effort ? `<span class="dinner-tag-chip">${m.recipe.effort === "quick" ? "⚡ Quick" : "🍳 Involved"}</span>` : ""}</div>`
+      : "";
+    // only claims a reason when this pick actually earned it, so it never reads as a
+    // coincidence dressed up as intelligence
+    let reason = "";
+    if (cycled && qi && qi.info && (PHASE_NUTRIENT_TAGS[qi.phase] || []).some(t => recipeTags.includes(t))) {
+      reason = `<div class="dinner-reason">🎯 Matches today's ${esc(qi.info.label.toLowerCase())} nutrition focus</div>`;
+    } else if (cycled && isLowEnergyDay(TODAY) && m.recipe.effort === "quick") {
+      reason = `<div class="dinner-reason">⚡ Picked quick — today's a lower-energy day</div>`;
     }
     return `<div class="dinner-card">
       ${cycleLine}
       ${badge}
       <div class="dinner-recipe-name">${esc(m.recipe.name)}</div>
+      ${tagChips}
+      ${reason}
       <div class="dinner-match">${m.haveCount}/${m.recipe.ingredients.length} ingredients already in the fridge</div>
       ${m.missing.length ? `<div class="dinner-missing">Missing: ${m.missing.map(esc).join(", ")}</div>`
         : `<div class="dinner-missing" style="color:var(--ink)">Everything's on hand.</div>`}
       ${m.recipe.notes ? `<div class="dinner-notes">${esc(m.recipe.notes)}</div>` : ""}
       ${showActions && (RECIPES.length > 1 || plannedTonight) ? `<div class="dinner-actions"><button type="button" class="add-btn" id="dinnerNextBtn">Show another →</button></div>` : ""}
+      ${takeoutStripHtml()}
     </div>`;
   }
   function renderDinnerSuggestion() {
@@ -40561,18 +40746,37 @@
     if (el) el.innerHTML = dinnerSuggestionHTML(false);
   }
 
+  function renderTakeoutList() {
+    const el = document.getElementById("takeoutList");
+    if (!el) return;
+    el.innerHTML = TAKEOUT.length ? TAKEOUT.map(t => `<div class="recipe-row">
+        <div class="info">
+          <div class="nm">${t.tag === "work" ? "🩺" : "🏠"} ${esc(t.name)}</div>
+          <div class="meta">${t.tag === "work" ? "Near work" : "Near home"}${t.note ? ` · ${esc(t.note)}` : ""}</div>
+        </div>
+        <div class="actions">
+          <button class="del" data-takeout-edit="${t.id}" aria-label="Edit ${esc(t.name)}">✎</button>
+          <button class="del" data-takeout-del="${t.id}" aria-label="Remove ${esc(t.name)}">×</button>
+        </div>
+      </div>`).join("") : `<div class="fridge-empty">No go-to places yet — add the ones you actually order from.</div>`;
+  }
+
   function renderRecipesList() {
     const el = document.getElementById("recipeList");
-    el.innerHTML = RECIPES.length ? RECIPES.map(r => `<div class="recipe-row">
+    el.innerHTML = RECIPES.length ? RECIPES.map(r => {
+      const tagIcons = (r.tags || []).map(t => RECIPE_TAG_ICON[t]).join("");
+      const effortIcon = r.effort ? (r.effort === "quick" ? "⚡" : "🍳") : "";
+      return `<div class="recipe-row">
         <div class="info">
-          <div class="nm">${esc(r.name)}</div>
+          <div class="nm">${esc(r.name)}${tagIcons || effortIcon ? ` ${tagIcons}${effortIcon}` : ""}</div>
           <div class="meta">${r.ingredients.length} ingredient${r.ingredients.length === 1 ? "" : "s"}${r.notes ? ` · ${esc(r.notes)}` : ""}</div>
         </div>
         <div class="actions">
           <button class="del" data-recipe-edit="${r.id}" aria-label="Edit ${esc(r.name)}">✎</button>
           <button class="del" data-recipe-del="${r.id}" aria-label="Delete ${esc(r.name)}">×</button>
         </div>
-      </div>`).join("") : `<div class="fridge-empty">No recipes yet — add the ones you actually cook.</div>`;
+      </div>`;
+    }).join("") : `<div class="fridge-empty">No recipes yet — add the ones you actually cook.</div>`;
   }
 
   /* ============================================================
@@ -42936,6 +43140,18 @@
     follicular: { label: "Follicular", icon: "🌱", nutrition: "Building energy — fresh veg, lean protein, sprouted foods." },
     fertile:    { label: "Fertile",    icon: "🥚", nutrition: "Light & antioxidant-rich — berries, leafy greens, zinc-rich seeds." },
     luteal:     { label: "Luteal",     icon: "🌙", nutrition: "Steady blood sugar — complex carbs, magnesium (nuts, dark chocolate), less caffeine/salt." },
+  };
+  // which RECIPE_TAGS (above, near RECIPES) count as "on theme" per phase — her
+  // explicit CD1-7 ask ("iron calcium nutrient dense rich foods") plus this file's
+  // own nutrition text for the other three. Only phases with a real ingredient-level
+  // signal get tags; follicular's "fresh veg, lean protein" doesn't map to anything
+  // in the fixed tag vocab, so it gets none and dinner ranking falls through to
+  // fridge-match + recency alone that week — not a gap, just nothing to boost on.
+  const PHASE_NUTRIENT_TAGS = {
+    menstrual: ["iron", "calcium", "warming"],
+    follicular: [],
+    fertile: ["antioxidant"],
+    luteal: ["magnesium"],
   };
   // chart-overlay colours per phase — same semantics as the Cycle page chips
   const PHASE_COL = {
@@ -49485,10 +49701,15 @@
   function closeRecipeForm() {
     recipeForm.hidden = true; recipeAddRow.hidden = false;
     recipeForm.reset(); recipeEditId = null;
+    recipeForm.querySelectorAll("[data-recipe-tag], [data-recipe-effort]").forEach(b => b.setAttribute("aria-pressed", "false"));
     document.getElementById("recipeSubmitBtn").textContent = "Add recipe";
   }
   function openRecipeForm(recipe) {
     recipeAddRow.hidden = true; recipeForm.hidden = false;
+    recipeForm.querySelectorAll("[data-recipe-tag]").forEach(b =>
+      b.setAttribute("aria-pressed", String(!!recipe && (recipe.tags || []).includes(b.dataset.recipeTag))));
+    recipeForm.querySelectorAll("[data-recipe-effort]").forEach(b =>
+      b.setAttribute("aria-pressed", String(!!recipe && recipe.effort === b.dataset.recipeEffort)));
     if (recipe) {
       recipeEditId = recipe.id;
       document.getElementById("recipeSubmitBtn").textContent = "Save changes";
@@ -49500,17 +49721,31 @@
   }
   document.getElementById("recipeAddBtn").addEventListener("click", () => openRecipeForm(null));
   document.getElementById("recipeCancelBtn").addEventListener("click", closeRecipeForm);
+  // tags multi-toggle; effort is single-pick but re-tapping the pressed one clears it
+  // (untagged effort is a valid state — "I haven't rated this one yet")
+  recipeForm.addEventListener("click", e => {
+    const tagBtn = e.target.closest("[data-recipe-tag]");
+    if (tagBtn) { tagBtn.setAttribute("aria-pressed", String(tagBtn.getAttribute("aria-pressed") !== "true")); return; }
+    const effortBtn = e.target.closest("[data-recipe-effort]");
+    if (effortBtn) {
+      const wasOn = effortBtn.getAttribute("aria-pressed") === "true";
+      recipeForm.querySelectorAll("[data-recipe-effort]").forEach(b => b.setAttribute("aria-pressed", "false"));
+      if (!wasOn) effortBtn.setAttribute("aria-pressed", "true");
+    }
+  });
   recipeForm.addEventListener("submit", e => {
     e.preventDefault();
     const name = document.getElementById("recipeName").value.trim();
     if (!name) return;
     const ingredients = document.getElementById("recipeIngredients").value.split("\n").map(s => s.trim()).filter(Boolean);
     const notes = document.getElementById("recipeNotes").value.trim();
+    const tags = [...recipeForm.querySelectorAll('[data-recipe-tag][aria-pressed="true"]')].map(b => b.dataset.recipeTag);
+    const effort = recipeForm.querySelector('[data-recipe-effort][aria-pressed="true"]')?.dataset.recipeEffort || null;
     if (recipeEditId) {
       const r = RECIPES.find(x => x.id === recipeEditId);
-      Object.assign(r, { name, ingredients, notes });
+      Object.assign(r, { name, ingredients, notes, tags, effort });
     } else {
-      RECIPES.push({ id: uid(), name, ingredients, notes });
+      RECIPES.push({ id: uid(), name, ingredients, notes, tags, effort });
     }
     saveRecipes(); state.dinnerSuggestIdx = 0; closeRecipeForm(); renderFood();
   });
@@ -49524,6 +49759,61 @@
       if (recipeEditId === id) closeRecipeForm();
       RECIPES = RECIPES.filter(r => r.id !== id);
       saveRecipes(); state.dinnerSuggestIdx = 0; renderFood();
+    }
+  });
+
+  /* ---- go-to takeout list ---- */
+  const takeoutForm = document.getElementById("takeoutAddForm");
+  const takeoutAddRow = document.getElementById("takeoutAddRow");
+  let takeoutEditId = null;
+  function closeTakeoutForm() {
+    takeoutForm.hidden = true; takeoutAddRow.hidden = false;
+    takeoutForm.reset(); takeoutEditId = null;
+    takeoutForm.querySelectorAll("[data-takeout-tag]").forEach(b => b.setAttribute("aria-pressed", "false"));
+    document.getElementById("takeoutSubmitBtn").textContent = "Add place";
+  }
+  function openTakeoutForm(place) {
+    takeoutAddRow.hidden = true; takeoutForm.hidden = false;
+    takeoutForm.querySelectorAll("[data-takeout-tag]").forEach(b =>
+      b.setAttribute("aria-pressed", String(place ? place.tag === b.dataset.takeoutTag : b.dataset.takeoutTag === "home")));
+    if (place) {
+      takeoutEditId = place.id;
+      document.getElementById("takeoutSubmitBtn").textContent = "Save changes";
+      document.getElementById("takeoutName").value = place.name;
+      document.getElementById("takeoutNote").value = place.note || "";
+    }
+    document.getElementById("takeoutName").focus();
+  }
+  document.getElementById("takeoutAddBtn").addEventListener("click", () => openTakeoutForm(null));
+  document.getElementById("takeoutCancelBtn").addEventListener("click", closeTakeoutForm);
+  takeoutForm.addEventListener("click", e => {
+    const tagBtn = e.target.closest("[data-takeout-tag]");
+    if (tagBtn) takeoutForm.querySelectorAll("[data-takeout-tag]").forEach(b => b.setAttribute("aria-pressed", String(b === tagBtn)));
+  });
+  takeoutForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = document.getElementById("takeoutName").value.trim();
+    if (!name) return;
+    const tag = takeoutForm.querySelector('[data-takeout-tag][aria-pressed="true"]')?.dataset.takeoutTag || "home";
+    const note = document.getElementById("takeoutNote").value.trim();
+    if (takeoutEditId) {
+      const t = TAKEOUT.find(x => x.id === takeoutEditId);
+      Object.assign(t, { name, tag, note });
+    } else {
+      TAKEOUT.push({ id: uid(), name, tag, note });
+    }
+    saveTakeout(); closeTakeoutForm(); renderFood(); renderTodayFood();
+  });
+  takeoutForm.addEventListener("keydown", e => { if (e.key === "Escape") closeTakeoutForm(); });
+  document.getElementById("takeoutList").addEventListener("click", e => {
+    const editBtn = e.target.closest("[data-takeout-edit]");
+    if (editBtn) { openTakeoutForm(TAKEOUT.find(t => t.id === editBtn.dataset.takeoutEdit)); return; }
+    const delBtn = e.target.closest("[data-takeout-del]");
+    if (delBtn) {
+      const id = delBtn.dataset.takeoutDel;
+      if (takeoutEditId === id) closeTakeoutForm();
+      TAKEOUT = TAKEOUT.filter(t => t.id !== id);
+      saveTakeout(); renderFood(); renderTodayFood();
     }
   });
 
