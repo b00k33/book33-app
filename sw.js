@@ -1,7 +1,7 @@
 ﻿// Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20260917-guide-anchor-person-v138";
+var CACHE_VERSION = "b33-20260917-nav-nostore-v139";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -128,8 +128,15 @@ self.addEventListener("fetch", function (e) {
   }
   if (req.method !== "GET") return;
   if (req.mode === "navigate") {
+    // 2026-09-17 (Linh: "this looks the same" twice in a row after a real deploy):
+    // GitHub Pages serves index.html with Cache-Control: max-age=600 -- a plain
+    // fetch(req) here respects that and can hand back the BROWSER's own 10-minute-old
+    // HTTP cache entry even though this handler is "network-first". cache:"no-store"
+    // forces every navigation to actually hit the network, so a fresh deploy is never
+    // more than a reload away regardless of GitHub Pages' own cache header.
+    var freshNavReq = new Request(req, { cache: "no-store" });
     e.respondWith(
-      timeoutFetch(req, 4000).then(function (res) {
+      timeoutFetch(freshNavReq, 4000).then(function (res) {
         caches.open(CACHE_VERSION).then(function (c) { c.put("./", res.clone()); });
         return res;
       }).catch(function () { return caches.match(req).then(function (c) { return c || caches.match("./"); }); })
