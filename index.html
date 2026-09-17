@@ -4014,6 +4014,10 @@
   .tl-guide-log-row { display: flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--ink-soft); flex-wrap: wrap; }
   .tl-guide-log-date { font-variant-numeric: tabular-nums; color: var(--ink-faint); flex: none; }
   .tl-guide-log-note { color: var(--ink-faint); font-style: italic; overflow-wrap: anywhere; }
+  .tl-guide-inspire-quote { font-size: 13px; font-style: italic; color: var(--ink); line-height: var(--lh-read); margin: 0; }
+  .tl-guide-inspire-src { font-size: 11px; color: var(--ink-faint); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .tl-guide-inspire-swap { font: inherit; font-size: 11px; font-weight: 600; color: var(--accent-seed); background: none; border: none; padding: 0; cursor: pointer; }
+  .tl-guide-inspire-swap:hover { text-decoration: underline; }
   /* 2026-09-17 (synth22): an ephemeral draft's Opener/Small talk/Closer are now
      inline-editable text inputs, same visual language as the Remember field
      right below them -- no separate "add"/"no place" states any more (every
@@ -21492,6 +21496,8 @@
           </div>
         </div>
         <div class="swf-info-card" id="swfTechniqueInfo" hidden></div>
+        <span class="swf-field-label">Link to a guide <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional — shows there as swappable Inspiration)</span></span>
+        <select id="swfGuideLink"><option value="">Not linked — general swipe file</option></select>
         <span class="swf-field-label">Where's this from? <span style="font-weight:400;text-transform:none;letter-spacing:0">(are you collecting, or practising?)</span></span>
         <div class="swf-chip-row" id="swfOriginToggle"></div>
         <span class="swf-field-label">Why did this stick? <span style="font-weight:400;text-transform:none;letter-spacing:0">(pick as many as fit)</span></span>
@@ -31499,6 +31505,7 @@
                   track: "work", year: TODAY.getFullYear(),
                   habit: "all", openStep: null, dhCycleDetailOpen: false, suppEditingId: null,
                   fitYear: TODAY.getFullYear(), fitSelectedDate: keyOf(TODAY), dinnerSuggestIdx: 0,
+                  guideInspireIdx: {}, // per-guide-id swap cursor for the Inspiration line (Swipe File link)
                   miniCalAnchor: new Date(TODAY), spendAnchor: new Date(TODAY), expMode: "personal",
                   // 2026-08-06: Habits page (real routines + weight, Week/Month/Manage)
                   hbMode: "week", hbAnchor: new Date(TODAY),
@@ -33703,8 +33710,30 @@
       : `<div class="tl-guide-line"><span class="tl-guide-label">Opener</span>${esc(guideCtx.open || "")}</div>
         <div class="tl-guide-line"><span class="tl-guide-label">Small talk</span>${esc(guideCtx.chat || "")}</div>
         <div class="tl-guide-line"><span class="tl-guide-label">Closer</span>${esc(guideCtx.close || "")}</div>`;
+    // 2026-09-17 (synth22, "transcript library... as inspiration for conversation
+    // guides to appear in these events"): pulls from Swipe File entries linked to
+    // THIS guide (SWF_ENTRIES' own guideId field, set from the swipe form's "Link
+    // to a guide" picker). Only a REAL guide has an id to link against — an
+    // ephemeral draft shows neither the line nor the invite, same "nothing to
+    // attach to yet" boundary the Remember/log sections don't have to observe
+    // (those write straight onto the draft) but this genuinely does. Auto-pick =
+    // stable first entry; "Swap" cycles via the same per-item index pattern
+    // dinnerSuggestionHTML's "Show another" already uses, keyed by guide id since
+    // several guides can each have their own swap position open at once.
+    const guideInspireEntries = !guideCtx.ephemeral ? SWF_ENTRIES.filter(x => x.guideId === guideCtx.id) : [];
+    const guideInspireHtml = guideCtx.ephemeral ? "" : guideInspireEntries.length ? (() => {
+      const n = guideInspireEntries.length;
+      const idx = (((state.guideInspireIdx[guideCtx.id] || 0) % n) + n) % n;
+      const pick = guideInspireEntries[idx];
+      return `<div class="tl-guide-line tl-guide-inspire">
+        <span class="tl-guide-label">Inspiration</span>
+        <p class="tl-guide-inspire-quote">${esc(pick.phrase)}</p>
+        <div class="tl-guide-inspire-src">${esc(pick.speaker)}${n > 1 ? `<button type="button" class="tl-guide-inspire-swap" data-guide-inspire-swap="${guideCtx.id}">🔀 Swap</button>` : ""}</div>
+      </div>`;
+    })() : `<div class="tl-guide-line tl-guide-inspire"><button type="button" class="tl-guide-remember-btn" data-guide-inspire-add="${guideCtx.id}">+ Add inspiration</button></div>`;
     const guideBodyHtml = guideShow && guideOpen ? `<div class="tl-guide-body">
         ${guideScriptHtml}
+        ${guideInspireHtml}
         ${guideRememberHtml}
         ${guideLogHtml}
       </div>` : "";
@@ -35056,6 +35085,23 @@
         tlGuideOpenId = g.id;
       }
       refreshOpenTlDetail();
+      return;
+    }
+    // Inspiration line (Swipe File entries linked to this guide) -- Swap cycles
+    // to the next linked entry in place; Add jumps to the Swipe File tab with
+    // this guide pre-linked (openSwipeFileForGuide closes this sheet itself).
+    const guideInspireSwapBtn = e.target.closest("[data-guide-inspire-swap]");
+    if (guideInspireSwapBtn) {
+      e.stopPropagation();
+      const gid = guideInspireSwapBtn.dataset.guideInspireSwap;
+      state.guideInspireIdx[gid] = (state.guideInspireIdx[gid] || 0) + 1;
+      refreshOpenTlDetail();
+      return;
+    }
+    const guideInspireAddBtn = e.target.closest("[data-guide-inspire-add]");
+    if (guideInspireAddBtn) {
+      e.stopPropagation();
+      openSwipeFileForGuide(guideInspireAddBtn.dataset.guideInspireAdd);
       return;
     }
     const ovrItem = () => TL_ITEMS_BY_ID[document.getElementById("tlDetailOverlay").dataset.itemId];
@@ -44737,7 +44783,20 @@
   let swfSelectedReactions = [];
   let swfSelectedFeelings = [];
   let swfSelectedOrigin = "found";
+  let swfSelectedGuideId = "";
   let swfSpeakerFilter = null, swfReactionFilter = null, swfFeelingFilter = null, swfOriginFilter = null;
+
+  // 2026-09-17 (synth22, "transcript library... as inspiration for conversation
+  // guides"): an entry optionally links to a GUIDES id -- "tied to whichever guide
+  // you were in when you added it" (her call). Populated fresh each time the form
+  // area is shown/reset so a newly-added guide always appears.
+  function swfRenderGuideLinkOptions() {
+    const sel = swf$("swfGuideLink");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">Not linked — general swipe file</option>` +
+      GUIDES.map(g => `<option value="${esc(g.id)}">${esc(g.place || g.person || "Untitled guide")}</option>`).join("");
+    sel.value = swfSelectedGuideId;
+  }
 
   const swf$ = id => document.getElementById(id);
 
@@ -44776,9 +44835,15 @@
 
   function swfResetForm(keepSpeaker) {
     const lastSpeaker = swf$("swfSpeaker").value;
+    // "keepSpeaker" already means "keep quick-succession context" (several lines
+    // added in one sitting) -- the guide link rides the same flag rather than a
+    // second one, since a jump-in-from-a-guide session wants both to persist.
+    const lastGuideId = swfSelectedGuideId;
     swf$("swfPhrase").value = ""; swf$("swfTopic").value = ""; swf$("swfTechnique").value = ""; swf$("swfNote").value = "";
     swfUpdateTechniqueInfo();
     swf$("swfSpeaker").value = keepSpeaker ? lastSpeaker : "";
+    swfSelectedGuideId = keepSpeaker ? lastGuideId : "";
+    swfRenderGuideLinkOptions();
     swfSelectedReactions = [];
     swfRenderReactionToggles();
     swfSelectedFeelings = [];
@@ -44798,6 +44863,8 @@
     swf$("swfPhrase").value = e.phrase; swf$("swfSpeaker").value = e.speaker; swf$("swfTopic").value = e.topic || "";
     swf$("swfTechnique").value = e.technique || ""; swf$("swfNote").value = e.note || "";
     swfUpdateTechniqueInfo();
+    swfSelectedGuideId = e.guideId || "";
+    swfRenderGuideLinkOptions();
     swfSelectedReactions = (e.reactions || []).slice();
     swfRenderReactionToggles();
     swfSelectedFeelings = (e.feelings || []).slice();
@@ -44871,6 +44938,7 @@
             return r ? `<span class="swf-tag">${esc(r.label)}</span>` : "";
           }).join("")}
           ${(e.feelings || []).map(f => `<span class="swf-tag">${esc(f)}</span>`).join("")}
+          ${e.guideId ? (() => { const g = GUIDES.find(x => x.id === e.guideId); return g ? `<span class="swf-tag">💬 ${esc(g.place || g.person || "guide")}</span>` : ""; })() : ""}
         </div>
         ${e.note ? `<p class="swf-entry-note">${esc(e.note)}</p>` : ""}
         <div class="swf-entry-actions">
@@ -44893,11 +44961,25 @@
   function swfInit() {
     swfRenderReactionToggles();
     swfRenderOriginToggle();
+    swfRenderGuideLinkOptions();
     swfRenderFeelingUI();
     swfUpdateTechniqueInfo();
     swfRenderLibrary();
   }
   let swfInited = false;
+  // jump-in from a guide's "+ Add inspiration" (renderTlDetailBody's guide card,
+  // via #tlDetailBody's click delegate) -- opens straight to a pre-linked entry
+  // form so saving there needs no extra step to connect it back to the guide.
+  function openSwipeFileForGuide(guideId) {
+    closeTlDetail();
+    state.view = "guides";
+    render();
+    document.querySelector('[data-guides-tab="swipe"]')?.click();
+    swfSelectedGuideId = guideId;
+    swfRenderGuideLinkOptions();
+    swf$("swfPhrase")?.focus();
+    swf$("swfPasteWrap")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   document.getElementById("guidesTabPicker").addEventListener("click", e => {
     const btn = e.target.closest("[data-guides-tab]");
@@ -44944,6 +45026,7 @@
     swf$("swfPhrase").focus();
   });
   document.getElementById("swfTechnique").addEventListener("change", swfUpdateTechniqueInfo);
+  document.getElementById("swfGuideLink").addEventListener("change", () => { swfSelectedGuideId = swf$("swfGuideLink").value; });
   document.getElementById("swfReactionToggles").addEventListener("click", e => {
     const btn = e.target.closest("[data-swf-reaction]");
     if (!btn) return;
@@ -44992,6 +45075,7 @@
       reactions: swfSelectedReactions.slice(),
       feelings: swfSelectedFeelings.slice(),
       origin: swfSelectedOrigin,
+      guideId: swfSelectedGuideId || null,
       note: swf$("swfNote").value.trim(),
       date: swfEditingId ? (SWF_ENTRIES.find(e => e.id === swfEditingId) || {}).date || keyOf(new Date()) : keyOf(new Date()),
     };
