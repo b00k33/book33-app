@@ -4327,6 +4327,23 @@
   }
   .cyc-pop-close { border: none; background: none; color: var(--ink-faint); font-size: 20px; cursor: pointer; padding: 0 4px; }
   .cyc-pop-close:hover { color: var(--warn); }
+  /* 2026-09-17 -- the Travel quick-peek popover, same fixed/z-index/radius/shadow
+     recipe as .cyc-popover just above (scrolls inside itself, never cut off) */
+  .travel-peek-pop {
+    position: fixed; z-index: 300; width: min(230px, calc(100vw - 32px));
+    background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
+    box-shadow: var(--page-shadow); padding: 12px 14px;
+    max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .travel-peek-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .travel-peek-countdown { font-size: 12.5px; font-weight: 700; color: #C4607A; margin-bottom: 10px; }
+  .travel-peek-countdown-quiet { color: var(--ink-faint); font-weight: 500; }
+  .travel-peek-list { display: flex; flex-direction: column; gap: 6px; }
+  .travel-peek-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .tl-travel-peek {
+    border: none; background: none; padding: 0 0 0 6px; font-size: 13px; line-height: 1; cursor: pointer;
+    position: relative; z-index: 1; flex: none;
+  }
   .df-num { display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding-right: 16px; border-right: 1px solid var(--note-line); min-width: 78px; }
   .df-n { font-family: var(--font-display); font-size: 46px; line-height: 1; color: var(--margin-rule); font-variant-numeric: tabular-nums; }
@@ -32988,8 +33005,13 @@
       // several -- tapping it (like tapping anywhere on the box) opens the
       // detail sheet, which shows the merge sub-list (renderTlMergeList).
       const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
+      // 2026-09-17 ("and travel events" / "i want c22 to feel fun"): a Travel-mode
+      // block's own quick-peek icon -- countdown + packing checklist, without
+      // opening the full detail sheet. e.stopPropagation() in its click handler
+      // (search "data-travel-peek") keeps this from also firing openTlDetail.
+      const travelPeekIc = modeOf(e) === "travel" ? `<button type="button" class="tl-travel-peek" data-travel-peek="${e.id}" aria-label="Travel quick look" title="Travel quick look">🚆</button>` : "";
       return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${powerMark ? ` data-power="${powerMark}"` : ""}${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
-        <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}</span>
+        <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}${travelPeekIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
       </div>`;
@@ -45222,7 +45244,7 @@
       // don't swap it for something that reads closer to Work's #17809B (a prior
       // #3FA9DC measured only 14.3 ΔE against Work, under the ~15 floor for reliably
       // telling two colours apart at a glance) or Morning (#D97757 measured 12.2).
-      { id: "travel",  name: "Travel",   emoji: "✈️", accent: "#C4607A", order: 7, shows: { tracks: [], categories: [] } },
+      { id: "travel",  name: "Travel",   emoji: "🚆", accent: "#C4607A", order: 7, shows: { tracks: [], categories: [] } },
       // same shape as Code/Study/Travel -- no real "sleep" track/category exists
       // app-wide, relies entirely on modeVisible()'s "an item tagged with the active
       // mode always shows" rule. Deep indigo accent is her approved value.
@@ -58607,6 +58629,15 @@
       renderDay();
       return;
     }
+    // Travel quick-peek trigger — checked BEFORE the tlDetail branch below for the
+    // same reason as the outcome-picker triggers just under this: the icon sits INSIDE
+    // a [data-tl-detail] block, so a separate document-level click listener calling
+    // e.stopPropagation() on it does nothing (both listeners are on document — stopping
+    // propagation to the next node never stops a sibling listener on the SAME node).
+    // Branching here, before tlDetail is checked, is the only way to stop the block's
+    // own detail sheet from also opening.
+    const travelPeekTrigger = e.target.closest("[data-travel-peek]");
+    if (travelPeekTrigger) { openTravelPeek(travelPeekTrigger, travelPeekTrigger.dataset.travelPeek); return; }
     // outcome-picker triggers — checked BEFORE the tlDetail
     // branch below so a tap on the ✎ note icon or a "Did this happen?" mini-action
     // never falls through and opens the big detail sheet instead
@@ -61786,6 +61817,85 @@
     state.cyclePopoverOpen = false;
     renderDayHealth();
   }
+  // 2026-09-17 (Linh: "and travel events" / "i want c22 to feel fun" -- picked "a
+  // separate quick-peek icon anyway... genuinely a second way in" over folding this
+  // into the block's existing detail sheet): a small 🚆 on a Travel-mode block opens
+  // a light popover -- a countdown plus a one-tap packing checklist -- without
+  // leaving the calendar. Deliberately its OWN small localStorage-backed tick set
+  // (book33-travel-peek-ticks) rather than reusing e.steps/[data-step-tick]: that
+  // system's change delegate calls reRenderCurrent() on every tick, which would
+  // destroy this hoisted-to-body popover mid-interaction; a self-contained list
+  // avoids fighting that machinery for what's meant to be a quick, disposable list.
+  const TRAVEL_PEEK_KEY = "book33-travel-peek-ticks";
+  const TRAVEL_PEEK_ITEMS = ["Wallet", "Keys", "Phone charger", "Headphones", "Water bottle"];
+  function loadTravelPeekTicks() {
+    try { const v = JSON.parse(localStorage.getItem(TRAVEL_PEEK_KEY)); if (v && typeof v === "object") return v; } catch (e) {}
+    return {};
+  }
+  let TRAVEL_PEEK_TICKS = loadTravelPeekTicks();
+  function saveTravelPeekTicks() { try { localStorage.setItem(TRAVEL_PEEK_KEY, JSON.stringify(TRAVEL_PEEK_TICKS)); } catch (e) {} }
+  function travelPeekCountdown(e) {
+    const startMin = toMin(e.start);
+    if (startMin === null || keyOf(state.anchor) !== keyOf(TODAY)) return null;
+    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+    const diff = startMin - nowMin;
+    if (diff <= 0) return keyOf(state.anchor) === keyOf(TODAY) && toMin(e.start) <= nowMin && itemEndMin(e) > nowMin ? "Underway" : null;
+    const h = Math.floor(diff / 60), m = diff % 60;
+    return `Leaving in ${h > 0 ? `${h}h ` : ""}${m}m`;
+  }
+  function renderTravelPeek() {
+    const pop = document.querySelector(".travel-peek-pop");
+    if (!pop || !state.travelPeekId) return;
+    const e = TL_ITEMS_BY_ID[state.travelPeekId];
+    if (!e) { closeTravelPeek(); return; }
+    const countdown = travelPeekCountdown(e);
+    const ticks = TRAVEL_PEEK_TICKS[e.id] || {};
+    pop.innerHTML = `
+      <div class="travel-peek-title">🚆 ${esc(e.title)}</div>
+      ${countdown ? `<div class="travel-peek-countdown">${esc(countdown)}</div>` : `<div class="travel-peek-countdown travel-peek-countdown-quiet">${esc(e.start)}${e.end ? ` – ${esc(e.end)}` : ""}</div>`}
+      <div class="travel-peek-list">${TRAVEL_PEEK_ITEMS.map(item => `
+        <label class="travel-peek-row">
+          <input type="checkbox" data-travel-peek-tick="${esc(item)}" ${ticks[item] ? "checked" : ""}>
+          <span${ticks[item] ? ` style="text-decoration:line-through;color:var(--ink-faint)"` : ""}>${esc(item)}</span>
+        </label>`).join("")}
+      </div>`;
+  }
+  function openTravelPeek(trigger, id) {
+    let pop = document.querySelector(".travel-peek-pop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "travel-peek-pop";
+      document.body.appendChild(pop);
+    }
+    const r = trigger.getBoundingClientRect();
+    pop.style.left = `${Math.round(Math.max(12, Math.min(r.left, window.innerWidth - 250)))}px`;
+    pop.style.top = `${Math.round(Math.min(r.bottom + 8, window.innerHeight - 260))}px`;
+    state.travelPeekId = id;
+    renderTravelPeek();
+  }
+  function closeTravelPeek() {
+    if (!state.travelPeekId) return;
+    state.travelPeekId = null;
+    const pop = document.querySelector(".travel-peek-pop");
+    if (pop) pop.remove();
+  }
+  document.addEventListener("click", e => {
+    // The open branch lives in the main timeline click delegate (search
+    // "Travel quick-peek trigger") so it can run BEFORE that delegate's own
+    // [data-tl-detail] branch — see the comment there for why. This listener only
+    // closes the popover on an outside tap.
+    if (e.target.closest("[data-travel-peek]")) return;
+    if (state.travelPeekId && !e.target.closest(".travel-peek-pop")) closeTravelPeek();
+  });
+  document.addEventListener("change", e => {
+    const box = e.target.closest("[data-travel-peek-tick]");
+    if (!box || !state.travelPeekId) return;
+    const ticks = TRAVEL_PEEK_TICKS[state.travelPeekId] || (TRAVEL_PEEK_TICKS[state.travelPeekId] = {});
+    ticks[box.dataset.travelPeekTick] = box.checked;
+    saveTravelPeekTicks();
+    renderTravelPeek();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeTravelPeek(); });
   // 2026-08-17 (Book33 — rail widgets brief): delegated so every .patients-nudge
   // trigger toggles itself (was #patientsNudge-only) -- #railPatNudge (the "Today's
   // patients" rail card's copy) rides this for free, same reason every other rail
