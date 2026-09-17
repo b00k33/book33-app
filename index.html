@@ -31216,6 +31216,20 @@
     }
     return null;
   }
+  // 2026-09-17 pm (her "where is the conversation guide" on "Get ready for date
+  // night" -- a prep routine anchored via t.anchorTo/chainAnchorOf to the real
+  // date-night routine, but its OWN title never names David): one hop through the
+  // same chain link chainedStartMinOn already walks for timing, reused here so
+  // guide matching sees what a nameless routine is actually anchored to. Tries the
+  // event's own title first -- identical result to the old bare personNameInTitle
+  // call for anything not chained.
+  function guidePersonFor(e) {
+    const own = personNameInTitle(e.title);
+    if (own) return own;
+    const rtnT = e.rtTaskId ? ROUTINE_TASKS.find(t => t.id === e.rtTaskId) : null;
+    const anchor = e.anchorTo ? chainAnchorOf(e) : (rtnT ? chainAnchorOf(rtnT) : null);
+    return anchor ? personNameInTitle(anchor.title) : null;
+  }
   // place first (the original, most specific match), then person -- a real saved
   // guide only, same contract as before this date; null means "nothing saved yet",
   // not "nothing to prep" -- see eventGuideContext below for the ad-hoc fallback.
@@ -31223,7 +31237,7 @@
     const path = locOf(e);
     const byPlace = path.length ? guideByPlace(path[path.length - 1]) : null;
     if (byPlace) return byPlace;
-    return guideByPerson(personNameInTitle(e.title));
+    return guideByPerson(guidePersonFor(e));
   };
   // 2026-09-17 (synth22, "every event needs conversation preparation and debrief"
   // + "make it seamless"): the generalized version every render site should call
@@ -31243,15 +31257,15 @@
     // scheduled, repeating activity -- not the brief, uncertain social encounter
     // (a lift, a train, a kebab shop) this feature exists for. guideForEvent above
     // still matches a REAL saved guide by place/person regardless of e.kind -- only
-    // the "nothing saved yet, want to fill one in?" EPHEMERAL invitation is scoped
-    // off routines here, by leaving place/person blank so guideWorthShowing's
-    // `|| !!guideCtx.place || !!guideCtx.person` fallback at every render site
-    // naturally stays false, without touching each call site separately.
+    // PLACE is scoped off a routine's ephemeral invitation here (a work shift's
+    // building isn't a guide moment); PERSON still resolves via guidePersonFor,
+    // including its anchorTo hop, since a "get ready for X" routine chained to the
+    // real X (date night with David) very much is one.
     const path = e.kind === "routine" ? [] : locOf(e);
     return {
       id: null, ephemeral: true,
       place: path.length ? path[path.length - 1] : "",
-      person: e.kind === "routine" ? "" : (personNameInTitle(e.title) || ""),
+      person: guidePersonFor(e) || "",
       icon: "💬", open: "", chat: "", close: "", remember: "", log: [],
     };
   }
