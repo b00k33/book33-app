@@ -21460,10 +21460,21 @@
         <span class="rtg-n" id="swfLibCount"></span>
         <input type="text" id="swfSearch" placeholder="Search phrases, topics, notes...">
       </div>
-      <div class="swf-chip-row" id="swfSpeakerChips"></div>
-      <div class="swf-chip-row" id="swfReactionChips"></div>
-      <div class="swf-chip-row" id="swfFeelingChips"></div>
-      <div class="swf-chip-row" id="swfOriginChips"></div>
+      <!-- 2026-09-18 ("improve ui" -> "too many words"): these four chip rows used to
+           render open, always, above the library -- with only a couple entries saved,
+           that's four rows of filter chrome duplicating tags the entry cards already
+           show. Collapsed behind one toggle now, same pattern as swfAddRow/swfAddWrap
+           just below. swfSyncFilterBtn() keeps the button's own label honest about
+           whether a filter is quietly still active while this is closed. -->
+      <div class="add-row" id="swfFilterRow" style="margin-top:8px">
+        <button class="add-btn" id="swfFilterBtn" type="button" aria-expanded="false">Filter</button>
+      </div>
+      <div id="swfFilterWrap" hidden>
+        <div class="swf-chip-row" id="swfSpeakerChips"></div>
+        <div class="swf-chip-row" id="swfReactionChips"></div>
+        <div class="swf-chip-row" id="swfFeelingChips"></div>
+        <div class="swf-chip-row" id="swfOriginChips"></div>
+      </div>
       <div id="swfLibrary"></div>
 
       <div class="add-row" id="swfAddRow" style="margin-top:16px">
@@ -44917,6 +44928,28 @@
     swfResetForm(false);
   }
 
+  // 2026-09-18 ("too many words" on the Swipe file screen): the four filter-chip
+  // rows collapse behind this toggle now instead of always rendering open. The
+  // button stays visible (unlike Add's row/wrap swap) and its own label carries
+  // the open/closed state plus a live count -- so a filter she set earlier is
+  // never silently invisible just because the panel is collapsed.
+  let swfFilterOpen = false;
+  function swfActiveFilterCount() {
+    return [swfSpeakerFilter, swfReactionFilter, swfFeelingFilter, swfOriginFilter].filter(Boolean).length;
+  }
+  function swfSyncFilterBtn() {
+    const btn = swf$("swfFilterBtn");
+    if (!btn) return;
+    const n = swfActiveFilterCount();
+    btn.textContent = (swfFilterOpen ? "Hide filters" : "Filter") + (n ? ` · ${n}` : "");
+    btn.setAttribute("aria-expanded", String(swfFilterOpen));
+  }
+  function toggleSwfFilter() {
+    swfFilterOpen = !swfFilterOpen;
+    swf$("swfFilterWrap").hidden = !swfFilterOpen;
+    swfSyncFilterBtn();
+  }
+
   function swfStartEdit(id) {
     const e = SWF_ENTRIES.find(x => x.id === id);
     if (!e) return;
@@ -44986,6 +45019,7 @@
 
     swf$("swfLibCount").textContent = `${SWF_ENTRIES.length} saved`;
     swfSyncHeaderCount();
+    swfSyncFilterBtn();
 
     swf$("swfLibrary").innerHTML = shown.length ? shown.map(e => `
       <div class="swf-entry">
@@ -45056,6 +45090,7 @@
   });
   document.getElementById("swfAddBtn").addEventListener("click", () => { openSwfAdd(); swf$("swfPhrase")?.focus(); });
   document.getElementById("swfDoneBtn").addEventListener("click", closeSwfAdd);
+  document.getElementById("swfFilterBtn").addEventListener("click", toggleSwfFilter);
 
   document.getElementById("swfLoadTranscript").addEventListener("click", () => {
     const text = swf$("swfTranscriptInput").value;
