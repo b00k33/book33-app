@@ -4348,8 +4348,12 @@
   }
   /* 2026-09-17 (synth22, "right when you mark the event done") -- the debrief
      popover a tick opens for a conversation-worthy event, same fixed/z-index/
-     radius/shadow recipe as .travel-peek-pop just above. */
-  .guide-debrief-pop {
+     radius/shadow recipe as .travel-peek-pop just above.
+     2026-09-20: .pain-log-pop (shoulder-rehab check-in, search "openPainLogPop")
+     joins this selector rather than duplicating it -- identical shape, different
+     trigger, its own class only so the two popovers' own querySelectors never
+     collide with each other. */
+  .guide-debrief-pop, .pain-log-pop {
     position: fixed; z-index: 300; width: min(230px, calc(100vw - 32px));
     background: var(--paper); border: 1px solid var(--note-line); border-radius: 14px;
     box-shadow: var(--page-shadow); padding: 12px 14px;
@@ -5869,6 +5873,11 @@
      legible rather than implied). Untimed rows show nothing -- R18, no filler. */
   .dp-t-time { flex: none; margin-left: auto; font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
   .dp-t-row.done .dp-t-time { opacity: 0.55; }
+  /* 2026-09-20 (shoulder-rehab ask, "view it directly [in the calendar]"): the
+     level logged via openPainLogPop for TODAY's occurrence, right on the same
+     row she ticked it from -- no second page to check. Untracked/unlogged rows
+     show nothing (R18, no filler, same rule .dp-t-time follows above). */
+  .dp-t-pain { flex: none; margin-left: 4px; font-size: 13px; line-height: 1; }
   /* TASKS keep soft rounded mochi corners + a round gold tick;
      ROUTINES are tasks on a schedule — rounded, tickable, gold ↻, steps + minutes in the
      meta; EVENTS (appointments/occasions) are rounded pills too, per "every box
@@ -23503,6 +23512,15 @@
               <button type="button" class="add-btn rtn-sub-add" id="fSubAdd">+ Add sub-task</button>
               <button type="button" class="add-btn rtn-sub-addgroup" id="fSubAddGroup">+ Add group</button>
             </div>
+            <!-- 2026-09-20 (shoulder-rehab ask, "a quick pain-level log each
+                 session"): reuses #fFillCalToggle's exact switch component
+                 (.rtg-auto-switch) -- a routine-level flag, not a per-occurrence
+                 setting, same shape as task.calOn. Off by default so nothing
+                 changes for any existing routine. -->
+            <div class="field full" id="fPainTrackField">
+              <label for="fPainTrackToggle">Ask how it felt each time <span class="field-hint">a quick check-in right after you tick it off</span></label>
+              <button type="button" class="rtg-auto-switch" id="fPainTrackToggle" role="switch" aria-checked="false" aria-label="Ask how it felt each time"></button>
+            </div>
           </div>
           <!-- 2026-08-26 ("tidy up the lower half"): Category/Goal/Notes -- each
                optional, each usually empty -- folded behind one disclosure instead of
@@ -27068,6 +27086,41 @@
   }
   function saveRoutines() { try { localStorage.setItem(ROUTINE_KEY, JSON.stringify(ROUTINE_TASKS)); } catch (e) {} saveWidgetDigest(); resyncItems(); }
   let ROUTINE_TASKS = loadRoutines();
+  // 2026-09-20 (shoulder-rehab ask, "a quick pain-level log each session"): any
+  // routine can opt in via task.painTrack (the #fPainTrackToggle switch); once on,
+  // ticking an occurrence done opens a small check-in (see openPainLogPop, mirrors
+  // openGuideDebriefPop exactly) instead of nothing. Entries live on the routine
+  // itself (task.painLog), same place task.log-shaped data already lives elsewhere
+  // in this file, so editing/deleting the routine carries its history with it —
+  // buildRoutineFromCurrentForm() carries painLog forward on every save the same
+  // way it already does for anchorTo/deadline/phase (search "orig.painLog").
+  const PAIN_LEVELS = [
+    { id: 1, label: "Pain-free", icon: "😌" },
+    { id: 2, label: "Mild", icon: "🙂" },
+    { id: 3, label: "Moderate", icon: "😕" },
+    { id: 4, label: "Sore", icon: "😣" },
+    { id: 5, label: "Severe", icon: "😖" },
+  ];
+  function addPainLog(taskId, dateKey, level) {
+    const t = ROUTINE_TASKS.find(x => x.id === taskId);
+    if (!t) return;
+    if (!Array.isArray(t.painLog)) t.painLog = [];
+    t.painLog.push({ date: dateKey, level, ts: Date.now() });
+    saveRoutines();
+  }
+  // The most recent entry for THIS occurrence's own date -- a routine ticked
+  // earlier today then re-logged (edit mistake, or a second same-day session)
+  // shows the latest tap, not the first.
+  function painLevelFor(e) {
+    if (!e.rtTaskId) return null;
+    const t = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
+    if (!t || !t.painTrack || !Array.isArray(t.painLog)) return null;
+    const dateKey = e.date || keyOf(TODAY);
+    const entries = t.painLog.filter(l => l.date === dateKey);
+    if (!entries.length) return null;
+    const last = entries.reduce((a, b) => (b.ts || 0) > (a.ts || 0) ? b : a);
+    return PAIN_LEVELS.find(p => p.id === last.level) || null;
+  }
   // one-time: seed the Saved-events library
   // from her existing recurring routines so it isn't empty on day one -- one entry
   // per routine with a track and a real weekdays list (the SIMPLE single-pattern
@@ -30860,10 +30913,13 @@
   // easy-to-change source (its filter is the ONLY place to narrow later).
   function dayRecapHTML(items) {
     if (!items.length) return `<div class="dp-recap-left">Nothing tickable on today's page yet.</div>`;
-    const row = (e, done) => `<button type="button" class="dp-t-row${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}
+    const row = (e, done) => {
+      const pain = done ? painLevelFor(e) : null;
+      return `<button type="button" class="dp-t-row${done ? " done" : ""}" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}
         aria-label="${done ? "Un-tick" : "Mark done"}: ${esc(e.title)}">
-        <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>${linkedBadgeHtml(e.linkInfo)}${e.start ? `<span class="dp-t-time">${esc(fmtTime(e.start))}</span>` : ""}
+        <span class="dp-dot${done ? " dp-dot-done" : ""}"></span><span class="dp-t-label">${esc(e.title)}</span>${linkedBadgeHtml(e.linkInfo)}${e.start ? `<span class="dp-t-time">${esc(fmtTime(e.start))}</span>` : ""}${pain ? `<span class="dp-t-pain" title="${esc(pain.label)}">${pain.icon}</span>` : ""}
       </button>`;
+    };
     // 2026-09-01 (Linh, live screenshot of this list: "correspond with timeline
     // instead of randomly listed") -- SUPERSEDES the done-first/todo-second
     // grouping: rows now run in the day's own order, all-day/untimed items
@@ -59249,13 +59305,23 @@
       const tickedEv = willBeOn ? TL_ITEMS_BY_ID[tickedId] : null;
       const tickedGuideCtx = tickedEv ? eventGuideContext(tickedEv) : null;
       const debriefWorthy = tickedGuideCtx && (guideWorthShowing(tickedGuideCtx) || tickedGuideCtx.place || tickedGuideCtx.person);
+      // 2026-09-20 (shoulder-rehab ask, "a quick pain-level log each session"):
+      // same trigger shape as debriefWorthy just above -- only a routine occurrence
+      // whose own task opted in (task.painTrack, the #fPainTrackToggle switch)
+      // gets this; every other tick is untouched. A routine tagged for BOTH (real
+      // guide place/person AND pain tracking) is a shape that shouldn't come up in
+      // practice, but the pain check-in wins if it ever does -- it's the more
+      // specific, deliberately-opted-into signal of the two.
+      const painTask = tickedEv && tickedEv.rtTaskId ? ROUTINE_TASKS.find(x => x.id === tickedEv.rtTaskId) : null;
+      const painLogWorthy = !!(painTask && painTask.painTrack);
       // renderDay() below replaces this node synchronously (same reason
       // celebrateIfDone above reads its rect first) -- capture the anchor point
       // now, pass plain numbers, never the element itself.
-      const tickRect = debriefWorthy ? tickEv.getBoundingClientRect() : null;
+      const tickRect = (debriefWorthy || painLogWorthy) ? tickEv.getBoundingClientRect() : null;
       tickTask(tickedId, willBeOn, tickEv.dataset.fitLink, tickEv.dataset.fitDate);
       renderDay();
-      if (debriefWorthy) openGuideDebriefPop(tickRect, tickedId);
+      if (painLogWorthy) openPainLogPop(tickRect, painTask.id, tickedEv.date || keyOf(TODAY));
+      else if (debriefWorthy) openGuideDebriefPop(tickRect, tickedId);
       return;
     }
     // edit a hand-written event — or, when the id matches a recurring-event
@@ -59605,6 +59671,7 @@
      submit handler saves this as a real routine instead (ROUTINE_TASKS). ---- */
   let fRptWeekdays = [];
   let fFillCalOn = true;
+  let fPainTrackOn = false;
   // Picking a repeat here promotes the event into a real
   // ROUTINE_TASKS record on Save (see the submit handler, "This will become a
   // repeating event"), reusing the event's own id so every Habits streak keyed
@@ -59868,6 +59935,15 @@
     fFillCalOn = !fFillCalOn;
     syncFFillCalToggle();
   });
+  function syncFPainTrackToggle() {
+    const btn = document.getElementById("fPainTrackToggle");
+    if (btn) { btn.setAttribute("aria-checked", String(fPainTrackOn)); btn.classList.toggle("on", fPainTrackOn); }
+  }
+  document.getElementById("fPainTrackToggle").addEventListener("click", () => {
+    fPainTrackOn = !fPainTrackOn;
+    syncFPainTrackToggle();
+  });
+  syncFPainTrackToggle();
   document.getElementById("fDate").addEventListener("input", updateEachWeekdayLabel);
   // Keeps the Day button's "Mon, 24 Aug" label
   // live as she picks (native control or, at mobile widths, b33mp) -- Start/End
@@ -59965,7 +60041,7 @@
     fRepeatWeekdays = []; fExtraSchedules = [];
     renderFSchedExtra(); syncFWeekdayButtons();
     formKind = "event";
-    fRepeatChoice = "none"; fRptWeekdays = []; fFillCalOn = true;
+    fRepeatChoice = "none"; fRptWeekdays = []; fFillCalOn = true; fPainTrackOn = false; syncFPainTrackToggle();
     convertingTodoId = null;
     // form.reset() only resets
     // real form CONTROLS to their HTML defaults -- fSubList's dynamically-built
@@ -60460,6 +60536,7 @@
     fEst.value = fDur.value;
     syncDurBoxesFromFDur();
     fFillCalOn = task.calOn !== false; syncFFillCalToggle();
+    fPainTrackOn = !!task.painTrack; syncFPainTrackToggle();
     document.getElementById("fRptStartDate").value = task.startDate || "";
     // Until: endDate/repeatCount round-trip the same way buildRoutineFromCurrentForm()
     // writes them -- repeatCount (if present) takes the radio back to "After N times"
@@ -62543,6 +62620,61 @@
     if (state.guideDebriefEventId && !e.target.closest(".guide-debrief-pop")) closeGuideDebriefPop();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeGuideDebriefPop(); });
+  // 2026-09-20 (shoulder-rehab ask, "a quick pain-level log each session"): same
+  // shape as renderGuideDebriefPop/openGuideDebriefPop/closeGuideDebriefPop just
+  // above (search those names for the reasoning -- hoisted to body, fixed
+  // position, outside-click-or-Escape closes), reusing their CSS (.pain-log-pop
+  // joins the .guide-debrief-pop selector, search "openPainLogPop" in the CSS)
+  // rather than a parallel set of rules. Opens only for a routine occurrence
+  // whose task has painTrack on (see the main tick delegate, search
+  // "painLogWorthy") -- everything else ticks exactly as it always has.
+  function renderPainLogPop() {
+    const pop = document.querySelector(".pain-log-pop");
+    if (!pop || !state.painLogTaskId) return;
+    const t = ROUTINE_TASKS.find(x => x.id === state.painLogTaskId);
+    if (!t) { closePainLogPop(); return; }
+    pop.innerHTML = `
+      <div class="guide-debrief-title">🩹 How did it feel — ${esc(t.title)}?</div>
+      <div class="tl-guide-chips">${PAIN_LEVELS.map(p =>
+        `<button type="button" class="tl-guide-chip" data-pain-log="${p.id}">${p.icon} ${esc(p.label)}</button>`
+      ).join("")}</div>`;
+  }
+  function openPainLogPop(rect, taskId, dateKey) {
+    if (!rect) return;
+    let pop = document.querySelector(".pain-log-pop");
+    if (!pop) {
+      pop = document.createElement("div");
+      pop.className = "pain-log-pop";
+      document.body.appendChild(pop);
+    }
+    pop.style.left = `${Math.round(Math.max(12, Math.min(rect.left, window.innerWidth - 250)))}px`;
+    pop.style.top = `${Math.round(Math.min(rect.bottom + 8, window.innerHeight - 160))}px`;
+    state.painLogTaskId = taskId;
+    state.painLogDate = dateKey;
+    renderPainLogPop();
+  }
+  function closePainLogPop() {
+    if (!state.painLogTaskId) return;
+    state.painLogTaskId = null;
+    state.painLogDate = null;
+    const pop = document.querySelector(".pain-log-pop");
+    if (pop) pop.remove();
+  }
+  document.addEventListener("click", e => {
+    // Same same-click-opens-and-closes guard as the debrief pop's own listener
+    // just above (search "the SAME click that opens the popover") -- identical
+    // reason, this popover can also be opened from a tick in the same bubble phase.
+    if (e.target.closest("[data-tick-ev]")) return;
+    const chip = e.target.closest("[data-pain-log]");
+    if (chip) {
+      if (state.painLogTaskId) addPainLog(state.painLogTaskId, state.painLogDate, parseInt(chip.dataset.painLog, 10));
+      closePainLogPop();
+      renderDay();
+      return;
+    }
+    if (state.painLogTaskId && !e.target.closest(".pain-log-pop")) closePainLogPop();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closePainLogPop(); });
   // 2026-08-17 (Book33 — rail widgets brief): delegated so every .patients-nudge
   // trigger toggles itself (was #patientsNudge-only) -- #railPatNudge (the "Today's
   // patients" rail card's copy) rides this for free, same reason every other rail
@@ -64580,6 +64712,7 @@
     };
     if (mode) task.mode = mode;
     if (goalVal) task.goal = goalVal;
+    if (fPainTrackOn) task.painTrack = true;
     if (start) task.start = start;
     // 2026-09-15 (fixing the Conversation Guide's "add a location" dead end):
     // ROUTINE_TASKS now carries a location -- generatedFor()'s two routine-
@@ -64689,6 +64822,10 @@
         if (orig.deadline != null) task.deadline = orig.deadline;
         if (orig.deadlineLabel != null) task.deadlineLabel = orig.deadlineLabel;
         if (orig.phase != null) task.phase = orig.phase;
+        // 2026-09-20 (shoulder-rehab pain log): not a form field, so it needs the
+        // same carry-forward as anchorTo/deadline/phase above, or re-saving the
+        // routine (even just to tweak a step) would silently wipe every past entry.
+        if (Array.isArray(orig.painLog)) task.painLog = orig.painLog;
       }
     }
     if (editingRoutineId) {
