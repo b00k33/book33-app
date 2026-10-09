@@ -264,7 +264,7 @@ scopes for a routine, and **yes** to drag-to-move / drag-the-edge-to-resize.
   then `bdayActionRows(e, true)`; no numerology (the right rail never carries it).
   The To-do card hides the active Mode's to-dos while the group lists them. Right
   now's NEXT row is plain again — no quick-add "+", no FREE gap row below it
-  (both retired same-day they shipped, RETIRED-FEATURES.md §14, "i dont need this").
+  (both retired same-day they shipped, RETIRED-FEATURES.md §13, "i dont need this").
 - **Cliniko paste box (2026-09-03 pm, "a text box so i can copy paste my cliniko
   schedule"):** `wmbPasteFormHtml()` (one collapsed "Paste Cliniko schedule ▾" line →
   textarea + Today/Tomorrow + Save) is mounted in the panel's Today's patients rail
@@ -285,7 +285,7 @@ scopes for a routine, and **yes** to drag-to-move / drag-the-edge-to-resize.
   "Next" rows (current + next patient off the same `wmbPatientList()`) or "N
   patients today — all seen" once the day's done. The full chronological list,
   per-patient briefing, gaps and duties stay the board's job alone — tap "Work day
-  board →" in the group head. RETIRED-FEATURES.md §15 (also notes the
+  board →" in the group head. RETIRED-FEATURES.md §14 (also notes the
   `railPatients` rail card above still duplicates the list when no session is
   running — out of scope for this pass, flag before touching).
 - **Walk-ins merge into a pasted day (2026-09-03, her pick "Merge the calendar in").**
@@ -1257,7 +1257,7 @@ calendar only suggests. The active Mode reshapes the whole app.**
 *(Rewritten 2026-09-03 — "make the modes on c22 manual toggle instead of auto", the
 third walk-back in three days after "prevent modes from auto turning on" (09-01) and
 "stop modes from taking over screen and calendar" (09-03). The original rule 2 said
-the calendar decides automatically; it no longer does. RETIRED-FEATURES.md §16.)*
+the calendar decides automatically; it no longer does. RETIRED-FEATURES.md §15.)*
 
 1. **One system.** A CBD Work shift is simply an event tagged `work`; tagging it is
    what makes Work Mode *offered* during that block. No second concept, no second word.
