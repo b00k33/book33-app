@@ -7,6 +7,34 @@ removals are newer); flag the conflict rather than quietly reinstating the featu
 Book33 is a single-file mobile web app (index.html). It must always look clean,
 symmetrical, aligned and organized. Follow every rule, then re-check your work.
 
+## C22's current focus — 3 pillars (2026-10-10)
+New design/build effort goes to three pillars by default now: **birthday tracking**,
+**fitness tracking**, and **marital responsibilities**. Nothing below is deleted or
+hidden because of this — her explicit answer was keep, not remove: every other feature
+documented in this file (Life Map, Modes, Numerology/Cosmos, Work/Cliniko clinic
+scheduling, Money, Home & Family, Conversation Guides/Swipe File, and the rest) stays
+real, intact and reachable exactly as described below. It just isn't where new design
+effort defaults to.
+
+**Where each pillar actually stands (2026-10-10 audit):**
+- **Birthdays** — already built: a dedicated page (`renderBirthdays`), a widget group
+  (`#wrBdayGroup`/`renderWrBdayGroup()`), a Mode colour, and popovers reused across
+  Day/Week/Month/Life Map. Elevate what exists; this is not a from-scratch build.
+- **Fitness** — real data (`FIT_LOG`) and several logging surfaces (Day's fitness-link
+  tile, Today's echo, the Habits grid row, Growth's stats), but no single home page —
+  one existed and was retired 2026-08-06. Becoming a real pillar runs through its own
+  `ask28` (the paused "fitness event → plan/actual training page" redesign), not a
+  rules-file edit.
+- **Marital responsibilities** — nothing built yet. Closest existing scaffolding: the
+  "Us" page (Mine/Partner/Both task-splitting), the `marriage` life-track/colour
+  (currently just a budget bucket), `partnerName()`/`PARTNER_KEY`, and the generic
+  spouse relationship on People. Her scope for it: shared duties/chores, quality-time
+  commitments, and logistics she owns on his behalf — still to be designed, via `ask28`.
+
+As each pillar goes through its own build, its concrete rules land as their own
+subsection under this one — same as Life Map and Modes already have theirs. This
+section is the index that grows, not a finished spec.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
@@ -22,9 +50,9 @@ everything rounded; soft pastel fills for calendar blocks with dark text on them
 clean sans face; no gradients, no dark card surfaces, no drop-shadowed sticker icons —
 line icons only. Colour is category/Mode, never decoration; blue is the single
 interactive accent.
-**Shape** — cards ~16px radius, tiles/blocks ~12px, chips 999. Gaps and padding on the
-`4 / 8 / 12 / 16 / 24 / 32` scale, card padding 16, tile gap 8. Generous whitespace: a
-card breathes, a list does not pack.
+**Shape** — cards, tiles and blocks are rounded per the radius tokens (Component
+reference, below); chips are 999. Gaps and padding follow the spacing scale (Spacing &
+size, below); tile gap 8. Generous whitespace: a card breathes, a list does not pack.
 **Behaviour** — one signal per row (colour *or* weight *or* size, never two); a name is
 never abbreviated by the layout, everything beside it may be; empty things are hidden in
 a list, kept in a sequence; every state that can be turned off can be turned back on from
@@ -62,8 +90,9 @@ A section label stays quieter than a name because of case and colour, not size.
 Three columns plus a rail:
 1. **Left nav, ~180px, LABELLED** — line icon + word per item, active item on a soft tint
    with a 4px accent bar at the left edge, avatar + chevron pinned bottom-left. Her standing
-   "labels over icons" preference, made concrete. Priority order stays Today > Events >
-   Life Map > To-do > everything else.
+   "labels over icons" preference, made concrete. Priority order is her build-pass answer
+   #4 below (unchanged by the 3-pillars focus above — nav restructuring for the pillars is
+   its own future design pass, not done here).
 2. **Left column, ~275px, stacked white cards:** TODAY (label + "View week" link; a
    2-column grid of 8 numerology tiles: UD · PM · Ruler · Moon · Sign · Zodiac year ·
    Zodiac month · PY — big value, small caption) → mini month (‹ › in the header; selected
@@ -83,8 +112,8 @@ age · cycle) · **Day ▾** view switch (1/3/5/7) · moon (theme) · gear. Bott
 section header is label · count · optional right-aligned link ("View all"); the toggle is
 one segmented control for every either/or, filled accent on the active option; the
 capsule is a 20px tabular-numeral pill.
-**Tap targets:** 44px for a primary control; 34px allowed for a full-width single-purpose
-row separated by space; the 24–44px band is the floor for a dense list only.
+**Tap targets:** base rule is 44px (Spacing & size, below). This view's one real
+exception: 34px allowed for a full-width single-purpose row separated by space.
 
 ### PART 4 — BEHAVIOURS THE MOCK IMPLIES (code7)
 The numerology tiles are the day's context at a glance — no tap needed. The mini month
@@ -648,9 +677,9 @@ calibration — full detail in cross-session memory `feedback_code7_calibration`
 - **Full-bleed pages vs. cap-and-centre.** The page canvas itself is full-bleed at
   every width; content caps (`--content-max` 720 for forms/reading, `--wide-max`
   1040–1160 for tables/dashboards) govern INNER content only. Don't re-add a page-level cap.
-- **Tap-target floor.** 44px is the preferred size for a primary control used
-  one-handed; the "24–44px acceptable" band (design45, Tap targets) is the floor for a
-  dense list, not a primary control.
+- **Tap-target floor.** 44px (Spacing & size, below) is the preferred size for a primary
+  control used one-handed; the "24–44px acceptable" band is the floor for a dense list,
+  not a primary control.
 - **Named off-scale exceptions** (mobile Day view, mobile Body page, mobile Routines,
   `.dp-t-row` dense list rows — see their own sections below) each win inside their own
   documented scope only. Don't round any of them back to the standard scale.
@@ -1072,7 +1101,7 @@ numeric rule in this file.
   to the LOWER half of that scale (4/8/12) rather than the upper half.
 
 ### Tap targets
-- The existing 44px minimum is unchanged and still absolute. It is NOT satisfied by row
+- The 44px minimum (Spacing & size, above) applies here too. It is NOT satisfied by row
   height alone — a 32px row is fine if the tappable area extends to 44px via padding, or
   the whole row is the target.
 - Where a compact row conflicts with 44px, the WHOLE ROW becomes the target rather than
@@ -1106,16 +1135,14 @@ numeric rule in this file.
 - Equal left/right padding, balanced top/bottom. Items share one left edge and
   consistent columns. Label/value pairs aligned. Group related items evenly.
 
-## Colours — Black & Brass, one source of truth
-- Use ONLY the token set (--ink*, --*-seed, --*-ink, --tl-*-bg, --accent-seed). Never
-  hardcode a hex in a component. Works in dark AND light. Track colours come only from
-  --*-seed. A hardcoded hex outside the :root block is always a bug, even one that
-  "matches" a token's current value by coincidence — it silently breaks the moment that
-  token changes or the theme switches.
-
 ## Component reference (concrete tokens — every page must match these)
 Most of these values already exist as the majority pattern somewhere in the file. The
-point is picking ONE and applying it everywhere.
+point is picking ONE and applying it everywhere. Every value below is a token (--ink*,
+--*-seed, --*-ink, --tl-*-bg, --accent-seed, --radius-*) — never a hardcoded hex or px
+pasted into a component. Works in dark AND light; track colours come only from
+--*-seed. A hardcoded value is always a bug, even one that currently "matches" a
+token's value by coincidence — it silently breaks the moment that token changes or the
+theme switches.
 - **Power-hour ring/bloom**: `POWER_HOURS` (Best/2nd Best/💰 Money = good/good/money,
   Worst/2nd Worst = bad) — the mark sits on the EVENT booked in a power hour, not the
   row. An event qualifies when MORE than half of its own real duration overlaps one
@@ -1132,18 +1159,18 @@ point is picking ONE and applying it everywhere.
 - **Pills, chips, tags, the primary "+ Add" button**: `border-radius: 999px`.
 - **Card padding**: 16px all sides as the default recipe. Deviate only for a row short
   enough to need less (use 12px, never an odd value like 13/14/15px).
-- **Type scale** (four sizes for reading text, nothing between):
-  - Page title (`.bd-head h1`): 38px, `var(--font-display)`, weight 400.
-  - Section header (`.section-head h2`): 20px, `var(--font-display)`, weight 400.
-  - Body text: 13px, regular weight.
-  - Label / caption / meta: 11px, `--ink-soft` or `--ink-faint`.
+- **Type scale** — one scale for reading text, defined once in design45 PART 2 above
+  (26/20/14/13/11px) — don't restate different numbers here. Page titles specifically
+  follow Page-header law instead: body scale, never 38px or the display font (confirmed
+  in code — `.bd-head h1` was demoted app-wide across all 32 pages, index.html, the
+  "design45 — the Day-view reference" block's own header-law comment).
   - No half-pixel sizes and no near-duplicate in-between sizes used as one-off tuning —
     round to the nearest scale step.
   - **5th role: numeral / glyph display.** Big glanceable numbers and icons — calendar
     date numbers, tile stat values, streak counters, the zodiac hanzi glyph — sit outside
-    the four reading-text sizes above on purpose. Size to the tile/card that holds it,
-    not to 11/13/20/38 — observed range 12-58px. Still gold/`--ink` per the colour rules;
-    only the size is exempt.
+    the reading-text scale above on purpose. Size to the tile/card that holds it, not to
+    the scale — observed range 12-58px. Still gold/`--ink` per the colour rules; only the
+    size is exempt.
 - **Buttons**:
   - `.btn-save` (primary Save inside an editor): 8px 20px padding, 13px font — this exact
     size everywhere. Don't shrink it per-page.
