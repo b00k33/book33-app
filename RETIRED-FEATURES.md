@@ -190,21 +190,7 @@ would force far more scrolling than before. Measured live at 1440×900: the defa
 Mobile/tablet/base `--hour-h` (74/77px) were already the "busy ordinary" values and
 needed no change — they're just uniform now too.
 
-## 7. Known dead code left in place (intentional)
-
-Self-contained, unreachable, and harmless — left rather than torn out, and disclosed
-here so nobody "discovers" it and wires it back up:
-
-- `renderCategories()`, `catRowHtml()`, `catReassignHtml()` and the `#categoriesPage`
-  delegates' `data-cat-*` branches (no `#catBody` element exists any more)
-- `renderRtnGridNested()`, `renderRtnGridCardsNested()` (only reachable via the removed
-  `trackcat` grouping)
-- `syncWho()`, `syncTrack()`, `syncTrackSummary()` (null-guarded no-ops now; their
-  callers exist for the data round-trip in §4)
-- `computeCompactHours()`, `POWER_HOUR_TYPE_H`, `powerHourH()` (§6 above — their
-  ROW-HEIGHT role is retired; `POWER_HOURS` itself is still very much live)
-
-## 8. Nav rail trim — retired 2026-08-26
+## 7. Nav rail trim — retired 2026-08-26
 
 Linh: "cut the nav rail down to the pages I actually use. It currently pins twelve,
 and I use six." `NAV_ITEMS` (the single array read by `navPanelRowHtml()`,
@@ -257,7 +243,7 @@ own render function, data and routes; `B33_ICONS` entries for unpinned pages (st
 shown inside Chapters); the Chapters row and Settings footer row, both untouched
 including their separators.
 
-## 9. Mobile Day-view header rows — retired 2026-08-27
+## 8. Mobile Day-view header rows — retired 2026-08-27
 
 Measured live at 412×915, mobile Day view, drawer open: `.nav-tiers`' "August ▾"
 control, `#dayRow2`'s big date, and `.day-step-row`'s `‹ Thursday 27 August › ⚙` row
@@ -267,7 +253,7 @@ by a 7-day strip in the top bar itself (`#navDayStrip`, `renderNavDayStrip()`) �
 day to jump to it, swipe to step the window (reuses `bindSwipe()`, the same function
 the calendar grid's own swipe already used).
 
-## 10. All Events "Every year" Date order / A–Z toggle — retired 2026-08-29
+## 9. All Events "Every year" Date order / A–Z toggle — retired 2026-08-29
 
 The `#evlYearSortToggle` control (`Date order` / `A–Z` buttons) on the All Events
 page's Repeats → Pattern → Every year section, and the month-grouped list it
@@ -289,7 +275,9 @@ more, but leaving it in place means an old saved value on her device never throw
 
 **Removed (hidden, not deleted — CSS `display: none`, mobile-only, ≤640px):**
 - `#navMonthBtn` / `#navMonthPop` (the "August ▾" control) — its month-name label and
-  its own 1/3/5/7 day-count picker (a 4th redundant copy) both retire outright.
+  its own 1/3/5/7 day-count picker (a 4th redundant copy) both retire outright. §8
+  (08-27) had already functionally replaced this control with the day strip; this is
+  where the actual DOM element was finally hidden in code, two days later.
 - `.day-step-row` (`#dayStepToday` / `#dayStepPrev` / `#dayStepDate` / `#dayStepNext`)
   — subsumed by tapping a day in the strip (jump anywhere, including today) or
   swiping it (step the window).
@@ -327,7 +315,7 @@ day headers) — a different, necessary element, not a duplicate of the new stri
 `.mini-cal-wrap` (the mini month grid) — already lived in the ☰ drawer on mobile
 Day view before this change, never inside the rows retired here.
 
-## 11. design44 → design45 — retired 2026-09-02
+## 10. design44 → design45 — retired 2026-09-02
 
 Linh supplied a full Day-view mock ("i really like this design. use it") and then
 "remove and delete design44". CLAUDE.md's design44 (one-screen summary, R1–R19, the
@@ -365,7 +353,7 @@ rule forbids a second control with the same handler. The mock's UP NEXT card
 ("mock, minus whats next") and the on-demand NOW rail (she kept RIGHT NOW always
 open) were declined by her, not by me.
 
-## 12. Session card "Stay 15 more →" — retired 2026-09-03
+## 11. Session card "Stay 15 more →" — retired 2026-09-03
 
 Linh: "remove stay 15 more, i dont use it". The link in the session card's head
 row (`.sc-stay-link`, `data-sc-extend="15"`, added 2026-08-31 as the one surviving
@@ -379,7 +367,7 @@ Also that day: **Mode takeover and Mode calendar filtering became opt-in**
 her "stop modes from taking over screen and calendar"). Nothing deleted — the
 Focus button, takeover overlay and Mode badge all come back when switched on.
 
-## 13. Session rail icon (⏳) and the Session card's own panel — retired 2026-09-03
+## 12. Session rail icon (⏳) and the Session card's own panel — retired 2026-09-03
 
 Linh, screenshot of the Right now panel: "organise the work widgets together with
 work mode". The Session card no longer has its own icon in `#wrIconRail` or its own
@@ -387,7 +375,7 @@ one-card panel; it mounts inside the combined Right now panel, in the **Mode gro
 (`#wrModeGroup`, `wrModeGroupEl()`/`wrSyncModeGroup()`) together with the Mode card,
 directly under Right now, at both widths (desktop panel and the phone's right
 drawer). A session starting auto-opens the combined panel, not a Session panel.
-Same shape as §11's retirement of the Today/Mode/Shopping icons. Also retired with
+Same shape as §10's retirement of the Today/Mode/Shopping icons. Also retired with
 it: the "Work day board →" link inside the card's patients section (one door per
 card — it sits in the group's head now), the Mode card's own name in its title while
 grouped ("To-dos · 0 of 4"; the group head names the Mode), the hero (96px rings +
@@ -404,9 +392,9 @@ mobile media query, same list `.nav-search-btn`/`.nav-mode-badge`/`.day-fab` alr
 use) so nothing new renders above 640px. `#ddtGear` (desktop's own separate gear) is
 untouched.
 
-## 14. Right now's NEXT quick-add "+" and the FREE gap row — retired 2026-09-03
+## 13. Right now's NEXT quick-add "+" and the FREE gap row — retired 2026-09-03
 
-Both shipped same-day as part of §13's Mode group follow-up (code7, "Right now keeps
+Both shipped same-day as part of §12's Mode group follow-up (code7, "Right now keeps
 NEXT, + moves there"); Linh lived with them live on her phone for under an hour and
 sent a screenshot: "i dont need this" (confirmed via popup: both the "+" and the FREE
 row). `renderNowFacts()` now renders only the plain NEXT row — no `.now-row-wrap`
@@ -415,7 +403,7 @@ and no `FREE · <duration>` row for the gap after it. The `.now-row-wrap`/`.now-
 CSS was deleted as dead weight along with it. `nextFreeGap()` itself is untouched —
 the hero card's "Free until X at Y" sub-line still reads it.
 
-## 15. Work session card's full patient list + paste box — retired 2026-09-03
+## 14. Work session card's full patient list + paste box — retired 2026-09-03
 
 Linh: "merge the work mode widget nad day board together. they are a pair" — the
 same `wmbPatientList()` rows and `wmbPasteFormHtml()` paste box were rendering in
@@ -435,13 +423,13 @@ still renders the full list + its own paste box when no Work session is running
 card shown in her screenshots, not this secondary rail card. Flag it to her
 before touching it if it comes up again.
 
-## 16. Sessions starting themselves from the calendar — retired 2026-09-03
+## 15. Sessions starting themselves from the calendar — retired 2026-09-03
 
 Her words: "make the modes on c22 manual toggle instead of auto". Third step of
 the same walk-back: 09-01 "prevent modes from auto turning on" (takeover made
 opt-in, `MT_AUTO_MODES` emptied), 09-03 "stop modes from taking over screen and
-calendar" (filtering opt-in), and now the last automatic piece — the session
-itself. Shown a two-way mock: A "chips; calendar suggests, you tap" vs B "plain
+calendar" (filtering opt-in, full detail in §11), and now the last automatic
+piece — the session itself. Shown a two-way mock: A "chips; calendar suggests, you tap" vs B "plain
 switches, calendar ignored" — she picked **A**, with a hand-started session
 ending at the covering block's end when there is one.
 
@@ -459,10 +447,10 @@ legal: `endsAt: null`, `eventId: null`, open-ended, "Running since 9:04".
 **Kept:** the event sheet's "Start <Mode> now" row (manual already); auto-END at
 a block's scheduled end for sessions started under a block; plan-complete ends a
 session; `extendSession()`/`bookAnotherSession()`/`moveToNextSession()` still
-unrendered (§12). `activeModeItem()` still scans the calendar — only to feed the
+unrendered (§11). `activeModeItem()` still scans the calendar — only to feed the
 suggestion and the opt-in filter badge.
 
-## 17. "Open for now" card's "Fits in this gap" to-dos — retired 2026-09-03
+## 16. "Open for now" card's "Fits in this gap" to-dos — retired 2026-09-03
 
 Her words: "i dont like the open for now page. let me choose mode instead of
 choosing to do" — answer: "the Mode chips first — pick a Mode, then that
