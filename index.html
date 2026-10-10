@@ -12839,21 +12839,25 @@
   .day-right-drawer.open { transform: translateX(0); visibility: visible; transition: transform 0.25s ease, visibility 0s; }
   .day-right-drawer-body { padding: 16px; }
   /* 2026-10-10 (Linh, screenshot of this exact drawer: "remove these - i want
-     to clear so i can redesign it"): the Right Now status card, the HOME mode
-     grid, Today's progress bar, and the To-do list all cleared from this ONE
-     mobile drawer, CSS-only -- placeDayDrawers() still reparents all four of
-     these real elements in here exactly as before (that reparenting engine is
-     too load-bearing across breakpoints to touch for a visual clear), they
-     just render display:none once they land. Nothing is deleted and nothing
-     stops working elsewhere: #rightNowCard/#wrModeGroup/#dayCtxWrap/#wrMobile
-     all still populate and still show normally on desktop (a different parent,
-     #wrPanelBody -- see renderWrPanel()'s own 2026-10-10 comment for that
-     half). Scoped to being a DIRECT child of this drawer body specifically, so
-     nothing outside this one mobile panel is touched.
-     Revert by deleting this rule once the redesign replaces it with something real. */
+     to clear so i can redesign it"): the Right Now status card, Today's
+     progress bar, and the To-do list cleared from this ONE mobile drawer,
+     CSS-only -- placeDayDrawers() still reparents these real elements in here
+     exactly as before (that reparenting engine is too load-bearing across
+     breakpoints to touch for a visual clear), they just render display:none
+     once they land. Nothing is deleted and nothing stops working elsewhere:
+     #rightNowCard/#dayCtxWrap/#wrMobile all still populate and still show
+     normally on desktop (a different parent, #wrPanelBody -- see
+     renderWrPanel()'s own 2026-10-10 comment for that half). Scoped to being
+     a DIRECT child of this drawer body specifically, so nothing outside this
+     one mobile panel is touched.
+     2026-10-10 pt.2 ("restore just the Mode toggle", same day): #wrModeGroup
+     (and #wrBdayGroup, which rides directly under it) dropped back OUT of
+     this hide-list -- the one piece of the original four she asked back, so
+     the Fitness Mode card (marGroupHtml) has a way to show again. See
+     renderWrPanel()'s matching 2026-10-10 pt.2 comment for the desktop half.
+     Revert by adding #rightNowCard/#dayCtxWrap/#wrMobile's replacements here
+     once a real redesign replaces this blank state. */
   #dayRightDrawerBody > #rightNowCard,
-  #dayRightDrawerBody > #wrModeGroup,
-  #dayRightDrawerBody > #wrBdayGroup,
   #dayRightDrawerBody > #dayCtxWrap,
   #dayRightDrawerBody > #wrMobile { display: none; }
   /* the only always-visible cue a drawer swipes in from an edge -- faint gold
@@ -53760,12 +53764,17 @@
       // 2026-09-01 ("put right now and today and mode together on one panel",
       // then "move all these into the one panel"): no icons of their own any
       // more -- all three open inside rightNowCard's combined panel, see
-      // WR_RIGHTNOW_MEMBERS. (This also retired the old modeAmbientRail
-      // is-there-an-ambient-mode icon gate that lived here -- the element
-      // still self-hides inside the panel on the same condition, via
-      // renderModeAmbientRail() itself.) 2026-09-03: the Session card's own
-      // icon retired the same way -- it lives in the panel's Mode group now.
-      if (id === "dayCtxWrap" || id === "modeAmbientRail" || id === "shopSlot" || id === "daySessionCard") return;
+      // WR_RIGHTNOW_MEMBERS. 2026-09-03: the Session card's own icon retired
+      // the same way -- it lives in the panel's Mode group now.
+      if (id === "dayCtxWrap" || id === "shopSlot" || id === "daySessionCard") return;
+      // 2026-10-10 (Linh: "restore just the Mode toggle" -- the Mode group's
+      // only way back after the same-day Right Now clear below emptied the one
+      // panel that used to carry it): the old is-there-an-ambient-mode icon
+      // gate, un-retired as its own small icon rather than reviving the whole
+      // combined panel she asked cleared. Same self-hide condition
+      // renderModeAmbientRail() itself uses, so there's never a dead button on
+      // a HOME-mode day.
+      if (id === "modeAmbientRail" && activeMode().id === MODE_HOME.id) return;
       html += wrIconBtnHtml(id, WR_PINNED_LABELS[id]);
     });
     html += `<div class="wr-ic-grouplabel">Now</div>`;
@@ -54140,19 +54149,21 @@
     if (WR_PINNED_IDS.includes(wrOpenId)) {
       title.textContent = WR_PINNED_LABELS[wrOpenId];
       // 2026-10-10 (Linh: "remove these - i want to clear so i can redesign
-      // it", re: this combined Right Now panel): opens empty on purpose now --
-      // title/chrome only. Nothing below is deleted: WR_RIGHTNOW_MEMBERS
-      // (rightNowCard/daySessionCard/modeAmbientRail/dayCtxWrap/shopSlot) park
-      // safely offstage into #wrPinned via the existing pinnedEls loop a few
-      // lines down (never .remove()'d, since those are real reparented DOM
-      // nodes other surfaces still use), and the Daily-cluster cards/Mode
-      // group/Birthday group below simply never get built. Every one of those
-      // stays fully intact and usable elsewhere (the desktop widget rail, the
-      // Day page, Settings) -- this only clears what THIS one mobile panel
-      // shows. Revert this one line (back to WR_RIGHTNOW_MEMBERS) and restore
-      // the block below to bring the old content back, whenever the redesign
-      // is ready to replace it with something real instead of empty.
-      const memberIds = wrOpenId === "rightNowCard" ? [] : [wrOpenId];
+      // it", re: this combined Right Now panel): opening Right Now itself
+      // stays empty on purpose -- title/chrome only. rightNowCard's own members
+      // (daySessionCard/modeAmbientRail/dayCtxWrap/shopSlot) park safely
+      // offstage into #wrPinned via the existing pinnedEls loop a few lines
+      // down (never .remove()'d, since those are real reparented DOM nodes
+      // other surfaces still use), and the Daily-cluster cards below never get
+      // built for it. Revert this ternary's rightNowCard branch (back to
+      // WR_RIGHTNOW_MEMBERS) and restore the dailyWrap block below it to bring
+      // the old combined content back, whenever a real redesign replaces it.
+      // 2026-10-10 pt.2 ("restore just the Mode toggle", same day): the Mode
+      // icon is the one exception -- it opens its own group (session card +
+      // ambient rail together, same pairing placeDayDrawers() always built on
+      // mobile) so the Fitness Mode card (marGroupHtml) has a way back, without
+      // reviving the rest of what she asked cleared above.
+      const memberIds = wrOpenId === "rightNowCard" ? [] : wrOpenId === "modeAmbientRail" ? WR_MODE_GROUP_IDS : [wrOpenId];
       const members = memberIds.map(id => pinnedEls[id]).filter(Boolean);
       // The Daily widget group renders below the real members as generated
       // cards ("move all these into the one panel") -- same ordering/hidden
@@ -54160,13 +54171,15 @@
       // empty cards skipped), so Arrange still governs what shows here.
       const keep = [...members];
       let dailyWrap = null, modeGroup = null;
-      if (false) {   // cleared -- see the comment on memberIds just above
-        if (!wrPanelDailyWrap) { wrPanelDailyWrap = document.createElement("div"); wrPanelDailyWrap.id = "wrPanelDailyCards"; }
-        dailyWrap = wrPanelDailyWrap;
-        keep.push(dailyWrap);
+      if (wrOpenId === "modeAmbientRail") {
         modeGroup = wrModeGroupEl();
         keep.push(modeGroup);
         keep.push(wrBdayGroupEl());
+      }
+      if (false) {   // Daily-cluster cards stay cleared -- Right Now only, see above
+        if (!wrPanelDailyWrap) { wrPanelDailyWrap = document.createElement("div"); wrPanelDailyWrap.id = "wrPanelDailyCards"; }
+        dailyWrap = wrPanelDailyWrap;
+        keep.push(dailyWrap);
       }
       // This branch must clear what was already in
       // body -- a generated .wr-card left behind by the OTHER branch's own
