@@ -3094,6 +3094,29 @@
     flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
     align-items: center; text-align: center; gap: 24px; padding: 16px 24px 32px;
   }
+  /* 2026-10-10 (Workout Mode, #tlWorkoutOverlay): left-aligned/scrollable, unlike
+     .tl-walk-body's centred single-step layout just above -- this body holds real
+     sets tables (exercisesHtml), not one short line of step text. */
+  .tl-workout-title { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 700; font-size: 14px; color: var(--ink); }
+  .tl-workout-timer { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ink-faint); font-weight: 600; }
+  .tl-workout-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 14px; }
+  .tl-workout-body .tl-fit-week { justify-content: center; }
+  .tl-fit-rest-start-btn {
+    align-self: center; display: flex; align-items: center; gap: 6px; padding: 9px 16px;
+    font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink-soft);
+    border: 1px solid var(--note-line); border-radius: 999px; background: var(--paper); cursor: pointer;
+  }
+  .tl-fit-rest-start-btn:hover { border-color: var(--fit-workout); color: var(--fit-workout); }
+  .tl-workout-rest {
+    display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 14px;
+    border-radius: var(--radius-sm); background: color-mix(in oklab, var(--fit-workout) 12%, var(--paper));
+    font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
+  }
+  .tl-fit-rest-chip {
+    font: inherit; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 5px 10px;
+    border: 1px solid var(--note-line); border-radius: 999px; background: var(--paper); cursor: pointer;
+  }
+  .tl-fit-rest-chip:hover { border-color: var(--fit-workout); color: var(--fit-workout); }
   .tl-walk-progress { display: flex; align-items: center; gap: 8px; }
   .tl-walk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--note-line); }
   .tl-walk-dot.done { background: var(--margin-rule); }
@@ -4122,6 +4145,32 @@
      as "big" even though the text itself was already small) -- just a bare quiet line
      in the default view now, same font-size/colour as before. */
   .tl-detail-fitlink { font-size: 13px; color: var(--ink-faint); padding: 4px 0; }
+  /* 2026-10-10 (Gym popover -> a real workout workflow): same tinted-card recipe as
+     .tl-detail-guide just below, --fit-workout instead of --accent-seed. Not
+     .tl-walk-start-btn's own class for the Start button -- that one is display:none
+     outside the @media(max-width:767px) walkthrough entry point a few rules up, a
+     mobile-only restriction this button must NOT inherit. */
+  .tl-detail-fit-card {
+    margin: 8px 0; padding: 10px 12px; border: 1px solid var(--note-line); border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--fit-workout) 7%, var(--paper));
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .tl-fit-week { display: flex; gap: 5px; }
+  .tl-fit-dot { width: 15px; height: 15px; border-radius: 50%; background: var(--note-line); flex: none; }
+  .tl-fit-dot.done { background: var(--fit-workout); }
+  .tl-fit-dot.planned { border: 1.5px solid var(--fit-workout); background: transparent; }
+  .tl-fit-dot.rest { background: color-mix(in oklab, var(--ink) 22%, transparent); }
+  .tl-fit-dot.today { outline: 1.5px solid var(--ink-faint); outline-offset: 2px; }
+  .tl-fit-plan-head { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  .tl-fit-plan-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tl-fit-plan-ex { font-size: 12px; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--note-line); border-radius: 999px; padding: 3px 9px; }
+  .tl-fit-start-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 16px; font: inherit; font-size: 13px; font-weight: 700;
+    border: 1px solid var(--fit-workout); border-radius: var(--radius-sm);
+    background: var(--fit-workout); color: var(--accent-on, #fff); cursor: pointer;
+  }
+  .tl-fit-start-btn:hover { filter: brightness(1.06); }
   /* 2026-08-05 (Part D, Reschedule/Duplicate): reuses .tl-detail-extra's own
      border-top/gap/padding rhythm (rule above) — same field look as .tl-rtn-note, same
      bordered/gold-text button language as .tl-detail-done-btn, just flex:1 pairs
@@ -20679,6 +20728,30 @@
     </div>
   </div>
 
+  <!-- 2026-10-10 (Gym popover -> "start a gym workflow"): same overlay+sheet shell as
+       #tlWalkOverlay just above (component reuse again) -- opens ON TOP of
+       #tlDetailOverlay, which stays open underneath. Differs from the walkthrough in
+       what the body holds: not one step at a time, but the week strip + every one of
+       today's exercises (exercisesHtml -- the SAME markup/mutators the Fitness page's
+       own logger uses, never a second copy of FIT_LOG) plus a running session timer and
+       an optional rest countdown, both of which update their own text node directly on
+       each tick (see openTlWorkout/renderTlWorkoutBody) rather than re-rendering the
+       whole body every second, which would wipe whatever she's mid-typing into a
+       weight/reps field. -->
+  <div class="tl-detail-overlay tl-walk-overlay" id="tlWorkoutOverlay" hidden>
+    <div class="tl-detail-sheet tl-walk-sheet" id="tlWorkoutSheet" role="dialog" aria-modal="true" aria-label="Workout">
+      <div class="tl-walk-head">
+        <button type="button" class="tl-walk-back" id="tlWorkoutBackLink">‹ Back</button>
+        <div class="tl-workout-title">
+          <span id="tlWorkoutTitle"></span>
+          <span class="tl-workout-timer" id="tlWorkoutTimer">0:00</span>
+        </div>
+        <button type="button" class="tl-walk-close" id="tlWorkoutClose" aria-label="Close">×</button>
+      </div>
+      <div class="tl-workout-body" id="tlWorkoutBody"></div>
+    </div>
+  </div>
+
   <!-- 2026-09-15 (Event Profile, Linh: "i want to be able to open the event like i
        open a patient profile"): same overlay+sheet pattern as #tlWalkOverlay just
        above -- opens ON TOP of #tlDetailOverlay, which stays open underneath, always
@@ -31362,6 +31435,35 @@
     return null;
   }
 
+  // 2026-10-10 (screenshot of the generic Gym popover: "give access to the gym planned
+  // session of day and week... start a gym workflow"): a fitness-aware card for any
+  // Gym/F45/Bouldering-type event. fitLink match first (the real wiring); a title match
+  // against FITNESS_TYPES as a fallback -- her own screenshot's "Gym" block carried
+  // neither fitLink nor a logged session, so without the fallback nothing fitness-aware
+  // would show at all. Deliberately independent of resolveFitSessionFor/fs above: this
+  // card is about TODAY'S PLAN, which exists whether or not a session has been logged
+  // yet, where resolveFitSessionFor only ever finds something AFTER one has.
+  function fitnessCardHtml(e) {
+    // Gym/F45/Bouldering only (exerciseKindFor's own keys) -- Pilates/Stretching stay
+    // session-level by her explicit prior pick ("stay session-level only, untouched"),
+    // so this card (and the Workout Mode it opens) never offers an empty exercise list
+    // for a type that was never meant to carry one.
+    const fitType = (e.fitLink && exerciseKindFor(e.fitLink)) ? e.fitLink
+      : FITNESS_TYPES.find(t => exerciseKindFor(t) && new RegExp(`\\b${t}\\b`, "i").test(e.title || ""));
+    if (!fitType) return "";
+    const d = parseKey(e.date);
+    const sessLogged = fitTypesOn(d).includes(fitType);
+    const specific = plannedFor(d);
+    const hasPlan = specific && specific.type === fitType && specific.exercises.length;
+    const planHtml = hasPlan ? `<div class="tl-fit-plan-head">${sessLogged ? "Logged today" : "Planned for today"}</div>
+        <div class="tl-fit-plan-list">${specific.exercises.slice(0, 4).map(ex => `<span class="tl-fit-plan-ex">${esc(ex.name)}</span>`).join("")}${specific.exercises.length > 4 ? `<span class="tl-fit-plan-ex">+${specific.exercises.length - 4} more</span>` : ""}</div>`
+      : "";
+    return `<div class="tl-detail-fit-card">
+        <div class="tl-fit-week">${fitWeekDotsHtml(d)}</div>
+        ${planHtml}
+        <button type="button" class="tl-fit-start-btn" data-fit-start="${esc(fitType)}:${esc(e.date)}">${sessLogged ? "▶ Continue workout" : "▶ Start workout"}</button>
+      </div>`;
+  }
   // 2026-08-11 (meal logging): the LINKED_MEALS analogue of resolveFitSessionFor above
   // -- unlike LINKED_FIT, the stored link already carries the meal's storage date (see
   // LINKED_MEALS's own declaration comment for why a bare id isn't enough here), so this
@@ -34545,6 +34647,7 @@
       ${streakRowHtml}
       ${chainRowHtml}
       ${nutritionRowHtml}
+      ${fitnessCardHtml(e)}
       ${phaseBandsHtml}
       ${remHtml}
       ${starsHtml}
@@ -34754,6 +34857,126 @@
     const e2 = TL_ITEMS_BY_ID[tlWalkItemId];
     if (e2 && tlWalkStepIdx < e2.steps.length - 1) { tlWalkStepIdx++; renderTlWalkBody(); }
     else closeTlWalk();
+  });
+  // ---- Workout Mode (2026-10-10, "give access to the gym planned session of day and
+  // week... start a gym workflow" -- her picks: today's plan, the week, logging
+  // without leaving, a live session feel): opens ON TOP of #tlDetailOverlay, same
+  // pattern as the walkthrough above. tlWorkoutSession() is the ONE FIT_LOG session
+  // this whole overlay operates on -- found by type for the date, or created via
+  // addFitSession if she's starting fresh (same function the Mode card's quick-log
+  // chips and the Fitness page's type picker both already call, never a parallel
+  // creator). The running timer and any rest countdown update their own text node
+  // directly on each tick (tickTlWorkoutTimer/tickTlWorkoutRest) rather than calling
+  // renderTlWorkoutBody() -- a full re-render every second would wipe whatever she's
+  // mid-typing into a weight/reps field underneath. ----
+  let tlWorkoutDateKey = null, tlWorkoutSessionId = null;
+  let tlWorkoutTimerInt = null, tlWorkoutRestUntil = 0, tlWorkoutRestInt = null;
+  function tlWorkoutSession() {
+    if (!tlWorkoutDateKey) return null;
+    return sessionById(parseKey(tlWorkoutDateKey), tlWorkoutSessionId);
+  }
+  function openTlWorkout(fitType, dateKey) {
+    armBackGuard();
+    const date = parseKey(dateKey);
+    let sess = fitSessionsOn(date).find(s => s.type === fitType);
+    if (!sess) sess = addFitSession(date, fitType);
+    if (!sess.startedAt) { sess.startedAt = Date.now(); saveFitLog(); }
+    tlWorkoutDateKey = dateKey; tlWorkoutSessionId = sess.id;
+    document.getElementById("tlWorkoutOverlay").hidden = false;
+    renderTlWorkoutBody();
+    clearInterval(tlWorkoutTimerInt);
+    tlWorkoutTimerInt = setInterval(tickTlWorkoutTimer, 1000);
+    tickTlWorkoutTimer();
+  }
+  function closeTlWorkout() {
+    // The timer was never just decoration -- on close, a blank Time/Duration (the
+    // Fitness page's own required-feeling fields, see setSessionField's comment)
+    // fills from what actually happened, same as she'd have typed in by hand.
+    const sess = tlWorkoutSession();
+    if (sess && sess.startedAt) {
+      const startD = new Date(sess.startedAt);
+      if (!sess.time) sess.time = minToTime(startD.getHours() * 60 + startD.getMinutes());
+      if (!sess.durationMin) sess.durationMin = Math.max(1, Math.round((Date.now() - sess.startedAt) / 60000));
+      saveFitLog();
+    }
+    document.getElementById("tlWorkoutOverlay").hidden = true;
+    clearInterval(tlWorkoutTimerInt); tlWorkoutTimerInt = null;
+    clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null;
+    tlWorkoutRestUntil = 0;
+    tlWorkoutDateKey = null; tlWorkoutSessionId = null;
+    refreshOpenTlDetail();   // the card underneath (week dots/plan line) picks up the new log
+    if (state.view === "day") renderDay();
+  }
+  function tickTlWorkoutTimer() {
+    const sess = tlWorkoutSession();
+    const el = document.getElementById("tlWorkoutTimer");
+    if (!sess || !el) return;
+    const elapsed = Math.max(0, Date.now() - sess.startedAt);
+    el.textContent = `${Math.floor(elapsed / 60000)}:${pad(Math.floor(elapsed / 1000) % 60)}`;
+  }
+  function tlWorkoutRestBannerHtml() {
+    return `<div class="tl-workout-rest" id="tlWorkoutRest">
+        <span>⏱ Resting — <span id="tlWorkoutRestSec"></span>s</span>
+        <button type="button" class="tl-fit-rest-chip" data-wo-rest-add30>+30s</button>
+        <button type="button" class="tl-fit-rest-chip" data-wo-rest-skip>Skip</button>
+      </div>`;
+  }
+  function tickTlWorkoutRest() {
+    const remain = Math.round((tlWorkoutRestUntil - Date.now()) / 1000);
+    const el = document.getElementById("tlWorkoutRestSec");
+    if (remain <= 0 || !el) {
+      clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null; tlWorkoutRestUntil = 0;
+      renderTlWorkoutBody();
+      return;
+    }
+    el.textContent = remain;
+  }
+  function startTlWorkoutRest(sec) {
+    tlWorkoutRestUntil = Date.now() + sec * 1000;
+    renderTlWorkoutBody();
+    clearInterval(tlWorkoutRestInt);
+    tlWorkoutRestInt = setInterval(tickTlWorkoutRest, 1000);
+    tickTlWorkoutRest();
+  }
+  // exercisesHtml(date, sess) below is the EXACT same markup the Fitness page's own
+  // #fitHomeToday host renders (liftExerciseHtml's real sets table + trend chip,
+  // climbExerciseHtml's grade/attempts/sent, the add-exercise row) -- this is a new
+  // VIEW onto FIT_LOG, never a second copy of it or its editing logic.
+  function renderTlWorkoutBody() {
+    const sess = tlWorkoutSession();
+    if (!sess) { closeTlWorkout(); return; }
+    const date = parseKey(tlWorkoutDateKey);
+    document.getElementById("tlWorkoutTitle").textContent = sess.type;
+    document.getElementById("tlWorkoutBody").innerHTML = `
+      <div class="tl-fit-week">${fitWeekDotsHtml(date)}</div>
+      ${tlWorkoutRestUntil > Date.now() ? tlWorkoutRestBannerHtml() : `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`}
+      ${exercisesHtml(date, sess)}
+    `;
+  }
+  document.getElementById("tlWorkoutClose").addEventListener("click", closeTlWorkout);
+  document.getElementById("tlWorkoutBackLink").addEventListener("click", closeTlWorkout);
+  document.getElementById("tlWorkoutOverlay").addEventListener("click", e => {
+    if (!e.target.closest(".tl-walk-sheet")) closeTlWorkout();
+  });
+  document.getElementById("tlWorkoutBody").addEventListener("click", e => {
+    // Stop this click from bubbling to #tlWorkoutOverlay's own outside-click-closes
+    // listener below -- same trap renderTlWalkBody's own click delegate documents and
+    // guards against (search its own e.stopPropagation() comment): any branch here that
+    // re-renders #tlWorkoutBody detaches e.target from the document mid-dispatch, which
+    // then reads as "clicked outside the sheet" and closes the whole overlay right
+    // after the real action (confirmed live: tapping "+ Add exercise" added the
+    // exercise AND immediately closed Workout Mode, before this fix).
+    e.stopPropagation();
+    if (e.target.closest("[data-wo-rest-start]")) { startTlWorkoutRest(90); return; }
+    if (e.target.closest("[data-wo-rest-add30]")) { tlWorkoutRestUntil += 30000; tickTlWorkoutRest(); return; }
+    if (e.target.closest("[data-wo-rest-skip]")) {
+      clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null; tlWorkoutRestUntil = 0;
+      renderTlWorkoutBody(); return;
+    }
+    handleExerciseClick(e, parseKey(tlWorkoutDateKey), renderTlWorkoutBody);
+  });
+  document.getElementById("tlWorkoutBody").addEventListener("change", e => {
+    handleExerciseChange(e, parseKey(tlWorkoutDateKey), renderTlWorkoutBody);
   });
   // ---- Event Profile: "open the event like a patient profile" (Linh, 2026-09-15) --
   // a fuller, staged view of an event, opened via the "⤢ Open full profile" button
@@ -35668,6 +35891,15 @@
     // back and re-render this exact sheet's "✓ Logged" line (see commitMealLog).
     const logMealBtn = e.target.closest("[data-log-meal]");
     if (logMealBtn) { openMealLogSheet(logMealBtn.dataset.logMeal); return; }
+    // "Start/Continue workout" (fitnessCardHtml) -- opens Workout Mode ON TOP of this
+    // sheet, same "stays open underneath" pattern data-tl-walk's own handler uses
+    // (search that name) for the mobile walkthrough.
+    const fitStartBtn = e.target.closest("[data-fit-start]");
+    if (fitStartBtn) {
+      const [fitType, dateKey] = fitStartBtn.dataset.fitStart.split(":");
+      openTlWorkout(fitType, dateKey);
+      return;
+    }
     // One-tap unchain right in the sheet — the item keeps its own saved time, same
     // contract as the Chains card's × button. Sheet stays open, its ⛓ row flips to
     // the "Chain it →" state; the timeline re-renders behind it.
@@ -43410,6 +43642,19 @@
     if (weekly) return { state: "planned", type: weekly, label: `${weekly} — planned` };
     if (goal) return { state: "light", label: "Light day planned" };
     return { state: "none", label: `Log a workout for ${d.getDate()} ${MON_SHORT[d.getMonth()]}` };
+  }
+  // Monday-start 7-dot strip for ANY date's week, reading fitDayStatus per day so it
+  // can't disagree with Week/Month/the Fitness Mode card (2026-10-10 cohesion build)
+  // or with itself between its two new callers: the Gym-event popover card and
+  // Workout Mode's own header, both added the same day ("give access to the gym
+  // planned session of day and week... start a gym workflow").
+  function fitWeekDotsHtml(forDate) {
+    const mon = startOfWeek(forDate);
+    return Array.from({ length: 7 }, (_, i) => addDays(mon, i)).map((dd, i) => {
+      const st = fitDayStatus(dd);
+      const cls = st.state === "done" ? " done" : st.state === "planned" ? " planned" : st.state === "rest" ? " rest" : "";
+      return `<span class="tl-fit-dot${cls}${keyOf(dd) === keyOf(TODAY) ? " today" : ""}" title="${esc(WD_FULL[i])} — ${esc(st.label)}"></span>`;
+    }).join("");
   }
   function planSessionFromTemplate(date, templateId) {
     const t = templateById(templateId);
