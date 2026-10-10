@@ -29,6 +29,17 @@ effort defaults to.
   list, new). The deeper plan/actual redesign (the paused "fitness event → plan/actual
   training page" ask28 thread) is still separate, future work — this home page is the
   "real home page now" she picked over a placeholder, not that redesign.
+  **Exercise tracking (2026-10-10, ask28 "design before building"):** Gym (new type),
+  F45 and Bouldering sessions can log real exercises under `session.exercises` —
+  lifts get a sets table (reps × weight, her pick of Option A over compact rows) with
+  smart pre-fill from the exercise's own last set (`lastSetFor`) and a trend chip
+  comparing today's heaviest set to the prior instance (`exerciseHistory`); climbs get
+  grade/attempts/sent instead of a sets table, since a route's result isn't reps×weight.
+  Exercise names autocomplete from everything logged before (`exerciseNameSuggestions`)
+  rather than a maintained library. The Fitness page's new Progression section charts
+  one picked exercise's heaviest-set trend plus a total-volume sparkline (her pick,
+  added to the mock) over its last 7 logged instances. Pilates/Stretching are unchanged
+  — no exercise kind, session-level logging only, per her original scope pick.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy
