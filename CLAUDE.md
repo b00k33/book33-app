@@ -136,6 +136,21 @@ effort defaults to.
     stay session-level only, her own prior explicit pick, so this card never offers an
     empty exercise list for a type that was never meant to carry one. Verified live,
     both the card and Workout Mode, at desktop and mobile widths.
+    **Plan-before-timer refinement (2026-10-10 pt.2, her own correction — "plan
+    exercise first before timer starts," sent against the live timer already
+    ticking with an empty list)**: opening Workout Mode no longer stamps
+    `sess.startedAt` on open. It stays a Plan phase — no clock, exercises freely
+    addable/editable — until she taps the one new "▶ Begin workout" button
+    (`beginTlWorkout()`), which is the sole transition into the Live phase
+    (`startTlWorkoutTimerLoop()`). Opening still auto-copies any existing
+    `plannedFor` exercise names in via `addExercise` (reusing its own
+    `plannedSetsFor` prefill for reps/weight) while the session is empty, so
+    what the card already showed as "today's plan" is waiting there to review,
+    not a blank list to retype — editing it during Plan phase costs no workout
+    time. Verified live on mobile 375x812: opening shows "Not started" with no
+    ticking clock, adding an exercise persists without starting the timer, and
+    "Begin workout" starts the clock from 0:01 while keeping what was already
+    added.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy

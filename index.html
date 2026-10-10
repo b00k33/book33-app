@@ -34875,18 +34875,40 @@
     if (!tlWorkoutDateKey) return null;
     return sessionById(parseKey(tlWorkoutDateKey), tlWorkoutSessionId);
   }
+  function startTlWorkoutTimerLoop() {
+    clearInterval(tlWorkoutTimerInt);
+    tlWorkoutTimerInt = setInterval(tickTlWorkoutTimer, 1000);
+    tickTlWorkoutTimer();
+  }
   function openTlWorkout(fitType, dateKey) {
     armBackGuard();
     const date = parseKey(dateKey);
     let sess = fitSessionsOn(date).find(s => s.type === fitType);
     if (!sess) sess = addFitSession(date, fitType);
-    if (!sess.startedAt) { sess.startedAt = Date.now(); saveFitLog(); }
+    // 2026-10-10 pt.2 (live in Workout Mode, "plan exercise first before timer
+    // starts"): the clock no longer starts the instant this opens -- sess.startedAt
+    // stays unset until she taps "Begin workout" (beginTlWorkout, renderTlWorkoutBody's
+    // Plan view), so adding/editing exercises here costs no workout time. A specific
+    // planned session for today (plannedFor) auto-copies its exercise NAMES in while
+    // the session is still empty -- addExercise's own existing prefill (plannedSetsFor)
+    // then fills each one's target reps/weight, so what the popover card already
+    // showed as "today's plan" is what's waiting for her, not a blank list to retype.
+    if ((!sess.exercises || !sess.exercises.length)) {
+      const plan = plannedFor(date);
+      if (plan && plan.type === fitType) plan.exercises.forEach(ex => addExercise(date, sess.id, ex.name));
+    }
     tlWorkoutDateKey = dateKey; tlWorkoutSessionId = sess.id;
     document.getElementById("tlWorkoutOverlay").hidden = false;
     renderTlWorkoutBody();
-    clearInterval(tlWorkoutTimerInt);
-    tlWorkoutTimerInt = setInterval(tickTlWorkoutTimer, 1000);
-    tickTlWorkoutTimer();
+    if (sess.startedAt) startTlWorkoutTimerLoop();
+  }
+  function beginTlWorkout() {
+    const sess = tlWorkoutSession();
+    if (!sess || sess.startedAt) return;
+    sess.startedAt = Date.now();
+    saveFitLog();
+    renderTlWorkoutBody();
+    startTlWorkoutTimerLoop();
   }
   function closeTlWorkout() {
     // The timer was never just decoration -- on close, a blank Time/Duration (the
@@ -34946,10 +34968,17 @@
     const sess = tlWorkoutSession();
     if (!sess) { closeTlWorkout(); return; }
     const date = parseKey(tlWorkoutDateKey);
+    const started = !!sess.startedAt;
     document.getElementById("tlWorkoutTitle").textContent = sess.type;
+    // Not started: the ticker (tickTlWorkoutTimer) owns this text node exclusively
+    // once running, so this only ever writes the idle label -- never overwrites a
+    // live "M:SS" with a blank frame between a render and the next tick.
+    if (!started) document.getElementById("tlWorkoutTimer").textContent = "Not started";
     document.getElementById("tlWorkoutBody").innerHTML = `
       <div class="tl-fit-week">${fitWeekDotsHtml(date)}</div>
-      ${tlWorkoutRestUntil > Date.now() ? tlWorkoutRestBannerHtml() : `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`}
+      ${started
+        ? (tlWorkoutRestUntil > Date.now() ? tlWorkoutRestBannerHtml() : `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`)
+        : `<button type="button" class="tl-fit-start-btn" data-wo-begin>▶ Begin workout</button>`}
       ${exercisesHtml(date, sess)}
     `;
   }
@@ -34967,6 +34996,7 @@
     // after the real action (confirmed live: tapping "+ Add exercise" added the
     // exercise AND immediately closed Workout Mode, before this fix).
     e.stopPropagation();
+    if (e.target.closest("[data-wo-begin]")) { beginTlWorkout(); return; }
     if (e.target.closest("[data-wo-rest-start]")) { startTlWorkoutRest(90); return; }
     if (e.target.closest("[data-wo-rest-add30]")) { tlWorkoutRestUntil += 30000; tickTlWorkoutRest(); return; }
     if (e.target.closest("[data-wo-rest-skip]")) {
