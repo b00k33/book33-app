@@ -36257,10 +36257,8 @@
   // same shape as FIT_EDIT_OPEN above, resets on reload, nothing worth persisting.
   const TPL_OPEN = new Set();       // template cards expanded in the Templates section
   const UPCOMING_OPEN = new Set();  // planned-session cards expanded in Upcoming
-  // Factored out of renderDayFitLink() (2026-10-10, the new Fitness home page
-  // needs the exact same logger for TODAY) -- pure function of a date, no
-  // reference to state.anchor, so either caller can pass whichever date is
-  // theirs (the Day page's viewed day, or always-TODAY for the home page).
+  // Pulled out as its own pure function of a date (no reference to state.anchor)
+  // so the markup is reusable; the Fitness home page calls it with TODAY.
   // One lift exercise's card: a real sets table (her pick, Option A over the
   // compact-row alternative) with a trend chip comparing TODAY's heaviest set to
   // the most recent PRIOR instance of this exact exercise name (exerciseHistory,
@@ -36334,9 +36332,9 @@
 
   /* ============ ONE FITNESS SYSTEM (2026-10-10, ask28) ============
      Weekly type plan, reusable templates, planned sessions and the progress
-     extras (PR list, weekly volume) -- all Fitness-page-only by design (never
-     touches the Day page's #fitLinkTile/renderDayFitLink, which is separately
-     being reconciled elsewhere; see CLAUDE.md). */
+     extras (PR list, weekly volume) -- all Fitness-page-only by design (the
+     Day page's old inline fitness tile was dead code since the 2026-08-02
+     Wellness-glance simplification -- removed separately, see CLAUDE.md). */
 
   // ---- A: weekly type plan picker ----
   function weekPlanHtml() {
@@ -36569,33 +36567,6 @@
         </div>`;
       }).join("")}</div>` : ""}
     </div>`;
-  }
-  function renderDayFitLink() {
-    const d = state.anchor;
-    // logging is always available for any day — a year-long habit tracker, not a prescribed
-    // plan to gate against (see Life Map: structure should guide, never block logging reality).
-    // Multiple sessions can be logged the same day (e.g. Pilates + Stretching).
-    const sessions = fitSessionsOn(d);
-    // fulfilment, not streaks — logged days vs planned days in the
-    // viewed day's week; a swapped day still counts, only the week total matters
-    const done = fitWeekProgress(d), target = fitWeekTarget(d);
-    const hasLog = sessions.length > 0;
-    const goal = hasLog ? null : fitGoalFor(d);
-    const fitType = hasLog ? "workout" : (goal || "restOff");
-    const fitTitle = hasLog ? (sessions.length > 1 ? `${sessions.length} sessions` : sessions[0].type)
-      : goal === "restExtra" ? "Extra rest day" : goal === "light" ? "Light day" : goal === "rest" ? "Rest day" : "Workout";
-
-    const html = `<div class="fit-link" data-type="${fitType}">
-      <span class="dot"></span>
-      <div class="body">
-        <div class="t1">${esc(fitTitle)}</div>
-        <div class="t2">${done}/${target} days this week${done >= target ? " ✓ fulfilled" : ""}</div>
-      </div>
-      <button class="tab-link" id="fitOpenTab" type="button">Open Fitness tab →</button>
-    </div>` + fitLoggerHtml(d);
-    // Guarded like every other host lookup in this file, rather than left to throw.
-    const fitHost = document.getElementById("fitLinkTile");
-    if (fitHost) fitHost.innerHTML = html;
   }
   // Progression chart (2026-10-10, ask28 exercise-tracking build) -- a picker
   // over every lift exercise ever logged, plus a weight-trend line and a volume
@@ -39789,7 +39760,6 @@
     renderSessionCard();
     renderDayHealth();
     renderDayProgress();
-    renderDayFitLink();
     renderShopping(d);
     applyWidgetSkins();
     applyDayTiles();
@@ -43048,9 +43018,8 @@
     ex[field] = field === "attempts" ? Math.max(1, +value || 1) : field === "sent" ? !!value : value;
     saveFitLog();
   }
-  // Shared click/change dispatch for the data-ex-* exercise markup, used by both
-  // #fitLinkTile (Day page, state.anchor) and #fitHomeToday (Fitness page, TODAY) --
-  // same markup and data functions, only the date and the re-render callback differ.
+  // Click/change dispatch for the data-ex-* exercise markup on the Fitness
+  // page's #fitHomeToday host (TODAY).
   function handleExerciseClick(e, date, rerender) {
     const addBtn = e.target.closest("[data-ex-add]");
     if (addBtn) {
@@ -43406,8 +43375,8 @@
   /* 2026-08-06: renderFitness()/renderFitSelectedDetail() (the old #habitsPage
      Fitness heatmap + selected-day session editor) removed along with that
      page's markup, per the Habits page rebuild. fitGoalFor/fitWeekProgress/
-     fitWeekTarget above, FIT_LOG, and the Day page's fitLinkTile star-rating
-     widget are all untouched -- only this page-specific rendering is gone. */
+     fitWeekTarget above and FIT_LOG are untouched -- only this page-specific
+     rendering is gone. */
 
   /* ============================================================
      GROWTH — Chapter 9 (complete & release): her real logged data,
@@ -49309,8 +49278,8 @@
     { viewId: "events",  label: "Events & birthdays", icon: "🗂",  group: "Focus" },
     // NEW (2026-10-10, C22's 3-pillar focus -- see CLAUDE.md "C22's current focus"):
     // Fitness gets a real home page (renderFitness(), reusing fitLoggerHtml() --
-    // factored out of renderDayFitLink() for this -- plus FIT_LOG/fitWeekProgress/
-    // fitWeekTarget/fitGoalFor) for the first time. It had scattered logging
+    // plus FIT_LOG/fitWeekProgress/fitWeekTarget/fitGoalFor) for the first time. It
+    // had scattered logging
     // surfaces (Day tile, Today echo, Habits grid, Growth stats) but no single
     // destination before this; all of those stay exactly as they were.
     { viewId: "fitness", label: "Fitness",   icon: "🏋",  group: "Focus" },
@@ -54753,58 +54722,9 @@
   document.getElementById("toFamilyTab")?.addEventListener("click", () => { state.view = "family"; render(); });
   document.getElementById("toTrackerTab")?.addEventListener("click", () => { state.view = "habits"; render(); });
   document.getElementById("toSupplementsTab")?.addEventListener("click", () => { state.view = "supplements"; render(); });
-  document.getElementById("fitLinkTile")?.addEventListener("click", e => {
-    if (e.target.closest("#fitOpenTab")) {
-      state.fitYear = state.anchor.getFullYear();
-      state.fitSelectedDate = keyOf(state.anchor);
-      state.view = "habits"; render();
-      return;
-    }
-    const quickBtn = e.target.closest("[data-fit-quick]");
-    if (quickBtn) { addFitSession(state.anchor, quickBtn.dataset.fitQuick); renderDay(); return; }
-    const typeBtn = e.target.closest("[data-fit-type]");
-    if (typeBtn) { addFitSession(state.anchor, typeBtn.dataset.fitType); renderDay(); return; }
-    const delBtn = e.target.closest("[data-fit-del]");
-    if (delBtn) { removeFitSession(state.anchor, delBtn.dataset.fitDel); renderDay(); return; }
-    const editBtn = e.target.closest("[data-fit-edit]");
-    if (editBtn) {   // ✎ reopens a folded session; ✓ Done folds it back
-      const id = editBtn.dataset.fitEdit;
-      if (FIT_EDIT_OPEN.has(id)) FIT_EDIT_OPEN.delete(id); else FIT_EDIT_OPEN.add(id);
-      renderDayFitLink(); return;
-    }
-    const starBtn = e.target.closest("[data-fit-star]");
-    if (starBtn) {
-      const [sid, n] = starBtn.dataset.fitStar.split(":");
-      setSessionRating(state.anchor, sid, +n); renderDayFitLink(); return;
-    }
-    const notesConfirm = e.target.closest("[data-fit-notes-confirm]");
-    if (notesConfirm) {
-      const sid = notesConfirm.dataset.fitNotesConfirm;
-      const ta = document.querySelector(`#fitLinkTile [data-fit-notes="${sid}"]`);
-      setSessionNotes(state.anchor, sid, ta.value);
-      notesConfirm.classList.add("saved");
-      setTimeout(() => notesConfirm.classList.remove("saved"), 900);
-      return;
-    }
-    handleExerciseClick(e, state.anchor, renderDayFitLink);
-  });
-  document.getElementById("fitLinkTile")?.addEventListener("change", e => {
-    const ta = e.target.closest("[data-fit-notes]");
-    if (ta) { setSessionNotes(state.anchor, ta.dataset.fitNotes, ta.value); return; }
-    const fld = e.target.closest("[data-fit-field]");
-    if (fld) {
-      const [sid, field] = fld.dataset.fitField.split(":");
-      setSessionField(state.anchor, sid, field, fld.value);
-      renderDay();
-      return;
-    }
-    handleExerciseChange(e, state.anchor, renderDayFitLink);
-  });
-  // Same shape as the #fitLinkTile pair above, for the Fitness home page's own
-  // #fitHomeToday host (2026-10-10) — always TODAY rather than state.anchor, and
-  // re-renders renderFitness() rather than renderDay()/renderDayFitLink(). The
-  // markup (fitLoggerHtml()) and the underlying data functions are shared; only
-  // this date/re-render glue differs, since the two hosts live on different pages.
+  // #fitHomeToday host for the Fitness page's own TODAY logger (2026-10-10) --
+  // reuses the fitLoggerHtml() markup and the handleExerciseClick/Change data
+  // functions above; always TODAY, re-renders renderFitness().
   document.getElementById("fitHomeToday")?.addEventListener("click", e => {
     const quickBtn = e.target.closest("[data-fit-quick]");
     if (quickBtn) { addFitSession(TODAY, quickBtn.dataset.fitQuick); renderFitness(); return; }
