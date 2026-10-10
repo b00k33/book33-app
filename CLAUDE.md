@@ -66,14 +66,43 @@ effort defaults to.
     set) and a Weekly-volume bar chart (combined across all lift exercises, last 8
     Mon-start weeks), both additive to the per-exercise chart already shipped, not
     replacing it.
-  - *Calendar display — intentionally NOT built this pass.* Her mock showed a
-    dashed "planned" block next to a solid "done" one on the Day page; that would
-    touch `renderDayFitLink()`/`#fitLinkTile`, which is being separately reconciled
-    right now (see the flagged dead-code cleanup task). Building calendar-grid
-    integration into that same fragile, concurrently-edited area risked a real
-    conflict for no safety gain, so this pass stops at the Fitness page's own
-    "Upcoming" list as the calendar-adjacent surface. Revisit once that cleanup
-    lands and `#fitLinkTile`'s fate (removed vs reconnected) is settled.
+  - *Calendar + Mode cohesion (2026-10-10, "make the fitness integration with the
+    calendar and mode more cohesive" — the dashed-planned-block idea from the mock
+    above, finally built once `#fitLinkTile` was confirmed fully gone):* one new
+    `fitDayStatus(d)` read (done → rest/light via `fitGoalFor` → a specific planned
+    session (`plannedFor`) → the generic weekly-type guess (`fitPlannedTypeFor`))
+    feeds all three surfaces below, so they can't disagree with each other:
+    - *Week's Fitness row* — its existing Done/Planned/Nothing/Rest ring only ever
+      checked `fitGoalFor`'s old light-day state; now also lights up tinted-green
+      for a real planned type. Tap behaviour unchanged (same quick-log popover).
+    - *Month* — a new `.mo-fit` corner dot (solid = done, dashed = planned),
+      bottom-left of `.mo-cell`, same solid/dashed idiom `.mo-period` already uses
+      one corner over. Visual only — the cell's own tap still jumps to Day; no
+      separate fitness tap target at that size.
+    - *Day's all-day row* — a dashed green `.fit-ghost-chip` (new
+      `fitPlannedGhostFor()`, spliced into BOTH `dayEventsRawFor()` and `renderDay()`'s
+      own separate duplicate copy of that same merge — two call sites, not one, see
+      that function's own comment) for today's planned-not-yet-logged type. A
+      planned session carries no time, so it's an all-day chip, never a timed
+      block. Tapping it opens the SAME quick-log popover Week uses
+      (`data-fit-ghost` → `openWrPop`) — needed `data-fit-ghost` added to that
+      popover's own outside-click allowlist, or it closed itself the instant it
+      opened.
+    - *Fitness Mode card* (`marGroupHtml()`) — a new branch alongside Work's and
+      Night/Sleep's existing ones, matched by **name** ("Fitness"), not id — a Mode
+      she adds herself gets a random `uid()`, never a stable id to hardcode. Shows
+      today's status line plus the same quick-log toggle chips as Week (her pick,
+      "quick-log right in the Mode card"), plus a Gym-specific link to the Fitness
+      page (Gym needs real sets/reps, never a bare toggle — same split Week's own
+      popover already makes).
+    **Known gap, disclosed rather than silently shipped:** this card's only mount
+    point is inside `#wrModeGroup`, which only exists inside the "Right now"
+    panel/drawer — the exact one cleared blank earlier the same day ("remove these
+    - i want to clear so i can redesign it", see that bullet below). So the Fitness
+    Mode card is built and verified correct (tested by temporarily forcing
+    `marGroupHtml()`'s `inGroup` true) but has **no live path to be seen** until
+    that panel is redesigned, or she asks for the Mode toggle restored on its own
+    sooner.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy

@@ -10033,6 +10033,13 @@
     background: var(--flow-med); z-index: 2;
   }
   .mo-period[data-predicted="true"] { background: transparent; border: 1.5px dashed var(--flow-med); }
+  /* 2026-10-10: bottom-left is free (ovulation's own ::after owns bottom-right) --
+     same solid-logged/dashed-planned idiom as .mo-period just above, one corner over. */
+  .mo-fit {
+    position: absolute; bottom: 8px; left: 8px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cat-personal-fitness); z-index: 2;
+  }
+  .mo-fit[data-predicted="true"] { background: transparent; border: 1.5px dashed var(--cat-personal-fitness); }
   .mo-cd { font-size: 11px; font-weight: 600; color: var(--ink-soft); letter-spacing: 0.03em; }
   .mo-cell[data-fertile="true"] { box-shadow: inset 0 0 0 1.5px var(--fertile); }
   .mo-cell[data-ovu="true"] { box-shadow: inset 0 0 0 1.5px var(--fertile); }
@@ -12277,6 +12284,12 @@
     padding: 7px 14px; font-size: 12.5px; border-radius: 8px;
   }
   #dayAlldayRow .ad-chip[data-category="Birthdays"] .ad-chip-ic { font-size: 14px; margin-right: 6px; }
+  /* 2026-10-10: must come after the data-track="personal" rule above -- identical
+     (1,2,0) specificity, source order is what wins (same reasoning the Birthdays
+     rule's own comment above already documents for this exact spot). */
+  #dayAlldayRow .ad-chip.fit-ghost-chip {
+    background: transparent; border: 1.5px dashed var(--cat-personal-fitness); color: var(--cat-personal-fitness);
+  }
   /* This chip carries .ad-chip,
      not .dcx-chip/.ddh-chip, so the shared [data-chip] soft-tint-wash rule (line
      ~10755) doesn't reach it by selector — copying its formula here (same --chip-tint
@@ -20065,6 +20078,12 @@
   #dayAlldayRow .ad-chip.tl-item::before { display: none; }
   #dayAlldayRow .ad-chip[data-chip="cycle"] { background: color-mix(in oklab, var(--now-mark) 12%, var(--paper)); color: var(--cycle-ink); font-weight: 600; }
   #dayAlldayRow .ad-chip[data-category="Birthdays"]:not(.bday-ribbon) { background: color-mix(in oklab, var(--margin-rule) 12%, var(--paper)); color: var(--margin-rule); font-weight: 600; }
+  /* 2026-10-10: must come after design45's own #dayAlldayRow .ad-chip.tl-item rule
+     just above -- identical (1,2,0) specificity, source order wins, same reasoning
+     as the two other #dayAlldayRow override comments already in this file. */
+  #dayAlldayRow .ad-chip.fit-ghost-chip {
+    background: transparent; border: 1.5px dashed var(--cat-personal-fitness); color: var(--cat-personal-fitness);
+  }
 
   /* -- phone nav drawer: labelled rows, count inline at the right -- */
   .nir-count { position: static; margin-left: auto; }
@@ -20240,6 +20259,18 @@
   .wr-mg-row.done .wr-mg-dot { background: var(--ink-faint); }
   .wr-mg-name { flex: 1; min-width: 0; font-weight: 600; }
   .wr-mg-meta, .wr-mg-t { flex: none; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  /* 2026-10-10: Fitness Mode card's quick-log row -- same pill shape as .mar-chip,
+     but a real toggle button (aria-pressed), not a read-only tag. */
+  .wr-mg-fit-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .wr-mg-fit-chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 10px;
+    border-radius: 999px; border: 1px solid var(--note-line); color: var(--ink-soft); background: var(--paper);
+    cursor: pointer; font-family: inherit;
+  }
+  .wr-mg-fit-chip[aria-pressed="true"], .wr-mg-fit-chip.done {
+    border-color: var(--cat-personal-fitness); color: var(--cat-personal-fitness);
+    background: color-mix(in oklab, var(--cat-personal-fitness) 14%, var(--paper));
+  }
   .wr-mg-t { width: 52px; }
   .wr-mode-group .mode-ambient-rail .wr-mg-sec:first-child { margin-top: 0; }
   .wr-mode-group .mode-ambient-rail .mar-head { margin-top: 8px; }
@@ -37956,7 +37987,7 @@
   // two different ways.
   function dayEventsRawFor(d) {
     const chainData = chainBlocksFor(d);
-    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === keyOf(d)).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d)];
+    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === keyOf(d)).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d), ...fitPlannedGhostFor(d)];
     if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
     return dayEvents.concat(chainData.items);
   }
@@ -38253,6 +38284,14 @@
     const cls = `ad-chip tl-item${cont ? " ad-chip-cont" : ""}`;
     const origin = itemOrigin(e);
     const label = cont ? "" : `<span class="ad-chip-t">${esc(e.title)}</span>`;
+    // 2026-10-10: a planned-not-logged fitness session -- deliberately no
+    // data-tl-detail (it isn't a real editable event, there's nothing to open a
+    // detail sheet onto); data-fit-ghost instead opens the same quick-log popover
+    // the Week habit row already uses (openWrPop, see its own document click
+    // delegate), so logging it here behaves identically to logging it from Week.
+    if (e.ghostPlanned) {
+      return `<span class="${cls} fit-ghost-chip" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="Fitness" data-fit-ghost="${esc(e.date)}" title="${esc(e.title)} — planned, tap to log">${label}</span>`;
+    }
     if (e.category === "Birthdays") {
       const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
       // 2026-08-18 (Linh, "improve the birthday all day view"): e.icon is the person's
@@ -39458,7 +39497,7 @@
     const chainData = chainBlocksFor(d);
     // chainedPlainEvent (2026-08-06): a chained one-off event's times recompute live
     // from its anchor here, same as chained routines do inside generatedFor()
-    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d)];
+    let dayEvents = [...generatedFor(d), ...EVENTS.filter(e => e.date === k).map(e => chainedPlainEvent(e, d)), ...fitCalendarEventsFor(d), ...fitPlannedGhostFor(d)];
     if (chainData.suppress.size) dayEvents = dayEvents.filter(e => !chainData.suppress.has(e.id));
     dayEvents = dayEvents.concat(chainData.items);
     // 2026-08-06 (Linh: "i dont like that i cant see the chain"): live anchorTo chains
@@ -40542,12 +40581,13 @@
     const dayHead = days.map(d => `<div class="hab-day" data-today="${keyOf(d) === todayK}">
       <span class="hd-dow">${WD_FULL[dowIndex(d)].slice(0, 3)}</span><span class="hd-num">${d.getDate()}</span></div>`).join("");
     const fit = days.map(d => {
-      const k = keyOf(d), types = fitTypesOn(d), goal = fitGoalFor(d);
-      let inner = mNone, title = `Log a workout for ${d.getDate()} ${MON_SHORT[d.getMonth()]}`;
-      if (types.length) { inner = mDot("var(--wk-fit)", types.length); title = types.join(", "); }
-      else if (goal === "rest" || goal === "restExtra") { inner = mRest; title = goal === "restExtra" ? "Extra rest day" : "Rest day"; }
-      else if (goal) { inner = mRing(); title += " — light day planned"; }
-      return cell(`data-wr-fit="${k}"`, k, inner, title);
+      const k = keyOf(d), st = fitDayStatus(d);
+      let inner = mNone;
+      if (st.state === "done") inner = mDot("var(--wk-fit)", st.types.length);
+      else if (st.state === "rest") inner = mRest;
+      else if (st.state === "planned") inner = mRing("var(--wk-fit)");
+      else if (st.state === "light") inner = mRing();
+      return cell(`data-wr-fit="${k}"`, k, inner, st.label);
     }).join("");
     // hair washes are ordinary routines now (rotation rebuild) -- ticked from the
     // day calendar / Routines-list row like any routine, so this grid carries no
@@ -40902,6 +40942,12 @@
         .sort((a, z) => (a.allDay ? "0" : "1" + (a.start || "")).localeCompare(z.allDay ? "0" : "1" + (z.start || "")));
       const dots = evs.filter(e => e.generated && !e.fromRecurringEvent && e.category !== "Birthdays");
       const ps = periodStatusFor(d, moPred);
+      // 2026-10-10 ("make the fitness integration with the calendar and mode more
+      // cohesive"): Month had no fitness mark at all -- mirrors .mo-period's own
+      // logged/predicted idiom (solid dot vs dashed) rather than inventing a second
+      // visual language, read from the SAME fitDayStatus() the Week row and the
+      // Fitness Mode card use so all three never disagree.
+      const fitSt = fitDayStatus(d);
       const cd = cycleDayFor(d);
       const moPhase = cd ? phaseOn(d, moPred) : null;
       const moPhaseInfo = moPhase ? CYCLE_PHASE_INFO[moPhase] : null;
@@ -40931,6 +40977,7 @@
           data-fertile="${!!isFertile}" data-ovu="${!!isOvu}" data-dp-band="${dpBand}"
           data-jump="${keyOf(d)}">
         ${ps ? `<span class="mo-period" data-predicted="${!!ps.predicted}" style="${ps.logged ? `background:var(${FLOW_VAR[ps.flow]})` : ""}" aria-label="${ps.logged ? "Period logged" : "Period expected"}"></span>` : ""}
+        ${fitSt.state === "done" || fitSt.state === "planned" ? `<span class="mo-fit" data-predicted="${fitSt.state === "planned"}" title="${esc(fitSt.label)}"></span>` : ""}
         <div class="mo-top">
           <span class="mo-datewrap">
             <span class="mo-num">${d.getDate()}${bdays.length ? ` <span class="mo-bd-badge" title="${esc(bdays.map(b => b.title).join(" · "))}">🎂</span>` : ""}</span>
@@ -42117,11 +42164,16 @@
   }
   document.addEventListener("click", e => {
     // a click whose target got detached mid-bubble (the popover re-rendered itself
-    // in response) must not count as an outside click — hence the isConnected guard
+    // in response) must not count as an outside click — hence the isConnected guard.
+    // 2026-10-10: data-fit-ghost added to the allowlist -- the Day all-day row's
+    // planned-fitness chip opens this SAME popover (see its own click delegate),
+    // and without this it closed itself the instant it opened (this handler saw
+    // the freshly-opened popover and the chip's own target not matching the old
+    // list, and called closeWrPop() right back).
     if (wrPopEl && !wrPopEl.hidden
       && e.target.isConnected
       && !e.target.closest("#wrPop")
-      && !e.target.closest("[data-wr-fit], [data-wr-fast], [data-wr-meal], [data-wr-hub]")) closeWrPop();
+      && !e.target.closest("[data-wr-fit], [data-wr-fast], [data-wr-meal], [data-wr-hub], [data-fit-ghost]")) closeWrPop();
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeWrPop(); });
 
@@ -43151,6 +43203,35 @@
       loc: s.location || "", generated: true, noRecurIcon: true, date: keyOf(date),
     }));
   }
+  // 2026-10-10 ("make the fitness integration with the calendar and mode more
+  // cohesive" -- her report that a planned session was invisible everywhere
+  // outside the Fitness page itself): a planned-but-not-yet-done session has no
+  // time (PLANNED_FIT carries none), so it can't join the timed-block merge
+  // fitCalendarEventsFor() feeds -- it lands in the all-day row instead (no
+  // .start/.allDay:true, same as any other untimed item alldayItemsFor() already
+  // picks up). Skips entirely once actually logged (the real fitcal- block takes
+  // over) and skips a type a routine already covers today, same dedupe
+  // fitCalendarEventsFor() applies for logged sessions, for the same reason.
+  function fitPlannedGhostFor(d) {
+    if (fitTypesOn(d).length) return [];
+    const specific = plannedFor(d);
+    const type = specific ? specific.type : fitPlannedTypeFor(d);
+    if (!type) return [];
+    const routineFitLinks = new Set(routinesOn(d).map(t => t.fitLink).filter(Boolean));
+    if (routineFitLinks.has(type)) return [];
+    const k = keyOf(d);
+    // NOT generated:true, unlike fitCalendarEventsFor's own sibling objects just
+    // above -- alldayItemsFor()'s own filter explicitly EXCLUDES a personal-track
+    // generated item (its "anonymous routine dot" rule, see its Month-view
+    // comment), which silently dropped this chip from every all-day row entirely.
+    // Nothing here carries draggable/data-drag-* attributes (see alldayChipHtml's
+    // ghostPlanned branch), so itemOrigin() reading this as "once" rather than
+    // "generated" only changes a cosmetic edge-rail tint, never an actual drag.
+    return [{
+      id: `fitplan-${k}`, title: type, track: "personal", category: "Fitness",
+      allDay: true, noRecurIcon: true, ghostPlanned: true, date: k,
+    }];
+  }
 
   // every date cell needed to draw a full-year, GitHub-style heatmap: padded out to whole
   // Monday-Sunday weeks so the grid is a clean rectangle, with out-of-year days marked.
@@ -43306,6 +43387,26 @@
   let PLANNED_FIT = loadPlannedFit();
   // { "YYYY-MM-DD": { id, type, templateId, exercises: [{id,name,kind,sets?,grade?,attempts?}] } }
   const plannedFor = date => PLANNED_FIT[keyOf(date)] || null;
+  // Unified "what's happening with fitness today" read (2026-10-10, "make the
+  // fitness integration with the calendar and mode more cohesive" -- her report
+  // that Week's own Fitness row, Month, and the Fitness Mode card could each only
+  // ever say what FIT_LOG/fitGoalFor already knew, never the weekly plan or a
+  // specific planned session). One function so those three surfaces can't drift
+  // from each other -- same precedence fitPlannedTypeFor already established
+  // (fitGoalFor's rest/light days win over a plan), with the plan split into a
+  // specific planned session (plannedFor) taking precedence over the generic
+  // weekly-type guess (fitPlannedTypeFor) for that date.
+  function fitDayStatus(d) {
+    const types = fitTypesOn(d), goal = fitGoalFor(d);
+    if (types.length) return { state: "done", types, label: types.join(", ") };
+    if (goal === "rest" || goal === "restExtra") return { state: "rest", label: goal === "restExtra" ? "Extra rest day" : "Rest day" };
+    const specific = plannedFor(d);
+    if (specific && specific.type) return { state: "planned", type: specific.type, label: `${specific.type} — planned` };
+    const weekly = fitPlannedTypeFor(d);
+    if (weekly) return { state: "planned", type: weekly, label: `${weekly} — planned` };
+    if (goal) return { state: "light", label: "Light day planned" };
+    return { state: "none", label: `Log a workout for ${d.getDate()} ${MON_SHORT[d.getMonth()]}` };
+  }
   function planSessionFromTemplate(date, templateId) {
     const t = templateById(templateId);
     if (!t) return null;
@@ -56889,6 +56990,29 @@
           <div class="wr-mg-line"><span class="wr-mg-t">${esc(fmtTime(minToHM(bed)))}</span><span class="wr-mg-name">In bed</span>${bed > nowMin ? `<span class="wr-mg-meta">in ${fmtDurMin(bed - nowMin)}</span>` : ""}</div>
         </div>`;
     }
+    // 2026-10-10 ("make the fitness integration with the calendar and mode more
+    // cohesive" -- her report that switching to Fitness Mode showed nothing
+    // fitness-specific at all): mirrors Night/Sleep's info-line branch just above,
+    // same fitDayStatus() Week/Month read, plus her pick "quick-log right in the
+    // Mode card" -- the SAME toggle-chip interaction the Week habit row's popover
+    // already offers (WR_FIT_TYPES only; Gym needs real sets/reps, so it's a link
+    // to the Fitness page instead, never a bare toggle). Matched by NAME, not id:
+    // a Mode she adds herself gets a random uid() (see lmModesAdd()), never a
+    // stable "fitness" id to check like Work/Night/Sleep's own hardcoded ones --
+    // if she ever renames this Mode, this branch simply stops matching rather
+    // than breaking.
+    let fitnessHtml = "";
+    if (am.name === "Fitness") {
+      const fst = fitDayStatus(TODAY);
+      const loggedToday = fitTypesOn(TODAY);
+      const gymDone = loggedToday.includes("Gym");
+      const chipsHtml = WR_FIT_TYPES.map(t =>
+        `<button type="button" class="wr-mg-fit-chip" data-mg-fit="${esc(t)}" aria-pressed="${loggedToday.includes(t)}">${WR_FIT_EM[t] || "🏋️"} ${esc(t)}</button>`).join("")
+        + (gymDone ? `<span class="wr-mg-fit-chip done">✓ Gym</span>`
+                   : `<button type="button" class="wr-mg-fit-chip" data-mg-fit-gym>🏋️ Gym →</button>`);
+      fitnessHtml = `<div class="wr-mg-sec"><span>Today</span><span>${esc(fst.state === "done" ? `✓ ${fst.label}` : fst.label)}</span></div>
+        <div class="wr-mg-fit-chips">${chipsHtml}</div>`;
+    }
     const todoDone = todos.filter(t => t.done).length;
     let markedCurrent = false;
     const chips = todos.map(t => {
@@ -56908,7 +57032,7 @@
     const todosHtml = `<div class="mar-head"><span class="mar-title">To-dos · ${todoDone} of ${todos.length}</span>${(todos.length || !occs.length) ? focusBtn : ""}</div>` +
       (todos.length ? `<div class="mar-strip">${chips}</div>` : (!occs.length ? `<div class="mar-empty">Nothing tagged to ${esc(am.name)} yet.</div>` : "")) +
       addHtml;
-    return rowsHtml + tomorrowHtml + todosHtml;
+    return rowsHtml + tomorrowHtml + fitnessHtml + todosHtml;
   }
   document.addEventListener("click", e => {
     if (e.target.closest("[data-mt-back]")) {
@@ -56944,6 +57068,18 @@
       renderDay();
       return;
     }
+    // 2026-10-10: quick-log straight from the Fitness Mode card -- same toggle
+    // semantics as the Week row's data-wrp-fit (log/unlog), renderDay() to keep
+    // both Mode-widget mounts in sync, same reasoning as data-mar-focus above.
+    const mgFit = e.target.closest("[data-mg-fit]");
+    if (mgFit) {
+      const t = mgFit.dataset.mgFit;
+      const sess = fitSessionsOn(TODAY).find(s => s.type === t);
+      if (sess) removeFitSession(TODAY, sess.id); else addFitSession(TODAY, t);
+      renderDay();
+      return;
+    }
+    if (e.target.closest("[data-mg-fit-gym]")) { state.view = "fitness"; render(); return; }
     // Toggles which upcoming row's quick-add
     // is open -- a second tap on the same row's now-"×" button closes it again,
     // matching the mockup's open/close pair rather than only ever opening.
@@ -60296,6 +60432,8 @@
     if (ocpCancel) { setOutcomeStatus(ocpCancel.dataset.ocpCancel, "cancelled"); renderDay(); return; }
     const ocpMove = e.target.closest("[data-ocp-move]");
     if (ocpMove) { openOutcomeSheet(ocpMove.dataset.ocpMove, true); return; }
+    const fitGhost = e.target.closest("[data-fit-ghost]");
+    if (fitGhost) { openWrPop(fitGhost, "fit", fitGhost.dataset.fitGhost); return; }
     const tlDetail = e.target.closest("[data-tl-detail]");
     if (tlDetail && !e.target.closest(".tl-tick")) {
       // The tapped block rides along so the
