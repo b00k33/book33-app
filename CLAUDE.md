@@ -329,6 +329,19 @@ scopes for a routine, and **yes** to drag-to-move / drag-the-edge-to-resize.
   The To-do card hides the active Mode's to-dos while the group lists them. Right
   now's NEXT row is plain again — no quick-add "+", no FREE gap row below it
   (both retired same-day they shipped, RETIRED-FEATURES.md §13, "i dont need this").
+- **Right now panel cleared for a redesign (2026-10-10, screenshot of this exact
+  panel: "remove these - i want to clear so i can redesign it"):** the status
+  card, the Mode group's chip grid, Today's progress bar, and the To-do card are
+  all hidden from this one panel — CSS-only on mobile (`#dayRightDrawerBody >
+  #rightNowCard/#wrModeGroup/#wrBdayGroup/#dayCtxWrap/#wrMobile { display: none }`,
+  right after `.day-right-drawer-body`), and on desktop `renderWrPanel()` mounts
+  nothing when `wrOpenId === "rightNowCard"` (empty `memberIds`, the old
+  dailyWrap/modeGroup/Birthday-group build skipped, `shopEl` null). Everything
+  above this bullet (Mode group, Birthdays group, the Cliniko paste box, the
+  Work session card) still renders exactly as documented, everywhere else it
+  shows — nothing was deleted, only this one panel's display. Revert by deleting
+  that CSS rule and restoring the three `renderWrPanel()` lines once a real
+  redesign replaces this blank state.
 - **Cliniko paste box (2026-09-03 pm, "a text box so i can copy paste my cliniko
   schedule"):** `wmbPasteFormHtml()` (one collapsed "Paste Cliniko schedule ▾" line →
   textarea + Today/Tomorrow + Save) is mounted in the panel's Today's patients rail
