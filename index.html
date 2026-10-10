@@ -12825,6 +12825,24 @@
   }
   .day-right-drawer.open { transform: translateX(0); visibility: visible; transition: transform 0.25s ease, visibility 0s; }
   .day-right-drawer-body { padding: 16px; }
+  /* 2026-10-10 (Linh, screenshot of this exact drawer: "remove these - i want
+     to clear so i can redesign it"): the Right Now status card, the HOME mode
+     grid, Today's progress bar, and the To-do list all cleared from this ONE
+     mobile drawer, CSS-only -- placeDayDrawers() still reparents all four of
+     these real elements in here exactly as before (that reparenting engine is
+     too load-bearing across breakpoints to touch for a visual clear), they
+     just render display:none once they land. Nothing is deleted and nothing
+     stops working elsewhere: #rightNowCard/#wrModeGroup/#dayCtxWrap/#wrMobile
+     all still populate and still show normally on desktop (a different parent,
+     #wrPanelBody -- see renderWrPanel()'s own 2026-10-10 comment for that
+     half). Scoped to being a DIRECT child of this drawer body specifically, so
+     nothing outside this one mobile panel is touched.
+     Revert by deleting this rule once the redesign replaces it with something real. */
+  #dayRightDrawerBody > #rightNowCard,
+  #dayRightDrawerBody > #wrModeGroup,
+  #dayRightDrawerBody > #wrBdayGroup,
+  #dayRightDrawerBody > #dayCtxWrap,
+  #dayRightDrawerBody > #wrMobile { display: none; }
   /* the only always-visible cue a drawer swipes in from an edge -- faint gold
      hairline pills, mobile single-Day-view only (dd-drawers-active, JS-toggled on
      <body>). Each also carries a real ~44px tap target via padding, per design44
@@ -54020,12 +54038,20 @@
     document.documentElement.toggleAttribute("data-wr-panel-open", true);
     if (WR_PINNED_IDS.includes(wrOpenId)) {
       title.textContent = WR_PINNED_LABELS[wrOpenId];
-      // 2026-09-01 ("put right now and today and mode together on one panel"):
-      // rightNowCard's panel mounts every WR_RIGHTNOW_MEMBERS element, in that
-      // order; every other pinned id still mounts just itself. Members are
-      // appended unconditionally (not parent-guarded) so their relative order
-      // is re-asserted on every render, not just first mount.
-      const memberIds = wrOpenId === "rightNowCard" ? WR_RIGHTNOW_MEMBERS : [wrOpenId];
+      // 2026-10-10 (Linh: "remove these - i want to clear so i can redesign
+      // it", re: this combined Right Now panel): opens empty on purpose now --
+      // title/chrome only. Nothing below is deleted: WR_RIGHTNOW_MEMBERS
+      // (rightNowCard/daySessionCard/modeAmbientRail/dayCtxWrap/shopSlot) park
+      // safely offstage into #wrPinned via the existing pinnedEls loop a few
+      // lines down (never .remove()'d, since those are real reparented DOM
+      // nodes other surfaces still use), and the Daily-cluster cards/Mode
+      // group/Birthday group below simply never get built. Every one of those
+      // stays fully intact and usable elsewhere (the desktop widget rail, the
+      // Day page, Settings) -- this only clears what THIS one mobile panel
+      // shows. Revert this one line (back to WR_RIGHTNOW_MEMBERS) and restore
+      // the block below to bring the old content back, whenever the redesign
+      // is ready to replace it with something real instead of empty.
+      const memberIds = wrOpenId === "rightNowCard" ? [] : [wrOpenId];
       const members = memberIds.map(id => pinnedEls[id]).filter(Boolean);
       // The Daily widget group renders below the real members as generated
       // cards ("move all these into the one panel") -- same ordering/hidden
@@ -54033,7 +54059,7 @@
       // empty cards skipped), so Arrange still governs what shows here.
       const keep = [...members];
       let dailyWrap = null, modeGroup = null;
-      if (wrOpenId === "rightNowCard") {
+      if (false) {   // cleared -- see the comment on memberIds just above
         if (!wrPanelDailyWrap) { wrPanelDailyWrap = document.createElement("div"); wrPanelDailyWrap.id = "wrPanelDailyCards"; }
         dailyWrap = wrPanelDailyWrap;
         keep.push(dailyWrap);
@@ -54062,7 +54088,7 @@
       // drops below them, so the actionable To-do list isn't sitting under a
       // card with nothing in it. Ordering only -- membership/parking (the
       // memberIds loop below) is unchanged either way.
-      const shopEl = wrOpenId === "rightNowCard" ? pinnedEls.shopSlot : null;
+      const shopEl = null;   // cleared along with the rest of this panel, see the memberIds comment above
       const shopHigh = shopEl && (SHOP.some(s => !s.bought) || !!shoppingDayReason(new Date()));
       members.forEach(el => {
         if (el === shopEl && !shopHigh) return;
