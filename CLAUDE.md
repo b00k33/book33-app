@@ -40,6 +40,40 @@ effort defaults to.
   one picked exercise's heaviest-set trend plus a total-volume sparkline (her pick,
   added to the mock) over its last 7 logged instances. Pilates/Stretching are unchanged
   — no exercise kind, session-level logging only, per her original scope pick.
+  **One fitness system — plan, calendar, log, progress (2026-10-10, ask28 "help me
+  design... before making the solution"):** four new Fitness-page sections, all
+  deliberately reconciled with what already existed rather than duplicating it:
+  - *Weekly plan* (`FIT_WEEK_PLAN`/`fitPlannedTypeFor`) — a fixed weekday→type picker
+    for Gym/F45/Bouldering, her pick over a rotating split or staying type-blind.
+    Layered UNDER `fitGoalFor` rather than a second day-status system: `fitGoalFor`
+    still alone owns rest/light/restExtra/the deload cycle, `fitPlannedTypeFor` only
+    ever answers "what type, on a day `fitGoalFor` has no opinion on." Pilates/
+    Stretching are deliberately left out of it — they're already scheduled via
+    Routines, so a second system assigning them a weekday too would be exactly the
+    kind of contradicting rule this pass was asked to remove, not add.
+  - *Templates + planned sessions* (`FIT_TEMPLATES`, `PLANNED_FIT`) — her combined
+    pick: a named reusable exercise list (a template) assigned to a future date, with
+    that date's own target sets/reps/grade set and editable from there. `PLANNED_FIT`
+    is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
+    streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
+    "actually happened"; a planned-but-not-done session never touches that math
+    (verified live: planning two future sessions left "This week" unchanged).
+  - *Today's pre-fill priority* — `addExercise` now checks TODAY's own `PLANNED_FIT`
+    entry before falling back to `lastSetFor`'s history guess, so a plan she set on
+    purpose beats a number carried over from last time (her pick: "see targets while
+    logging").
+  - *Progress extras* — a Personal-bests list (every lift exercise's heaviest-ever
+    set) and a Weekly-volume bar chart (combined across all lift exercises, last 8
+    Mon-start weeks), both additive to the per-exercise chart already shipped, not
+    replacing it.
+  - *Calendar display — intentionally NOT built this pass.* Her mock showed a
+    dashed "planned" block next to a solid "done" one on the Day page; that would
+    touch `renderDayFitLink()`/`#fitLinkTile`, which is being separately reconciled
+    right now (see the flagged dead-code cleanup task). Building calendar-grid
+    integration into that same fragile, concurrently-edited area risked a real
+    conflict for no safety gain, so this pass stops at the Fitness page's own
+    "Upcoming" list as the calendar-adjacent surface. Revisit once that cleanup
+    lands and `#fitLinkTile`'s fate (removed vs reconnected) is settled.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy

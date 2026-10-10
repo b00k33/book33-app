@@ -13581,6 +13581,54 @@
   .vol-bars span { width: 8px; background: var(--note-line); border-radius: 2px 2px 0 0; display: block; }
   .vol-bars span.last { background: var(--margin-rule); }
 
+  /* One fitness system (2026-10-10): weekly plan, templates, upcoming, PR list,
+     weekly volume -- all Fitness-page-only, see the JS comment at their functions. */
+  .wp-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .wp-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+  .wp-day { font-size: 10px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; font-family: var(--font-body); }
+  .wp-fixed { font-size: 10.5px; color: var(--ink-faint); font-style: italic; font-family: var(--font-body); padding: 4px 0; }
+  .wp-select {
+    width: 100%; font-family: var(--font-body); font-size: 10.5px; color: var(--ink); background: var(--field-bg);
+    border: 1px solid var(--note-line); border-radius: 3px; padding: 3px 2px; box-sizing: border-box;
+  }
+  .ex-card--planned { border-style: dashed; }
+
+  .tpl-list, .up-list { display: flex; flex-direction: column; gap: 8px; }
+  .tpl-card, .up-card { position: relative; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--paper); padding: 10px 12px; }
+  .tpl-head, .up-head {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; padding-right: 26px;
+    border: none; background: none; cursor: pointer; text-align: left; font-family: var(--font-body);
+  }
+  .tpl-name, .up-date { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .tpl-type-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    color: var(--margin-rule); background: color-mix(in oklab, var(--margin-rule) 14%, transparent);
+  }
+  .tpl-count { font-size: 11px; color: var(--ink-faint); margin-left: auto; }
+  .tpl-del { position: absolute; top: 10px; right: 10px; }
+  .tpl-body, .up-body { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--note-line); display: flex; flex-direction: column; gap: 6px; }
+  .tpl-ex-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid var(--note-line); font-family: var(--font-body);
+  }
+  .tpl-ex-row:last-child { border-bottom: none; }
+  .tpl-ex-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .tpl-ex-detail { font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+  .pr-list { display: flex; flex-direction: column; }
+  .pr-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--note-line); font-family: var(--font-body);
+  }
+  .pr-row:last-child { border-bottom: none; }
+  .pr-name { font-size: 13px; color: var(--ink); font-weight: 600; }
+  .pr-val { font-size: 13px; color: var(--margin-rule); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .wv-bars { display: flex; align-items: flex-end; gap: 6px; height: 82px; }
+  .wv-bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+  .wv-bar { width: 100%; max-width: 20px; background: var(--margin-rule); border-radius: 3px 3px 0 0; }
+  .wv-lbl { font-size: 8.5px; color: var(--ink-faint); font-family: var(--font-body); white-space: nowrap; }
+
   /* ============ CYCLE ============ */
   :root {
     --flow-spot:  #FF7EB6;
@@ -20979,11 +21027,26 @@
     <div class="section-head"><h2>This week</h2><span class="rule"></span></div>
     <div id="fitHomeWeek"></div>
 
+    <div class="section-head" style="margin-top:24px"><h2>Weekly plan</h2><span class="rule"></span></div>
+    <div id="fitHomeWeekPlan"></div>
+
     <div class="section-head" style="margin-top:24px"><h2>Today</h2><span class="rule"></span></div>
     <div id="fitHomeToday"></div>
 
+    <div class="section-head" style="margin-top:24px"><h2>Workout templates</h2><span class="rule"></span></div>
+    <div id="fitHomeTemplates"></div>
+
+    <div class="section-head" style="margin-top:24px"><h2>Upcoming</h2><span class="rule"></span></div>
+    <div id="fitHomeUpcoming"></div>
+
+    <div class="section-head" style="margin-top:24px"><h2>Personal bests</h2><span class="rule"></span></div>
+    <div id="fitHomePRs"></div>
+
     <div class="section-head" style="margin-top:24px"><h2>Progression</h2><span class="rule"></span></div>
     <div id="fitHomeChart"></div>
+
+    <div class="section-head" style="margin-top:24px"><h2>Weekly volume</h2><span class="rule"></span></div>
+    <div id="fitHomeVolume"></div>
 
     <div class="section-head" style="margin-top:24px"><h2>Recent sessions</h2><span class="rule"></span></div>
     <div id="fitHomeHistory"></div>
@@ -36190,6 +36253,10 @@
   // sessions she explicitly reopened with ✎ — transient, resets on reload; everything
   // filled and NOT in here renders folded, which is what makes the box auto-close
   const FIT_EDIT_OPEN = new Set();
+  // transient expand/collapse state for the "one fitness system" build (2026-10-10) --
+  // same shape as FIT_EDIT_OPEN above, resets on reload, nothing worth persisting.
+  const TPL_OPEN = new Set();       // template cards expanded in the Templates section
+  const UPCOMING_OPEN = new Set();  // planned-session cards expanded in Upcoming
   // Factored out of renderDayFitLink() (2026-10-10, the new Fitness home page
   // needs the exact same logger for TODAY) -- pure function of a date, no
   // reference to state.anchor, so either caller can pass whichever date is
@@ -36264,6 +36331,186 @@
     </div>`;
     return html;
   }
+
+  /* ============ ONE FITNESS SYSTEM (2026-10-10, ask28) ============
+     Weekly type plan, reusable templates, planned sessions and the progress
+     extras (PR list, weekly volume) -- all Fitness-page-only by design (never
+     touches the Day page's #fitLinkTile/renderDayFitLink, which is separately
+     being reconciled elsewhere; see CLAUDE.md). */
+
+  // ---- A: weekly type plan picker ----
+  function weekPlanHtml() {
+    const cells = [];
+    for (let dow = 0; dow < 7; dow++) {
+      const fixed = dow === 2 || dow === 5;   // Wed/Sat -- fitGoalFor's unconditional rest
+      const val = FIT_WEEK_PLAN[dow] || "";
+      cells.push(`<div class="wp-cell">
+        <div class="wp-day">${WD_FULL[dow].slice(0, 3)}</div>
+        ${fixed ? `<div class="wp-fixed">Rest</div>` : `<select class="wp-select" data-wp-day="${dow}">
+            <option value=""${val === "" ? " selected" : ""}>—</option>
+            ${FIT_PLANNABLE_TYPES.map(ty => `<option value="${ty}"${val === ty ? " selected" : ""}>${ty}</option>`).join("")}
+          </select>`}
+      </div>`);
+    }
+    return `<div class="wp-row">${cells.join("")}</div>
+      <div class="chart-sub" style="margin-top:8px">Wed &amp; Sat are always rest. Deload weeks still lighten or clear a day automatically — this just sets an ordinary week's type.</div>`;
+  }
+
+  // ---- B: planned-exercise editors (mirror liftExerciseHtml/climbExerciseHtml,
+  // but for PLANNED_FIT's target numbers -- no trend chip, nothing to compare a
+  // future plan against yet) ----
+  function plannedLiftExerciseHtml(dateKey, ex) {
+    return `<div class="ex-card ex-card--planned">
+      <div class="ex-name"><span>${esc(ex.name)}</span>
+        <button type="button" class="ex-del" data-pex-del="${dateKey}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
+      </div>
+      <table class="ex-table"><tr><th>Set</th><th>Target reps</th><th>Target kg</th><th></th></tr>
+        ${ex.sets.map((st, i) => `<tr>
+          <td>${i + 1}</td>
+          <td><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-pex-set-field="${dateKey}:${ex.id}:${i}:reps" value="${st.reps ?? ""}"></td>
+          <td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-pex-set-field="${dateKey}:${ex.id}:${i}:weightKg" value="${st.weightKg ?? ""}"></td>
+          <td><button type="button" class="ex-set-del" data-pex-set-del="${dateKey}:${ex.id}:${i}" aria-label="Remove set ${i + 1}">×</button></td>
+        </tr>`).join("")}
+      </table>
+      <div class="ex-add-set" data-pex-add-set="${dateKey}:${ex.id}">+ Add set</div>
+    </div>`;
+  }
+  function plannedClimbExerciseHtml(dateKey, ex) {
+    return `<div class="ex-card ex-card--planned">
+      <div class="ex-name"><span>${esc(ex.name)}</span>
+        <button type="button" class="ex-del" data-pex-del="${dateKey}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
+      </div>
+      <div class="ex-climb-fields">
+        <label class="fit-field"><span class="fit-field-lbl">Grade</span>
+          <input type="text" list="climbGrades-planned" placeholder="e.g. V4" data-pex-climb="${dateKey}:${ex.id}:grade" value="${esc(ex.grade || "")}"></label>
+        <label class="fit-field"><span class="fit-field-lbl">Attempts (target)</span>
+          <input type="number" min="1" data-pex-climb="${dateKey}:${ex.id}:attempts" value="${ex.attempts || 1}"></label>
+      </div>
+    </div>`;
+  }
+  function plannedExercisesHtml(date, plan) {
+    const dateKey = keyOf(date);
+    const kind = exerciseKindFor(plan.type);
+    const namesListId = `pexNames-${plan.id}`;
+    let html = plan.exercises.length
+      ? `<div class="ex-list">${plan.exercises.map(ex => kind === "lift" ? plannedLiftExerciseHtml(dateKey, ex) : plannedClimbExerciseHtml(dateKey, ex)).join("")}</div>`
+      : `<div class="fit-hist-empty">No exercises planned yet.</div>`;
+    html += `<datalist id="${namesListId}">${exerciseNameSuggestions(kind).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`;
+    if (kind === "climb") html += `<datalist id="climbGrades-planned">${["V0","V1","V2","V3","V4","V5","V6","V7","V8","V9","V10"].map(g => `<option value="${g}">`).join("")}</datalist>`;
+    html += `<div class="ex-add-row">
+      <input type="text" class="ex-name-input" list="${namesListId}" placeholder="${kind === "climb" ? "Route name" : "Exercise name"}" data-pex-add-name="${dateKey}">
+      <button type="button" class="add-ex-btn" data-pex-add="${dateKey}">+ Add ${kind === "climb" ? "route" : "exercise"}</button>
+    </div>`;
+    return html;
+  }
+
+  // ---- B: reusable templates (library half) ----
+  function templateExerciseRowHtml(t, ex) {
+    const detail = ex.kind === "lift"
+      ? `${(ex.sets[0] || {}).reps || "–"} reps × ${(ex.sets[0] || {}).weightKg || "–"}kg default`
+      : esc(ex.grade || "grade tbd");
+    return `<div class="tpl-ex-row">
+      <span class="tpl-ex-name">${esc(ex.name)}</span>
+      <span class="tpl-ex-detail">${detail}</span>
+      <button type="button" class="ex-del" data-tpl-ex-del="${t.id}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
+    </div>`;
+  }
+  function templateCardHtml(t) {
+    const open = TPL_OPEN.has(t.id);
+    return `<div class="tpl-card">
+      <button type="button" class="tpl-head" data-tpl-toggle="${t.id}">
+        <span class="tpl-name">${esc(t.name)}</span>
+        <span class="tpl-type-badge" data-type="${t.type}">${t.type}</span>
+        <span class="tpl-count">${t.exercises.length} exercise${t.exercises.length === 1 ? "" : "s"}</span>
+      </button>
+      <button type="button" class="ex-del tpl-del" data-tpl-del="${t.id}" aria-label="Delete ${esc(t.name)} template">×</button>
+      ${open ? `<div class="tpl-body">
+        ${t.exercises.map(ex => templateExerciseRowHtml(t, ex)).join("") || `<div class="fit-hist-empty">No exercises yet.</div>`}
+        <div class="ex-add-row">
+          <input type="text" class="ex-name-input" placeholder="${exerciseKindFor(t.type) === "climb" ? "Route name" : "Exercise name"}" data-tpl-add-name="${t.id}">
+          <button type="button" class="add-ex-btn" data-tpl-add="${t.id}">+ Add</button>
+        </div>
+      </div>` : ""}
+    </div>`;
+  }
+  function newTemplateFormHtml() {
+    return `<div class="ex-add-row" style="margin-top:10px">
+      <input type="text" class="ex-name-input" placeholder="Template name, e.g. Push Day" id="tplNewName">
+      <select class="wp-select" id="tplNewType" style="flex:none;width:auto">
+        ${FIT_PLANNABLE_TYPES.map(ty => `<option value="${ty}">${ty}</option>`).join("")}
+      </select>
+      <button type="button" class="add-ex-btn" id="tplNewBtn">+ New template</button>
+    </div>`;
+  }
+  function templatesHtml() {
+    const list = FIT_TEMPLATES.length
+      ? `<div class="tpl-list">${FIT_TEMPLATES.map(templateCardHtml).join("")}</div>`
+      : `<div class="fit-hist-empty">No templates yet — build one below (e.g. "Push Day").</div>`;
+    return list + newTemplateFormHtml();
+  }
+
+  // ---- B: upcoming planned sessions (per-date half) ----
+  function planAheadFormHtml() {
+    const tomorrow = keyOf(addDays(TODAY, 1));
+    return `<div class="ex-add-row" style="margin-top:10px;flex-wrap:wrap">
+      <input type="date" id="planDate" min="${tomorrow}" value="${tomorrow}">
+      <select class="wp-select" id="planTemplate" style="flex:1">
+        <option value="">Blank session…</option>
+        ${FIT_TEMPLATES.map(t => `<option value="${t.id}">${esc(t.name)} (${t.type})</option>`).join("")}
+      </select>
+      <select class="wp-select" id="planBlankType" style="flex:none;width:auto">
+        ${FIT_PLANNABLE_TYPES.map(ty => `<option value="${ty}">${ty}</option>`).join("")}
+      </select>
+      <button type="button" class="add-ex-btn" id="planAddBtn">+ Plan a session</button>
+    </div>
+    <div class="chart-sub" style="margin-top:4px">The type dropdown only matters for "Blank session" — a template uses its own type.</div>`;
+  }
+  function upcomingHtml() {
+    const dates = Object.keys(PLANNED_FIT).filter(k => k >= keyOf(TODAY)).sort();
+    const rows = dates.map(k => {
+      const plan = PLANNED_FIT[k];
+      const d = parseKey(k);
+      const open = UPCOMING_OPEN.has(k);
+      return `<div class="up-card">
+        <button type="button" class="up-head" data-up-toggle="${k}">
+          <span class="up-date">${esc(qaDayLbl(d))}</span>
+          <span class="tpl-type-badge" data-type="${plan.type}">${plan.type}</span>
+          <span class="tpl-count">${plan.exercises.length} planned</span>
+        </button>
+        <button type="button" class="ex-del tpl-del" data-up-del="${k}" aria-label="Remove plan for ${esc(qaDayLbl(d))}">×</button>
+        ${open ? `<div class="up-body">${plannedExercisesHtml(d, plan)}</div>` : ""}
+      </div>`;
+    }).join("");
+    return (rows || `<div class="fit-hist-empty">Nothing planned ahead yet.</div>`) + planAheadFormHtml();
+  }
+
+  // ---- D: progress extras ----
+  function prListHtml() {
+    const rows = exerciseNameSuggestions("lift")
+      .map(n => ({ n, pb: exerciseHistory(n).reduce((m, h) => Math.max(m, h.heaviest), 0) }))
+      .filter(r => r.pb > 0)
+      .sort((a, b) => b.pb - a.pb);
+    if (!rows.length) return `<div class="fit-hist-empty">Log a lift exercise to see your bests here.</div>`;
+    return `<div class="pr-list">${rows.map(r => `<div class="pr-row"><span class="pr-name">${esc(r.n)}</span><span class="pr-val">${r.pb}kg</span></div>`).join("")}</div>`;
+  }
+  function weeklyVolumeHtml() {
+    const weeks = [];
+    for (let i = 7; i >= 0; i--) {
+      const mon = addDays(startOfWeek(TODAY), -7 * i);
+      let vol = 0;
+      for (let dd = 0; dd < 7; dd++) {
+        fitSessionsOn(addDays(mon, dd)).forEach(s => (s.exercises || []).forEach(ex => {
+          if (ex.kind === "lift") vol += setVolume(ex.sets);
+        }));
+      }
+      weeks.push({ mon, vol });
+    }
+    if (!weeks.some(w => w.vol > 0)) return `<div class="fit-hist-empty">Log a few Gym/F45 sessions to see your weekly volume trend.</div>`;
+    const maxVol = Math.max(...weeks.map(w => w.vol), 1);
+    return `<div class="wv-bars">${weeks.map(w => `<div class="wv-bar-col"><div class="wv-bar" style="height:${Math.max(4, Math.round(w.vol / maxVol * 60))}px"></div><div class="wv-lbl">${w.mon.getDate()}/${w.mon.getMonth() + 1}</div></div>`).join("")}</div>
+      <div class="chart-sub">Total sets × reps × weight, by week (Mon start), last 8 weeks.</div>`;
+  }
+
   function fitLoggerHtml(d) {
     const sessions = fitSessionsOn(d);
     return `<div class="fit-logger">
@@ -36413,8 +36660,13 @@
       </div>
     </div>`;
 
+    document.getElementById("fitHomeWeekPlan").innerHTML = weekPlanHtml();
     document.getElementById("fitHomeToday").innerHTML = fitLoggerHtml(TODAY);
+    document.getElementById("fitHomeTemplates").innerHTML = templatesHtml();
+    document.getElementById("fitHomeUpcoming").innerHTML = upcomingHtml();
+    document.getElementById("fitHomePRs").innerHTML = prListHtml();
     document.getElementById("fitHomeChart").innerHTML = fitChartHtml();
+    document.getElementById("fitHomeVolume").innerHTML = weeklyVolumeHtml();
 
     const past = [];
     for (let i = 1; i <= 14; i++) {
@@ -42747,10 +42999,12 @@
     if (!sess.exercises) sess.exercises = [];
     const ex = { id: uid(), name: cleanName, kind };
     if (kind === "lift") {
-      // first set pre-fills from the most recent prior instance of this exact
-      // exercise name anywhere in history -- null/null (blank fields) if it's
-      // genuinely new, never a guessed number.
-      const last = lastSetFor(cleanName, date);
+      // first set pre-fills from TODAY's own plan if she set one on purpose (her
+      // combined pick: "plan ahead, see targets while logging"); otherwise the most
+      // recent prior instance of this exact exercise anywhere in history -- null/null
+      // (blank fields) if it's genuinely new, never a guessed number.
+      const planned = keyOf(date) === keyOf(TODAY) ? plannedSetsFor(cleanName) : null;
+      const last = planned || lastSetFor(cleanName, date);
       ex.sets = [{ reps: last ? last.reps : null, weightKg: last ? last.weightKg : null }];
     } else {
       ex.grade = ""; ex.sent = false; ex.attempts = 1;
@@ -42842,6 +43096,49 @@
       rerender(); return;
     }
   }
+  // Same dispatch shape as handleExerciseClick/handleExerciseChange above, for the
+  // data-pex-* planned-exercise markup inside an open Upcoming card. dateKey is the
+  // "YYYY-MM-DD" string straight off the dataset (no colons in it, same safe split
+  // convention as everywhere else) -- parseKey turns it back into a Date for the
+  // PLANNED_FIT functions, which all key off keyOf(date) like FIT_LOG's do.
+  function handlePlannedExerciseClick(e, rerender) {
+    const addBtn = e.target.closest("[data-pex-add]");
+    if (addBtn) {
+      const dateKey = addBtn.dataset.pexAdd;
+      const input = addBtn.closest(".ex-add-row")?.querySelector(`[data-pex-add-name="${dateKey}"]`);
+      if (input && input.value.trim()) { addPlannedExercise(parseKey(dateKey), input.value); rerender(); }
+      return;
+    }
+    const delBtn = e.target.closest("[data-pex-del]");
+    if (delBtn) {
+      const [dateKey, exId] = delBtn.dataset.pexDel.split(":");
+      removePlannedExercise(parseKey(dateKey), exId); rerender(); return;
+    }
+    const addSetBtn = e.target.closest("[data-pex-add-set]");
+    if (addSetBtn) {
+      const [dateKey, exId] = addSetBtn.dataset.pexAddSet.split(":");
+      addPlannedSet(parseKey(dateKey), exId); rerender(); return;
+    }
+    const delSetBtn = e.target.closest("[data-pex-set-del]");
+    if (delSetBtn) {
+      const [dateKey, exId, idx] = delSetBtn.dataset.pexSetDel.split(":");
+      removePlannedSet(parseKey(dateKey), exId, +idx); rerender(); return;
+    }
+  }
+  function handlePlannedExerciseChange(e, rerender) {
+    const setFld = e.target.closest("[data-pex-set-field]");
+    if (setFld) {
+      const [dateKey, exId, idx, field] = setFld.dataset.pexSetField.split(":");
+      setPlannedSetField(parseKey(dateKey), exId, +idx, field, setFld.value);
+      rerender(); return;
+    }
+    const climbFld = e.target.closest("[data-pex-climb]");
+    if (climbFld) {
+      const [dateKey, exId, field] = climbFld.dataset.pexClimb.split(":");
+      setPlannedClimbField(parseKey(dateKey), exId, field, climbFld.value);
+      rerender(); return;
+    }
+  }
   // minutes-from-midnight back to an "HH:MM" string, matching how EVENTS store times
   function addMinutesToTimeStr(timeStr, mins) {
     const total = toMin(timeStr) + mins;
@@ -42929,6 +43226,181 @@
       if (g !== "rest" && g !== "restExtra") n++;
     }
     return n;
+  }
+
+  // Weekly type plan (2026-10-10, ask28 "one fitness system" -- her pick, Option 1
+  // "fixed weekly template"): which of the 3 exercise-tracked types trains on which
+  // weekday, every week. Deliberately layered UNDER fitGoalFor rather than a second
+  // parallel day-status system -- fitGoalFor alone still owns rest/light/restExtra
+  // (incl. the deload cycle), this only ever answers "what TYPE, on an otherwise
+  // ordinary workout day." Pilates/Stretching stay out of this -- they're already
+  // scheduled via Routines (a standing class has its own weekday + fitLink), so a
+  // second system assigning them a weekday too would just be the exact kind of
+  // contradicting rule she asked to avoid.
+  const FIT_WEEK_PLAN_KEY = "book33-fitness-week-plan";
+  const FIT_PLANNABLE_TYPES = ["Gym", "F45", "Bouldering"];
+  function loadFitWeekPlan() {
+    try {
+      const v = JSON.parse(localStorage.getItem(FIT_WEEK_PLAN_KEY) || "{}");
+      const out = {};
+      Object.keys(v).forEach(k => { if (FIT_PLANNABLE_TYPES.includes(v[k])) out[k] = v[k]; });
+      return out;
+    } catch (e) { return {}; }
+  }
+  function saveFitWeekPlan() { try { localStorage.setItem(FIT_WEEK_PLAN_KEY, JSON.stringify(FIT_WEEK_PLAN)); } catch (e) {} }
+  let FIT_WEEK_PLAN = loadFitWeekPlan();   // { "0".."6" (dowIndex, Mon-Sun) : "Gym"|"F45"|"Bouldering" }
+  function setFitWeekPlanDay(dow, type) {
+    if (type && FIT_PLANNABLE_TYPES.includes(type)) FIT_WEEK_PLAN[dow] = type;
+    else delete FIT_WEEK_PLAN[dow];
+    saveFitWeekPlan();
+  }
+  // the planned TYPE for a date -- null on any day fitGoalFor already has an opinion
+  // on (rest/light/restExtra; never both at once) or when nothing's assigned that
+  // weekday yet. Purely advisory, same as fitGoalFor itself -- never blocks logging
+  // a different type that day.
+  function fitPlannedTypeFor(date) {
+    if (fitGoalFor(date)) return null;
+    return FIT_WEEK_PLAN[dowIndex(date)] || null;
+  }
+
+  // Reusable workout templates (2026-10-10, ask28 "one fitness system" -- her combined
+  // pick: a named exercise list you assign to a future date, where you ALSO set that
+  // date's specific target sets/reps). A template itself carries no date and no
+  // actuals -- just the shape (which exercises, in what order, with starting target
+  // numbers to seed from); PLANNED_FIT below is the per-date instance.
+  const FIT_TEMPLATES_KEY = "book33-fitness-templates";
+  function loadFitTemplates() { try { return JSON.parse(localStorage.getItem(FIT_TEMPLATES_KEY) || "[]"); } catch (e) { return []; } }
+  function saveFitTemplates() { try { localStorage.setItem(FIT_TEMPLATES_KEY, JSON.stringify(FIT_TEMPLATES)); } catch (e) {} }
+  let FIT_TEMPLATES = loadFitTemplates();
+  // [{ id, name, type, exercises: [{ id, name, kind, sets?:[{reps,weightKg}], grade?, attempts? }] }]
+  function addFitTemplate(name, type) {
+    const cleanName = String(name || "").trim();
+    if (!cleanName || !FIT_PLANNABLE_TYPES.includes(type)) return null;
+    const t = { id: uid(), name: cleanName, type, exercises: [] };
+    FIT_TEMPLATES.push(t);
+    saveFitTemplates();
+    return t;
+  }
+  function removeFitTemplate(templateId) {
+    FIT_TEMPLATES = FIT_TEMPLATES.filter(t => t.id !== templateId);
+    saveFitTemplates();
+  }
+  function templateById(templateId) { return FIT_TEMPLATES.find(t => t.id === templateId) || null; }
+  function addTemplateExercise(templateId, name) {
+    const t = templateById(templateId);
+    const cleanName = String(name || "").trim();
+    const kind = t && exerciseKindFor(t.type);
+    if (!t || !kind || !cleanName) return null;
+    const ex = { id: uid(), name: cleanName, kind };
+    if (kind === "lift") ex.sets = [{ reps: null, weightKg: null }];
+    else { ex.grade = ""; ex.attempts = 1; }
+    t.exercises.push(ex);
+    saveFitTemplates();
+    return ex;
+  }
+  function removeTemplateExercise(templateId, exerciseId) {
+    const t = templateById(templateId);
+    if (!t) return;
+    t.exercises = t.exercises.filter(e => e.id !== exerciseId);
+    saveFitTemplates();
+  }
+
+  // Planned sessions (2026-10-10, ask28): a date-specific instance of a future
+  // session's content, drafted from a template (or built blank) and editable from
+  // there -- target sets/reps per exercise, shown alongside the actual-input boxes
+  // once that day is actually logged. Deliberately a SEPARATE store from FIT_LOG,
+  // never merged into it: a planned-but-not-yet-done session must never count toward
+  // fitLoggedOn/fitWeekProgress/streaks or the Growth heatmap, which all read FIT_LOG
+  // alone and must keep meaning "actually happened." One planned entry per date (a
+  // day is planned for one type via the weekly plan, matching fitPlannedTypeFor).
+  const PLANNED_FIT_KEY = "book33-fitness-planned";
+  function loadPlannedFit() { try { return JSON.parse(localStorage.getItem(PLANNED_FIT_KEY) || "{}"); } catch (e) { return {}; } }
+  function savePlannedFit() { try { localStorage.setItem(PLANNED_FIT_KEY, JSON.stringify(PLANNED_FIT)); } catch (e) {} }
+  let PLANNED_FIT = loadPlannedFit();
+  // { "YYYY-MM-DD": { id, type, templateId, exercises: [{id,name,kind,sets?,grade?,attempts?}] } }
+  const plannedFor = date => PLANNED_FIT[keyOf(date)] || null;
+  function planSessionFromTemplate(date, templateId) {
+    const t = templateById(templateId);
+    if (!t) return null;
+    const k = keyOf(date);
+    const plan = {
+      id: uid(), type: t.type, templateId: t.id,
+      exercises: t.exercises.map(ex => ({
+        id: uid(), name: ex.name, kind: ex.kind,
+        sets: ex.kind === "lift" ? ex.sets.map(s => ({ reps: s.reps, weightKg: s.weightKg })) : undefined,
+        grade: ex.kind === "climb" ? (ex.grade || "") : undefined,
+        attempts: ex.kind === "climb" ? (ex.attempts || 1) : undefined,
+      })),
+    };
+    PLANNED_FIT[k] = plan;
+    savePlannedFit();
+    return plan;
+  }
+  function planSessionBlank(date, type) {
+    if (!FIT_PLANNABLE_TYPES.includes(type)) return null;
+    const k = keyOf(date);
+    PLANNED_FIT[k] = { id: uid(), type, templateId: null, exercises: [] };
+    savePlannedFit();
+    return PLANNED_FIT[k];
+  }
+  function removePlannedSession(date) {
+    delete PLANNED_FIT[keyOf(date)];
+    savePlannedFit();
+  }
+  function addPlannedExercise(date, name) {
+    const plan = plannedFor(date);
+    const kind = plan && exerciseKindFor(plan.type);
+    const cleanName = String(name || "").trim();
+    if (!plan || !kind || !cleanName) return null;
+    const ex = { id: uid(), name: cleanName, kind };
+    if (kind === "lift") ex.sets = [{ reps: null, weightKg: null }];
+    else { ex.grade = ""; ex.attempts = 1; }
+    plan.exercises.push(ex);
+    savePlannedFit();
+    return ex;
+  }
+  function removePlannedExercise(date, exerciseId) {
+    const plan = plannedFor(date);
+    if (!plan) return;
+    plan.exercises = plan.exercises.filter(e => e.id !== exerciseId);
+    savePlannedFit();
+  }
+  function setPlannedSetField(date, exerciseId, setIndex, field, value) {
+    const plan = plannedFor(date);
+    const ex = plan?.exercises.find(e => e.id === exerciseId);
+    if (!ex || !ex.sets[setIndex]) return;
+    ex.sets[setIndex][field] = value === "" ? null : +value;
+    savePlannedFit();
+  }
+  function addPlannedSet(date, exerciseId) {
+    const plan = plannedFor(date);
+    const ex = plan?.exercises.find(e => e.id === exerciseId);
+    if (!ex || ex.kind !== "lift") return;
+    const prev = ex.sets[ex.sets.length - 1];
+    ex.sets.push({ reps: prev ? prev.reps : null, weightKg: prev ? prev.weightKg : null });
+    savePlannedFit();
+  }
+  function removePlannedSet(date, exerciseId, setIndex) {
+    const plan = plannedFor(date);
+    const ex = plan?.exercises.find(e => e.id === exerciseId);
+    if (!ex) return;
+    ex.sets.splice(setIndex, 1);
+    savePlannedFit();
+  }
+  function setPlannedClimbField(date, exerciseId, field, value) {
+    const plan = plannedFor(date);
+    const ex = plan?.exercises.find(e => e.id === exerciseId);
+    if (!ex || ex.kind !== "climb") return;
+    ex[field] = field === "attempts" ? Math.max(1, +value || 1) : value;
+    savePlannedFit();
+  }
+  // target sets for an exercise name, from TODAY's own planned session if one exists
+  // -- takes priority over lastSetFor's history-based guess when actually logging,
+  // since a plan she set on purpose beats a number carried over from last time.
+  function plannedSetsFor(name) {
+    const plan = plannedFor(TODAY);
+    const ex = plan?.exercises.find(e => e.kind === "lift" && e.name.trim().toLowerCase() === String(name).trim().toLowerCase());
+    return ex?.sets?.length ? ex.sets[0] : null;
   }
 
   /* 2026-08-06: renderFitness()/renderFitSelectedDetail() (the old #habitsPage
@@ -54377,6 +54849,66 @@
   document.getElementById("fitHomeChart")?.addEventListener("change", e => {
     const pick = e.target.closest("[data-ex-chart-pick]");
     if (pick) { FIT_CHART_EXERCISE = pick.value; renderFitness(); }
+  });
+
+  document.getElementById("fitHomeWeekPlan")?.addEventListener("change", e => {
+    const sel = e.target.closest("[data-wp-day]");
+    if (sel) { setFitWeekPlanDay(sel.dataset.wpDay, sel.value); renderFitness(); }
+  });
+
+  document.getElementById("fitHomeTemplates")?.addEventListener("click", e => {
+    if (e.target.closest("#tplNewBtn")) {
+      const nameInput = document.getElementById("tplNewName");
+      const typeSelect = document.getElementById("tplNewType");
+      const t = addFitTemplate(nameInput.value, typeSelect.value);
+      if (t) { TPL_OPEN.add(t.id); renderFitness(); }
+      return;
+    }
+    const toggle = e.target.closest("[data-tpl-toggle]");
+    if (toggle) {
+      const id = toggle.dataset.tplToggle;
+      if (TPL_OPEN.has(id)) TPL_OPEN.delete(id); else TPL_OPEN.add(id);
+      renderFitness(); return;
+    }
+    const del = e.target.closest("[data-tpl-del]");
+    if (del) { removeFitTemplate(del.dataset.tplDel); renderFitness(); return; }
+    const addBtn = e.target.closest("[data-tpl-add]");
+    if (addBtn) {
+      const id = addBtn.dataset.tplAdd;
+      const input = document.querySelector(`[data-tpl-add-name="${id}"]`);
+      if (input && input.value.trim()) { addTemplateExercise(id, input.value); renderFitness(); }
+      return;
+    }
+    const exDel = e.target.closest("[data-tpl-ex-del]");
+    if (exDel) {
+      const [id, exId] = exDel.dataset.tplExDel.split(":");
+      removeTemplateExercise(id, exId); renderFitness(); return;
+    }
+  });
+
+  document.getElementById("fitHomeUpcoming")?.addEventListener("click", e => {
+    if (e.target.closest("#planAddBtn")) {
+      const dateVal = document.getElementById("planDate").value;
+      const templateId = document.getElementById("planTemplate").value;
+      const blankType = document.getElementById("planBlankType").value;
+      if (!dateVal) return;
+      const date = parseKey(dateVal);
+      const plan = templateId ? planSessionFromTemplate(date, templateId) : planSessionBlank(date, blankType);
+      if (plan) { UPCOMING_OPEN.add(dateVal); renderFitness(); }
+      return;
+    }
+    const toggle = e.target.closest("[data-up-toggle]");
+    if (toggle) {
+      const k = toggle.dataset.upToggle;
+      if (UPCOMING_OPEN.has(k)) UPCOMING_OPEN.delete(k); else UPCOMING_OPEN.add(k);
+      renderFitness(); return;
+    }
+    const del = e.target.closest("[data-up-del]");
+    if (del) { removePlannedSession(parseKey(del.dataset.upDel)); renderFitness(); return; }
+    handlePlannedExerciseClick(e, renderFitness);
+  });
+  document.getElementById("fitHomeUpcoming")?.addEventListener("change", e => {
+    handlePlannedExerciseChange(e, renderFitness);
   });
 
   /* ---- health, logged straight from the day it happened ---- */
