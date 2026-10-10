@@ -16,22 +16,41 @@ scheduling, Money, Home & Family, Conversation Guides/Swipe File, and the rest) 
 real, intact and reachable exactly as described below. It just isn't where new design
 effort defaults to.
 
-**Where each pillar actually stands (2026-10-10 audit):**
+**Where each pillar actually stands (2026-10-10 audit, updated same day — nav shipped):**
 - **Birthdays** — already built: a dedicated page (`renderBirthdays`), a widget group
   (`#wrBdayGroup`/`renderWrBdayGroup()`), a Mode colour, and popovers reused across
-  Day/Week/Month/Life Map. Elevate what exists; this is not a from-scratch build.
-- **Fitness** — real data (`FIT_LOG`) and several logging surfaces (Day's fitness-link
-  tile, Today's echo, the Habits grid row, Growth's stats), but no single home page —
-  one existed and was retired 2026-08-06. Becoming a real pillar runs through its own
-  `ask28` (the paused "fitness event → plan/actual training page" redesign), not a
-  rules-file edit.
-- **Marital responsibilities** — nothing built yet. Closest existing scaffolding: the
-  "Us" page (Mine/Partner/Both task-splitting), the `marriage` life-track/colour
-  (currently just a budget bucket), `partnerName()`/`PARTNER_KEY`, and the generic
-  spouse relationship on People. Her scope for it: shared duties/chores, quality-time
-  commitments, and logistics she owns on his behalf — still to be designed, via `ask28`.
+  Day/Week/Month/Life Map. Pinned nav row: "Events & birthdays" (unchanged — it already
+  covered this, see "Nav now reflects the pillars" below for why the label wasn't
+  rewritten).
+- **Fitness** — now has a real home page (`renderFitness()`, `#fitnessPage`,
+  `viewId: "fitness"`), pinned in nav. Pulls together what existed (Day's fitness-link
+  tile's logger, now factored into `fitLoggerHtml(date)` and shared by both; the weekly
+  goal via `fitWeekProgress`/`fitWeekTarget`/`isDeloadWeek`; a 14-day recent-sessions
+  list, new). The deeper plan/actual redesign (the paused "fitness event → plan/actual
+  training page" ask28 thread) is still separate, future work — this home page is the
+  "real home page now" she picked over a placeholder, not that redesign.
+- **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
+  (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
+  "reuse Us as the starting point") — tapping it still shows Us's own content/copy
+  verbatim ("🤝 PartnerName & us"), not a distinct Marital page. A real Marital-specific
+  design (shared duties/chores, quality-time commitments, logistics she owns on his
+  behalf) is its own future `ask28`, not done here.
 
-As each pillar goes through its own build, its concrete rules land as their own
+### Nav now reflects the pillars (2026-10-10, ask28 — "help redesign this so it is
+more useful to me. i dont use some of it")
+`NAV_ITEMS` regrouped: a `"Focus"` group (Events & birthdays, Fitness, Marital) and an
+`"Also"` group (Life Map, Conversation Guides, Month) — both print real section labels
+in the mobile drawer (`renderNavPanel()`'s existing group-label support; the desktop/icon
+rails only draw a blank divider between groups, no text, narrower surfaces). **To-do
+unpinned** (she doesn't use it) — moved into the Planning door (`NAV_DOORS`), same "rail
+retirement, not page retirement" shape as every other unpin; see RETIRED-FEATURES.md §7.
+"Events & birthdays" was deliberately NOT relabelled "Birthdays" to match the Focus
+group's theme — the page still shows all events, not just birthdays, and a label
+promising narrower content than the page delivers is exactly the mismatch Page-header
+law exists to prevent. The PART 3 "Priority order" line above now points here instead of
+restating a list — this section is live, that one isn't.
+
+As each pillar goes through its own further build, its concrete rules land as their own
 subsection under this one — same as Life Map and Modes already have theirs. This
 section is the index that grows, not a finished spec.
 
@@ -90,9 +109,9 @@ A section label stays quieter than a name because of case and colour, not size.
 Three columns plus a rail:
 1. **Left nav, ~180px, LABELLED** — line icon + word per item, active item on a soft tint
    with a 4px accent bar at the left edge, avatar + chevron pinned bottom-left. Her standing
-   "labels over icons" preference, made concrete. Priority order is her build-pass answer
-   #4 below (unchanged by the 3-pillars focus above — nav restructuring for the pillars is
-   its own future design pass, not done here).
+   "labels over icons" preference, made concrete. Priority order: see "C22's current
+   focus — 3 pillars" → "Nav now reflects the pillars" above — her build-pass answer #4
+   below described the ORIGINAL order; the 2026-10-10 nav redesign superseded it.
 2. **Left column, ~275px, stacked white cards:** TODAY (label + "View week" link; a
    2-column grid of 8 numerology tiles: UD · PM · Ruler · Moon · Sign · Zodiac year ·
    Zodiac month · PY — big value, small caption) → mini month (‹ › in the header; selected

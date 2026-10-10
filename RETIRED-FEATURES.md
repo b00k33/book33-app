@@ -243,6 +243,14 @@ own render function, data and routes; `B33_ICONS` entries for unpinned pages (st
 shown inside Chapters); the Chapters row and Settings footer row, both untouched
 including their separators.
 
+**Further trim, 2026-10-10 (ask28, "help redesign this so it is more useful to me. i
+dont use some of it" → "To-do"):** To-do unpinned, same shape as every row above — page,
+route and `CATEGORIES` entry untouched, moved into the Planning door
+(`NAV_DOORS`, alongside Goals/Presets/Birthdays). Same pass also pinned two new rows,
+Fitness and Marital (the latter reusing the existing Us page's `viewId`) — see
+CLAUDE.md's "C22's current focus" → "Nav now reflects the pillars" for the full story;
+not a retirement, so not detailed here.
+
 ## 8. Mobile Day-view header rows — retired 2026-08-27
 
 Measured live at 412×915, mobile Day view, drawer open: `.nav-tiers`' "August ▾"
