@@ -103,6 +103,39 @@ effort defaults to.
     Mode toggle" — see that same bullet's "Mode group restored on its own" note
     for the small 🎭 icon / mobile un-hide that gives this card a real path to be
     seen again, without reviving the rest of what she asked cleared.
+  - *Gym calendar block → a real workout workflow (2026-10-10, screenshot of the
+    generic event popover: "give access to the gym planned session of day and week...
+    start a gym workflow" — her full pick, "A+B+C — full workout mode", plus all four
+    "what's missing" options: today's plan, the week, logging without leaving, a live
+    session feel):* a brand new `.tl-detail-fit-card` in `renderTlDetailBody()` (any
+    Gym/F45/Bouldering-type event — `e.fitLink` match first, a title-word-boundary
+    match as the fallback her own screenshot's bare "Gym" event actually needed, since
+    it carried neither) shows a 7-dot week strip (`fitWeekDotsHtml()`, reusing
+    `fitDayStatus` so it can't disagree with Week/Month/the Mode card above), today's
+    planned exercises when one exists (`plannedFor`), and a "▶ Start/Continue workout"
+    button. That button opens a new **Workout Mode** overlay (`#tlWorkoutOverlay`,
+    `openTlWorkout()`) — same "full-screen, opens ON TOP of `#tlDetailOverlay`,
+    which stays open underneath" shell `#tlWalkOverlay` (the mobile hair-wash
+    walkthrough) already established, reused directly rather than a new pattern. The
+    body is `exercisesHtml(date, sess)` **verbatim** — the exact sets-table/trend-chip/
+    climb-fields markup and `handleExerciseClick`/`handleExerciseChange` mutators the
+    Fitness page's own `#fitHomeToday` logger already uses — so this is a new VIEW
+    onto `FIT_LOG`, never a second copy of it. On top of that unchanged data layer:
+    a running elapsed-session timer and an optional 90s rest countdown (+30s/Skip),
+    both updating their own text node directly on each tick rather than calling
+    `renderTlWorkoutBody()` — a full re-render every second would wipe whatever she's
+    mid-typing into a weight/reps field, the exact trap `renderTlWalkBody`'s own
+    `e.stopPropagation()` comment already documents for this sheet family (hit it
+    live too: tapping "+ Add exercise" added the exercise AND immediately closed the
+    whole overlay, until `#tlWorkoutBody`'s click delegate got the same
+    `e.stopPropagation()`). Closing (✕ or Back) fills a blank Time/Duration from what
+    actually happened (session start time, elapsed minutes) rather than leaving them
+    for her to type by hand, and calls `refreshOpenTlDetail()` so the card underneath
+    immediately shows "Continue workout" / the filled-in week dot. Deliberately scoped
+    to `exerciseKindFor`'s own three types (Gym/F45/Bouldering) — Pilates/Stretching
+    stay session-level only, her own prior explicit pick, so this card never offers an
+    empty exercise list for a type that was never meant to carry one. Verified live,
+    both the card and Workout Mode, at desktop and mobile widths.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy
