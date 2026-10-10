@@ -13485,6 +13485,19 @@
   .hair-override-current { font-size: 11px; color: var(--ink-soft); margin-top: 8px; }
   .hair-override-current b { color: var(--ink); font-weight: 600; }
 
+  /* Fitness home page's recent-sessions list (2026-10-10) -- same row shape as
+     every other label/value list in the file, reusing the fit-* tokens above
+     rather than minting new ones. */
+  .fit-hist-list { display: flex; flex-direction: column; }
+  .fit-hist-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 0; border-bottom: 1px solid var(--note-line); font-family: var(--font-body);
+  }
+  .fit-hist-row:last-child { border-bottom: none; }
+  .fit-hist-date { font-size: 13px; color: var(--ink); font-weight: 600; flex: none; }
+  .fit-hist-types { font-size: 13px; color: var(--ink-soft); text-align: right; }
+  .fit-hist-empty { font-size: 13px; color: var(--ink-faint); font-style: italic; font-family: var(--font-body); }
+
   /* ============ CYCLE ============ */
   :root {
     --flow-spot:  #FF7EB6;
@@ -20872,6 +20885,22 @@
 
     <div class="section-head" style="margin-top:24px"><h2>Growing, learning, improving</h2><span class="rule"></span></div>
     <div id="grTrajectory"></div>
+  </div>
+
+  <!-- ================= FITNESS ================= -->
+  <div class="page" id="fitnessPage" hidden>
+    <div class="bd-head">
+      <h1>Fitness</h1>
+    </div>
+
+    <div class="section-head"><h2>This week</h2><span class="rule"></span></div>
+    <div id="fitHomeWeek"></div>
+
+    <div class="section-head" style="margin-top:24px"><h2>Today</h2><span class="rule"></span></div>
+    <div id="fitHomeToday"></div>
+
+    <div class="section-head" style="margin-top:24px"><h2>Recent sessions</h2><span class="rule"></span></div>
+    <div id="fitHomeHistory"></div>
   </div>
 
   <!-- ================= HEALTH ================= -->
@@ -31509,6 +31538,9 @@
         { id: "hair", label: "Hair", group: "Self-care" },
         { id: "skinNails", label: "Skin & Nails", group: "Self-care" },
         { id: "habits", label: "Habits", group: "Body" },
+        // NEW (2026-10-10): Fitness's own pinned-nav home page -- see NAV_ITEMS'
+        // "NEW (2026-10-10, C22's 3-pillar focus" comment for the full story.
+        { id: "fitness", label: "Fitness", group: "Body" },
         { id: "health", label: "Fasting", group: "Body" },
         { id: "cycle", label: "Cycle", group: "Body" },
         { id: "growth", label: "Growth", group: "Body" },
@@ -36072,31 +36104,13 @@
   // sessions she explicitly reopened with ✎ — transient, resets on reload; everything
   // filled and NOT in here renders folded, which is what makes the box auto-close
   const FIT_EDIT_OPEN = new Set();
-  function renderDayFitLink() {
-    const d = state.anchor;
-    // logging is always available for any day — a year-long habit tracker, not a prescribed
-    // plan to gate against (see Life Map: structure should guide, never block logging reality).
-    // Multiple sessions can be logged the same day (e.g. Pilates + Stretching).
+  // Factored out of renderDayFitLink() (2026-10-10, the new Fitness home page
+  // needs the exact same logger for TODAY) -- pure function of a date, no
+  // reference to state.anchor, so either caller can pass whichever date is
+  // theirs (the Day page's viewed day, or always-TODAY for the home page).
+  function fitLoggerHtml(d) {
     const sessions = fitSessionsOn(d);
-    // fulfilment, not streaks — logged days vs planned days in the
-    // viewed day's week; a swapped day still counts, only the week total matters
-    const done = fitWeekProgress(d), target = fitWeekTarget(d);
-    const hasLog = sessions.length > 0;
-    const goal = hasLog ? null : fitGoalFor(d);
-    const fitType = hasLog ? "workout" : (goal || "restOff");
-    const fitTitle = hasLog ? (sessions.length > 1 ? `${sessions.length} sessions` : sessions[0].type)
-      : goal === "restExtra" ? "Extra rest day" : goal === "light" ? "Light day" : goal === "rest" ? "Rest day" : "Workout";
-
-    let html = `<div class="fit-link" data-type="${fitType}">
-      <span class="dot"></span>
-      <div class="body">
-        <div class="t1">${esc(fitTitle)}</div>
-        <div class="t2">${done}/${target} days this week${done >= target ? " ✓ fulfilled" : ""}</div>
-      </div>
-      <button class="tab-link" id="fitOpenTab" type="button">Open Fitness tab →</button>
-    </div>`;
-
-    html += `<div class="fit-logger">
+    return `<div class="fit-logger">
       ${sessions.some(s => s.type === "Pilates") ? "" :
         `<button type="button" class="fit-quick-log" data-fit-quick="Pilates">🧘 Log Pilates — 7:30am · 45m · Inlife Wellness</button>`}
       <div class="fit-type-picker">
@@ -36150,9 +36164,67 @@
         </div>`;
       }).join("")}</div>` : ""}
     </div>`;
+  }
+  function renderDayFitLink() {
+    const d = state.anchor;
+    // logging is always available for any day — a year-long habit tracker, not a prescribed
+    // plan to gate against (see Life Map: structure should guide, never block logging reality).
+    // Multiple sessions can be logged the same day (e.g. Pilates + Stretching).
+    const sessions = fitSessionsOn(d);
+    // fulfilment, not streaks — logged days vs planned days in the
+    // viewed day's week; a swapped day still counts, only the week total matters
+    const done = fitWeekProgress(d), target = fitWeekTarget(d);
+    const hasLog = sessions.length > 0;
+    const goal = hasLog ? null : fitGoalFor(d);
+    const fitType = hasLog ? "workout" : (goal || "restOff");
+    const fitTitle = hasLog ? (sessions.length > 1 ? `${sessions.length} sessions` : sessions[0].type)
+      : goal === "restExtra" ? "Extra rest day" : goal === "light" ? "Light day" : goal === "rest" ? "Rest day" : "Workout";
+
+    const html = `<div class="fit-link" data-type="${fitType}">
+      <span class="dot"></span>
+      <div class="body">
+        <div class="t1">${esc(fitTitle)}</div>
+        <div class="t2">${done}/${target} days this week${done >= target ? " ✓ fulfilled" : ""}</div>
+      </div>
+      <button class="tab-link" id="fitOpenTab" type="button">Open Fitness tab →</button>
+    </div>` + fitLoggerHtml(d);
     // Guarded like every other host lookup in this file, rather than left to throw.
     const fitHost = document.getElementById("fitLinkTile");
     if (fitHost) fitHost.innerHTML = html;
+  }
+  // The Fitness pillar's own nav-pinned home page (2026-10-10, ask28 nav redesign
+  // -- see CLAUDE.md "C22's current focus"). Always TODAY, same convention as
+  // renderTodayFit() below -- this is a destination you navigate TO, not a view
+  // of whatever day the Day page happens to be browsing.
+  function renderFitness() {
+    const weekHost = document.getElementById("fitHomeWeek");
+    if (!weekHost) return;
+    const done = fitWeekProgress(TODAY), target = fitWeekTarget(TODAY);
+    const deload = isDeloadWeek(TODAY);
+    weekHost.innerHTML = `<div class="fit-link" data-type="${done >= target ? "workout" : "restOff"}">
+      <span class="dot"></span>
+      <div class="body">
+        <div class="t1">${done}/${target} days this week${done >= target ? " ✓ fulfilled" : ""}</div>
+        <div class="t2">${deload ? "Deload week — lighter by design" : FITNESS_TYPES.join(" · ")}</div>
+      </div>
+    </div>`;
+
+    document.getElementById("fitHomeToday").innerHTML = fitLoggerHtml(TODAY);
+
+    const past = [];
+    for (let i = 1; i <= 14; i++) {
+      const d = addDays(TODAY, -i);
+      if (fitLoggedOn(d)) past.push(d);
+    }
+    document.getElementById("fitHomeHistory").innerHTML = past.length
+      ? `<div class="fit-hist-list">${past.map(d => {
+          const sessions = fitSessionsOn(d);
+          return `<div class="fit-hist-row">
+            <span class="fit-hist-date">${esc(qaDayLbl(d))}</span>
+            <span class="fit-hist-types">${sessions.map(s => esc(s.type)).join(" · ")}</span>
+          </div>`;
+        }).join("")}</div>`
+      : `<div class="fit-hist-empty">Nothing logged in the last 2 weeks yet.</div>`;
   }
   // a compact read-only echo of the above for the Today page — always TODAY, never
   // whatever day the Day page happens to be browsing. The full session editor (types,
@@ -48207,6 +48279,7 @@
     document.getElementById("foodPage").hidden = state.view !== "food";
     document.getElementById("nutritionPage").hidden = state.view !== "nutrition";
     document.getElementById("growthPage").hidden = state.view !== "growth";
+    document.getElementById("fitnessPage").hidden = state.view !== "fitness";
     document.getElementById("healthPage").hidden = state.view !== "health";
     document.getElementById("cyclePage").hidden = state.view !== "cycle";
     document.getElementById("habitsPage").hidden = state.view !== "habits";
@@ -48250,6 +48323,7 @@
     else if (state.view === "food") renderFood();
     else if (state.view === "nutrition") renderNutrition();
     else if (state.view === "growth") renderGrowth();
+    else if (state.view === "fitness") renderFitness();
     else if (state.view === "health") renderHealth();
     else if (state.view === "cycle") renderCycle();
     else if (state.view === "supplements") renderSupplements();
@@ -48334,8 +48408,8 @@
   function needsBooking() {
     return MEDICAL.checks.filter(c => { const st = medStatus(c).st; return st === "overdue" || st === "soon"; }).length;
   }
-  // NAV_ITEMS is a deliberately small pinned set (6 + Settings). Unpinning is NOT
-  // retiring -- presets/habits/nutrition/medical/money/cbdWork/growth all keep
+  // NAV_ITEMS is a deliberately small pinned set (7 + Settings). Unpinning is NOT
+  // retiring -- presets/habits/nutrition/medical/money/cbdWork/growth/todo all keep
   // their page, their route and their CATEGORIES entry untouched, and stay
   // reachable through the ▤ Chapters accordion (navPanelChaptersHtml()/
   // dnrChaptersHtml(), both read CATEGORIES directly, never this array) and the
@@ -48344,29 +48418,33 @@
   // live booking-count badge above -- the only NAV_ITEMS badge whose count doesn't
   // surface anywhere else in the app) and the Presets badge (SAVED_EVENTS.length)
   // that goes with it.
-  // `group` is null on all six kept items on purpose, not left over from their old
-  // groups (health/people used to carry "Body & health"/"Life") -- with only one
-  // item left per former group, the .nir-sep/.dnr-sep separator condition in
-  // renderNavIconRail()/renderDeskNavRail() (`item.group !== lastGroup && lastGroup
-  // && item.group`) would otherwise draw a hairline before every item, since each
-  // one's group would always differ from the last. null keeps all six in one block
-  // -- the separators before Chapters and before Settings are untouched.
+  // 2026-10-10 (ask28 nav redesign, "help redesign this so it is more useful to
+  // me. i dont use some of it" -> her 8 answers): regrouped around C22's 3-pillar
+  // focus (see CLAUDE.md "C22's current focus"). `group: "Focus"` on
+  // events/fitness/us and `group: "Also"` on lifeMap/guides/month print real
+  // section labels via renderNavPanel()'s existing group-label support (it
+  // already prints `<div class="nav-panel-group-lbl">`${item.group}`</div>` on
+  // every group change -- this was a ~zero-effort addition, not new plumbing).
+  // The icon rail / desktop rail (.nir-sep/.dnr-sep) only draw a blank divider on
+  // a group change, not a text label, so those two surfaces show a hairline
+  // between the two groups rather than "Focus"/"Also" text -- narrower surfaces,
+  // lower payoff for new label markup there. `"Also"`, not `"More"`, on purpose --
+  // the Everything-else row below already prints a hardcoded "More" label
+  // (navPanelEverythingElseRowHtml's caller); reusing that exact word for a
+  // second, different group would read as the same heading twice in one drawer.
+  // To-do was unpinned this same pass (she doesn't use it) -- moved to the
+  // Planning door below, same "rail retirement, not page retirement" shape as
+  // every other unpin here.
   // Life Map, People, Body sit below the top level -- they're still fully
   // routable (no id removed, no page deleted), just reachable through the
   // "Everything else" door (NAV_DOORS, below) instead of a pinned row here. Every
   // surface that reads this array (icon rail, tab strip, desktop rail, launcher
   // popover) shrinks with it -- each still has ITS OWN existing Chapters mechanism,
   // so nothing here goes unreachable.
-  // 2026-08-30 (code6+code7, her 8-question calibration): reordered to her own
-  // stated priority -- "today events life map to do everything else" -- Today first,
-  // then her two named most-used pages (Events, Life Map), then To-do. Month drops
-  // OUT of that named priority but stays pinned anyway (her follow-up answer, once
-  // she learned its rail icon isn't just "go to Month" -- it also expands the only
-  // jump-to-any-date calendar panel this rail has, no other button reaches it).
-  // Settings stays last/footer-separated, per her own answer, not grouped with the
-  // top 4. This single array drives BOTH the narrow icon rail (#navIconRail) and the
-  // wider labelled #navPanelRows list (renderNavPanelRowHtml()) -- her "everywhere,
-  // keep them consistent" answer means one reorder here does both.
+  // Settings stays last/footer-separated, per her own 2026-08-30 answer, not
+  // grouped with the rest. This single array drives BOTH the narrow icon rail
+  // (#navIconRail) and the wider labelled #navPanelRows list
+  // (renderNavPanelRowHtml()) -- one reorder here does both.
   const NAV_ITEMS = [
     { viewId: "day",     label: "Today",     icon: "☀",  group: null },
     // Label covers two CATEGORIES ids (events + the standalone
@@ -48374,23 +48452,41 @@
     // "events" (the All Events rebuild already surfaces birthdays as gold capsules
     // on its yearly rails); the standalone Birthdays page isn't deleted, it moves
     // into the Planning door (Commit 2 STEP 3) rather than staying pinned here.
-    { viewId: "events",  label: "Events & birthdays", icon: "🗂",  group: null },
+    { viewId: "events",  label: "Events & birthdays", icon: "🗂",  group: "Focus" },
+    // NEW (2026-10-10, C22's 3-pillar focus -- see CLAUDE.md "C22's current focus"):
+    // Fitness gets a real home page (renderFitness(), reusing fitLoggerHtml() --
+    // factored out of renderDayFitLink() for this -- plus FIT_LOG/fitWeekProgress/
+    // fitWeekTarget/fitGoalFor) for the first time. It had scattered logging
+    // surfaces (Day tile, Today echo, Habits grid, Growth stats) but no single
+    // destination before this; all of those stay exactly as they were.
+    { viewId: "fitness", label: "Fitness",   icon: "🏋",  group: "Focus" },
+    // NEW (2026-10-10): the existing Us page (Mine/Partner/Both task-splitting)
+    // promoted into the Marital pillar's nav slot -- her own pick, "reuse Us as
+    // the starting point," over building something new this pass. Removed from
+    // the family door's views below so it isn't listed twice, same precedent as
+    // Life Map/Guides' own promotions. Tapping it still shows the Us page's own
+    // content/copy verbatim for now ("🤝 PartnerName & us") -- a distinct
+    // Marital-specific page design is its own future ask28, not done here.
+    { viewId: "us",      label: "Marital",   icon: "💞",  group: "Focus" },
     // NEW (2026-08-30): was 3 taps deep behind Everything else -> Planning -> Life
     // Map -- one of her two named most-used pages, now one tap like Events beside
     // it. Removed from NAV_DOORS' planning door below so it isn't listed twice.
-    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: null },
-    { viewId: "todo",    label: "To-do",     icon: "☑",  group: null },
+    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: "Also" },
     // 2026-09-17 (synth22, "put conversation guide here" + a screenshot of this
     // exact rail): was 3 taps deep behind Everything else -> Conversation Guides'
     // own door -- same promotion Life Map got on 2026-08-30, same reasoning (a
     // page real enough to use daily doesn't belong behind a catch-all). Removed
     // from NAV_DOORS below so it isn't listed twice; its CATEGORIES chapter entry
     // (search "guides3") stays untouched, same as Life Map's own.
-    { viewId: "guides",  label: "Conversation Guides", icon: "💬", group: null },
+    { viewId: "guides",  label: "Conversation Guides", icon: "💬", group: "Also" },
     // "Calendar" here means the month-grid overview, distinct from "Today" (the day
     // timeline) above -- the two are complementary views of the same data, same
     // distinction Google Calendar itself makes between its own "Today" and "Month".
-    { viewId: "month",   label: "Month",     icon: "🗓",  group: null },
+    { viewId: "month",   label: "Month",     icon: "🗓",  group: "Also" },
+    // 2026-10-10 (ask28, "i dont use some of it" -> "To-do"): unpinned, not
+    // retired -- its page, route and CATEGORIES entry are untouched, same "rail
+    // retirement, not page retirement" shape as RETIRED-FEATURES.md's earlier nav
+    // trim (§7). Moved into the Planning door below so it isn't orphaned.
     // no "settings" view exists -- CATEGORIES' real "notify" view is the closest
     // analog to a general preferences home, and is where the Drawer/Tabs toggle
     // itself lives (renderNotifyPage's Global group), so routing here is self-
@@ -48410,9 +48506,12 @@
     { id: "wellness", label: "Wellness", icon: "🌸",
       preview: "Habits · Cycle · Fasting · Growth · Medical · Nutrition · Supplements · Hair · Skin & Nails · Today",
       views: ["habits", "cycle", "health", "growth", "medical", "nutrition", "supplements", "hair", "skinNails", "today"] },
+    // 2026-10-10: "us" promoted straight to the pinned rail as "Marital" (search
+    // "NEW (2026-10-10)" in NAV_ITEMS above) -- removed from here so it isn't
+    // listed twice, same precedent as Life Map/Guides' own promotions.
     { id: "family", label: "Home & Family", icon: "👥",
-      preview: "People · Family Dinh · Us · Pregnancies · Shopping · Food · Home admin",
-      views: ["people", "family", "us", "pregnancies", "shopping", "food", "homeAdmin"] },
+      preview: "People · Family Dinh · Pregnancies · Shopping · Food · Home admin",
+      views: ["people", "family", "pregnancies", "shopping", "food", "homeAdmin"] },
     { id: "money", label: "Money", icon: "💰",
       preview: "Expenses & bills",
       views: ["money"] },
@@ -48433,9 +48532,11 @@
     // content moved into the Day page's widget rail, see #rightNowCardHome.
     // 2026-09-17 (synth22): "guides" removed -- Conversation Guides graduated to
     // its own C3 door right above, same precedent as Money/Cosmos.
+    // 2026-10-10: "todo" unpinned from the rail (search "2026-10-10 (ask28" in
+    // NAV_ITEMS above) -- moved here so it isn't orphaned.
     { id: "planning", label: "Planning", icon: "🗺",
-      preview: "Goals · Presets · Birthdays",
-      views: ["goals", "presets", "birthdays"] },
+      preview: "Goals · Presets · Birthdays · To-do",
+      views: ["goals", "presets", "birthdays", "todo"] },
   ];
   // Computed, not hardcoded -- the "Everything else" row's badge always matches
   // NAV_DOORS' real contents.
@@ -52073,6 +52174,15 @@
     money: ["var(--gold-bright)", `<circle cx="12" cy="12" r="8.8" fill="currentColor"/><g class="icxs" stroke-width="1.9" stroke-linecap="round"><path d="M14.8 9.3c-.5-.9-1.5-1.4-2.7-1.4-1.6 0-2.7.8-2.7 2 0 2.9 5.5 1.5 5.5 4.4 0 1.3-1.2 2.1-2.8 2.1-1.4 0-2.5-.6-3-1.6M12 6.2v1.6M12 16.5v1.6"/></g>`],
     cbdWork: ["var(--ic-sky)", `<rect x="3" y="7.4" width="18" height="13" rx="2.4" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.2" d="M8.6 7V5.4c0-.9.7-1.6 1.6-1.6h3.6c.9 0 1.6.7 1.6 1.6V7"/><path class="icx" d="M10.9 11.2h2.2v2h2v2.2h-2v2h-2.2v-2h-2v-2.2h2z"/>`],
     growth: ["var(--cat-personal-fitness)", `<path fill="currentColor" d="M5.7 19.5c-.5-.5-.5-1.2 0-1.7l8.2-8.2h-3.6a1.15 1.15 0 1 1 0-2.3h6.4c.63 0 1.15.5 1.15 1.15v6.4a1.15 1.15 0 1 1-2.3 0v-3.6l-8.2 8.2c-.5.5-1.2.5-1.7 0z"/>`],
+    // 2026-10-10 (ask28 nav redesign, Fitness pillar): a dumbbell, reusing growth's
+    // own --cat-personal-fitness token above rather than minting a new one --
+    // growth borrowed it loosely for an unrelated arrow glyph, fitness is its
+    // actual semantic home.
+    fitness: ["var(--cat-personal-fitness)", `<rect x="2.6" y="9.5" width="2.6" height="5" rx="1" fill="currentColor"/><rect x="18.8" y="9.5" width="2.6" height="5" rx="1" fill="currentColor"/><rect x="6.4" y="7.8" width="2.4" height="8.4" rx="1" fill="currentColor"/><rect x="15.2" y="7.8" width="2.4" height="8.4" rx="1" fill="currentColor"/><rect x="8.6" y="11" width="6.8" height="2" fill="currentColor"/>`],
+    // 2026-10-10 (ask28 nav redesign, Marital pillar -- reuses the "us" viewId,
+    // see NAV_ITEMS): --marriage-ink is the marriage life-track's own existing
+    // token, the correct semantic match.
+    us: ["var(--marriage-ink)", `<path fill="currentColor" d="M12 20.2c-.3 0-.6-.1-.8-.3C7.8 17 3.2 13.2 3.2 9.1 3.2 6.3 5.4 4 8.2 4c1.6 0 3 .8 3.8 2 .8-1.2 2.2-2 3.8-2 2.8 0 5 2.3 5 5.1 0 4.1-4.6 7.9-8 10.8-.2.2-.5.3-.8.3z"/>`],
     // 2026-08-26 (nav rail trim, new Events row): a stack of cards -- a list of
     // things booked, the one item in this whole set that's a stack rather than a
     // single glyph, per Linh's own drawing. --ic-violet (new token, see its
@@ -53831,6 +53941,49 @@
       const [sid, field] = fld.dataset.fitField.split(":");
       setSessionField(state.anchor, sid, field, fld.value);
       renderDay();
+    }
+  });
+  // Same shape as the #fitLinkTile pair above, for the Fitness home page's own
+  // #fitHomeToday host (2026-10-10) — always TODAY rather than state.anchor, and
+  // re-renders renderFitness() rather than renderDay()/renderDayFitLink(). The
+  // markup (fitLoggerHtml()) and the underlying data functions are shared; only
+  // this date/re-render glue differs, since the two hosts live on different pages.
+  document.getElementById("fitHomeToday")?.addEventListener("click", e => {
+    const quickBtn = e.target.closest("[data-fit-quick]");
+    if (quickBtn) { addFitSession(TODAY, quickBtn.dataset.fitQuick); renderFitness(); return; }
+    const typeBtn = e.target.closest("[data-fit-type]");
+    if (typeBtn) { addFitSession(TODAY, typeBtn.dataset.fitType); renderFitness(); return; }
+    const delBtn = e.target.closest("[data-fit-del]");
+    if (delBtn) { removeFitSession(TODAY, delBtn.dataset.fitDel); renderFitness(); return; }
+    const editBtn = e.target.closest("[data-fit-edit]");
+    if (editBtn) {
+      const id = editBtn.dataset.fitEdit;
+      if (FIT_EDIT_OPEN.has(id)) FIT_EDIT_OPEN.delete(id); else FIT_EDIT_OPEN.add(id);
+      renderFitness(); return;
+    }
+    const starBtn = e.target.closest("[data-fit-star]");
+    if (starBtn) {
+      const [sid, n] = starBtn.dataset.fitStar.split(":");
+      setSessionRating(TODAY, sid, +n); renderFitness(); return;
+    }
+    const notesConfirm = e.target.closest("[data-fit-notes-confirm]");
+    if (notesConfirm) {
+      const sid = notesConfirm.dataset.fitNotesConfirm;
+      const ta = document.querySelector(`#fitHomeToday [data-fit-notes="${sid}"]`);
+      setSessionNotes(TODAY, sid, ta.value);
+      notesConfirm.classList.add("saved");
+      setTimeout(() => notesConfirm.classList.remove("saved"), 900);
+      return;
+    }
+  });
+  document.getElementById("fitHomeToday")?.addEventListener("change", e => {
+    const ta = e.target.closest("[data-fit-notes]");
+    if (ta) { setSessionNotes(TODAY, ta.dataset.fitNotes, ta.value); return; }
+    const fld = e.target.closest("[data-fit-field]");
+    if (fld) {
+      const [sid, field] = fld.dataset.fitField.split(":");
+      setSessionField(TODAY, sid, field, fld.value);
+      renderFitness();
     }
   });
 
