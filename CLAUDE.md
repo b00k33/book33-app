@@ -95,14 +95,14 @@ effort defaults to.
       "quick-log right in the Mode card"), plus a Gym-specific link to the Fitness
       page (Gym needs real sets/reps, never a bare toggle — same split Week's own
       popover already makes).
-    **Known gap, disclosed rather than silently shipped:** this card's only mount
+    **Known gap, disclosed then resolved the same day:** this card's only mount
     point is inside `#wrModeGroup`, which only exists inside the "Right now"
     panel/drawer — the exact one cleared blank earlier the same day ("remove these
-    - i want to clear so i can redesign it", see that bullet below). So the Fitness
-    Mode card is built and verified correct (tested by temporarily forcing
-    `marGroupHtml()`'s `inGroup` true) but has **no live path to be seen** until
-    that panel is redesigned, or she asks for the Mode toggle restored on its own
-    sooner.
+    - i want to clear so i can redesign it", see that bullet below). Flagged to
+    her rather than shipped silently invisible; her answer was "restore just the
+    Mode toggle" — see that same bullet's "Mode group restored on its own" note
+    for the small 🎭 icon / mobile un-hide that gives this card a real path to be
+    seen again, without reviving the rest of what she asked cleared.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy
@@ -360,17 +360,30 @@ scopes for a routine, and **yes** to drag-to-move / drag-the-edge-to-resize.
   (both retired same-day they shipped, RETIRED-FEATURES.md §13, "i dont need this").
 - **Right now panel cleared for a redesign (2026-10-10, screenshot of this exact
   panel: "remove these - i want to clear so i can redesign it"):** the status
-  card, the Mode group's chip grid, Today's progress bar, and the To-do card are
-  all hidden from this one panel — CSS-only on mobile (`#dayRightDrawerBody >
-  #rightNowCard/#wrModeGroup/#wrBdayGroup/#dayCtxWrap/#wrMobile { display: none }`,
-  right after `.day-right-drawer-body`), and on desktop `renderWrPanel()` mounts
-  nothing when `wrOpenId === "rightNowCard"` (empty `memberIds`, the old
-  dailyWrap/modeGroup/Birthday-group build skipped, `shopEl` null). Everything
-  above this bullet (Mode group, Birthdays group, the Cliniko paste box, the
-  Work session card) still renders exactly as documented, everywhere else it
-  shows — nothing was deleted, only this one panel's display. Revert by deleting
-  that CSS rule and restoring the three `renderWrPanel()` lines once a real
-  redesign replaces this blank state.
+  card, Today's progress bar, and the To-do card are hidden from this one panel
+  — CSS-only on mobile (`#dayRightDrawerBody > #rightNowCard/#dayCtxWrap/#wrMobile
+  { display: none }`, right after `.day-right-drawer-body`), and on desktop
+  `renderWrPanel()` mounts nothing when `wrOpenId === "rightNowCard"` (empty
+  `memberIds`, the old dailyWrap build skipped, `shopEl` null). Everything above
+  this bullet (Birthdays group, the Cliniko paste box, the Work session card)
+  still renders exactly as documented, everywhere else it shows — nothing was
+  deleted, only this one panel's display. Revert by restoring `WR_RIGHTNOW_MEMBERS`
+  and the `dailyWrap` block once a real redesign replaces this blank state.
+  **Mode group restored on its own the same day ("restore just the Mode
+  toggle"):** unlike the three above, the Mode group (chips + `marGroupHtml()`,
+  Birthdays group riding under it) got its own small way back rather than
+  staying cleared — it's the one piece that also carries the just-built
+  Fitness Mode card (see "Calendar + Mode cohesion" above), and leaving it dark
+  would have shipped that work invisible. Mobile: `#wrModeGroup`/`#wrBdayGroup`
+  dropped back out of the hide-list above. Desktop: `#deskWidgetRail` gets back
+  a small 🎭 "Mode" icon (`renderWrIconRail()`, self-hidden on a HOME-mode day,
+  same condition `renderModeAmbientRail()` itself uses) that opens `wrOpenId
+  === "modeAmbientRail"` — its own `memberIds` branch (`WR_MODE_GROUP_IDS`,
+  i.e. both Session card and ambient rail) builds just that one group, the
+  Daily-cluster cards and Shopping stay cleared. This is a deliberately NEW,
+  narrower entry point, not a revert of the combined panel — the old
+  pre-10/10 code never had a standalone Mode icon either; the chips only ever
+  lived inside the (now cleared) Right Now panel.
 - **Cliniko paste box (2026-09-03 pm, "a text box so i can copy paste my cliniko
   schedule"):** `wmbPasteFormHtml()` (one collapsed "Paste Cliniko schedule ▾" line →
   textarea + Today/Tomorrow + Save) is mounted in the panel's Today's patients rail
