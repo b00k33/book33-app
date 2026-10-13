@@ -13714,7 +13714,7 @@
   .ex-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
   .ex-table th {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint);
-    text-align: left; font-weight: 700; padding-bottom: 2px; font-family: var(--font-body);
+    text-align: left; font-weight: 700; padding: 0 8px 2px 0; font-family: var(--font-body);
   }
   .ex-table td { padding: 2px 4px 2px 0; font-family: var(--font-body); }
   .ex-table td:first-child { font-size: 12px; color: var(--ink-soft); padding-right: 8px; }
@@ -13750,6 +13750,47 @@
     cursor: pointer; font-family: var(--font-body); flex: none;
   }
   .add-ex-btn:hover { background: color-mix(in oklab, var(--margin-rule) 10%, transparent); }
+
+  /* Exercise modes, demo link, hold timer, pain notes (2026-10-13). Chips follow
+     .fit-type-opt's pressed look (tint + accent), nothing new in colour. */
+  .ex-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .ex-seg { display: inline-flex; border: 1px solid var(--note-line); border-radius: 999px; overflow: hidden; background: var(--paper); }
+  .ex-seg-btn, .ex-chip-btn {
+    border: 0; background: none; color: var(--ink-soft); font-family: var(--font-body); font-size: 12px;
+    font-weight: 600; padding: 4px 12px; cursor: pointer; text-decoration: none; line-height: var(--lh-tight);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .ex-chip-btn { border: 1px solid var(--note-line); border-radius: 999px; background: var(--paper); }
+  .ex-seg-btn.on, .ex-chip-btn.on {
+    color: var(--margin-rule); background: color-mix(in oklab, var(--margin-rule) 10%, transparent);
+  }
+  .ex-chip-btn.on { border-color: var(--margin-rule); }
+  .ex-seg-btn:hover, .ex-chip-btn:hover { color: var(--ink); }
+  .ex-seg-btn:focus-visible, .ex-chip-btn:focus-visible, .ex-hold-btn:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
+  .ex-demo-edit { padding: 4px 8px; margin-left: -4px; }
+  .ex-video-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .ex-video-edit .ex-name-input { flex: 1 1 100%; min-width: 0; }
+  .ex-vid-cancel { border: 0; background: none; color: var(--ink-soft); font-family: var(--font-body); font-size: 12px; font-weight: 600; cursor: pointer; padding: 6px 8px; }
+  .ex-vid-err { flex: 1 1 100%; font-size: 11px; color: var(--warn); font-family: var(--font-body); }
+  .ex-val { display: inline-flex; align-items: center; gap: 4px; }
+  .ex-hold-btn {
+    border: 1px solid var(--margin-rule); background: none; color: var(--margin-rule); border-radius: 999px;
+    min-width: 32px; padding: 3px 8px; font-family: var(--font-body); font-size: 12px; font-weight: 700;
+    cursor: pointer; font-variant-numeric: tabular-nums; line-height: var(--lh-tight);
+  }
+  .ex-hold-btn.running { background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
+  .ex-pain { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--note-line); display: flex; flex-direction: column; gap: 8px; }
+  .ex-pain-head { font-family: var(--font-body); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
+  .ex-pain-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fit-hist-pain { flex: 1 0 100%; font-size: 12px; color: var(--ink-soft); }
+  .fit-hist-row { flex-wrap: wrap; }
+  @media (pointer: coarse), (max-width: 640px) {
+    .ex-seg-btn, .ex-chip-btn, .ex-hold-btn, .ex-vid-cancel, .ex-modes .ex-demo { min-height: 44px; }
+    .ex-demo-edit { min-width: 44px; }
+    .ex-video-edit .add-ex-btn, .ex-video-edit .ex-name-input, .ex-pain .fit-notes { min-height: 44px; }
+    .ex-hold-btn { min-width: 44px; }
+    .ex-val .ex-set-input { min-height: 44px; width: 64px; }
+  }
 
   /* Fitness home page's progression chart (2026-10-10) -- weight-trend line +
      volume sparkline for one picked lift exercise, her pick from the mock. */
@@ -35116,8 +35157,13 @@
       const ex = addExercise(date, sess.id, pex.name);
       if (!ex) return;
       if (ex.kind === "lift" && pex.sets && pex.sets.length) {
-        const base = ex.sets[0] || { reps: null, weightKg: null };
-        ex.sets = pex.sets.map(s => ({ reps: s.reps ?? base.reps, weightKg: s.weightKg ?? base.weightKg }));
+        if (pex.timed != null) ex.timed = !!pex.timed;
+        if (pex.sided != null) ex.sided = !!pex.sided;
+        const base = ex.sets[0] || blankSet();
+        ex.sets = pex.sets.map(s => ({
+          reps: s.reps ?? base.reps, weightKg: s.weightKg ?? base.weightKg,
+          secs: s.secs ?? base.secs, repsR: s.repsR ?? base.repsR, secsR: s.secsR ?? base.secsR,
+        }));
       } else if (ex.kind === "climb") {
         ex.grade = pex.grade || ""; ex.attempts = pex.attempts || 1;
       }
@@ -36872,13 +36918,9 @@
         ${trend ? `<span class="ex-trend${trend < 0 ? " down" : ""}">${trend > 0 ? "↑" : "↓"} ${Math.abs(trend)}kg</span>` : ""}
         <button type="button" class="ex-del" data-ex-del="${sess.id}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
       </div>
-      <table class="ex-table"><tr><th>Set</th><th>Reps</th><th>kg</th><th></th></tr>
-        ${ex.sets.map((st, i) => `<tr>
-          <td>${i + 1}</td>
-          <td><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-ex-set-field="${sess.id}:${ex.id}:${i}:reps" value="${st.reps ?? ""}"></td>
-          <td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-ex-set-field="${sess.id}:${ex.id}:${i}:weightKg" value="${st.weightKg ?? ""}"></td>
-          <td><button type="button" class="ex-set-del" data-ex-set-del="${sess.id}:${ex.id}:${i}" aria-label="Remove set ${i + 1}">×</button></td>
-        </tr>`).join("")}
+      ${exModesHtml("ex", sess.id, ex.id, ex)}
+      <table class="ex-table">${exTableHeadHtml(ex, false)}
+        ${ex.sets.map((st, i) => exSetRowHtml(ex, st, i, { attr: "data-ex-set-field", delAttr: "data-ex-set-del", prefix: `${sess.id}:${ex.id}`, canDel: true, hold: true })).join("")}
       </table>
       <div class="ex-add-set" data-ex-add-set="${sess.id}:${ex.id}">+ Add set</div>
     </div>`;
@@ -36926,6 +36968,7 @@
       <input type="text" class="ex-name-input" list="${namesListId}" placeholder="${kind === "climb" ? "Route name" : "Exercise name"}" data-ex-add-name="${sess.id}">
       <button type="button" class="add-ex-btn" data-ex-add="${sess.id}">+ Add ${kind === "climb" ? "route" : "exercise"}</button>
     </div>`;
+    html += painHtml(sess);
     return html;
   }
 
@@ -36961,13 +37004,9 @@
       <div class="ex-name"><span>${esc(ex.name)}</span>
         <button type="button" class="ex-del" data-pex-del="${dateKey}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
       </div>
-      <table class="ex-table"><tr><th>Set</th><th>Target reps</th><th>Target kg</th><th></th></tr>
-        ${ex.sets.map((st, i) => `<tr>
-          <td>${i + 1}</td>
-          <td><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-pex-set-field="${dateKey}:${ex.id}:${i}:reps" value="${st.reps ?? ""}"></td>
-          <td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-pex-set-field="${dateKey}:${ex.id}:${i}:weightKg" value="${st.weightKg ?? ""}"></td>
-          <td><button type="button" class="ex-set-del" data-pex-set-del="${dateKey}:${ex.id}:${i}" aria-label="Remove set ${i + 1}">×</button></td>
-        </tr>`).join("")}
+      ${exModesHtml("pex", dateKey, ex.id, ex)}
+      <table class="ex-table">${exTableHeadHtml(ex, true)}
+        ${ex.sets.map((st, i) => exSetRowHtml(ex, st, i, { attr: "data-pex-set-field", delAttr: "data-pex-set-del", prefix: `${dateKey}:${ex.id}`, canDel: true, hold: false })).join("")}
       </table>
       <div class="ex-add-set" data-pex-add-set="${dateKey}:${ex.id}">+ Add set</div>
     </div>`;
@@ -37012,18 +37051,14 @@
     if (ex.kind === "lift") {
       // one row per set, so the reps (and kg) can differ set to set -- 12, 10, 8 -- the same
       // table the planned-day editor uses. A new set starts as a copy of the last one.
-      const sets = ex.sets && ex.sets.length ? ex.sets : [{ reps: null, weightKg: null }];
+      const sets = ex.sets && ex.sets.length ? ex.sets : [blankSet()];
       return `<div class="tpl-ex-row tpl-ex-row--lift">
         <span class="tpl-ex-name">${esc(ex.name)}</span>
         <button type="button" class="ex-del" data-tpl-ex-del="${t.id}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
         <div class="tpl-sets">
-          <table class="ex-table"><tr><th>Set</th><th>Reps</th><th>kg</th><th></th></tr>
-            ${sets.map((st, i) => `<tr>
-              <td>${i + 1}</td>
-              <td><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-tpl-set-field="${id}:${i}:reps" value="${st.reps ?? ""}" aria-label="Reps, set ${i + 1} of ${esc(ex.name)}"></td>
-              <td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-tpl-set-field="${id}:${i}:weightKg" value="${st.weightKg ?? ""}" aria-label="Weight in kg, set ${i + 1} of ${esc(ex.name)}"></td>
-              <td>${sets.length > 1 ? `<button type="button" class="ex-set-del" data-tpl-set-del="${id}:${i}" aria-label="Remove set ${i + 1}">×</button>` : ""}</td>
-            </tr>`).join("")}
+          ${exModesHtml("tpl", t.id, ex.id, ex)}
+          <table class="ex-table">${exTableHeadHtml(ex, false)}
+            ${sets.map((st, i) => exSetRowHtml(ex, st, i, { attr: "data-tpl-set-field", delAttr: "data-tpl-set-del", prefix: id, canDel: sets.length > 1, hold: false })).join("")}
           </table>
           <button type="button" class="ex-add-set tpl-add-set" data-tpl-add-set="${id}">+ Add set</button>
         </div>
@@ -37275,9 +37310,11 @@
     document.getElementById("fitHomeHistory").innerHTML = past.length
       ? `<div class="fit-hist-list">${past.map(d => {
           const sessions = fitSessionsOn(d);
+          const pains = sessions.map(s => [painSummary(s), s.pain && (s.pain.note || "").trim()].filter(Boolean).join(" — ")).filter(Boolean);
           return `<div class="fit-hist-row">
             <span class="fit-hist-date">${esc(qaDayLbl(d))}</span>
             <span class="fit-hist-types">${sessions.map(s => esc(s.type)).join(" · ")}</span>
+            ${pains.length ? `<span class="fit-hist-pain">Pain: ${esc(pains.join("; "))}</span>` : ""}
           </div>`;
         }).join("")}</div>`
       : `<div class="fit-hist-empty">Nothing logged in the last 2 weeks yet.</div>`;
@@ -43601,6 +43638,265 @@
   }
   const heaviestSetWeight = sets => (sets || []).reduce((m, s) => Math.max(m, s.weightKg || 0), 0);
   const setVolume = sets => (sets || []).reduce((v, s) => v + (s.reps || 0) * (s.weightKg || 0), 0);
+
+  // ---- exercise modes (2026-10-13, "some exercises need a timer" / "some exercises need
+  // to differentiate right or left side"): a lift exercise can be Timed (a hold -- L sit,
+  // plank: its sets are seconds, not reps and kg) and/or Left & right (a Left and a Right
+  // number per set). Both are flags ON THE EXERCISE (ex.timed / ex.sided) in all three
+  // places an exercise lives -- a logged session, a planned day, a template -- and each
+  // choice is remembered by name (EX_MODE_PREFS), so "L sit" starts Timed every time after
+  // the first. A set keeps reps / weightKg / secs / repsR / secsR side by side, so flipping
+  // a toggle back never loses a number; the flags only decide which ones are shown.
+  const EX_MODE_PREFS_KEY = "book33-fitness-exmodes";
+  let EX_MODE_PREFS = (() => { try { return JSON.parse(localStorage.getItem(EX_MODE_PREFS_KEY) || "{}"); } catch (e) { return {}; } })();
+  const exModeName = name => String(name || "").trim().toLowerCase();
+  function exModePrefFor(name) {
+    const p = EX_MODE_PREFS[exModeName(name)] || {};
+    return { timed: !!p.timed, sided: !!p.sided };
+  }
+  function rememberExMode(name, prop, on) {
+    const k = exModeName(name);
+    if (!k) return;
+    EX_MODE_PREFS[k] = Object.assign({}, EX_MODE_PREFS[k], { [prop]: !!on });
+    try { localStorage.setItem(EX_MODE_PREFS_KEY, JSON.stringify(EX_MODE_PREFS)); } catch (e) {}
+  }
+  const blankSet = () => ({ reps: null, weightKg: null, secs: null, repsR: null, secsR: null });
+  const cloneSet = s => ({ reps: s?.reps ?? null, weightKg: s?.weightKg ?? null, secs: s?.secs ?? null, repsR: s?.repsR ?? null, secsR: s?.secsR ?? null });
+  // the ONE writer for a number in a set (all three editors). With Left & right on, typing
+  // the Left number fills the Right one too while Right is empty or still matching it --
+  // most holds and single-leg sets are the same both ways -- and a Right number she typed
+  // herself is never overwritten.
+  function applySetField(ex, st, field, raw) {
+    const v = raw === "" || raw == null ? null : +raw;
+    const mirror = field === "reps" ? "repsR" : field === "secs" ? "secsR" : null;
+    if (mirror && ex.sided && (st[mirror] == null || st[mirror] === st[field])) st[mirror] = v;
+    st[field] = v;
+    return st;
+  }
+  function setExProp(ex, prop, on) {
+    ex[prop] = !!on;
+    if (prop === "sided" && on) (ex.sets || []).forEach(st => { if (st.repsR == null) st.repsR = st.reps; if (st.secsR == null) st.secsR = st.secs; });
+    rememberExMode(ex.name, prop, on);
+  }
+  // ctx tpl (a=template, b=exercise) / pex (a=date key, b=exercise) / ex (a=session, b=exercise,
+  // on `date`). One lookup + one dispatcher so the three hosts share a path.
+  function exLookup(ctx, a, b, date) {
+    return ctx === "tpl" ? templateExerciseOf(a, b)
+      : ctx === "pex" ? ((plannedFor(parseKey(a)) || {}).exercises || []).find(e => e.id === b)
+      : exerciseById(date, a, b);
+  }
+  // Demo video (2026-10-13, "i need to add a link of video demo for exercise"): a link
+  // belongs to the EXERCISE, not to one day's copy of it, so it is kept by name beside the
+  // modes -- paste it once (in a template, a planned day or a logged session) and "▶ Demo"
+  // shows wherever that exercise appears. Only web links are accepted (http/https; a bare
+  // "youtube.com/..." gets https:// put in front).
+  let exVideoEditKey = null, exVideoErr = "";
+  function exVideoFor(name) { return (EX_MODE_PREFS[exModeName(name)] || {}).video || ""; }
+  function cleanVideoUrl(raw) {
+    let s = String(raw || "").trim();
+    if (!s) return "";
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = "https://" + s;
+    try { const u = new URL(s); return (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes(".") ? u.href : null; } catch (e) { return null; }
+  }
+  function setExVideo(name, url) {
+    const k = exModeName(name);
+    if (!k) return;
+    EX_MODE_PREFS[k] = Object.assign({}, EX_MODE_PREFS[k], { video: url || "" });
+    try { localStorage.setItem(EX_MODE_PREFS_KEY, JSON.stringify(EX_MODE_PREFS)); } catch (e) {}
+  }
+  // spec = "ctx:a:b:edit|save|del|cancel". Returns false when nothing changed (bad link, no
+  // such exercise) so the host knows to still re-render the editor with its message.
+  function applyExVid(spec, date) {
+    const parts = String(spec).split(":");
+    const action = parts.pop();
+    const key = parts.join(":");
+    exVideoErr = "";
+    if (action === "edit") { exVideoEditKey = key; return true; }
+    if (action === "cancel") { exVideoEditKey = null; return true; }
+    const ex = exLookup(parts[0], parts[1], parts[2], date);
+    if (!ex) return false;
+    if (action === "del") { setExVideo(ex.name, ""); exVideoEditKey = null; return true; }
+    if (action === "save") {
+      const input = document.querySelector(`[data-ex-vid-input="${key}"]`);
+      const raw = input ? input.value : "";
+      const url = cleanVideoUrl(raw);
+      if (url === null) { exVideoErr = "That doesn't look like a web link — try pasting it again."; return true; }
+      setExVideo(ex.name, url);
+      exVideoEditKey = null;
+      return true;
+    }
+    return false;
+  }
+  // after a host re-renders with the editor open, put the cursor in it (a re-render replaces the node)
+  function exVidAfter() {
+    if (!exVideoEditKey) return;
+    const el = document.querySelector(`[data-ex-vid-input="${exVideoEditKey}"]`);
+    if (el) { el.focus(); if (el.value) el.select(); }
+  }
+  document.addEventListener("keydown", e => {
+    const inp = e.target.closest ? e.target.closest("[data-ex-vid-input]") : null;
+    if (!inp || (e.key !== "Enter" && e.key !== "Escape")) return;
+    e.preventDefault();
+    const btn = inp.closest(".ex-video-edit")?.querySelector(e.key === "Enter" ? '[data-ex-vid$=":save"]' : '[data-ex-vid$=":cancel"]');
+    if (btn) btn.click();
+  });
+  // spec = "ctx:a:b:prop:1|0".
+  function applyExMode(spec, date) {
+    const [ctx, a, b, prop, on] = String(spec).split(":");
+    const ex = exLookup(ctx, a, b, date);
+    if (!ex || ex.kind !== "lift" || (prop !== "timed" && prop !== "sided")) return false;
+    cancelExHold();
+    setExProp(ex, prop, on === "1");
+    if (ctx === "tpl") saveFitTemplates(); else if (ctx === "pex") savePlannedFit(); else saveFitLog();
+    return true;
+  }
+  function exModesHtml(ctx, a, b, ex) {
+    const at = (prop, on) => `data-ex-mode="${ctx}:${a}:${b}:${prop}:${on ? 1 : 0}"`;
+    const vkey = `${ctx}:${a}:${b}`;
+    const vid = action => `data-ex-vid="${vkey}:${action}"`;
+    const url = exVideoFor(ex.name);
+    const editing = exVideoEditKey === vkey;
+    const demo = editing ? ""
+      : url ? `<a class="ex-chip-btn on ex-demo" href="${esc(url)}" target="_blank" rel="noopener noreferrer">▶ Demo</a><button type="button" class="ex-chip-btn ex-demo-edit" ${vid("edit")} aria-label="Change demo link for ${esc(ex.name)}">✎</button>`
+      : `<button type="button" class="ex-chip-btn" ${vid("edit")}>+ Demo video</button>`;
+    const editor = editing ? `<div class="ex-video-edit">
+        <input type="url" inputmode="url" class="ex-name-input" placeholder="Paste a video link" data-ex-vid-input="${vkey}" value="${esc(url)}" aria-label="Demo video link for ${esc(ex.name)}">
+        <button type="button" class="add-ex-btn" ${vid("save")}>Save</button>
+        ${url ? `<button type="button" class="add-ex-btn" ${vid("del")}>Remove</button>` : ""}
+        <button type="button" class="ex-vid-cancel" ${vid("cancel")}>Cancel</button>
+        ${exVideoErr ? `<div class="ex-vid-err" role="alert">${esc(exVideoErr)}</div>` : ""}
+      </div>` : "";
+    return `<div class="ex-modes">
+      <span class="ex-seg" role="group" aria-label="Count by">
+        <button type="button" class="ex-seg-btn${ex.timed ? "" : " on"}" ${at("timed", 0)} aria-pressed="${ex.timed ? "false" : "true"}">Reps</button>
+        <button type="button" class="ex-seg-btn${ex.timed ? " on" : ""}" ${at("timed", 1)} aria-pressed="${ex.timed ? "true" : "false"}">Timer</button>
+      </span>
+      <button type="button" class="ex-chip-btn${ex.sided ? " on" : ""}" ${at("sided", ex.sided ? 0 : 1)} aria-pressed="${ex.sided ? "true" : "false"}">Left &amp; right</button>
+      ${demo}
+    </div>${editor}`;
+  }
+  function exTableHeadHtml(ex, target) {
+    const unit = ex.timed ? " (s)" : "";
+    const vals = ex.sided ? [`Left${unit}`, `Right${unit}`] : [ex.timed ? "Seconds" : (target ? "Target reps" : "Reps")];
+    const heads = vals.concat(ex.timed ? [] : [target && !ex.sided ? "Target kg" : "kg"]);
+    return `<tr><th>Set</th>${heads.map(h => `<th>${h}</th>`).join("")}<th></th></tr>`;
+  }
+  // one set row for any of the three editors. o: { attr, delAttr, prefix, canDel, hold }
+  function exSetRowHtml(ex, st, i, o) {
+    const keys = ex.timed ? (ex.sided ? ["secs", "secsR"] : ["secs"]) : (ex.sided ? ["reps", "repsR"] : ["reps"]);
+    const cell = k => {
+      const side = k.endsWith("R") ? ", right" : ex.sided ? ", left" : "";
+      return `<td><span class="ex-val"><input type="number" min="0" inputmode="numeric" class="ex-set-input" ${o.attr}="${o.prefix}:${i}:${k}" value="${st[k] ?? ""}" aria-label="${ex.timed ? "Seconds" : "Reps"}${side}, set ${i + 1} of ${esc(ex.name)}">${o.hold && ex.timed ? exHoldBtnHtml(o.prefix, i, k) : ""}</span></td>`;
+    };
+    return `<tr>
+      <td>${i + 1}</td>
+      ${keys.map(cell).join("")}
+      ${ex.timed ? "" : `<td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" ${o.attr}="${o.prefix}:${i}:weightKg" value="${st.weightKg ?? ""}" aria-label="Weight in kg, set ${i + 1} of ${esc(ex.name)}"></td>`}
+      <td>${o.canDel ? `<button type="button" class="ex-set-del" ${o.delAttr}="${o.prefix}:${i}" aria-label="Remove set ${i + 1}">×</button>` : ""}</td>
+    </tr>`;
+  }
+
+  // ---- hold timer (2026-10-13): a Timed set in a LOGGED session gets a ▶ beside its
+  // seconds. With a number already in the box it counts DOWN to it (and buzzes at zero);
+  // with the box empty it counts up. ■ stops it and saves what she actually held. One hold
+  // runs at a time, and only the button's own text updates each tick -- never a re-render --
+  // so numbers she is typing elsewhere survive (same rule as the session and rest clocks).
+  // Time is read off Date.now(), so a throttled background tab still shows the true figure.
+  let exHold = null;   // { key: "sess:ex:i:L|R", date, rerender, startedAt, target, int }
+  function exHoldElapsed() { return exHold ? Math.max(0, Math.round((Date.now() - exHold.startedAt) / 1000)) : 0; }
+  function exHoldLabel() {
+    if (!exHold) return "";
+    const s = exHold.target ? Math.max(0, exHold.target - exHoldElapsed()) : exHoldElapsed();
+    return `${Math.floor(s / 60)}:${pad(s % 60)}`;
+  }
+  function exHoldBtnHtml(prefix, i, k) {
+    const key = `${prefix}:${i}:${k === "secsR" ? "R" : "L"}`;
+    const on = !!(exHold && exHold.key === key);
+    return `<button type="button" class="ex-hold-btn${on ? " running" : ""}" data-ex-hold="${key}" aria-label="${on ? "Stop" : "Start"} timer, set ${i + 1}${k === "secsR" ? ", right" : ""}">${on ? "■ " + exHoldLabel() : "▶"}</button>`;
+  }
+  function cancelExHold() { if (exHold) { clearInterval(exHold.int); exHold = null; } }
+  function exHoldSetFor(key, date) {
+    const [sessId, exId, i, side] = key.split(":");
+    const ex = exerciseById(date, sessId, exId);
+    return ex && ex.sets[+i] ? { st: ex.sets[+i], field: side === "R" ? "secsR" : "secs" } : null;
+  }
+  function stopExHold(buzz) {
+    const h = exHold;
+    if (!h) return;
+    clearInterval(h.int); exHold = null;
+    const hit = exHoldSetFor(h.key, h.date);
+    if (hit) {
+      const held = Math.max(1, Math.round((Date.now() - h.startedAt) / 1000));
+      hit.st[hit.field] = h.target && held > h.target ? h.target : held;   // ran to zero: keep the target
+      saveFitLog();
+    }
+    if (buzz && navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+    h.rerender();
+  }
+  function tickExHold() {
+    if (!exHold) return;
+    const btn = document.querySelector(`[data-ex-hold="${exHold.key}"]`);
+    if (!btn || !btn.getClientRects().length) { cancelExHold(); return; }   // page or sheet closed under it
+    if (exHold.target && exHoldElapsed() >= exHold.target) { stopExHold(true); return; }
+    btn.textContent = "■ " + exHoldLabel();
+  }
+  function toggleExHold(key, date, rerender) {
+    if (exHold && exHold.key === key) { stopExHold(false); return; }
+    const hit = exHoldSetFor(key, date);
+    if (!hit) return;
+    cancelExHold();   // a hold already running is dropped, not saved -- she moved on
+    exHold = { key, date, rerender, startedAt: Date.now(), target: hit.st[hit.field] || 0, int: setInterval(tickExHold, 250) };
+    rerender();
+  }
+
+  // ---- pain notes (2026-10-13, "for each gym session i need to make notes of where i feel
+  // pain"): sess.pain = { areas: { Knee: "L" | "R" | "LR", "Lower back": "1" }, note }. Kept
+  // OFF sess.notes on purpose -- biomechTipFor() recycles long session notes into the
+  // day's tip, and a pain note should never resurface as one. Tap a joint once for Left,
+  // again for Right, again for Both, again to clear; the spine areas are simply on/off.
+  // Part of exercisesHtml, so Workout Mode and the Fitness page's logger both carry it.
+  const PAIN_AREAS = [
+    { id: "Neck" }, { id: "Upper back" }, { id: "Lower back" },
+    { id: "Shoulder", one: "shoulder", many: "shoulders" }, { id: "Elbow", one: "elbow", many: "elbows" },
+    { id: "Wrist", one: "wrist", many: "wrists" }, { id: "Hip", one: "hip", many: "hips" },
+    { id: "Knee", one: "knee", many: "knees" }, { id: "Ankle", one: "ankle", many: "ankles" },
+    { id: "Foot", one: "foot", many: "feet" },
+  ];
+  function painLabel(a, v) {
+    if (!v) return a.id;
+    if (!a.one) return a.id;
+    return v === "L" ? `Left ${a.one}` : v === "R" ? `Right ${a.one}` : `Both ${a.many}`;
+  }
+  function painSummary(s) {
+    const areas = (s.pain && s.pain.areas) || {};
+    return PAIN_AREAS.filter(a => areas[a.id]).map(a => painLabel(a, areas[a.id])).join(", ");
+  }
+  function cyclePainArea(date, sessId, areaId) {
+    const sess = sessionById(date, sessId), a = PAIN_AREAS.find(x => x.id === areaId);
+    if (!sess || !a) return;
+    if (!sess.pain) sess.pain = { areas: {}, note: "" };
+    const areas = sess.pain.areas = sess.pain.areas || {};
+    const cur = areas[areaId] || "";
+    const next = a.one ? ({ "": "L", L: "R", R: "LR", LR: "" })[cur] : (cur ? "" : "1");
+    if (next) areas[areaId] = next; else delete areas[areaId];
+    saveFitLog();
+  }
+  function setPainNote(date, sessId, text) {
+    const sess = sessionById(date, sessId);
+    if (!sess) return;
+    if (!sess.pain) sess.pain = { areas: {}, note: "" };
+    sess.pain.note = text;
+    saveFitLog();
+  }
+  function painHtml(sess) {
+    const pain = sess.pain || {}, areas = pain.areas || {};
+    return `<div class="ex-pain">
+      <div class="ex-pain-head">Where I felt pain</div>
+      <div class="ex-pain-chips">${PAIN_AREAS.map(a => `<button type="button" class="ex-chip-btn${areas[a.id] ? " on" : ""}" data-ex-pain="${sess.id}:${a.id}" aria-pressed="${areas[a.id] ? "true" : "false"}">${esc(painLabel(a, areas[a.id]))}</button>`).join("")}</div>
+      <textarea class="fit-notes ex-pain-note" rows="2" data-ex-pain-note="${sess.id}" placeholder="What it felt like, and when" aria-label="Notes on where it hurt">${esc(pain.note || "")}</textarea>
+      <div class="chart-sub">Tap a joint again for left, then right, then both.</div>
+    </div>`;
+  }
   // every past instance of a lift exercise, chronological (oldest first) -- the
   // progression chart's own data source. {heaviest} is the chart's line, {volume}
   // the sparkline beneath it (her pick, "total volume" added to the chart).
@@ -43630,7 +43926,9 @@
       // (blank fields) if it's genuinely new, never a guessed number.
       const planned = keyOf(date) === keyOf(TODAY) ? plannedSetsFor(cleanName) : null;
       const last = planned || lastSetFor(cleanName, date);
-      ex.sets = [{ reps: last ? last.reps : null, weightKg: last ? last.weightKg : null }];
+      const pref = exModePrefFor(cleanName);   // remembered by name: "L sit" starts Timed
+      ex.timed = pref.timed; ex.sided = pref.sided;
+      ex.sets = [last ? cloneSet(last) : blankSet()];
     } else {
       ex.grade = ""; ex.sent = false; ex.attempts = 1;
     }
@@ -43651,7 +43949,7 @@
     // entered numbers are a better guess than whatever she lifted last time.
     const prevToday = ex.sets[ex.sets.length - 1];
     const fallback = prevToday || lastSetFor(ex.name, date);
-    ex.sets.push({ reps: fallback ? fallback.reps : null, weightKg: fallback ? fallback.weightKg : null });
+    ex.sets.push(fallback ? cloneSet(fallback) : blankSet());
     saveFitLog();
     return ex;
   }
@@ -43664,7 +43962,7 @@
   function setExerciseSetField(date, sessionId, exerciseId, setIndex, field, value) {
     const ex = exerciseById(date, sessionId, exerciseId);
     if (!ex || !ex.sets[setIndex]) return;
-    ex.sets[setIndex][field] = value === "" ? null : +value;
+    applySetField(ex, ex.sets[setIndex], field, value);
     saveFitLog();
   }
   function setClimbField(date, sessionId, exerciseId, field, value) {
@@ -43676,6 +43974,14 @@
   // Click/change dispatch for the data-ex-* exercise markup on the Fitness
   // page's #fitHomeToday host (TODAY).
   function handleExerciseClick(e, date, rerender) {
+    const holdBtn = e.target.closest("[data-ex-hold]");
+    if (holdBtn) { toggleExHold(holdBtn.dataset.exHold, date, rerender); return; }
+    const modeBtn = e.target.closest('[data-ex-mode^="ex:"]');
+    if (modeBtn) { if (applyExMode(modeBtn.dataset.exMode, date)) rerender(); return; }
+    const vidBtn = e.target.closest('[data-ex-vid^="ex:"]');
+    if (vidBtn) { if (applyExVid(vidBtn.dataset.exVid, date)) { rerender(); exVidAfter(); } return; }
+    const painBtn = e.target.closest("[data-ex-pain]");
+    if (painBtn) { const [sid, area] = painBtn.dataset.exPain.split(":"); cyclePainArea(date, sid, area); rerender(); return; }
     const addBtn = e.target.closest("[data-ex-add]");
     if (addBtn) {
       const sessId = addBtn.dataset.exAdd;
@@ -43701,6 +44007,10 @@
     }
   }
   function handleExerciseChange(e, date, rerender) {
+    // the pain note saves where it is -- no re-render, so a tap on a joint chip right after
+    // typing isn't lost to the box being rebuilt under her finger
+    const painNote = e.target.closest("[data-ex-pain-note]");
+    if (painNote) { setPainNote(date, painNote.dataset.exPainNote, painNote.value); return; }
     const setFld = e.target.closest("[data-ex-set-field]");
     if (setFld) {
       const [sessId, exId, idx, field] = setFld.dataset.exSetField.split(":");
@@ -43726,6 +44036,10 @@
   // convention as everywhere else) -- parseKey turns it back into a Date for the
   // PLANNED_FIT functions, which all key off keyOf(date) like FIT_LOG's do.
   function handlePlannedExerciseClick(e, rerender) {
+    const modeBtn = e.target.closest('[data-ex-mode^="pex:"]');
+    if (modeBtn) { if (applyExMode(modeBtn.dataset.exMode)) rerender(); return; }
+    const vidBtn = e.target.closest('[data-ex-vid^="pex:"]');
+    if (vidBtn) { if (applyExVid(vidBtn.dataset.exVid)) { rerender(); exVidAfter(); } return; }
     const addBtn = e.target.closest("[data-pex-add]");
     if (addBtn) {
       const dateKey = addBtn.dataset.pexAdd;
@@ -43957,7 +44271,7 @@
     const kind = t && exerciseKindFor(t.type);
     if (!t || !kind || !cleanName) return null;
     const ex = { id: uid(), name: cleanName, kind };
-    if (kind === "lift") ex.sets = [{ reps: null, weightKg: null }];
+    if (kind === "lift") { const pref = exModePrefFor(cleanName); ex.timed = pref.timed; ex.sided = pref.sided; ex.sets = [blankSet()]; }
     else { ex.grade = ""; ex.attempts = 1; }
     t.exercises.push(ex);
     saveFitTemplates();
@@ -43971,17 +44285,17 @@
   }
   function setTemplateSetField(templateId, exerciseId, setIndex, field, raw) {
     const ex = templateExerciseOf(templateId, exerciseId);
-    if (!ex || ex.kind !== "lift" || !ex.sets || !ex.sets[setIndex]) return;
-    ex.sets[setIndex][field] = raw === "" || raw == null ? null : +raw;
+    if (!ex || ex.kind !== "lift" || !ex.sets || !ex.sets[setIndex]) return null;
+    const st = applySetField(ex, ex.sets[setIndex], field, raw);
     saveFitTemplates();
+    return st;   // the caller syncs the Right box when Left & right mirrored into it
   }
   function addTemplateSet(templateId, exerciseId) {
     const ex = templateExerciseOf(templateId, exerciseId);
     if (!ex || ex.kind !== "lift") return;
-    if (!Array.isArray(ex.sets) || !ex.sets.length) ex.sets = [{ reps: null, weightKg: null }];
+    if (!Array.isArray(ex.sets) || !ex.sets.length) ex.sets = [blankSet()];
     if (ex.sets.length >= 20) return;
-    const last = ex.sets[ex.sets.length - 1];
-    ex.sets.push({ reps: last.reps, weightKg: last.weightKg });
+    ex.sets.push(cloneSet(ex.sets[ex.sets.length - 1]));
     saveFitTemplates();
   }
   function removeTemplateSet(templateId, exerciseId, setIndex) {
@@ -44059,7 +44373,9 @@
       id: uid(), type: t.type, templateId: t.id,
       exercises: t.exercises.map(ex => ({
         id: uid(), name: ex.name, kind: ex.kind,
-        sets: ex.kind === "lift" ? ex.sets.map(s => ({ reps: s.reps, weightKg: s.weightKg })) : undefined,
+        sets: ex.kind === "lift" ? ex.sets.map(cloneSet) : undefined,
+        timed: ex.kind === "lift" ? !!ex.timed : undefined,
+        sided: ex.kind === "lift" ? !!ex.sided : undefined,
         grade: ex.kind === "climb" ? (ex.grade || "") : undefined,
         attempts: ex.kind === "climb" ? (ex.attempts || 1) : undefined,
       })),
@@ -44085,7 +44401,7 @@
     const cleanName = String(name || "").trim();
     if (!plan || !kind || !cleanName) return null;
     const ex = { id: uid(), name: cleanName, kind };
-    if (kind === "lift") ex.sets = [{ reps: null, weightKg: null }];
+    if (kind === "lift") { const pref = exModePrefFor(cleanName); ex.timed = pref.timed; ex.sided = pref.sided; ex.sets = [blankSet()]; }
     else { ex.grade = ""; ex.attempts = 1; }
     plan.exercises.push(ex);
     savePlannedFit();
@@ -44101,7 +44417,7 @@
     const plan = plannedFor(date);
     const ex = plan?.exercises.find(e => e.id === exerciseId);
     if (!ex || !ex.sets[setIndex]) return;
-    ex.sets[setIndex][field] = value === "" ? null : +value;
+    applySetField(ex, ex.sets[setIndex], field, value);
     savePlannedFit();
   }
   function addPlannedSet(date, exerciseId) {
@@ -44109,7 +44425,7 @@
     const ex = plan?.exercises.find(e => e.id === exerciseId);
     if (!ex || ex.kind !== "lift") return;
     const prev = ex.sets[ex.sets.length - 1];
-    ex.sets.push({ reps: prev ? prev.reps : null, weightKg: prev ? prev.weightKg : null });
+    ex.sets.push(prev ? cloneSet(prev) : blankSet());
     savePlannedFit();
   }
   function removePlannedSet(date, exerciseId, setIndex) {
@@ -55696,6 +56012,10 @@
       if (t) { TPL_OPEN.add(t.id); renderFitness(); }
       return;
     }
+    const modeBtn = e.target.closest('[data-ex-mode^="tpl:"]');
+    if (modeBtn) { if (applyExMode(modeBtn.dataset.exMode)) renderFitness(); return; }
+    const vidBtn = e.target.closest('[data-ex-vid^="tpl:"]');
+    if (vidBtn) { if (applyExVid(vidBtn.dataset.exVid)) { renderFitness(); exVidAfter(); } return; }
     const toggle = e.target.closest("[data-tpl-toggle]");
     if (toggle) {
       const id = toggle.dataset.tplToggle;
@@ -55728,7 +56048,11 @@
     const setFld = e.target.closest("[data-tpl-set-field]");
     if (setFld) {
       const [tid, exId, i, field] = setFld.dataset.tplSetField.split(":");
-      setTemplateSetField(tid, exId, +i, field, setFld.value);
+      const st = setTemplateSetField(tid, exId, +i, field, setFld.value);
+      // Left & right mirrors the Left number into an empty Right box -- show it without a re-render
+      const mirrorKey = field === "reps" ? "repsR" : field === "secs" ? "secsR" : null;
+      const mirrorEl = st && mirrorKey ? document.querySelector(`#fitHomeTemplates [data-tpl-set-field="${tid}:${exId}:${i}:${mirrorKey}"]`) : null;
+      if (mirrorEl) mirrorEl.value = st[mirrorKey] ?? "";
       return;
     }
     const grade = e.target.closest("[data-tpl-grade]");
