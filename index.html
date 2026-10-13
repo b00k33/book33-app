@@ -3111,6 +3111,9 @@
     display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 14px;
     border-radius: var(--radius-sm); background: color-mix(in oklab, var(--fit-workout) 12%, var(--paper));
     font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
+    /* 2026-10-13: pinned to the top of the scrolling body, so the countdown stays in view
+       while she is down at the sets (the paper under the tint keeps it opaque) */
+    position: sticky; top: -16px; z-index: 2; box-shadow: 0 4px 12px color-mix(in oklab, var(--ink) 14%, transparent);
   }
   .tl-fit-rest-chip {
     font: inherit; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); padding: 5px 10px;
@@ -13782,10 +13785,26 @@
   .ex-pain { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--note-line); display: flex; flex-direction: column; gap: 8px; }
   .ex-pain-head { font-family: var(--font-body); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
   .ex-pain-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ex-rest { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .ex-rest-sel {
+    font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--ink); background: var(--paper);
+    border: 1px solid var(--note-line); border-radius: 999px; padding: 4px 8px; cursor: pointer;
+  }
+  .ex-rest-sel:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
+  /* a logged set's number is its "done" button -- fills in with a tick */
+  .ex-setno {
+    border: 1px solid var(--note-line); background: none; color: var(--ink-soft); border-radius: 999px;
+    min-width: 28px; height: 28px; padding: 0 4px; font-family: var(--font-body); font-size: 12px; font-weight: 700;
+    cursor: pointer; font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .ex-setno.on { color: var(--margin-rule); border-color: var(--margin-rule); background: color-mix(in oklab, var(--margin-rule) 14%, transparent); }
+  .ex-setno:focus-visible { outline: 2px solid var(--margin-rule); outline-offset: 2px; }
+  .ex-done-hint { margin-bottom: 8px; }
   .fit-hist-pain { flex: 1 0 100%; font-size: 12px; color: var(--ink-soft); }
   .fit-hist-row { flex-wrap: wrap; }
   @media (pointer: coarse), (max-width: 640px) {
-    .ex-seg-btn, .ex-chip-btn, .ex-hold-btn, .ex-vid-cancel, .ex-modes .ex-demo { min-height: 44px; }
+    .ex-seg-btn, .ex-chip-btn, .ex-hold-btn, .ex-vid-cancel, .ex-modes .ex-demo, .ex-rest-sel { min-height: 44px; }
+    .ex-setno { min-width: 44px; height: 44px; font-size: 14px; }
     .ex-demo-edit { min-width: 44px; }
     .ex-video-edit .add-ex-btn, .ex-video-edit .ex-name-input, .ex-pain .fit-notes { min-height: 44px; }
     .ex-hold-btn { min-width: 44px; }
@@ -35159,6 +35178,7 @@
       if (ex.kind === "lift" && pex.sets && pex.sets.length) {
         if (pex.timed != null) ex.timed = !!pex.timed;
         if (pex.sided != null) ex.sided = !!pex.sided;
+        if (pex.restSec != null) ex.restSec = pex.restSec;
         const base = ex.sets[0] || blankSet();
         ex.sets = pex.sets.map(s => ({
           reps: s.reps ?? base.reps, weightKg: s.weightKg ?? base.weightKg,
@@ -35220,7 +35240,7 @@
   }
   function tlWorkoutRestBannerHtml() {
     return `<div class="tl-workout-rest" id="tlWorkoutRest">
-        <span>⏱ Resting — <span id="tlWorkoutRestSec"></span>s</span>
+        <span>⏱ Rest — <span id="tlWorkoutRestSec"></span></span>
         <button type="button" class="tl-fit-rest-chip" data-wo-rest-add30>+30s</button>
         <button type="button" class="tl-fit-rest-chip" data-wo-rest-skip>Skip</button>
       </div>`;
@@ -35230,10 +35250,16 @@
     const el = document.getElementById("tlWorkoutRestSec");
     if (remain <= 0 || !el) {
       clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null; tlWorkoutRestUntil = 0;
-      renderTlWorkoutBody();
+      // 2026-10-13: rests now start on their own after every set, so one ending must not
+      // rebuild the whole body under a number she is typing -- swap the banner for the
+      // "Start rest" button in place. A buzz tells her it's over.
+      const banner = document.getElementById("tlWorkoutRest");
+      if (banner) banner.outerHTML = `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`;
+      else renderTlWorkoutBody();
+      if (remain <= 0 && el && navigator.vibrate) { try { navigator.vibrate([80, 50, 80]); } catch (e) {} }
       return;
     }
-    el.textContent = remain;
+    el.textContent = `${Math.floor(remain / 60)}:${pad(remain % 60)}`;
   }
   function startTlWorkoutRest(sec) {
     tlWorkoutRestUntil = Date.now() + sec * 1000;
@@ -36920,7 +36946,7 @@
       </div>
       ${exModesHtml("ex", sess.id, ex.id, ex)}
       <table class="ex-table">${exTableHeadHtml(ex, false)}
-        ${ex.sets.map((st, i) => exSetRowHtml(ex, st, i, { attr: "data-ex-set-field", delAttr: "data-ex-set-del", prefix: `${sess.id}:${ex.id}`, canDel: true, hold: true })).join("")}
+        ${ex.sets.map((st, i) => exSetRowHtml(ex, st, i, { attr: "data-ex-set-field", delAttr: "data-ex-set-del", prefix: `${sess.id}:${ex.id}`, canDel: true, hold: true, done: true })).join("")}
       </table>
       <div class="ex-add-set" data-ex-add-set="${sess.id}:${ex.id}">+ Add set</div>
     </div>`;
@@ -36957,7 +36983,12 @@
     if (!kind) return "";
     const exercises = sess.exercises || [];
     const namesListId = `exNames-${kind}-${sess.id}`;
-    let html = exercises.length
+    // one quiet line, only while a session is LIVE and nothing is ticked yet -- how the rest
+    // timer starts is otherwise invisible; it disappears after the first tick
+    const anyDone = exercises.some(ex => (ex.sets || []).some(st => st.done));
+    let html = kind === "lift" && sess.startedAt && exercises.length && !anyDone
+      ? `<div class="chart-sub ex-done-hint">Tap a set's number when it's done — your rest timer starts on its own.</div>` : "";
+    html += exercises.length
       ? `<div class="ex-list">${exercises.map(ex => kind === "lift" ? liftExerciseHtml(d, sess, ex) : climbExerciseHtml(sess, ex)).join("")}</div>`
       : "";
     html += `<datalist id="${namesListId}">${exerciseNameSuggestions(kind).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`;
@@ -43773,6 +43804,7 @@
       </span>
       <button type="button" class="ex-chip-btn${ex.sided ? " on" : ""}" ${at("sided", ex.sided ? 0 : 1)} aria-pressed="${ex.sided ? "true" : "false"}">Left &amp; right</button>
       ${demo}
+      <label class="ex-rest"><span>Rest</span><select class="ex-rest-sel" data-ex-rest="${vkey}" aria-label="Rest between sets for ${esc(ex.name)}">${EX_REST_CHOICES.map(s => `<option value="${s}"${s === exRestOf(ex) ? " selected" : ""}>${exRestLabel(s)}</option>`).join("")}</select></label>
     </div>${editor}`;
   }
   function exTableHeadHtml(ex, target) {
@@ -43788,8 +43820,14 @@
       const side = k.endsWith("R") ? ", right" : ex.sided ? ", left" : "";
       return `<td><span class="ex-val"><input type="number" min="0" inputmode="numeric" class="ex-set-input" ${o.attr}="${o.prefix}:${i}:${k}" value="${st[k] ?? ""}" aria-label="${ex.timed ? "Seconds" : "Reps"}${side}, set ${i + 1} of ${esc(ex.name)}">${o.hold && ex.timed ? exHoldBtnHtml(o.prefix, i, k) : ""}</span></td>`;
     };
+    // a LOGGED set's number is the "done" button (o.done): it fills in with a tick, and in a
+    // live Workout Mode session it starts the rest countdown. Zero extra width -- the Set
+    // column was already there.
+    const first = o.done
+      ? `<td><button type="button" class="ex-setno${st.done ? " on" : ""}" data-ex-set-done="${o.prefix}:${i}" aria-pressed="${st.done ? "true" : "false"}" aria-label="Set ${i + 1} of ${esc(ex.name)}, ${st.done ? "done" : "mark done"}">${st.done ? "✓" : i + 1}</button></td>`
+      : `<td>${i + 1}</td>`;
     return `<tr>
-      <td>${i + 1}</td>
+      ${first}
       ${keys.map(cell).join("")}
       ${ex.timed ? "" : `<td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" ${o.attr}="${o.prefix}:${i}:weightKg" value="${st.weightKg ?? ""}" aria-label="Weight in kg, set ${i + 1} of ${esc(ex.name)}"></td>`}
       <td>${o.canDel ? `<button type="button" class="ex-set-del" ${o.delAttr}="${o.prefix}:${i}" aria-label="Remove set ${i + 1}">×</button>` : ""}</td>
@@ -43828,6 +43866,18 @@
     if (hit) {
       const held = Math.max(1, Math.round((Date.now() - h.startedAt) / 1000));
       hit.st[hit.field] = h.target && held > h.target ? h.target : held;   // ran to zero: keep the target
+      // the LAST side of a set finishing completes the set: tick it and start the rest
+      // (Left & right: after Right -- the Left hold just leads into the Right one)
+      const [sessId, exId, , side] = h.key.split(":");
+      const ex = exerciseById(h.date, sessId, exId);
+      if (ex && (!ex.sided || side === "R")) {
+        hit.st.done = true;
+        saveFitLog();
+        h.rerender();
+        maybeStartExRest(sessId, ex);
+        if (buzz && navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
+        return;
+      }
       saveFitLog();
     }
     if (buzz && navigator.vibrate) { try { navigator.vibrate([120, 60, 120]); } catch (e) {} }
@@ -43847,6 +43897,52 @@
     cancelExHold();   // a hold already running is dropped, not saved -- she moved on
     exHold = { key, date, rerender, startedAt: Date.now(), target: hit.st[hit.field] || 0, int: setInterval(tickExHold, 250) };
     rerender();
+  }
+
+  // ---- rest between sets (2026-10-13, "add rest timer between sets"): each lift has its
+  // own rest length (ex.restSec; Off / 30s .. 3 min, default 90s), remembered by name like
+  // the other exercise settings. In a LIVE Workout Mode session (Begin pressed), tapping a
+  // set's number marks it done -- or a Timed hold finishing does -- and starts that
+  // exercise's rest on Workout Mode's own banner (the one the manual "Start rest" button
+  // already used, now pinned to the top while she scrolls). Outside a live session the same
+  // tap just ticks the set, so after-the-fact logging never starts a clock. st.done lives on
+  // logged sets only; cloneSet() leaves it out on purpose, so a plan or a copied set is never
+  // pre-ticked. Buzz only, no sound (her standing sound-off).
+  const EX_REST_DEFAULT = 90;
+  const EX_REST_CHOICES = [0, 30, 45, 60, 90, 120, 180];
+  function exRestOf(ex) {
+    if (ex && ex.restSec != null) return ex.restSec;
+    const p = EX_MODE_PREFS[exModeName(ex && ex.name)] || {};
+    return p.rest != null ? p.rest : EX_REST_DEFAULT;
+  }
+  const exRestLabel = s => !s ? "No rest" : s >= 120 ? `${s / 60} min` : `${s}s`;
+  function applyExRest(spec, value, date) {   // spec = "ctx:a:b"
+    const [ctx, a, b] = String(spec).split(":");
+    const ex = exLookup(ctx, a, b, date);
+    if (!ex || ex.kind !== "lift") return false;
+    ex.restSec = EX_REST_CHOICES.includes(+value) ? +value : EX_REST_DEFAULT;
+    const k = exModeName(ex.name);
+    if (k) {
+      EX_MODE_PREFS[k] = Object.assign({}, EX_MODE_PREFS[k], { rest: ex.restSec });
+      try { localStorage.setItem(EX_MODE_PREFS_KEY, JSON.stringify(EX_MODE_PREFS)); } catch (e) {}
+    }
+    if (ctx === "tpl") saveFitTemplates(); else if (ctx === "pex") savePlannedFit(); else saveFitLog();
+    return true;
+  }
+  function toggleSetDone(date, sessId, exId, i) {
+    const ex = exerciseById(date, sessId, exId);
+    if (!ex || !ex.sets[i]) return false;
+    ex.sets[i].done = !ex.sets[i].done;
+    saveFitLog();
+    return ex.sets[i].done;
+  }
+  // true when a rest actually started (live Workout Mode on THIS session, rest not Off)
+  function maybeStartExRest(sessId, ex) {
+    const sess = tlWorkoutSession(), overlay = document.getElementById("tlWorkoutOverlay");
+    const sec = exRestOf(ex);
+    if (!sec || !sess || sess.id !== sessId || !sess.startedAt || !overlay || overlay.hidden) return false;
+    startTlWorkoutRest(sec);
+    return true;
   }
 
   // ---- pain notes (2026-10-13, "for each gym session i need to make notes of where i feel
@@ -43980,6 +44076,14 @@
     if (modeBtn) { if (applyExMode(modeBtn.dataset.exMode, date)) rerender(); return; }
     const vidBtn = e.target.closest('[data-ex-vid^="ex:"]');
     if (vidBtn) { if (applyExVid(vidBtn.dataset.exVid, date)) { rerender(); exVidAfter(); } return; }
+    const doneBtn = e.target.closest("[data-ex-set-done]");
+    if (doneBtn) {
+      const [sid, eid, idx] = doneBtn.dataset.exSetDone.split(":");
+      const on = toggleSetDone(date, sid, eid, +idx);
+      rerender();
+      if (on) maybeStartExRest(sid, exerciseById(date, sid, eid));   // ticking a set done starts its rest
+      return;
+    }
     const painBtn = e.target.closest("[data-ex-pain]");
     if (painBtn) { const [sid, area] = painBtn.dataset.exPain.split(":"); cyclePainArea(date, sid, area); rerender(); return; }
     const addBtn = e.target.closest("[data-ex-add]");
@@ -44011,6 +44115,8 @@
     // typing isn't lost to the box being rebuilt under her finger
     const painNote = e.target.closest("[data-ex-pain-note]");
     if (painNote) { setPainNote(date, painNote.dataset.exPainNote, painNote.value); return; }
+    const restSel = e.target.closest('[data-ex-rest^="ex:"]');
+    if (restSel) { applyExRest(restSel.dataset.exRest, restSel.value, date); return; }
     const setFld = e.target.closest("[data-ex-set-field]");
     if (setFld) {
       const [sessId, exId, idx, field] = setFld.dataset.exSetField.split(":");
@@ -44064,6 +44170,8 @@
     }
   }
   function handlePlannedExerciseChange(e, rerender) {
+    const restSel = e.target.closest('[data-ex-rest^="pex:"]');
+    if (restSel) { applyExRest(restSel.dataset.exRest, restSel.value); return; }
     const setFld = e.target.closest("[data-pex-set-field]");
     if (setFld) {
       const [dateKey, exId, idx, field] = setFld.dataset.pexSetField.split(":");
@@ -44376,6 +44484,7 @@
         sets: ex.kind === "lift" ? ex.sets.map(cloneSet) : undefined,
         timed: ex.kind === "lift" ? !!ex.timed : undefined,
         sided: ex.kind === "lift" ? !!ex.sided : undefined,
+        restSec: ex.kind === "lift" && ex.restSec != null ? ex.restSec : undefined,
         grade: ex.kind === "climb" ? (ex.grade || "") : undefined,
         attempts: ex.kind === "climb" ? (ex.attempts || 1) : undefined,
       })),
@@ -56045,6 +56154,8 @@
   // saved as she types in a template exercise's Sets / Reps / kg (no re-render, so Tab
   // walks straight across the row)
   document.getElementById("fitHomeTemplates")?.addEventListener("change", e => {
+    const restSel = e.target.closest('[data-ex-rest^="tpl:"]');
+    if (restSel) { applyExRest(restSel.dataset.exRest, restSel.value); return; }
     const setFld = e.target.closest("[data-tpl-set-field]");
     if (setFld) {
       const [tid, exId, i, field] = setFld.dataset.tplSetField.split(":");
