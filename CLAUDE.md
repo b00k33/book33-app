@@ -164,6 +164,31 @@ effort defaults to.
     paint underneath it), and `closeTlWorkout()` also calls `refreshOpenTlProfile()`.
     Verified live at 800px: "GYmn" popover shows the card, Profile Plan tab shows
     it, Start opens Workout Mode on top in "Not started", an added exercise persists.
+    **Preplan in advance (2026-10-13, her question "how do i preplan the workout in
+    advance")**: Workout Mode now has two modes, decided by whether a FIT_LOG session
+    already exists for that type+date. **No session → PLAN mode**, which edits
+    `PLANNED_FIT[date]` (the same store the Fitness page's "Plan a session"/Upcoming
+    list reads and writes — one planned-session system, no second copy) for ANY date:
+    reuses `plannedExercisesHtml` + `handlePlannedExerciseClick/Change`, plus a "Start
+    from a template" chip row (`planSessionFromTemplate`) while the plan is empty. A
+    future date shows a "Saved as you go" note and no Begin button; today shows
+    "Begin workout". **A real FIT_LOG session is only created by "Begin workout"**
+    (`beginTlWorkout` → `addFitSession` + `copyPlanIntoSession`, which keeps each
+    planned set's target reps/kg) — before, merely opening Workout Mode created a
+    session, so a peek marked the day "done" in the week dots/streaks. A just-opened
+    blank plan, or a past-date session still empty on close, is removed again
+    (`tlWorkoutPlanCreated`/`tlWorkoutSessCreated`), so peeking leaves nothing behind.
+    A PAST date with no session opens straight into logging ("Logging", no Begin,
+    no plan copied in). The card's button speaks to when the event is: "✎ Plan
+    workout"/"✎ Edit plan" (future), "▶ Start workout"/"▶ Continue workout" (today),
+    "✎ Log workout"/"✎ Open workout" (past/logged). `fitPlannedGhostFor` now skips
+    the all-day "Gym — planned" chip when the day already has an event named for that
+    type, so a plan made from a calendar block doesn't double up beside it. Verified
+    live at 800px: future event → Plan workout → template fills sets → card shows
+    "Planned … ✎ Edit plan", nothing in FIT_LOG, no all-day duplicate; today → Begin
+    workout copies the template's sets (8×60, 8×60, 6×62.5) into the session and the
+    clock starts; peek-and-leave removes the empty plan. The past-date logging path
+    was written but not driven in the browser.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy

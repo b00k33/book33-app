@@ -3117,6 +3117,8 @@
     border: 1px solid var(--note-line); border-radius: 999px; background: var(--paper); cursor: pointer;
   }
   .tl-fit-rest-chip:hover { border-color: var(--fit-workout); color: var(--fit-workout); }
+  .tl-workout-note { font-size: 12px; color: var(--ink-faint); text-align: center; }
+  .tl-workout-tpls { display: flex; flex-direction: column; gap: 6px; }
   .tl-walk-progress { display: flex; align-items: center; gap: 8px; }
   .tl-walk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--note-line); }
   .tl-walk-dot.done { background: var(--margin-rule); }
@@ -31461,13 +31463,20 @@
     const sessLogged = fitTypesOn(d).includes(fitType);
     const specific = plannedFor(d);
     const hasPlan = specific && specific.type === fitType && specific.exercises.length;
-    const planHtml = hasPlan ? `<div class="tl-fit-plan-head">${sessLogged ? "Logged today" : "Planned for today"}</div>
+    // 2026-10-13 (her "how do i preplan the workout in advance"): the button speaks
+    // to WHEN the event is -- a future one is for planning (nothing gets logged),
+    // today's starts the session, a past one is for logging after the fact.
+    const dk = e.date, tk = keyOf(TODAY);
+    const btnLabel = sessLogged ? (dk === tk ? "▶ Continue workout" : "✎ Open workout")
+      : dk > tk ? (hasPlan ? "✎ Edit plan" : "✎ Plan workout")
+      : dk === tk ? "▶ Start workout" : "✎ Log workout";
+    const planHtml = hasPlan ? `<div class="tl-fit-plan-head">${sessLogged ? "Logged" : dk === tk ? "Planned for today" : "Planned"}</div>
         <div class="tl-fit-plan-list">${specific.exercises.slice(0, 4).map(ex => `<span class="tl-fit-plan-ex">${esc(ex.name)}</span>`).join("")}${specific.exercises.length > 4 ? `<span class="tl-fit-plan-ex">+${specific.exercises.length - 4} more</span>` : ""}</div>`
       : "";
     return `<div class="tl-detail-fit-card">
         <div class="tl-fit-week">${fitWeekDotsHtml(d)}</div>
         ${planHtml}
-        <button type="button" class="tl-fit-start-btn" data-fit-start="${esc(fitType)}:${esc(e.date)}">${sessLogged ? "▶ Continue workout" : "▶ Start workout"}</button>
+        <button type="button" class="tl-fit-start-btn" data-fit-start="${esc(fitType)}:${esc(e.date)}">${btnLabel}</button>
       </div>`;
   }
   // 2026-08-11 (meal logging): the LINKED_MEALS analogue of resolveFitSessionFor above
@@ -34875,10 +34884,12 @@
   // directly on each tick (tickTlWorkoutTimer/tickTlWorkoutRest) rather than calling
   // renderTlWorkoutBody() -- a full re-render every second would wipe whatever she's
   // mid-typing into a weight/reps field underneath. ----
-  let tlWorkoutDateKey = null, tlWorkoutSessionId = null;
+  let tlWorkoutDateKey = null, tlWorkoutSessionId = null, tlWorkoutType = null;
+  let tlWorkoutPlanCreated = false, tlWorkoutSessCreated = false;
   let tlWorkoutTimerInt = null, tlWorkoutRestUntil = 0, tlWorkoutRestInt = null;
+  // null while still PLANNING (tlWorkoutSessionId unset) -- see openTlWorkout.
   function tlWorkoutSession() {
-    if (!tlWorkoutDateKey) return null;
+    if (!tlWorkoutDateKey || !tlWorkoutSessionId) return null;
     return sessionById(parseKey(tlWorkoutDateKey), tlWorkoutSessionId);
   }
   function startTlWorkoutTimerLoop() {
@@ -34886,31 +34897,65 @@
     tlWorkoutTimerInt = setInterval(tickTlWorkoutTimer, 1000);
     tickTlWorkoutTimer();
   }
+  // 2026-10-13 (her question "how do i preplan the workout in advance"): opening
+  // Workout Mode no longer logs anything by itself. With no session logged for that
+  // date yet it opens in PLAN mode, editing PLANNED_FIT[date] -- the SAME store the
+  // Fitness page's "Plan a session"/Upcoming list reads and writes, so a plan made
+  // here from a calendar event shows up there and vice versa -- for ANY date, today
+  // or weeks out. The real FIT_LOG session (the thing that marks the day done and
+  // counts toward streaks/the week dots) is only created by "Begin workout" (today)
+  // or, for a PAST date being logged after the fact, straight away -- see
+  // beginTlWorkout/copyPlanIntoSession. A just-opened plan or past session that is
+  // still empty on close is removed again (closeTlWorkout), so peeking leaves nothing
+  // behind.
   function openTlWorkout(fitType, dateKey) {
     armBackGuard();
     const date = parseKey(dateKey);
+    const isPast = dateKey < keyOf(TODAY);
     let sess = fitSessionsOn(date).find(s => s.type === fitType);
-    if (!sess) sess = addFitSession(date, fitType);
-    // 2026-10-10 pt.2 (live in Workout Mode, "plan exercise first before timer
-    // starts"): the clock no longer starts the instant this opens -- sess.startedAt
-    // stays unset until she taps "Begin workout" (beginTlWorkout, renderTlWorkoutBody's
-    // Plan view), so adding/editing exercises here costs no workout time. A specific
-    // planned session for today (plannedFor) auto-copies its exercise NAMES in while
-    // the session is still empty -- addExercise's own existing prefill (plannedSetsFor)
-    // then fills each one's target reps/weight, so what the popover card already
-    // showed as "today's plan" is what's waiting for her, not a blank list to retype.
-    if ((!sess.exercises || !sess.exercises.length)) {
-      const plan = plannedFor(date);
-      if (plan && plan.type === fitType) plan.exercises.forEach(ex => addExercise(date, sess.id, ex.name));
+    tlWorkoutDateKey = dateKey; tlWorkoutType = fitType;
+    tlWorkoutPlanCreated = false; tlWorkoutSessCreated = false;
+    if (!sess && isPast) {
+      sess = addFitSession(date, fitType); tlWorkoutSessCreated = true;
     }
-    tlWorkoutDateKey = dateKey; tlWorkoutSessionId = sess.id;
+    tlWorkoutSessionId = sess ? sess.id : null;
+    if (!sess) {
+      let plan = plannedFor(date);
+      if (!plan || (plan.type !== fitType && !plan.exercises.length)) {
+        plan = planSessionBlank(date, fitType); tlWorkoutPlanCreated = true;
+      }
+      if (plan) tlWorkoutType = plan.type;
+    }
     document.getElementById("tlWorkoutOverlay").hidden = false;
     renderTlWorkoutBody();
-    if (sess.startedAt) startTlWorkoutTimerLoop();
+    if (sess && sess.startedAt) startTlWorkoutTimerLoop();
+  }
+  // The plan's exercises become the session's, each keeping its planned target sets
+  // (addExercise's own prefill -- a plan for TODAY, else last time's numbers -- fills
+  // any target she left blank).
+  function copyPlanIntoSession(date, sess, plan) {
+    plan.exercises.forEach(pex => {
+      const ex = addExercise(date, sess.id, pex.name);
+      if (!ex) return;
+      if (ex.kind === "lift" && pex.sets && pex.sets.length) {
+        const base = ex.sets[0] || { reps: null, weightKg: null };
+        ex.sets = pex.sets.map(s => ({ reps: s.reps ?? base.reps, weightKg: s.weightKg ?? base.weightKg }));
+      } else if (ex.kind === "climb") {
+        ex.grade = pex.grade || ""; ex.attempts = pex.attempts || 1;
+      }
+    });
+    saveFitLog();
   }
   function beginTlWorkout() {
-    const sess = tlWorkoutSession();
-    if (!sess || sess.startedAt) return;
+    let sess = tlWorkoutSession();
+    if (!sess) {
+      const date = parseKey(tlWorkoutDateKey);
+      sess = addFitSession(date, tlWorkoutType);
+      tlWorkoutSessionId = sess.id; tlWorkoutSessCreated = true;
+      const plan = plannedFor(date);
+      if (plan && plan.type === tlWorkoutType) copyPlanIntoSession(date, sess, plan);
+    }
+    if (sess.startedAt) return;
     sess.startedAt = Date.now();
     saveFitLog();
     renderTlWorkoutBody();
@@ -34926,12 +34971,18 @@
       if (!sess.time) sess.time = minToTime(startD.getHours() * 60 + startD.getMinutes());
       if (!sess.durationMin) sess.durationMin = Math.max(1, Math.round((Date.now() - sess.startedAt) / 60000));
       saveFitLog();
+    } else if (sess && tlWorkoutSessCreated && !(sess.exercises && sess.exercises.length)) {
+      removeFitSession(parseKey(tlWorkoutDateKey), sess.id);   // opened a past day, logged nothing
+    } else if (!sess && tlWorkoutPlanCreated && tlWorkoutDateKey) {
+      const plan = plannedFor(parseKey(tlWorkoutDateKey));
+      if (plan && !plan.exercises.length) removePlannedSession(parseKey(tlWorkoutDateKey));   // peeked, planned nothing
     }
     document.getElementById("tlWorkoutOverlay").hidden = true;
     clearInterval(tlWorkoutTimerInt); tlWorkoutTimerInt = null;
     clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null;
     tlWorkoutRestUntil = 0;
-    tlWorkoutDateKey = null; tlWorkoutSessionId = null;
+    tlWorkoutDateKey = null; tlWorkoutSessionId = null; tlWorkoutType = null;
+    tlWorkoutPlanCreated = false; tlWorkoutSessCreated = false;
     refreshOpenTlDetail();   // the card underneath (week dots/plan line) picks up the new log
     refreshOpenTlProfile();  // ...and the Profile's Plan stage, when Workout Mode was opened from there
     if (state.view === "day") renderDay();
@@ -34972,20 +35023,40 @@
   // climbExerciseHtml's grade/attempts/sent, the add-exercise row) -- this is a new
   // VIEW onto FIT_LOG, never a second copy of it or its editing logic.
   function renderTlWorkoutBody() {
-    const sess = tlWorkoutSession();
-    if (!sess) { closeTlWorkout(); return; }
+    if (!tlWorkoutDateKey) { closeTlWorkout(); return; }
     const date = parseKey(tlWorkoutDateKey);
+    const isToday = tlWorkoutDateKey === keyOf(TODAY);
+    const sess = tlWorkoutSession();
+    const timerEl = document.getElementById("tlWorkoutTimer");
+    if (!sess) {
+      // PLAN mode -- see openTlWorkout. Editing PLANNED_FIT[date]; no clock, no log.
+      const plan = plannedFor(date);
+      if (!plan) { closeTlWorkout(); return; }
+      document.getElementById("tlWorkoutTitle").textContent = plan.type;
+      timerEl.textContent = isToday ? "Planning" : `${qaDayLbl(date)} · Planning`;
+      const tpls = plan.exercises.length ? [] : FIT_TEMPLATES.filter(t => t.type === plan.type);
+      document.getElementById("tlWorkoutBody").innerHTML = `
+        <div class="tl-fit-week">${fitWeekDotsHtml(date)}</div>
+        ${isToday
+          ? `<button type="button" class="tl-fit-start-btn" data-wo-begin>▶ Begin workout</button>`
+          : `<div class="tl-workout-note">Saved as you go — it'll be waiting here on the day.</div>`}
+        ${tpls.length ? `<div class="tl-workout-tpls"><div class="tl-fit-plan-head">Start from a template</div>
+          <div class="tl-fit-plan-list">${tpls.map(t => `<button type="button" class="tl-fit-rest-chip" data-wo-tpl="${esc(t.id)}">${esc(t.name)}</button>`).join("")}</div></div>` : ""}
+        ${plannedExercisesHtml(date, plan)}
+      `;
+      return;
+    }
     const started = !!sess.startedAt;
     document.getElementById("tlWorkoutTitle").textContent = sess.type;
     // Not started: the ticker (tickTlWorkoutTimer) owns this text node exclusively
     // once running, so this only ever writes the idle label -- never overwrites a
     // live "M:SS" with a blank frame between a render and the next tick.
-    if (!started) document.getElementById("tlWorkoutTimer").textContent = "Not started";
+    if (!started) timerEl.textContent = isToday ? "Not started" : "Logging";
     document.getElementById("tlWorkoutBody").innerHTML = `
       <div class="tl-fit-week">${fitWeekDotsHtml(date)}</div>
       ${started
         ? (tlWorkoutRestUntil > Date.now() ? tlWorkoutRestBannerHtml() : `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`)
-        : `<button type="button" class="tl-fit-start-btn" data-wo-begin>▶ Begin workout</button>`}
+        : isToday ? `<button type="button" class="tl-fit-start-btn" data-wo-begin>▶ Begin workout</button>` : ""}
       ${exercisesHtml(date, sess)}
     `;
   }
@@ -35004,16 +35075,22 @@
     // exercise AND immediately closed Workout Mode, before this fix).
     e.stopPropagation();
     if (e.target.closest("[data-wo-begin]")) { beginTlWorkout(); return; }
+    const tplBtn = e.target.closest("[data-wo-tpl]");
+    if (tplBtn) { planSessionFromTemplate(parseKey(tlWorkoutDateKey), tplBtn.dataset.woTpl); renderTlWorkoutBody(); return; }
     if (e.target.closest("[data-wo-rest-start]")) { startTlWorkoutRest(90); return; }
     if (e.target.closest("[data-wo-rest-add30]")) { tlWorkoutRestUntil += 30000; tickTlWorkoutRest(); return; }
     if (e.target.closest("[data-wo-rest-skip]")) {
       clearInterval(tlWorkoutRestInt); tlWorkoutRestInt = null; tlWorkoutRestUntil = 0;
       renderTlWorkoutBody(); return;
     }
+    // data-ex-* (a logged session) and data-pex-* (the plan) never share an attribute,
+    // so both handlers can safely see every click -- only the mode on screen has any.
     handleExerciseClick(e, parseKey(tlWorkoutDateKey), renderTlWorkoutBody);
+    handlePlannedExerciseClick(e, renderTlWorkoutBody);
   });
   document.getElementById("tlWorkoutBody").addEventListener("change", e => {
     handleExerciseChange(e, parseKey(tlWorkoutDateKey), renderTlWorkoutBody);
+    handlePlannedExerciseChange(e, renderTlWorkoutBody);
   });
   // ---- Event Profile: "open the event like a patient profile" (Linh, 2026-09-15) --
   // a fuller, staged view of an event, opened via the "⤢ Open full profile" button
@@ -43504,6 +43581,12 @@
     const routineFitLinks = new Set(routinesOn(d).map(t => t.fitLink).filter(Boolean));
     if (routineFitLinks.has(type)) return [];
     const k = keyOf(d);
+    // 2026-10-13: a plan made FROM a calendar event ("Plan workout" on a Gym block)
+    // must not also grow an all-day "Gym" chip beside that same event -- skip when the
+    // day already carries a one-off or generated event named for this type.
+    const typeRe = new RegExp(`\\b${type}`, "i");
+    if (EVENTS.some(ev => ev.date === k && typeRe.test(ev.title || ""))
+      || generatedFor(d).some(ev => typeRe.test(ev.title || ""))) return [];
     // NOT generated:true, unlike fitCalendarEventsFor's own sibling objects just
     // above -- alldayItemsFor()'s own filter explicitly EXCLUDES a personal-track
     // generated item (its "anonymous routine dot" rule, see its Month-view
