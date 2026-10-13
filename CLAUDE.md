@@ -214,6 +214,70 @@ As each pillar goes through its own further build, its concrete rules land as th
 subsection under this one — same as Life Map and Modes already have theirs. This
 section is the index that grows, not a finished spec.
 
+## C22 is a menu (preselect) calendar (2026-10-13, her words: "i only want it to be a
+## preselect calendar where i dont manually type the event, i select the event")
+**Nothing is typed on the calendar.** A calendar event is made by picking a type from a
+menu; the title is the type's label, the length is the type's default, the colour is the
+type's GROUP. Built on the branch `c22-menu-calendar` (worktree `.wtscratch_menucal`) —
+**never push to main until she says "push live"**; the first load of this build archives the
+old freeform calendar (see Data below), so flag that before any push.
+- **Menu** (`EVENT_TYPES_BUILTIN`, 29 types in 6 `TYPE_GROUPS`, her approved list): Fitness
+  (Gym, Pilates, F45, Bouldering, Stretching, Walk, Run) · Work (Clinic, Admin and billing,
+  Study, Code) · Home (Cleaning, Laundry, Cooking, Shopping, Pack for work) · Self-care
+  (Skincare, Hair wash, Blow dry, Manicure, Wind-down) · Together (Date night, Quality
+  time, His errands, Family, Friends) · Meals and travel (Breakfast, Lunch, Dinner,
+  Travel). Birthdays are NOT a type — they stay generated from People. Her own additions
+  and per-type default lengths / hidden flags live in `book33-event-types` (`TYPE_STORE`),
+  edited on **Planning → Event menu → Types**. A type she needs that isn't there is added
+  THERE first — never typed on the calendar.
+- **One picker** (`openTypePicker`, `#tpsOverlay`): groups first (tap group → tap type, two
+  taps; an "Often" row of her top four types is one tap). Every "new event" opener routes
+  here: slot taps (Day/week columns/hours rail), + button, FAB, all-day, month "+", quick
+  bar. `openFormForEdit(ev)` on a typed event opens the same picker as **Change type**. The
+  old Event form survives only for legacy untyped events, routines and to-do → event.
+- **Quick bar** (`qaCommit`/`quickAddOne`): matches what she types to a menu type
+  (`quickTypeMatch`: label as a whole word, or an alias like "workout"→Gym); no match opens
+  the picker on the day/time it read. It still searches, answers questions and logs
+  ("done pilates"). The draft's title is not editable for events.
+- **Event shape:** `{…, typeId, title: type label, track: group track, mode?, fitLink?,
+  steps?, who?, note?}`. `typeOf(e)` is THE resolver (typed event → `typeId`; routine
+  occurrence → its template's; `fitcal-`/`fitplan-` blocks → by label). `colorModeOf(e)` is
+  colour only (`typeOf(e).group` else `modeOf(e)`); `modeOf` is unchanged and still drives
+  Mode sessions/visibility — types that should start a Mode carry `mode`. Groups are NOT in
+  `MODES` (so they never leak into Mode pickers/sessions/Life Map) but ride the same
+  `--mode-<id>` colour plumbing via `MODES.concat(TYPE_GROUPS)` and `modeById`'s fallback.
+- **Colours:** one per group (Fitness green, Work blue, Home gold, Self-care violet,
+  Together coral, Meals teal — `TYPE_GROUPS[].accent`). Typed blocks show the group's drawn
+  glyph (`itemMarkHtml`), never an emoji.
+- **Smart types:** Workouts (Gym/F45/Bouldering) — existing workout card + Workout Mode key
+  off the title/`fitLink`; ticking a fitness type logs a FIT_LOG session (`fitLink`,
+  `LINKED_FIT`). Clinic — the popover shows today's patients (`wmbPatientList`) + a link to
+  the Work day board. Together — the picker asks "who is it with?" (Me/Him/Both → `who`) and
+  the popover says "With <partner>". Chores/Date night — `steps` render as the tickable
+  checklist + walkthrough (`hasSteps` accepts typed events).
+- **My week** (Planning → Event menu → My week): the usual-week pattern. Each row is an
+  ordinary weekly `ROUTINE_TASKS` entry flagged `fromPattern` (+`typeId`, `startDate` =
+  the day it was added) — no second occurrence engine; ticking logs fitness, group colour
+  comes free through `typeOf`'s `rtTaskId` branch.
+- **Runs itself** (`menuNudges()`): shown at the foot of the picker + a dot on the + button
+  (never above the calendar — R8): *did it happen?* (finished, unticked; Done/Skipped via
+  `setOutcomeStatus`), *clash* (two menu items overlap in the next 3 days; one-tap
+  `rescheduleItem`, with Undo), *missing* (workout days below `fitWeekTarget`; nothing
+  together this week).
+- **Data:** `archiveFreeformCalendarOnce()` — first load moves every untyped EVENTS row and
+  all RECURRING_EVENTS to `book33-events-before-menucal` / `book33-recurring-events-before-menucal`
+  (flag `book33-menucal-archived`), leaving the calendar empty; Event menu → Types has
+  "Put the old events back" (with Undo). Fitness logs, birthdays, people, routines and
+  to-dos are untouched.
+- **Still typed, deliberately left (decide later):** to-do → event scheduling (the to-do's
+  own words), the Us page's "Allocate" box, Google Calendar import, Unstick's small move.
+  They create untyped events (neutral colour). The drag-from-palette path was not built —
+  tap ("Often") is the palette on a phone.
+- **Conflicts with RETIRED-FEATURES.md, flagged not hidden:** §1 "Whose job" — the picker's
+  "who is it with?" step is a new, narrower ask for Together types only, not the old form
+  field; §3 "Mode decides the colour" — typed items are coloured by GROUP (her choice);
+  untyped items still follow the Mode/neutral rule. §17 records the retired typed screens.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
