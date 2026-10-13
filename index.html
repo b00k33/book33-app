@@ -5816,6 +5816,13 @@
   .tl-detail-patients { flex-direction: column; align-items: flex-start; gap: 4px; }
   .tl-detail-pat-h { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
   .tl-detail-pat { font-size: 13px; color: var(--ink); }
+  .tps-often { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tps-chip {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
+    border: 1.5px solid var(--note-line); border-radius: 999px; background: var(--paper);
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .tps-chip:hover, .tps-chip:focus-visible { border-color: var(--tps-accent, var(--gold)); }
   .tps-runs { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--note-line); }
   .tps-runs-h { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
   .tps-run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -58006,7 +58013,14 @@
       body = `<button type="button" class="tps-back" data-tps-back>‹ All groups</button>
         <div class="tps-grid">${menuTypes(group.id).map(t => optHtml("data-tps-type", t.id, "", t.label, typeLenLabel(t.min), group.accent)).join("")}</div>`;
     } else {
-      body = `<div class="tps-grid">${TYPE_GROUPS.map(g => {
+      // "Often": her most-used types as one-tap chips (the palette path) -- only once the
+      // day and time are known, since a chip creates the event straight away.
+      const often = !s.change && !s.onPick && !s.needsWhen ? tpQuickTypes() : [];
+      const oftenHtml = often.length ? `<div class="tps-often" role="group" aria-label="Often">${often.map(t => {
+        const g = typeGroupOf(t);
+        return `<button type="button" class="tps-chip" data-tps-quick="${esc(t.id)}" style="--tps-accent:${esc(g ? g.accent : "var(--gold)")}">${g ? `<span class="tps-opt-ic" aria-hidden="true">${modeIconHtml(g, 14)}</span>` : ""}${esc(t.label)}</button>`;
+      }).join("")}</div>` : "";
+      body = `${oftenHtml}<div class="tps-grid">${TYPE_GROUPS.map(g => {
         const n = menuTypes(g.id).length;
         return optHtml("data-tps-group", g.id, modeIconHtml(g, 22), g.name, `${n} type${n === 1 ? "" : "s"}`, g.accent, "is-group");
       }).join("")}</div>`;
@@ -58025,6 +58039,15 @@
       ${when}${body}
       ${s.step === "groups" && !s.onPick && !s.change ? tpNudgesHtml() : ""}
       ${s.step === "groups" && !s.onPick ? `<div class="tps-foot"><button type="button" class="tps-manage" data-tps-manage="week">My usual week</button><button type="button" class="tps-manage" data-tps-manage="types">Manage event types</button></div>` : ""}`;
+  }
+  // the four types she uses most (events + her usual week), padded with sensible starters
+  function tpQuickTypes() {
+    const n = new Map();
+    EVENTS.forEach(e => { if (e.typeId) n.set(e.typeId, (n.get(e.typeId) || 0) + 1); });
+    ROUTINE_TASKS.forEach(r => { if (r.typeId) n.set(r.typeId, (n.get(r.typeId) || 0) + 2); });
+    const ranked = [...n.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    return ranked.concat(["gym", "pilates", "dinner", "clinic"]).filter((id, i, a) => a.indexOf(id) === i)
+      .map(typeById).filter(t => t && !TYPE_STORE.hidden.includes(t.id)).slice(0, 4);
   }
   function tpFinish(who) {
     const s = tpState, t = s && typeById(s.typeId);
@@ -58065,9 +58088,9 @@
     const g = e.target.closest("[data-tps-group]");
     if (g) { tpState.groupId = g.dataset.tpsGroup; tpState.step = "types"; renderTypePicker(); return; }
     if (e.target.closest("[data-tps-back]")) { tpState.step = "groups"; tpState.groupId = null; renderTypePicker(); return; }
-    const ty = e.target.closest("[data-tps-type]");
+    const ty = e.target.closest("[data-tps-type], [data-tps-quick]");
     if (ty) {
-      const t = typeById(ty.dataset.tpsType);
+      const t = typeById(ty.dataset.tpsType || ty.dataset.tpsQuick);
       if (!t) return;
       tpState.typeId = t.id;
       if (t.smart === "together") { tpState.step = "who"; renderTypePicker(); return; }
