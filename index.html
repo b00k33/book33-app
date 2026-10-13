@@ -5785,6 +5785,36 @@
      .mfs-sheet just above. Two columns fit at 412px with the longest Mode name
      ("Birthdays") on one line; this would need a 1-column fallback below some narrower
      width if the app ever supported one, but it doesn't today. ---- */
+  /* ---- Event type picker (2026-10-13) -- the tms tile idiom, one tier up for the
+     group colour: --tps-accent is the GROUP's accent on every tile it owns. ---- */
+  .tps-overlay { z-index: 310; }
+  .tps-sheet { width: min(420px, 100vw); padding: 16px; gap: 12px; overflow-y: auto; }
+  .tps-head { display: flex; align-items: flex-start; gap: 8px; }
+  .tps-head-t { min-width: 0; flex: 1; }
+  .tps-title { font-size: 15px; font-weight: 800; color: var(--ink); line-height: var(--lh-tight); }
+  .tps-subject { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+  .tps-head .tl-detail-close { margin-left: auto; flex: none; width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .tps-back {
+    display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px 0 0; border: 0; background: none;
+    color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; align-self: flex-start;
+  }
+  .tps-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tps-opt {
+    display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px;
+    border: 1.5px solid var(--note-line); border-radius: var(--radius-sm); background: var(--paper);
+    color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+    transition: border-color .12s ease, background .12s ease;
+  }
+  .tps-opt:hover, .tps-opt:focus-visible { border-color: var(--tps-accent, var(--gold)); }
+  .tps-opt.is-group { min-height: 64px; background: color-mix(in oklab, var(--tps-accent, var(--gold)) 12%, var(--paper)); }
+  .tps-opt-ic { flex: none; display: inline-flex; color: var(--tps-accent, var(--ink-soft)); }
+  .tps-opt-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .tps-opt-sub { font-size: 11px; font-weight: 500; color: var(--ink-faint); }
+  .tps-when { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+  .tps-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .tps-chk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .tps-foot { display: flex; justify-content: center; }
+  .tps-manage { border: 0; background: none; min-height: 44px; padding: 0 12px; color: var(--ink-faint); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
   .tms-sheet { width: min(400px, 100vw); padding: 16px; gap: 14px; overflow: visible; }
   .tms-head { display: flex; align-items: flex-start; gap: 10px; }
   .tms-head-t { min-width: 0; flex: 1; }
@@ -16974,6 +17004,10 @@
   /* part-of-life dot (Categories & colours brief) -- always the parent's own colour,
      never the sub's, so a Fitness-green block still visibly reads as Personal. */
   .tl-life-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; flex: none; }
+  .tl-type-ic { display: inline-flex; align-items: center; margin-right: 4px; flex: none; vertical-align: -1px; }
+  .tl-type-ic .mode-ic { display: block; }
+  .tl-item[data-kind="task"] .tl-type-ic { display: none; }
+  .md-item-title .tl-type-ic { margin-right: 3px; }
 
   /* ============================================================
      DESKTOP DECLUTTER — the duplicate big date + UD/weekday line is removed (the
@@ -20847,6 +20881,15 @@
        (data-todopanel-modechip) via openTodoModeSheet(id). -->
   <div class="tl-detail-overlay tms-overlay" id="tmsOverlay" hidden>
     <div class="tl-detail-sheet tms-sheet" id="tmsSheet" role="dialog" aria-modal="true" aria-labelledby="tmsTitle"></div>
+  </div>
+
+  <!-- THE way to add anything to the calendar (2026-10-13, "i select the event, i dont
+       type it"): group tiles -> that group's types -> created. Same
+       .tl-detail-overlay/.tl-detail-sheet chrome as #tmsOverlay above, rendered by
+       renderTypePicker(), opened by openTypePicker({date,start,end,allDay}) from every
+       slot / + / all-day opener. -->
+  <div class="tl-detail-overlay tps-overlay" id="tpsOverlay" hidden>
+    <div class="tl-detail-sheet tps-sheet" id="tpsSheet" role="dialog" aria-modal="true" aria-labelledby="tpsTitle"></div>
   </div>
 
   <!-- the "Everything else" door
@@ -33636,7 +33679,7 @@
       // is quiet colour only now, same as it's always been aria-hidden (never read
       // aloud) and same as its multi-day-column twin a few hundred lines down
       // (search "md-item-title .tl-life-dot") already rendered with no title at all.
-      const lifeDot = `<span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span>`;
+      const lifeDot = itemMarkHtml(e);
       // 2026-08-23: same reasoning as the resizable guard above -- a merged box's
       // own data-move-id would only ever carry the ONE representative id, so
       // press-and-hold-reschedule and right-click-edit (both keyed off this
@@ -33650,7 +33693,7 @@
       // opening the full detail sheet. e.stopPropagation() in its click handler
       // (search "data-travel-peek") keeps this from also firing openTlDetail.
       const travelPeekIc = modeOf(e) === "travel" ? `<button type="button" class="tl-travel-peek" data-travel-peek="${e.id}" aria-label="Travel quick look" title="Travel quick look">🚆</button>` : "";
-      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${powerMark ? ` data-power="${powerMark}"` : ""}${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
+      return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${powerMark ? ` data-power="${powerMark}"` : ""}${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
         <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}${travelPeekIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${rateHtml}${resizeHandles}
@@ -34682,13 +34725,13 @@
     // (--tsoft below), category/track never enters into it. A track/category-tagged
     // event with no Mode gets a plain neutral header, same as any other no-Mode item.
     document.getElementById("tlDetailHead").dataset.track = e.track || "";
-    document.getElementById("tlDetailHead").dataset.mode = modeOf(e) || "";
+    document.getElementById("tlDetailHead").dataset.mode = colorModeOf(e) || "";
     document.getElementById("tlDetailHead").dataset.category = e.category || "";
     // --ef-tint/--ef-ink, same mechanism #addForm's own applyEfTint() call already
     // uses (widened, not duplicated, see that function) -- no fallback passed, so a
     // no-Mode item leaves the sheet in its plain --wash/--tline/--tsoft-less neutral
     // default (see #tlDetailSheet's own CSS for what those derive to when unset).
-    applyEfTint(document.getElementById("tlDetailSheet"), modeOf(e));
+    applyEfTint(document.getElementById("tlDetailSheet"), colorModeOf(e));
     // The header is exactly three parts -- ✕ · title-with-a-subtitle · one action:
     // this sheet is always about ONE occurrence, so its subtitle always names the
     // date it's pinned to. The category/kind crumb and the time/duration detail move
@@ -38463,9 +38506,9 @@
     const resizeHandles = resizable
       ? `<div class="tl-resize-handle tl-resize-top" data-resize="top" aria-hidden="true"></div><div class="tl-resize-handle tl-resize-bottom" data-resize="bottom" aria-hidden="true"></div>`
       : "";
-    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
+    return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       style="top:${top}px;height:${h}px;${colStyle}">
-      <span class="md-item-title"><span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span><span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
+      <span class="md-item-title">${itemMarkHtml(e)}<span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
       <span class="md-item-time">${timeTxt}</span>
       ${resizeHandles}
     </div>`;
@@ -38503,7 +38546,7 @@
     const mergeBadge = p.mergeCount > 1 ? `<span class="tl-merge-badge" title="${p.mergeCount} occurrences today">×${p.mergeCount}</span>` : "";
     const timeTxt = p.mergeCount > 1 ? `${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : fmtTime(e.start);
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
-    return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
+    return `<div class="md-line tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" style="top:${top}px;height:${h}px;${colStyle}">
       ${showTime ? `<span class="md-line-time">${timeTxt}</span>` : ""}<span class="md-line-title">${esc(e.title)}</span>${mergeBadge}
     </div>`;
@@ -38527,7 +38570,7 @@
     // 2026-08-24: no visible text on a bar either way, but a merged run's aria-label
     // still says so, same reasoning as mdItemHtml()'s own badge just above.
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
-    return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
+    return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
   }
   function mdColumnHtml(d, items, labelable, colWidth) {
@@ -38651,7 +38694,7 @@
     // the Week habit row already uses (openWrPop, see its own document click
     // delegate), so logging it here behaves identically to logging it from Week.
     if (e.ghostPlanned) {
-      return `<span class="${cls} fit-ghost-chip" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="Fitness" data-fit-ghost="${esc(e.date)}" title="${esc(e.title)} — planned, tap to log">${label}</span>`;
+      return `<span class="${cls} fit-ghost-chip" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${origin}" data-category="Fitness" data-fit-ghost="${esc(e.date)}" title="${esc(e.title)} — planned, tap to log">${label}</span>`;
     }
     if (e.category === "Birthdays") {
       const pd = e.personId ? ` data-bday-person="${esc(e.personId)}"` : "";
@@ -38695,7 +38738,7 @@
       const bdIc = "";
       return `<span class="${cls}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="Birthdays"${pd} title="${esc(bdTitle)}">${bdIc}${label}</span>`;
     }
-    return `<span class="${cls}" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-origin="${origin}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
+    return `<span class="${cls}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${origin}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${cont ? ` aria-label="${esc(e.title)} (continued)"` : ""} title="${esc(e.title)}">${label}</span>`;
   }
   // 2026-08-25 ("Mobile Day: nothing above the calendar" follow-up, STEP 3): the
   // cycle chip that used to sit in #dayCtxChips (dcxChipsHtml(), now birthday-only --
@@ -40755,8 +40798,8 @@
     // in var(${dotVar(e)}), so they just resolve a --mode-* custom property instead
     // of a --wk-* one when a Mode applies.
     const dotVar = e => {
-      const modeId = modeOf(e);
-      const m = modeId && MODES.find(x => x.id === modeId);
+      const modeId = colorModeOf(e);
+      const m = modeId && modeById(modeId);
       if (m && m.accent) return `--mode-${modeId}`;
       return (e.id && e.id.indexOf("fitcal-") === 0) || e.fitLink ? "--wk-fit"
         : /beauty/i.test(e.category || "") ? "--wk-beauty"
@@ -41363,7 +41406,7 @@
         })()}
         ${state.moShowEvents ? `<div class="mo-evs">
           ${bdays.map(b => `<span class="mo-bd" data-mode="${modeOf(b) || ""}" ${b.personId ? `data-bday-person="${esc(b.personId)}" ` : ""}title="${esc(b.title)}">${b.icon || "🎂"} ${esc(b.title.split(/\s+|—/)[0].trim())}</span>`).join("")}
-          ${chips.slice(0, 3).map(e => `<span class="mo-chip" data-track="${e.track}" data-mode="${modeOf(e) || ""}" data-eid="${e.id}" title="${esc(e.title)} — right-click to edit">${e.allDay || !e.start ? "" : fmtTime(e.start) + " "}${esc(e.title)}</span>`).join("")}
+          ${chips.slice(0, 3).map(e => `<span class="mo-chip" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-eid="${e.id}" title="${esc(e.title)} — right-click to edit">${e.allDay || !e.start ? "" : fmtTime(e.start) + " "}${esc(e.title)}</span>`).join("")}
           ${chips.length > 3 ? `<span class="mo-more">+${chips.length - 3} more</span>` : ""}
           <div class="mo-dots">
             ${dots.map(e => `<span class="d" style="background:${TRACK_INK[e.track]}"></span>`).join("")}
@@ -43555,7 +43598,10 @@
   // run — still need a block of their own here.
   function fitCalendarEventsFor(date) {
     const routineFitLinks = new Set(routinesOn(date).map(t => t.fitLink).filter(Boolean));
-    return fitSessionsOn(date).filter(s => s.time && !routineFitLinks.has(s.type)).map(s => ({
+    // 2026-10-13: a session that a calendar item (typed event or routine) logged by
+    // being ticked done already HAS its block -- never draw it a second time.
+    const linkedSessIds = new Set(Object.values(LINKED_FIT));
+    return fitSessionsOn(date).filter(s => s.time && !routineFitLinks.has(s.type) && !linkedSessIds.has(s.id)).map(s => ({
       id: `fitcal-${s.id}`, title: s.type, track: "personal", category: "Fitness",
       icon: "🏋️", start: s.time, end: s.durationMin ? addMinutesToTimeStr(s.time, s.durationMin) : "",
       // 2026-08-03: date wasn't carried before — harmless while every reader just assumed
@@ -47179,6 +47225,128 @@
   }
   let MODES = loadModes();
   function saveModes() { try { localStorage.setItem(MODES_KEY, JSON.stringify(MODES)); } catch (e) {} applyModeColours(); }
+
+  /* ============================================================
+     EVENT TYPES -- the preselect calendar (2026-10-13, "complete rewrite and
+     redesign of c22 ... a preselect calendar where i dont manually type the event,
+     i select the event e.g. gym, work"). Every event is one of these types; its
+     title is the type's label (a snapshot, never typed), its colour is its GROUP's
+     colour (her pick: one colour per group, not per type). Groups are NOT Modes --
+     they live in their own table so they never leak into the Mode pickers, Right-now
+     chips, Life Map palette, sessions or takeover -- but they ride the same colour
+     plumbing (--mode-<id>/data-mode, see applyModeColours/regenerateModeStyles) so
+     every calendar surface that already paints a Mode paints a group for free.
+     `mode` on a type is the existing Mode the block still belongs to for Work/Study/
+     Cleaning sessions -- colour comes from the group, session logic from the Mode.
+     ============================================================ */
+  const TYPE_GROUPS = [
+    { id: "g-fitness",  name: "Fitness",          icon: "fitness",   accent: "#4FB36A", track: "personal", category: "Fitness" },
+    { id: "g-work",     name: "Work",             icon: "briefcase", accent: "#4F86E8", track: "work" },
+    { id: "g-home",     name: "Home",             icon: "home",      accent: "#D9A93E", track: "personal", category: "Home" },
+    { id: "g-selfcare", name: "Self-care",        icon: "sparkle",   accent: "#9A82E0", track: "personal", category: "Beauty" },
+    { id: "g-together", name: "Together",         icon: "heart",     accent: "#E0775A", track: "marriage" },
+    { id: "g-meals",    name: "Meals and travel", icon: "meal",      accent: "#3FB0C0", track: "personal" },
+  ];
+  // smart: "workout" (Gym/F45/Bouldering open the workout planner), "clinic" (today's
+  // patients), "together" (with him? + checklist), "chores" (tick-off checklist).
+  // fit: the FITNESS_TYPES name a Done tick logs a FIT_LOG session under.
+  const EVENT_TYPES_BUILTIN = [
+    { id: "gym",        group: "g-fitness", label: "Gym",               min: 60,  fit: "Gym",        smart: "workout" },
+    { id: "pilates",    group: "g-fitness", label: "Pilates",           min: 45,  fit: "Pilates" },
+    { id: "f45",        group: "g-fitness", label: "F45",               min: 45,  fit: "F45",        smart: "workout" },
+    { id: "bouldering", group: "g-fitness", label: "Bouldering",        min: 90,  fit: "Bouldering", smart: "workout" },
+    { id: "stretching", group: "g-fitness", label: "Stretching",        min: 20,  fit: "Stretching" },
+    { id: "walk",       group: "g-fitness", label: "Walk",              min: 30 },
+    { id: "run",        group: "g-fitness", label: "Run",               min: 40 },
+    { id: "clinic",     group: "g-work",    label: "Clinic",            min: 480, mode: "work", smart: "clinic" },
+    { id: "admin",      group: "g-work",    label: "Admin and billing", min: 60,  mode: "work" },
+    { id: "study",      group: "g-work",    label: "Study",             min: 60,  mode: "study" },
+    { id: "code",       group: "g-work",    label: "Code",              min: 90,  mode: "code" },
+    { id: "cleaning",   group: "g-home",    label: "Cleaning",          min: 60,  mode: "clean", smart: "chores", steps: ["Kitchen", "Bathroom", "Floors"] },
+    { id: "laundry",    group: "g-home",    label: "Laundry",           min: 30,  smart: "chores", steps: ["Wash", "Dry", "Fold"] },
+    { id: "cooking",    group: "g-home",    label: "Cooking",           min: 45,  smart: "chores", steps: ["Prep", "Cook", "Clean up"] },
+    { id: "shopping",   group: "g-home",    label: "Shopping",          min: 60,  smart: "chores", steps: ["List", "Shop", "Put away"] },
+    { id: "packwork",   group: "g-home",    label: "Pack for work",     min: 15 },
+    { id: "skincare",   group: "g-selfcare", label: "Skincare",         min: 15 },
+    { id: "hairwash",   group: "g-selfcare", label: "Hair wash",        min: 30 },
+    { id: "blowdry",    group: "g-selfcare", label: "Blow dry",         min: 20 },
+    { id: "manicure",   group: "g-selfcare", label: "Manicure",         min: 45 },
+    { id: "winddown",   group: "g-selfcare", label: "Wind-down",        min: 30 },
+    { id: "datenight",  group: "g-together", label: "Date night",       min: 180, smart: "together", steps: ["Get ready", "Leave on time"] },
+    { id: "quality",    group: "g-together", label: "Quality time",     min: 60,  smart: "together" },
+    { id: "errands",    group: "g-together", label: "His errands",      min: 45,  smart: "together", who: "partner" },
+    { id: "family",     group: "g-together", label: "Family",           min: 120, smart: "together" },
+    { id: "friends",    group: "g-together", label: "Friends",          min: 120, smart: "together" },
+    { id: "breakfast",  group: "g-meals",   label: "Breakfast",         min: 30 },
+    { id: "lunch",      group: "g-meals",   label: "Lunch",             min: 45 },
+    { id: "dinner",     group: "g-meals",   label: "Dinner",            min: 60 },
+    { id: "travel",     group: "g-meals",   label: "Travel",            min: 45,  mode: "travel" },
+  ];
+  // Her additions/edits live in one store: custom types, hidden built-ins, and per-type
+  // overrides (default length, checklist steps). Built-ins are code, so a future
+  // built-in addition reaches her without a migration.
+  const TYPE_STORE_KEY = "book33-event-types";
+  function loadTypeStore() {
+    try {
+      const v = JSON.parse(localStorage.getItem(TYPE_STORE_KEY));
+      if (v && typeof v === "object") return { custom: v.custom || [], hidden: v.hidden || [], over: v.over || {} };
+    } catch (e) {}
+    return { custom: [], hidden: [], over: {} };
+  }
+  let TYPE_STORE = loadTypeStore(), typeIndexCache = null;
+  function saveTypeStore() {
+    typeIndexCache = null;
+    try { localStorage.setItem(TYPE_STORE_KEY, JSON.stringify(TYPE_STORE)); } catch (e) {}
+  }
+  function typeIndex() {
+    if (typeIndexCache) return typeIndexCache;
+    const list = EVENT_TYPES_BUILTIN.concat(TYPE_STORE.custom.map(c => ({ ...c, custom: true })))
+      .map(t => (TYPE_STORE.over[t.id] ? { ...t, ...TYPE_STORE.over[t.id] } : t));
+    typeIndexCache = { list, byId: new Map(list.map(t => [t.id, t])), byLabel: new Map(list.map(t => [t.label.toLowerCase(), t])) };
+    return typeIndexCache;
+  }
+  // the menu she picks from: hidden built-ins drop out of it but never out of lookups,
+  // so an event already on the calendar keeps its colour/label if she hides its type.
+  function menuTypes(groupId) {
+    return typeIndex().list.filter(t => !TYPE_STORE.hidden.includes(t.id) && (!groupId || t.group === groupId));
+  }
+  const typeById = id => (id ? typeIndex().byId.get(id) || null : null);
+  const typeByLabel = label => typeIndex().byLabel.get(String(label || "").trim().toLowerCase()) || null;
+  const typeGroupOf = t => (t ? TYPE_GROUPS.find(g => g.id === t.group) || null : null);
+  function typeLenLabel(min) {
+    if (min < 60) return `${min}m`;
+    const h = Math.floor(min / 60), m = min % 60;
+    return m ? `${h}h ${m}m` : `${h}h`;
+  }
+  // THE one resolver for "which type is this item": a typed event carries it, a
+  // routine occurrence reads its template's (same shape as modeOf), and the
+  // generated fitness blocks (fitcal-*, titled by their FITNESS_TYPES name) map by label
+  // so a logged Gym session paints the Fitness colour with no migration.
+  function typeOf(e) {
+    if (!e) return null;
+    if (e.typeId) return typeById(e.typeId);
+    if (e.rtTaskId) {
+      const r = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
+      return r && r.typeId ? typeById(r.typeId) : null;
+    }
+    if (e.id && String(e.id).indexOf("fitcal-") === 0) return typeByLabel(e.title);
+    return null;
+  }
+  // colour-only twin of modeOf(): a typed item paints its GROUP; everything else keeps
+  // whatever Mode (or none = the one neutral) it had. Session/visibility logic keeps
+  // calling modeOf() -- a type never starts or hides a Mode by being coloured.
+  function colorModeOf(e) {
+    const t = typeOf(e);
+    return t ? t.group : modeOf(e);
+  }
+  // the small mark at the head of a calendar block: a typed item shows its GROUP's
+  // drawn glyph (currentColor, so it takes the block's own ink); anything else keeps
+  // the old life-category dot, so generated/untyped items look exactly as before.
+  function itemMarkHtml(e) {
+    const g = typeGroupOf(typeOf(e));
+    if (g) return `<span class="tl-type-ic" aria-hidden="true">${modeIconHtml(g, 12)}</span>`;
+    return `<span class="tl-life-dot" style="background:${catDotColor(e)}" aria-hidden="true"></span>`;
+  }
   // colours the whole calendar by Mode, the same way the Edit Event form does.
   // Modelled directly on applyCategoryColours()/regenerateCategoryStyles()
   // (search them) -- a --mode-<id>/--mode-<id>-on custom property per Mode, plus a
@@ -47189,7 +47357,7 @@
   // uses for chrome -- reused, not re-derived.
   function applyModeColours() {
     const root = document.documentElement.style;
-    MODES.forEach(m => {
+    MODES.concat(TYPE_GROUPS).forEach(m => {
       if (!m.accent) return;
       root.setProperty(`--mode-${m.id}`, m.accent);
       root.setProperty(`--mode-${m.id}-on`, accentOnFor(m.accent));
@@ -47224,7 +47392,7 @@
     let el = document.getElementById("b33ModeDynStyles");
     if (!el) { el = document.createElement("style"); el.id = "b33ModeDynStyles"; document.head.appendChild(el); }
     let css = "";
-    MODES.forEach(m => {
+    MODES.concat(TYPE_GROUPS).forEach(m => {
       if (!m.accent) return;
       // --cat-edge: transparent -- the no-Mode fallback's hairline border
       // (search --track-neutral) is set by a
@@ -47317,7 +47485,7 @@
   applyModeColours();
   function modeById(id) {
     if (!id || id === "home") return MODE_HOME;
-    return MODES.find(m => m.id === id) || MODE_HOME;
+    return MODES.find(m => m.id === id) || TYPE_GROUPS.find(g => g.id === id) || MODE_HOME;
   }
   // a Mode's own emoji sometimes lacks U+FE0F, the emoji-presentation selector --
   // Work's built-in "⚕" is the one
@@ -47390,7 +47558,13 @@
     heart:
       '<path fill="currentColor" d="M12 21.2s-7.6-4.6-9.6-9.3C1.2 8.6 3.4 5 7 5c2 0 3.5 1.1 5 3 1.5-1.9 3-3 5-3 3.6 0 5.8 3.6 4.6 6.9-2 4.7-9.6 9.3-9.6 9.3z"/>',
     star:
-      '<path fill="currentColor" d="M12 2.4l2.9 6.1 6.7.9-4.9 4.6 1.2 6.6L12 17.4l-5.9 3.2 1.2-6.6L2.4 9.4l6.7-.9z"/>'
+      '<path fill="currentColor" d="M12 2.4l2.9 6.1 6.7.9-4.9 4.6 1.2 6.6L12 17.4l-5.9 3.2 1.2-6.6L2.4 9.4l6.7-.9z"/>',
+    // 2026-10-13 (event type groups): the Work and Self-care groups' glyphs
+    briefcase:
+      '<rect x="2.5" y="7.5" width="19" height="13" rx="2.2" fill="currentColor"/>'+
+      '<path d="M8.5 7.5V5.8c0-.9.7-1.6 1.6-1.6h3.8c.9 0 1.6.7 1.6 1.6v1.7" fill="none" stroke="currentColor" stroke-width="2"/>',
+    sparkle:
+      '<path fill="currentColor" d="M12 2.2c.5 4.6 2.2 7 7.8 9.8-5.6 2.8-7.3 5.2-7.8 9.8-.5-4.6-2.2-7-7.8-9.8 5.6-2.8 7.3-5.2 7.8-9.8z"/>'
   };
   // One resolver for "what glyph does this Mode render as," everywhere -- if the
   // same MODE_ICONS[id]-or-emoji lookup appears a second time somewhere, that's
@@ -47577,7 +47751,7 @@
     const nowMin = n.getHours() * 60 + n.getMinutes();
     const items = dayEventsRawFor(n)
       .filter(o => !o.allDay && o.start && !o.ghostSkip && !o.ghostMoved)
-      .map(o => ({ s: toMin(o.start), e: Math.min(itemEndMin(o), NOW_DAY_END_MIN), modeId: modeOf(o) }))
+      .map(o => ({ s: toMin(o.start), e: Math.min(itemEndMin(o), NOW_DAY_END_MIN), modeId: colorModeOf(o) }))
       .filter(o => o.s != null && o.e != null && o.e > o.s)
       .sort((a, b) => a.s - b.s);
     if (!items.length) return null;
@@ -47622,7 +47796,7 @@
   }
   function nowAccentFor(item) {
     if (!item) return { bg: "var(--field-bg)", edge: "var(--track-neutral-bar)" };
-    const mode = modeById(modeOf(item));
+    const mode = modeById(colorModeOf(item));
     if (!mode || !mode.accent) return { bg: "var(--field-bg)", edge: "var(--track-neutral-bar)" };
     return { bg: color_mix_tint(mode.accent), edge: mode.accent };
   }
@@ -50266,6 +50440,7 @@
     if (!document.getElementById("tlProfileOverlay").hidden) { closeTlProfile(); return true; }
     if (!document.getElementById("tlWalkOverlay").hidden) { closeTlWalk(); return true; }
     if (!document.getElementById("tlDetailOverlay").hidden) { closeTlDetail(); return true; }
+    if (tpState && !document.getElementById("tpsOverlay").hidden) { closeTypePicker(); return true; }
     if (!document.getElementById("addForm").hidden) { closeForm(); return true; }
     if (todoPanelOpen) { closeTodoPanel(); return true; }
     if (fastPanelOpen) { closeFastPanel(); return true; }
@@ -57617,6 +57792,161 @@
       return;
     }
   });
+  // ---- Event type picker (2026-10-13) ----------------------------------------
+  // The ONLY way a calendar event is made now: pick a group, pick a type, done. The
+  // title is the type's label, the length is its default, the colour is its group's --
+  // nothing is typed. tpState lives only while the sheet is open.
+  let tpState = null;
+  function defaultStartFor(dateKey) {
+    if (dateKey === keyOf(TODAY)) {
+      const n = new Date(), m = Math.min(23 * 60, Math.ceil((n.getHours() * 60 + n.getMinutes() + 1) / 15) * 15);
+      return minToTime(m);
+    }
+    return "09:00";
+  }
+  function typedEventFields(t) {
+    const g = typeGroupOf(t);
+    const f = { typeId: t.id, title: t.label, track: g ? g.track : "personal", category: g && g.category ? g.category : "" };
+    if (t.mode) f.mode = t.mode;
+    if (t.fit) f.fitLink = t.fit;
+    if (t.steps && t.steps.length) f.steps = t.steps.map(s => ({ text: s, min: 5 }));
+    return f;
+  }
+  // One creator for every typed event (the picker today; anything that adds one later).
+  // Length is the type's default unless an end is given; an all-day event has neither.
+  function createTypedEvent(typeId, o) {
+    const t = typeById(typeId);
+    if (!t) return null;
+    const allDay = !!o.allDay || !o.start;
+    const ev = {
+      id: uid(), date: o.date, kind: "event", locPath: [], allDay,
+      start: allDay ? "" : o.start, end: allDay ? "" : (o.end || addMinutesToTimeStr(o.start, t.min)),
+      ...typedEventFields(t),
+    };
+    const who = o.who || t.who;
+    if (who && who !== "me") ev.who = who;
+    EVENTS.push(ev);
+    saveEvents(EVENTS);
+    return ev;
+  }
+  function applyTypeToEvent(id, t) {
+    const ev = EVENTS.find(x => x.id === id);
+    if (!ev || !t) return;
+    delete ev.mode; delete ev.fitLink; delete ev.steps;
+    Object.assign(ev, typedEventFields(t));
+    saveEvents(EVENTS);
+    render();
+  }
+  function openTypePicker(opts) {
+    opts = opts || {};
+    const change = !!opts.eventId;
+    const date = opts.date || keyOf(state.anchor);
+    const needsWhen = !change && !opts.start && !opts.allDay;
+    tpState = {
+      change, eventId: opts.eventId || null, date, allDay: !!opts.allDay, end: opts.end || "",
+      start: opts.start || (needsWhen ? defaultStartFor(date) : ""), needsWhen,
+      step: "groups", groupId: null, typeId: null,
+    };
+    armBackGuard();
+    renderTypePicker();
+    animateSheetOpen(document.getElementById("tpsOverlay"));
+  }
+  function closeTypePicker() {
+    animateSheetClose(null, document.getElementById("tpsOverlay"));
+    tpState = null;
+  }
+  function renderTypePicker() {
+    const host = document.getElementById("tpsSheet");
+    if (!host || !tpState) return;
+    const s = tpState;
+    let subject = "";
+    if (s.change) subject = (EVENTS.find(x => x.id === s.eventId) || {}).title || "";
+    else if (!s.needsWhen) subject = `${qaDayLbl(parseKey(s.date))} · ${s.allDay ? "All day" : fmtTime(s.start)}`;
+    const group = TYPE_GROUPS.find(g => g.id === s.groupId);
+    const optHtml = (attr, val, ic, name, sub, accent, cls) => `
+      <button type="button" class="tps-opt${cls ? " " + cls : ""}" ${attr}="${esc(val)}" style="--tps-accent:${esc(accent)}">
+        ${ic ? `<span class="tps-opt-ic" aria-hidden="true">${ic}</span>` : ""}
+        <span class="tps-opt-main"><span>${esc(name)}</span>${sub ? `<span class="tps-opt-sub">${esc(sub)}</span>` : ""}</span>
+      </button>`;
+    let title = s.change ? "Change type" : "What is it?", body = "";
+    if (s.step === "who") {
+      title = "Who is it with?";
+      const t = typeById(s.typeId);
+      body = `<div class="tps-grid">${["both", "me", "partner"].map(w =>
+        optHtml("data-tps-who", w, modeIconHtml(group, 18), w === "me" ? "Just me" : w === "partner" ? partnerName() : "Both of us", "", group.accent)).join("")}</div>`;
+      subject = `${t.label} · ${subject}`;
+    } else if (s.step === "types" && group) {
+      title = group.name;
+      body = `<button type="button" class="tps-back" data-tps-back>‹ All groups</button>
+        <div class="tps-grid">${menuTypes(group.id).map(t => optHtml("data-tps-type", t.id, "", t.label, typeLenLabel(t.min), group.accent)).join("")}</div>`;
+    } else {
+      body = `<div class="tps-grid">${TYPE_GROUPS.map(g => {
+        const n = menuTypes(g.id).length;
+        return optHtml("data-tps-group", g.id, modeIconHtml(g, 22), g.name, `${n} type${n === 1 ? "" : "s"}`, g.accent, "is-group");
+      }).join("")}</div>`;
+    }
+    const when = s.needsWhen && s.step === "groups" ? `
+      <div class="tps-when">
+        <label class="tps-field">Day<input type="date" id="tpsDate" value="${esc(s.date)}"></label>
+        <label class="tps-field">Start<input type="time" id="tpsTime" value="${esc(s.start)}"${s.allDay ? " disabled" : ""}></label>
+        <label class="tps-chk"><input type="checkbox" id="tpsAllDay"${s.allDay ? " checked" : ""}> All day</label>
+      </div>` : "";
+    host.innerHTML = `
+      <div class="tps-head">
+        <div class="tps-head-t"><div class="tps-title" id="tpsTitle">${esc(title)}</div>${subject ? `<div class="tps-subject">${esc(subject)}</div>` : ""}</div>
+        <button type="button" class="tl-detail-close" data-tps-close aria-label="Close">×</button>
+      </div>
+      ${when}${body}
+      ${s.step === "groups" ? `<div class="tps-foot"><button type="button" class="tps-manage" data-tps-manage>Manage event types</button></div>` : ""}`;
+  }
+  function tpFinish(who) {
+    const s = tpState, t = s && typeById(s.typeId);
+    if (!s || !t) return;
+    const start = s.allDay ? "" : (s.start || defaultStartFor(s.date));
+    const ev = createTypedEvent(t.id, { date: s.date, start, end: s.end, allDay: s.allDay, who });
+    closeTypePicker();
+    if (!ev) return;
+    if (ev.date !== keyOf(state.anchor)) state.anchor = parseKey(ev.date);
+    render();
+    showUndoSnackbar(`${t.label} added`, () => {
+      EVENTS = EVENTS.filter(x => x.id !== ev.id);
+      saveEvents(EVENTS);
+      render();
+    });
+  }
+  document.getElementById("tpsOverlay").addEventListener("click", e => {
+    if (!tpState) return;
+    if (e.target === e.currentTarget || e.target.closest("[data-tps-close]")) { closeTypePicker(); return; }
+    if (e.target.closest("[data-tps-manage]")) { closeTypePicker(); state.view = "eventTypes"; render(); return; }
+    const g = e.target.closest("[data-tps-group]");
+    if (g) { tpState.groupId = g.dataset.tpsGroup; tpState.step = "types"; renderTypePicker(); return; }
+    if (e.target.closest("[data-tps-back]")) { tpState.step = "groups"; tpState.groupId = null; renderTypePicker(); return; }
+    const ty = e.target.closest("[data-tps-type]");
+    if (ty) {
+      const t = typeById(ty.dataset.tpsType);
+      if (!t) return;
+      if (tpState.change) { const id = tpState.eventId; closeTypePicker(); applyTypeToEvent(id, t); return; }
+      tpState.typeId = t.id;
+      if (t.smart === "together") { tpState.step = "who"; renderTypePicker(); return; }
+      tpFinish(null);
+      return;
+    }
+    const w = e.target.closest("[data-tps-who]");
+    if (w) tpFinish(w.dataset.tpsWho);
+  });
+  document.getElementById("tpsOverlay").addEventListener("change", e => {
+    if (!tpState) return;
+    if (e.target.id === "tpsDate" && e.target.value) tpState.date = e.target.value;
+    else if (e.target.id === "tpsTime" && e.target.value) tpState.start = e.target.value;
+    else if (e.target.id === "tpsAllDay") {
+      tpState.allDay = e.target.checked;
+      const ti = document.getElementById("tpsTime");
+      if (ti) ti.disabled = tpState.allDay;
+    }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && tpState && !document.getElementById("tpsOverlay").hidden) closeTypePicker();
+  });
   // done items sink to the bottom, same as renderTodoPage() -- "the full to-do list",
   // not just the rail card's pending-only cap of 5.
   // a to-do's steps/photos default to empty -- every to-do made before this feature
@@ -59838,7 +60168,7 @@
     if (e.target.closest("#evlUpMoreBtn")) { state.evlUpNextExpanded = !state.evlUpNextExpanded; renderUpNext(); return; }
     evlRowClickHandler(e);
   });
-  document.getElementById("evlAddBtn").addEventListener("click", () => openForm());
+  document.getElementById("evlAddBtn").addEventListener("click", () => openTypePicker({ date: keyOf(state.anchor) }));
   document.getElementById("evlFrom").addEventListener("change", renderEventsPage);
   document.getElementById("evlTo").addEventListener("change", renderEventsPage);
   document.getElementById("evlThisMonth").addEventListener("click", () => {
@@ -59939,7 +60269,7 @@
       return;
     }
     const addBtn = e.target.closest("[data-evl-add-month]");
-    if (addBtn) { openForm(); return; }
+    if (addBtn) { openTypePicker({ date: keyOf(state.anchor) }); return; }
     const row = e.target.closest(".evl-month-row"); if (!row || row.classList.contains("evl-year-axis")) return;
     const idx = parseInt(row.dataset.evlMonth, 10);
     state.evlOpenMonth = state.evlOpenMonth === idx ? null : idx;
@@ -60983,7 +61313,7 @@
   function applyEfTint(host, modeId, noModeFallback, tintProp, inkProp) {
     if (!host) return;
     tintProp = tintProp || "--ef-tint"; inkProp = inkProp || "--ef-ink";
-    const m = modeId ? MODES.find(x => x.id === modeId) : null;
+    const m = modeId ? (MODES.find(x => x.id === modeId) || TYPE_GROUPS.find(g => g.id === modeId)) : null;
     const tint = (m && m.accent) || noModeFallback || null;
     if (tint) {
       host.style.setProperty(tintProp, tint);
@@ -61920,9 +62250,8 @@
   // than touching state.anchor itself, keeps every other reader of state.anchor (the
   // rest of the Day page, two clicks away) undisturbed by a quick-add on this card.
   function openFormForDate(dateKey) {
-    openForm();
-    fDate.value = dateKey;
-    updateEachWeekdayLabel();
+    // 2026-10-13: new events are picked, not typed -- the type picker, for that day.
+    openTypePicker({ date: dateKey });
   }
   // The multi-day click-to-add
   // needs BOTH a date (which column) and a time (where in it) prefilled at once --
@@ -61931,9 +62260,7 @@
   // just those same two pieces combined: openForm()'s own prefStart/prefLoc prefill,
   // then the exact fDate-override openFormForDate() already does.
   function openFormForDateTime(dateKey, prefStart, prefLoc) {
-    openForm(prefStart, prefLoc);
-    fDate.value = dateKey;
-    updateEachWeekdayLabel();
+    openTypePicker({ date: dateKey, start: prefStart || "" });
   }
   // Built the same way --
   // openFormForDateTime() for the date, then ticks fAllDay and DISPATCHES a real
@@ -61941,9 +62268,7 @@
   // listener already runs (search fAllDay.addEventListener("change" -- this reuses
   // that exact logic instead of a second copy that could drift from it later.
   function openAllDayFormForDate(dateKey) {
-    openFormForDateTime(dateKey);
-    fAllDay.checked = true;
-    fAllDay.dispatchEvent(new Event("change"));
+    openTypePicker({ date: dateKey, allDay: true });
   }
   function openFormForEdit(ev) {
     armBackGuard();
@@ -63422,7 +63747,7 @@
     // and it opens the SAME openForm(null) #addBtn's own listener calls — no second
     // add flow. #addBtn itself is only hidden, so desktop is untouched either way.
     if (!raw.trim()) {
-      if (mobileDayMq.matches && state.view === "day") openForm(null);
+      if (mobileDayMq.matches && state.view === "day") openTypePicker({ date: keyOf(state.anchor) });
       return;
     }
     // explicit search wording goes straight to results
@@ -63914,10 +64239,10 @@
     if (title) { openFormWithAction(title); fCat.value = ""; }
   });
 
-  document.getElementById("addBtn").addEventListener("click", () => openForm(null));
+  document.getElementById("addBtn").addEventListener("click", () => openTypePicker({ date: keyOf(state.anchor) }));
   // 2026-08-24 (GCal-shaped mobile top bar, STEP 4): the floating ＋ opens the exact
   // same New Event form as #addBtn just above -- one open-form call, two triggers.
-  document.getElementById("dayFab")?.addEventListener("click", () => openForm(null));
+  document.getElementById("dayFab")?.addEventListener("click", () => openTypePicker({ date: keyOf(state.anchor) }));
   // Daily Focus lean-in actions → pre-fill the add form as an all-day Personal task, ready to save/tweak
   function openFormWithAction(title) {
     armBackGuard();
@@ -64610,7 +64935,7 @@
     // minute instead of drifting by however many blocks are expanded above it.
     let minutes = Math.round(minForTop(e.clientY - rect.top) / 15) * 15;
     minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
-    openForm(minToTime(minutes), locForMinute(minutes));
+    openTypePicker({ date: keyOf(state.anchor), start: minToTime(minutes) });
   });
   // hover ghost — shows the time + auto-location you'd get before you even click
   const hoverLine = document.getElementById("hoverAddLine");
@@ -64847,12 +65172,12 @@
       if (el.id === "hours") {
         const h = Math.max(START_HOUR, Math.min(END_HOUR - 1, Math.floor(minForTop(clientY - rect.top) / 60)));
         if (hourRowH(h) === 0) return;   // a trimmed ("Hours shown") hour -- not really there
-        openForm(minToTime(h * 60), locForMinute(h * 60));
+        openTypePicker({ date: keyOf(state.anchor), start: minToTime(h * 60) });
         return;
       }
       let minutes = Math.round(minForTop(clientY - rect.top) / 15) * 15;
       minutes = Math.max(START_MIN, Math.min(END_MIN - 15, minutes));
-      openForm(minToTime(minutes), locForMinute(minutes));
+      openTypePicker({ date: keyOf(state.anchor), start: minToTime(minutes) });
     }
     function bind(el) {
       el.addEventListener("pointerdown", e => {
@@ -64905,7 +65230,7 @@
     const rect = document.getElementById("eventsLayer").getBoundingClientRect();
     const h = Math.max(START_HOUR, Math.min(END_HOUR - 1, Math.floor(minForTop(e.clientY - rect.top) / 60)));
     if (hourRowH(h) === 0) return;   // a trimmed ("Hours shown") hour -- not really there
-    openForm(minToTime(h * 60), locForMinute(h * 60));
+    openTypePicker({ date: keyOf(state.anchor), start: minToTime(h * 60) });
   });
 
   // 2026-08-05 (Part D, "press-and-hold a block, then drag to a new time; snaps to
