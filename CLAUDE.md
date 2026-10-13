@@ -89,6 +89,29 @@ effort defaults to.
     `position: sticky; top: -16px` so it stays in view while she scrolls, buzz at the end, and
     swapped for the "Start rest" button IN PLACE — never a body re-render, which would wipe a
     number being typed). Outside a live session a tick is just a tick, no clock.
+    **Workout templates editor, "gym visuals" (2026-10-14, her B3 mock, "build and push live"):**
+    the Fitness page's `#fitHomeTemplates` is a split editor (`templatesHtml()`/`tpeRender()`):
+    template tabs + "+ New template", then an exercise LIST (left) and the picked exercise's
+    DETAIL (right); on a phone it is list → detail with a back arrow (a `@container tpe
+    (max-width: 640px)` query, not a viewport one). Same data as before (`FIT_TEMPLATES`,
+    the shared set-row writers) — nothing migrated; the new per-exercise `ex.area`
+    (core/legs/push/pull/full; climbs always pull) and `ex.gear` (bar/db/kb/mach/body) are
+    inferred from the name (`tpeAreaOf`/`tpeGearOf`), changeable by hand, and remembered BY
+    NAME in `EX_MODE_PREFS` with timed/sided/rest/video. The artwork is `TPE_ART` (inline
+    SVG defs injected once into `#tpeArtDefs`, ids prefixed `tpe-`; muscle figures, gear
+    icons, a barbell loaded with real-colour plates). The summary strip's muscle map and
+    legend highlight each other; the ribbon and the set rows' fill bars show load; the coach
+    strip (`tpeHistory`/`tpeCoachHtml`) reads `FIT_LOG` for last session + PR and hides plates
+    at 0 kg. Numbers are typed or stepped (saved live, no re-render while typing — only
+    `tpeRefresh`/`tpeUpdateSum`/`tpeRibUpdate`/`tpeCoachUpdate` touch the DOM; `tpeRender()`
+    is the only full rebuild and runs from `renderFitness()`). Deleting a template or
+    removing an exercise has no confirm — `showUndoSnackbar`. The prefix is `tpe-`, NOT
+    `wt-`: `wt*` is the week-to-do module (`wtAdd`, `.wt-chip`, `data-wt-*`) and a first
+    attempt silently lost to its `wtAdd`. **Flagged design45 exception, this editor only:**
+    shaded artwork, five muscle-area hues (`--tpe-core/legs/push/pull/full`) and 10–12.5px
+    type — documented in the CSS comment above `.tpe`; don't copy it to other pages. The
+    planned-day and logged-session editors still use the shared `exSetRowHtml` builders and
+    are untouched.
     `PLANNED_FIT`
     is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
     streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
