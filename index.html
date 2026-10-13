@@ -13803,6 +13803,10 @@
   .tpl-ex-detail { font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .tpl-ex-row { flex-wrap: wrap; }
   .tpl-ex-name { flex: 1 1 120px; min-width: 0; }
+  .tpl-ex-row--lift .tpl-ex-name { order: 1; }
+  .tpl-ex-row--lift .ex-del { order: 2; }
+  .tpl-ex-row--lift .tpl-sets { order: 3; flex: 1 0 100%; }
+  .tpl-add-set { border: none; background: none; padding: 0; font-family: var(--font-body); text-align: left; }
   .tpl-ex-fields { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .tpl-fld { display: inline-flex; align-items: center; gap: 4px; }
   .tpl-ex-fields .tpl-grade { width: auto; min-height: 32px; font-size: 12.5px; }
@@ -13815,6 +13819,9 @@
     .tpl-ex-row .tpl-ex-fields { order: 3; flex: 1 0 100%; }
     .tpl-head { padding-right: 44px; min-height: 44px; }
     #fitHomeTemplates .ex-name-input, #fitHomeTemplates .wp-select, #fitHomeTemplates .add-ex-btn { min-height: 44px; }
+    .tpl-sets .ex-set-input { min-height: 44px; width: 64px; }
+    .tpl-sets .ex-set-del { min-width: 44px; min-height: 44px; font-size: 16px; }
+    .tpl-add-set { min-height: 44px; font-size: 13px; }
     .tpl-ex-fields .ex-set-input, .tpl-ex-fields .tpl-grade { min-height: 44px; }
     .tpl-ex-fields .ex-set-input { width: 64px; }
   }
@@ -37003,15 +37010,24 @@
     const id = `${t.id}:${ex.id}`;
     let fields;
     if (ex.kind === "lift") {
+      // one row per set, so the reps (and kg) can differ set to set -- 12, 10, 8 -- the same
+      // table the planned-day editor uses. A new set starts as a copy of the last one.
       const sets = ex.sets && ex.sets.length ? ex.sets : [{ reps: null, weightKg: null }];
-      const first = sets[0];
-      fields = `<span class="tpl-ex-fields">
-        <label class="tpl-fld"><input type="number" min="1" max="20" inputmode="numeric" class="ex-set-input" data-tpl-sets="${id}" value="${sets.length}" aria-label="Sets for ${esc(ex.name)}"> sets</label>
-        <span aria-hidden="true">×</span>
-        <label class="tpl-fld"><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-tpl-reps="${id}" value="${first.reps ?? ""}" aria-label="Reps for ${esc(ex.name)}"> reps</label>
-        <span aria-hidden="true">×</span>
-        <label class="tpl-fld"><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-tpl-kg="${id}" value="${first.weightKg ?? ""}" aria-label="Weight in kg for ${esc(ex.name)}"> kg</label>
-      </span>`;
+      return `<div class="tpl-ex-row tpl-ex-row--lift">
+        <span class="tpl-ex-name">${esc(ex.name)}</span>
+        <button type="button" class="ex-del" data-tpl-ex-del="${t.id}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
+        <div class="tpl-sets">
+          <table class="ex-table"><tr><th>Set</th><th>Reps</th><th>kg</th><th></th></tr>
+            ${sets.map((st, i) => `<tr>
+              <td>${i + 1}</td>
+              <td><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-tpl-set-field="${id}:${i}:reps" value="${st.reps ?? ""}" aria-label="Reps, set ${i + 1} of ${esc(ex.name)}"></td>
+              <td><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-tpl-set-field="${id}:${i}:weightKg" value="${st.weightKg ?? ""}" aria-label="Weight in kg, set ${i + 1} of ${esc(ex.name)}"></td>
+              <td>${sets.length > 1 ? `<button type="button" class="ex-set-del" data-tpl-set-del="${id}:${i}" aria-label="Remove set ${i + 1}">×</button>` : ""}</td>
+            </tr>`).join("")}
+          </table>
+          <button type="button" class="ex-add-set tpl-add-set" data-tpl-add-set="${id}">+ Add set</button>
+        </div>
+      </div>`;
     } else {
       const grades = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"];
       fields = `<span class="tpl-ex-fields">
@@ -43947,23 +43963,38 @@
     saveFitTemplates();
     return ex;
   }
-  // one template exercise's starting numbers. A lift keeps its sets as an array (so a
-  // plan made from it can still edit set by set): "Sets" resizes it (new sets copy the
-  // last one), "Reps"/"kg" fill every set. A climb takes a grade and a number of tries.
-  function setTemplateExerciseDefault(templateId, exerciseId, field, raw) {
-    const t = templateById(templateId), ex = t && t.exercises.find(e => e.id === exerciseId);
-    if (!ex) return;
-    const num = raw === "" || raw == null ? null : +raw;
-    if (ex.kind === "lift") {
-      if (!Array.isArray(ex.sets) || !ex.sets.length) ex.sets = [{ reps: null, weightKg: null }];
-      if (field === "sets") {
-        const n = Math.max(1, Math.min(20, Math.round(num || 1)));
-        while (ex.sets.length < n) ex.sets.push({ ...ex.sets[ex.sets.length - 1] });
-        ex.sets.length = n;
-      } else if (field === "reps") ex.sets.forEach(s => { s.reps = num; });
-      else if (field === "kg") ex.sets.forEach(s => { s.weightKg = num; });
-    } else if (field === "grade") ex.grade = raw || "";
-    else if (field === "attempts") ex.attempts = Math.max(1, Math.round(num || 1));
+  // one template exercise's starting numbers. A lift keeps one {reps, weightKg} per set
+  // (so the reps can differ set to set); a climb takes a grade and a number of tries.
+  function templateExerciseOf(templateId, exerciseId) {
+    const t = templateById(templateId);
+    return t ? t.exercises.find(e => e.id === exerciseId) || null : null;
+  }
+  function setTemplateSetField(templateId, exerciseId, setIndex, field, raw) {
+    const ex = templateExerciseOf(templateId, exerciseId);
+    if (!ex || ex.kind !== "lift" || !ex.sets || !ex.sets[setIndex]) return;
+    ex.sets[setIndex][field] = raw === "" || raw == null ? null : +raw;
+    saveFitTemplates();
+  }
+  function addTemplateSet(templateId, exerciseId) {
+    const ex = templateExerciseOf(templateId, exerciseId);
+    if (!ex || ex.kind !== "lift") return;
+    if (!Array.isArray(ex.sets) || !ex.sets.length) ex.sets = [{ reps: null, weightKg: null }];
+    if (ex.sets.length >= 20) return;
+    const last = ex.sets[ex.sets.length - 1];
+    ex.sets.push({ reps: last.reps, weightKg: last.weightKg });
+    saveFitTemplates();
+  }
+  function removeTemplateSet(templateId, exerciseId, setIndex) {
+    const ex = templateExerciseOf(templateId, exerciseId);
+    if (!ex || ex.kind !== "lift" || !ex.sets || ex.sets.length < 2) return;   // an exercise keeps at least one set
+    ex.sets.splice(setIndex, 1);
+    saveFitTemplates();
+  }
+  function setTemplateClimbField(templateId, exerciseId, field, raw) {
+    const ex = templateExerciseOf(templateId, exerciseId);
+    if (!ex || ex.kind !== "climb") return;
+    if (field === "grade") ex.grade = raw || "";
+    else if (field === "attempts") ex.attempts = Math.max(1, Math.round(+raw || 1));
     saveFitTemplates();
   }
   function removeTemplateExercise(templateId, exerciseId) {
@@ -55680,6 +55711,10 @@
       if (input && input.value.trim()) { addTemplateExercise(id, input.value); renderFitness(); }
       return;
     }
+    const addSet = e.target.closest("[data-tpl-add-set]");
+    if (addSet) { const [tid, exId] = addSet.dataset.tplAddSet.split(":"); addTemplateSet(tid, exId); renderFitness(); return; }
+    const setDel = e.target.closest("[data-tpl-set-del]");
+    if (setDel) { const [tid, exId, i] = setDel.dataset.tplSetDel.split(":"); removeTemplateSet(tid, exId, +i); renderFitness(); return; }
     const exDel = e.target.closest("[data-tpl-ex-del]");
     if (exDel) {
       const [id, exId] = exDel.dataset.tplExDel.split(":");
@@ -55690,14 +55725,16 @@
   // saved as she types in a template exercise's Sets / Reps / kg (no re-render, so Tab
   // walks straight across the row)
   document.getElementById("fitHomeTemplates")?.addEventListener("change", e => {
-    const map = [["tplSets", "sets"], ["tplReps", "reps"], ["tplKg", "kg"], ["tplGrade", "grade"], ["tplAttempts", "attempts"]];
-    for (const [key, field] of map) {
-      const el = e.target.closest(`[data-${key.replace(/[A-Z]/g, c => "-" + c.toLowerCase())}]`);
-      if (!el) continue;
-      const [tid, exId] = el.dataset[key].split(":");
-      setTemplateExerciseDefault(tid, exId, field, el.value);
+    const setFld = e.target.closest("[data-tpl-set-field]");
+    if (setFld) {
+      const [tid, exId, i, field] = setFld.dataset.tplSetField.split(":");
+      setTemplateSetField(tid, exId, +i, field, setFld.value);
       return;
     }
+    const grade = e.target.closest("[data-tpl-grade]");
+    if (grade) { const [tid, exId] = grade.dataset.tplGrade.split(":"); setTemplateClimbField(tid, exId, "grade", grade.value); return; }
+    const tries = e.target.closest("[data-tpl-attempts]");
+    if (tries) { const [tid, exId] = tries.dataset.tplAttempts.split(":"); setTemplateClimbField(tid, exId, "attempts", tries.value); }
   });
 
   document.getElementById("fitHomeUpcoming")?.addEventListener("click", e => {
