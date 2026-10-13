@@ -30367,6 +30367,25 @@
     EVENTS.forEach(e => { if (e.track === "family") { e.track = "personal"; changed = true; } });
     if (changed) saveEvents(EVENTS);
   })();
+  // 2026-10-13 Menu calendar: the calendar starts EMPTY (her call) -- every event and
+  // recurring event made before the menu existed is set aside whole, once, in a backup
+  // key, and Settings > Event types can put them back. Fitness logs, birthdays, people,
+  // routines and to-dos are separate stores and are not touched. Typed events (the new
+  // kind) always stay, so running this again can never remove a new event.
+  const MENUCAL_BACKUP_KEY = "book33-events-before-menucal", MENUCAL_RECUR_BACKUP_KEY = "book33-recurring-events-before-menucal";
+  (function archiveFreeformCalendarOnce() {
+    const FLAG = "book33-menucal-archived";
+    try { if (localStorage.getItem(FLAG)) return; } catch (e) { return; }
+    const old = EVENTS.filter(e => !e.typeId), oldRecur = RECURRING_EVENTS.slice();
+    try {
+      if (old.length) localStorage.setItem(MENUCAL_BACKUP_KEY, JSON.stringify(old));
+      if (oldRecur.length) localStorage.setItem(MENUCAL_RECUR_BACKUP_KEY, JSON.stringify(oldRecur));
+    } catch (e) { return; }   // couldn't write the backup -- do NOT clear anything, try again next load
+    if (old.length) { EVENTS = EVENTS.filter(e => e.typeId); saveEvents(EVENTS); }
+    if (oldRecur.length) { RECURRING_EVENTS = []; saveRecurringEvents(); }
+    try { localStorage.setItem(FLAG, "1"); } catch (e) {}
+    console.log("menu calendar: archived " + old.length + " events + " + oldRecur.length + " recurring events");
+  })();
   let DONE = loadDone();
   let DONE_AT = loadDoneAt();
   let OUTCOMES = loadOutcomes();
