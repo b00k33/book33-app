@@ -38740,8 +38740,13 @@
   // "part of life" swatch legend, compact mode only (§1: bars carry no text/dot of
   // their own at that size, so the legend is what maps colour → track instead) —
   // one row per life category, same --{id}-seed token catDotColor() itself reads.
-  function mdLegendHtml() {
-    return lifeCats().map(c => `<span class="md-legend-item"><span class="md-legend-dot" style="background:var(--${c.id}-seed)" aria-hidden="true"></span>${esc(c.name)}</span>`).join("");
+  // 2026-10-13 (menu calendar): the colours on the grid are the type GROUPS now (Fitness,
+  // Work, Home, ...), so the legend names the groups that are actually on screen instead
+  // of the old life categories. Empty when nothing typed is showing.
+  function mdLegendHtml(dayList) {
+    const seen = new Set();
+    (dayList || []).forEach(({ items }) => items.forEach(e => { const t = typeOf(e); if (t) seen.add(t.group); }));
+    return TYPE_GROUPS.filter(g => seen.has(g.id)).map(g => `<span class="md-legend-item"><span class="md-legend-dot" style="background:${esc(g.accent)}" aria-hidden="true"></span>${esc(g.name)}</span>`).join("");
   }
 
   /* ============================================================
@@ -39311,8 +39316,9 @@
     // condition anew." Visible effect worth flagging: the legend now disappears
     // on desktop 5/7-day (labelable there for the first time), where it used to
     // show — see the fix report for how it reads under a labelled grid.
-    legendHost.hidden = labelable;
-    legendHost.innerHTML = labelable ? "" : mdLegendHtml();
+    const legendHtml = labelable ? "" : mdLegendHtml(dayList);
+    legendHost.hidden = labelable || !legendHtml;
+    legendHost.innerHTML = legendHtml;
     // 2026-08-15 (§4 all-day row build): one call per visible window, same pattern as
     // the legend just above — see its own comment for the full brief.
     renderMdAlldayRow(dayList);
