@@ -54,6 +54,13 @@ effort defaults to.
   - *Templates + planned sessions* (`FIT_TEMPLATES`, `PLANNED_FIT`) — her combined
     pick: a named reusable exercise list (a template) assigned to a future date, with
     that date's own target sets/reps/grade set and editable from there. `PLANNED_FIT`
+    **Preset numbers (2026-10-13, "how do i preset reps and sets?"):** each template
+    exercise row carries editable Sets × Reps × kg (lifts) or grade + tries (climbs),
+    saved as she types via `setTemplateExerciseDefault` (no re-render, so Tab walks across);
+    Sets resizes `ex.sets`, Reps/kg fill every set. They flow into a planned day
+    (`planSessionFromTemplate`) and, new, into a logged-but-not-started session: the Gym
+    screen's "Start from a template" chips (`data-wo-sess-tpl` → `copyPlanIntoSession`).
+    `PLANNED_FIT`
     is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
     streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
     "actually happened"; a planned-but-not-done session never touches that math

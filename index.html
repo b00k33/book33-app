@@ -13801,6 +13801,23 @@
   .tpl-ex-row:last-child { border-bottom: none; }
   .tpl-ex-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
   .tpl-ex-detail { font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .tpl-ex-row { flex-wrap: wrap; }
+  .tpl-ex-name { flex: 1 1 120px; min-width: 0; }
+  .tpl-ex-fields { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  .tpl-fld { display: inline-flex; align-items: center; gap: 4px; }
+  .tpl-ex-fields .tpl-grade { width: auto; min-height: 32px; font-size: 12.5px; }
+  @media (pointer: coarse), (max-width: 640px) {
+    .tpl-ex-row .ex-del, .tpl-card .tpl-del { min-width: 44px; min-height: 44px; font-size: 16px; }
+    .tpl-card .tpl-del { top: 2px; right: 2px; }
+    /* name and its × share the top line; the Sets/Reps/kg row sits under them */
+    .tpl-ex-row .tpl-ex-name { order: 1; }
+    .tpl-ex-row .ex-del { order: 2; }
+    .tpl-ex-row .tpl-ex-fields { order: 3; flex: 1 0 100%; }
+    .tpl-head { padding-right: 44px; min-height: 44px; }
+    #fitHomeTemplates .ex-name-input, #fitHomeTemplates .wp-select, #fitHomeTemplates .add-ex-btn { min-height: 44px; }
+    .tpl-ex-fields .ex-set-input, .tpl-ex-fields .tpl-grade { min-height: 44px; }
+    .tpl-ex-fields .ex-set-input { width: 64px; }
+  }
 
   .pr-list { display: flex; flex-direction: column; }
   .pr-row {
@@ -35206,11 +35223,16 @@
     // once running, so this only ever writes the idle label -- never overwrites a
     // live "M:SS" with a blank frame between a render and the next tick.
     if (!started) timerEl.textContent = isToday ? "Not started" : "Logging";
+    // a session with nothing in it yet offers her templates too (same chips Plan mode
+    // shows) -- the preset sets/reps/kg come along
+    const sessTpls = !started && !(sess.exercises && sess.exercises.length) ? FIT_TEMPLATES.filter(t => t.type === sess.type) : [];
     document.getElementById("tlWorkoutBody").innerHTML = `
       <div class="tl-fit-week">${fitWeekDotsHtml(date)}</div>
       ${started
         ? (tlWorkoutRestUntil > Date.now() ? tlWorkoutRestBannerHtml() : `<button type="button" class="tl-fit-rest-start-btn" data-wo-rest-start>⏱ Start rest</button>`)
         : isToday ? `<button type="button" class="tl-fit-start-btn" data-wo-begin>▶ Begin workout</button>` : ""}
+      ${sessTpls.length ? `<div class="tl-workout-tpls"><div class="tl-fit-plan-head">Start from a template</div>
+        <div class="tl-fit-plan-list">${sessTpls.map(t => `<button type="button" class="tl-fit-rest-chip" data-wo-sess-tpl="${esc(t.id)}">${esc(t.name)}</button>`).join("")}</div></div>` : ""}
       ${exercisesHtml(date, sess)}
     `;
   }
@@ -35231,6 +35253,12 @@
     if (e.target.closest("[data-wo-begin]")) { beginTlWorkout(); return; }
     const tplBtn = e.target.closest("[data-wo-tpl]");
     if (tplBtn) { planSessionFromTemplate(parseKey(tlWorkoutDateKey), tplBtn.dataset.woTpl); renderTlWorkoutBody(); return; }
+    const sessTplBtn = e.target.closest("[data-wo-sess-tpl]");
+    if (sessTplBtn) {
+      const tpl = templateById(sessTplBtn.dataset.woSessTpl), sess = tlWorkoutSession();
+      if (tpl && sess) { copyPlanIntoSession(parseKey(tlWorkoutDateKey), sess, { exercises: tpl.exercises }); renderTlWorkoutBody(); }
+      return;
+    }
     if (e.target.closest("[data-wo-rest-start]")) { startTlWorkoutRest(90); return; }
     if (e.target.closest("[data-wo-rest-add30]")) { tlWorkoutRestUntil += 30000; tickTlWorkoutRest(); return; }
     if (e.target.closest("[data-wo-rest-skip]")) {
@@ -36967,13 +36995,33 @@
   }
 
   // ---- B: reusable templates (library half) ----
+  // 2026-10-13 (her question "how do i preset reps and sets?"): the numbers a template
+  // exercise starts with are editable right on its row -- Sets × Reps × kg for a lift,
+  // grade + attempts for a climb. They are the template's defaults: planSessionFromTemplate
+  // and the Gym screen's "Start from a template" copy them into the day.
   function templateExerciseRowHtml(t, ex) {
-    const detail = ex.kind === "lift"
-      ? `${(ex.sets[0] || {}).reps || "–"} reps × ${(ex.sets[0] || {}).weightKg || "–"}kg default`
-      : esc(ex.grade || "grade tbd");
+    const id = `${t.id}:${ex.id}`;
+    let fields;
+    if (ex.kind === "lift") {
+      const sets = ex.sets && ex.sets.length ? ex.sets : [{ reps: null, weightKg: null }];
+      const first = sets[0];
+      fields = `<span class="tpl-ex-fields">
+        <label class="tpl-fld"><input type="number" min="1" max="20" inputmode="numeric" class="ex-set-input" data-tpl-sets="${id}" value="${sets.length}" aria-label="Sets for ${esc(ex.name)}"> sets</label>
+        <span aria-hidden="true">×</span>
+        <label class="tpl-fld"><input type="number" min="0" inputmode="numeric" class="ex-set-input" data-tpl-reps="${id}" value="${first.reps ?? ""}" aria-label="Reps for ${esc(ex.name)}"> reps</label>
+        <span aria-hidden="true">×</span>
+        <label class="tpl-fld"><input type="number" min="0" step="0.5" inputmode="decimal" class="ex-set-input" data-tpl-kg="${id}" value="${first.weightKg ?? ""}" aria-label="Weight in kg for ${esc(ex.name)}"> kg</label>
+      </span>`;
+    } else {
+      const grades = ["V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10"];
+      fields = `<span class="tpl-ex-fields">
+        <label class="tpl-fld"><select class="wp-select tpl-grade" data-tpl-grade="${id}" aria-label="Grade for ${esc(ex.name)}"><option value="">grade tbd</option>${grades.map(g => `<option value="${g}"${ex.grade === g ? " selected" : ""}>${g}</option>`).join("")}</select></label>
+        <label class="tpl-fld"><input type="number" min="1" inputmode="numeric" class="ex-set-input" data-tpl-attempts="${id}" value="${ex.attempts || 1}" aria-label="Attempts for ${esc(ex.name)}"> tries</label>
+      </span>`;
+    }
     return `<div class="tpl-ex-row">
       <span class="tpl-ex-name">${esc(ex.name)}</span>
-      <span class="tpl-ex-detail">${detail}</span>
+      ${fields}
       <button type="button" class="ex-del" data-tpl-ex-del="${t.id}:${ex.id}" aria-label="Remove ${esc(ex.name)}">×</button>
     </div>`;
   }
@@ -36996,8 +37044,8 @@
     </div>`;
   }
   function newTemplateFormHtml() {
-    return `<div class="ex-add-row" style="margin-top:10px">
-      <input type="text" class="ex-name-input" placeholder="Template name, e.g. Push Day" id="tplNewName">
+    return `<div class="ex-add-row" style="margin-top:10px;flex-wrap:wrap">
+      <input type="text" class="ex-name-input" placeholder="Template name, e.g. Push Day" id="tplNewName" style="flex:1 1 160px;min-width:0">
       <select class="wp-select" id="tplNewType" style="flex:none;width:auto">
         ${FIT_PLANNABLE_TYPES.map(ty => `<option value="${ty}">${ty}</option>`).join("")}
       </select>
@@ -43898,6 +43946,25 @@
     t.exercises.push(ex);
     saveFitTemplates();
     return ex;
+  }
+  // one template exercise's starting numbers. A lift keeps its sets as an array (so a
+  // plan made from it can still edit set by set): "Sets" resizes it (new sets copy the
+  // last one), "Reps"/"kg" fill every set. A climb takes a grade and a number of tries.
+  function setTemplateExerciseDefault(templateId, exerciseId, field, raw) {
+    const t = templateById(templateId), ex = t && t.exercises.find(e => e.id === exerciseId);
+    if (!ex) return;
+    const num = raw === "" || raw == null ? null : +raw;
+    if (ex.kind === "lift") {
+      if (!Array.isArray(ex.sets) || !ex.sets.length) ex.sets = [{ reps: null, weightKg: null }];
+      if (field === "sets") {
+        const n = Math.max(1, Math.min(20, Math.round(num || 1)));
+        while (ex.sets.length < n) ex.sets.push({ ...ex.sets[ex.sets.length - 1] });
+        ex.sets.length = n;
+      } else if (field === "reps") ex.sets.forEach(s => { s.reps = num; });
+      else if (field === "kg") ex.sets.forEach(s => { s.weightKg = num; });
+    } else if (field === "grade") ex.grade = raw || "";
+    else if (field === "attempts") ex.attempts = Math.max(1, Math.round(num || 1));
+    saveFitTemplates();
   }
   function removeTemplateExercise(templateId, exerciseId) {
     const t = templateById(templateId);
@@ -55617,6 +55684,19 @@
     if (exDel) {
       const [id, exId] = exDel.dataset.tplExDel.split(":");
       removeTemplateExercise(id, exId); renderFitness(); return;
+    }
+  });
+
+  // saved as she types in a template exercise's Sets / Reps / kg (no re-render, so Tab
+  // walks straight across the row)
+  document.getElementById("fitHomeTemplates")?.addEventListener("change", e => {
+    const map = [["tplSets", "sets"], ["tplReps", "reps"], ["tplKg", "kg"], ["tplGrade", "grade"], ["tplAttempts", "attempts"]];
+    for (const [key, field] of map) {
+      const el = e.target.closest(`[data-${key.replace(/[A-Z]/g, c => "-" + c.toLowerCase())}]`);
+      if (!el) continue;
+      const [tid, exId] = el.dataset[key].split(":");
+      setTemplateExerciseDefault(tid, exId, field, el.value);
+      return;
     }
   });
 
