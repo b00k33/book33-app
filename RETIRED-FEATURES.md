@@ -473,3 +473,25 @@ the one row the Mode group head also draws (factored out of
 (`toggleModeChip`), `activeMode()` stops being Home, the card goes, the
 Mode's own card is what she lands on. The `[data-sc-freetodo-done]` click
 branch stays in the JS, unreferenced.
+
+## 17. Typed calendar events — retired 2026-10-13
+
+Her words: "i only want it to be a preselect calendar where i dont manually type the
+event, i select the event e.g. gym, work etc." The calendar is a menu now (see CLAUDE.md
+"C22 is a menu (preselect) calendar"). Retired, on purpose:
+
+- **Typing an event's title on the calendar.** The New Event form no longer opens from any
+  "add" control (slot taps, +, FAB, all-day, month "+"); the quick bar's draft has no title
+  box for events; "Edit" on a typed event is "Change type". The old form stays alive only
+  for legacy untyped events, routines and to-do → event.
+- **Presets** (saved typed events) — left the Planning door; its page and CATEGORIES row
+  stay so `categoryOf("presets")` still resolves. Nothing to preset when nothing is typed.
+- **The old calendar's contents.** Archived whole on first load of the menu build
+  (`book33-events-before-menucal`, `book33-recurring-events-before-menucal`) — the calendar
+  starts empty by her choice; "Put the old events back" lives in Event menu → Types.
+
+**Kept, do not "finish the job":** the legacy event form code, `SAVED_EVENTS`, the
+`presetsPage` route, to-do scheduling, the Us page "Allocate", Google Calendar import —
+none were part of this retirement. Don't strip `title` from events: typed events keep the
+type's label in `title` on purpose, so every renderer/title-keyed feature (workout card,
+meal slots, Done logging) keeps working.
