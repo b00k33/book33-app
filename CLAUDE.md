@@ -79,6 +79,16 @@ effort defaults to.
     "Lower back":"1"}, note}` — deliberately NOT `sess.notes`, because `biomechTipFor()`
     recycles long session notes into the day's tip. Part of `exercisesHtml`, so Workout Mode
     and the Fitness page logger both show it; recent-sessions list shows "Pain: …".
+    **Rest between sets (2026-10-13, "add rest timer between sets"):** each lift has `ex.restSec`
+    (Off/30s/45s/60s/90s/2 min/3 min, default 90s; a Rest picker in the same modes row,
+    remembered by name as `rest` in `EX_MODE_PREFS`, copied template → plan → session). A
+    LOGGED set's number is its done button (`st.done`, `data-ex-set-done`; `cloneSet` omits
+    `done` so nothing is ever pre-ticked). In a LIVE Workout Mode session (Begin pressed, overlay
+    open — `maybeStartExRest`) ticking a set, or a Timed hold finishing its last side, starts
+    that exercise's rest on Workout Mode's existing banner (now m:ss, pinned with
+    `position: sticky; top: -16px` so it stays in view while she scrolls, buzz at the end, and
+    swapped for the "Start rest" button IN PLACE — never a body re-render, which would wipe a
+    number being typed). Outside a live session a tick is just a tick, no clock.
     `PLANNED_FIT`
     is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
     streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
