@@ -4164,6 +4164,9 @@
   .tl-fit-plan-head { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
   .tl-fit-plan-list { display: flex; flex-wrap: wrap; gap: 6px; }
   .tl-fit-plan-ex { font-size: 12px; font-weight: 600; color: var(--ink); background: var(--paper); border: 1px solid var(--note-line); border-radius: 999px; padding: 3px 9px; }
+  /* Opens from the popover OR the full Profile (both z-index 350, Profile later in the
+     DOM) -- one step above so Workout Mode is never painted underneath the Profile. */
+  #tlWorkoutOverlay { z-index: 360; }
   .tl-fit-start-btn {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     padding: 11px 16px; font: inherit; font-size: 13px; font-weight: 700;
@@ -31448,8 +31451,11 @@
     // session-level by her explicit prior pick ("stay session-level only, untouched"),
     // so this card (and the Workout Mode it opens) never offers an empty exercise list
     // for a type that was never meant to carry one.
+    // 2026-10-13 (her screenshot: an event titled "GYmn" -- typo -- showed the generic
+    // popover and an empty profile): the title match is word-START only (\bGym, no
+    // trailing \b), so "GYmn" / "Gyming" / "Gym session" all still find Gym.
     const fitType = (e.fitLink && exerciseKindFor(e.fitLink)) ? e.fitLink
-      : FITNESS_TYPES.find(t => exerciseKindFor(t) && new RegExp(`\\b${t}\\b`, "i").test(e.title || ""));
+      : FITNESS_TYPES.find(t => exerciseKindFor(t) && new RegExp(`\\b${t}`, "i").test(e.title || ""));
     if (!fitType) return "";
     const d = parseKey(e.date);
     const sessLogged = fitTypesOn(d).includes(fitType);
@@ -34927,6 +34933,7 @@
     tlWorkoutRestUntil = 0;
     tlWorkoutDateKey = null; tlWorkoutSessionId = null;
     refreshOpenTlDetail();   // the card underneath (week dots/plan line) picks up the new log
+    refreshOpenTlProfile();  // ...and the Profile's Plan stage, when Workout Mode was opened from there
     if (state.view === "day") renderDay();
   }
   function tickTlWorkoutTimer() {
@@ -35045,7 +35052,11 @@
     const timeLabel = e.start ? `${fmtTime(e.start)} – ${fmtTime(e.end || minToTime(detailEnd))}` : "All day";
     const timeRow = `<div class="tl-detail-row">${glyphHtml("🕐", "tl-detail-em")}<span>${timeLabel}</span></div>`;
     const stepsHtml = tlProfileStepsHtml(e);
-    if (!guideMatch) return `${timeRow}${stepsHtml || `<div class="tl-profile-empty">Nothing to check off for this one.</div>`}`;
+    // 2026-10-13: a Gym/F45/Bouldering event's Plan stage IS its workout -- the same
+    // card the popover shows (week dots, planned exercises, Start/Continue), so
+    // "Open full profile" no longer lands on an empty "Nothing to check off".
+    const fitCard = fitnessCardHtml(e);
+    if (!guideMatch) return `${timeRow}${fitCard}${stepsHtml || (fitCard ? "" : `<div class="tl-profile-empty">Nothing to check off for this one.</div>`)}`;
     const guideRef = guideMatch.id || ("eph:" + e.id);
     const whereRow = path.length ? `<div class="tl-detail-row tl-detail-row-where">${glyphHtml("📍", "tl-detail-em")}<span>${path.map(esc).join(" › ")}</span></div>` : "";
     const nudge = guideNudgeText(guideMatch);
@@ -35060,7 +35071,7 @@
           ? `<span class="tl-guide-remember-edit-wrap"><textarea rows="2" class="tl-guide-remember-input" data-guide-remember-input="${guideRef}" placeholder="Anything to keep in mind">${esc(guideMatch.remember || "")}</textarea><button type="button" class="tl-guide-remember-save" data-guide-remember-save="${guideRef}">Save</button></span>`
           : `<button type="button" class="tl-guide-remember-btn" data-guide-remember-open="${guideRef}">${guideMatch.remember ? esc(guideMatch.remember) : "+ Add something to remember"}</button>`}
       </div>`;
-    return `${timeRow}${whereRow}${stepsHtml}${openerHtml}${rememberHtml}`;
+    return `${timeRow}${fitCard}${whereRow}${stepsHtml}${openerHtml}${rememberHtml}`;
   }
   function tlProfileLiveHtml(e, guideMatch) {
     const isTodayEvent = e.date === keyOf(TODAY);
@@ -35177,6 +35188,13 @@
   // since this overlay has its own body element, not because the behaviour should
   // differ. Keep both in sync if the guide-log/remember logic ever changes.
   document.getElementById("tlProfileBody").addEventListener("click", e => {
+    const fitStartBtn = e.target.closest("[data-fit-start]");
+    if (fitStartBtn) {
+      e.stopPropagation();
+      const [fitType, dateKey] = fitStartBtn.dataset.fitStart.split(":");
+      openTlWorkout(fitType, dateKey);
+      return;
+    }
     const guideLogBtn = e.target.closest("[data-guide-log]");
     if (guideLogBtn) {
       e.stopPropagation();

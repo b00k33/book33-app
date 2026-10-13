@@ -151,6 +151,19 @@ effort defaults to.
     ticking clock, adding an exercise persists without starting the timer, and
     "Begin workout" starts the clock from 0:01 while keeping what was already
     added.
+    **Typo + Profile follow-up (2026-10-13, her question "how do i add exercises
+    to my gym calendar," sent with screenshots of an event typed "GYmn")**: the
+    title fallback matched `\bGym\b`, so the typo'd event got no workout card and
+    "Open full profile" landed on an empty Plan stage ("Nothing to check off for
+    this one"). Fixed two ways: the title match is now word-START only
+    (`\bGym`), so "GYmn"/"Gyming"/"Gym session" all find Gym; and the Event
+    Profile's Plan stage now shows the same `fitnessCardHtml(e)` card (its own
+    `data-fit-start` handler on `#tlProfileBody`), in place of the empty-state
+    line, for any Gym/F45/Bouldering event. `#tlWorkoutOverlay` is z-index 360
+    (the Profile is also 350 and later in the DOM, so Workout Mode would otherwise
+    paint underneath it), and `closeTlWorkout()` also calls `refreshOpenTlProfile()`.
+    Verified live at 800px: "GYmn" popover shows the card, Profile Plan tab shows
+    it, Start opens Workout Mode on top in "Not started", an added exercise persists.
 - **Marital responsibilities** — still nothing purpose-built. The existing "Us" page
   (Mine/Partner/Both task-splitting) is now pinned in nav labelled "Marital" (her pick:
   "reuse Us as the starting point") — tapping it still shows Us's own content/copy
