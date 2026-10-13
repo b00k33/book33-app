@@ -5813,6 +5813,9 @@
   .tps-when { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
   .tps-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
   .tps-chk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .tl-detail-patients { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .tl-detail-pat-h { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .tl-detail-pat { font-size: 13px; color: var(--ink); }
   .tps-runs { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--note-line); }
   .tps-runs-h { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
   .tps-run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -34135,7 +34138,9 @@
     const kind = eventKind(e);
     const done = isDone(e.id);
     const path = locOf(e);
-    const hasSteps = kind === "routine" && e.steps && e.steps.length;
+    // a typed (menu) event's checklist (Cleaning, Laundry, Date night...) shows the same
+    // tickable steps a routine's does
+    const hasSteps = (kind === "routine" || (e.typeId && !e.generated)) && e.steps && e.steps.length;
     const hasRtnExtras = kind === "routine" && !!e.fromRoutine;
     // 2026-08-15 (§6 mobile redesign, Pass B): moved up from further below (was
     // computed just above scopeHtml) so the new Repeats/Next-after-this/Streak
@@ -34803,7 +34808,7 @@
       ${remHtml}
       ${starsHtml}
       ${actionPairHtml}
-      ${fitLinkHtml}${plainNoteHtml}
+      ${fitLinkHtml}${typedSmartHtml(e)}${plainNoteHtml}
       ${guideRowHtml}
       ${openProfileBtnHtml}
       ${stepsHtml}
@@ -58294,6 +58299,33 @@
       saveTypeStore(); etAddGroup = null; renderEventTypesPage();
     });
   })();
+  // The smart part of a typed event's popover: who a Together event is with, and today's
+  // patients on a Clinic day (the same wmbPatientList() the Work Day Board reads, so the
+  // two never disagree). Workouts need nothing here -- the Plan tab's workout card and
+  // the "ticking this off logs a session" line already key off the title / fitLink.
+  function typedSmartHtml(e) {
+    const t = typeOf(e);
+    if (!t || e.generated) return "";
+    let h = "";
+    if (t.smart === "together") {
+      const w = whoOf(e), pn = partnerName();
+      const lbl = w === "both" ? `With ${pn}` : w === "partner" ? `For ${pn}` : "Just me";
+      h += `<div class="tl-detail-row"><span class="tl-detail-em" aria-hidden="true">${whoEm(w)}</span><span class="tl-detail-note-text">${esc(lbl)}</span></div>`;
+    }
+    if (t.smart === "clinic" && e.date === keyOf(TODAY)) {
+      try {
+        const pats = wmbPatientList().items.slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+        h += `<div class="tl-detail-row tl-detail-patients"><div class="tl-detail-pat-h">Today's patients · ${pats.length}</div>${pats.slice(0, 6).map(p =>
+          `<div class="tl-detail-pat">${esc(fmtTime(p.start))} · ${esc(p.name || "Patient")}</div>`).join("")}
+          <button type="button" class="tl-walk-start-btn" data-tl-open-board>Work day board →</button></div>`;
+      } catch (err) { /* no patient list yet -- show nothing rather than an error */ }
+    }
+    return h;
+  }
+  document.getElementById("tlDetailSheet").addEventListener("click", e => {
+    if (!e.target.closest("[data-tl-open-board]")) return;
+    closeTlDetail(); state.view = "workBoard"; render();
+  });
   // ---- "Runs itself" (2026-10-13): what the calendar notices for her ------------------
   // Three kinds, all computed from what is already on the calendar (nothing new stored):
   //  did  -- a finished menu item nobody ticked: Done / Skipped, one tap
