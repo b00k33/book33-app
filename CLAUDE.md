@@ -258,7 +258,11 @@ old freeform calendar (see Data below), so flag that before any push.
 - **My week** (Planning → Event menu → My week): the usual-week pattern. Each row is an
   ordinary weekly `ROUTINE_TASKS` entry flagged `fromPattern` (+`typeId`, `startDate` =
   the day it was added) — no second occurrence engine; ticking logs fitness, group colour
-  comes free through `typeOf`'s `rtTaskId` branch.
+  comes free through `typeOf`'s `rtTaskId` branch. **Rest days (her call 2026-10-13,
+  "Wednesday and Saturday are rest days"):** a Fitness-group row can never take Wed/Sat
+  (`FIT_REST_DOWS`, `patternRestDay`) — those day chips show dimmed/dashed and don't toggle,
+  new rows start on the next non-rest day, and any older row is pruned on load. Other groups
+  (Clinic etc.) are unaffected; a one-off Fitness event on a rest day is still allowed.
 - **Runs itself** (`menuNudges()`): shown at the foot of the picker + a dot on the + button
   (never above the calendar — R8): *did it happen?* (finished, unticked; Done/Skipped via
   `setOutcomeStatus`), *clash* (two menu items overlap in the next 3 days; one-tap

@@ -5857,6 +5857,8 @@
     color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
   .et-day.on { background: var(--et-accent, var(--gold)); border-color: var(--et-accent, var(--gold)); color: var(--paper); }
+  .et-day.is-rest { background: none; border-style: dashed; color: var(--ink-faint); opacity: .55; cursor: default; }
+  .et-restnote { font-size: 11px; color: var(--ink-faint); }
   .et-time { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
   .et-time input, .et-len-sel, .et-add-name {
     min-height: 44px; padding: 0 8px; border: 1.5px solid var(--note-line); border-radius: var(--radius-sm);
@@ -43786,6 +43788,9 @@
   // Monday-start week of 2026, when this pattern was specified) rather than resetting
   // every calendar year, so "repeat this pattern ongoingly" holds across year boundaries.
   const FITNESS_GOAL = { daysPerWeek: 5, deloadCycleWeeks: 18, deloadWeeksInCycle: [5, 9, 14, 18] };
+  // Wed (2) and Sat (5), Monday=0 -- the weekly rest days. Her call 2026-10-13: "Wednesday
+  // and Saturday are rest days", so My week never offers them to a Fitness type.
+  const FIT_REST_DOWS = [2, 5];
   const FIT_CYCLE_ANCHOR = startOfWeek(new Date(2026, 0, 1));
   function fitCycleWeekNumber(date) {
     return Math.floor(dayDiff(date, FIT_CYCLE_ANCHOR) / 7) + 1;
@@ -43797,7 +43802,7 @@
   // the recommended (not logged) status for a date — null on every ordinary day
   function fitGoalFor(date) {
     const dow = dowIndex(date);
-    if (dow === 2 || dow === 5) return "rest";   // Wed & Sat — weekly rest days, every week
+    if (FIT_REST_DOWS.includes(dow)) return "rest";   // Wed & Sat — weekly rest days, every week
     if (!isDeloadWeek(date)) return null;
     if (dow === 6) return "restExtra";
     if (dow === 0) return "light";
@@ -58139,6 +58144,8 @@
     return byGroup[t.group] || "09:00";
   }
   const patternRows = () => ROUTINE_TASKS.filter(t => t.fromPattern);
+  // a Fitness type never lands on a rest day (Wed/Sat)
+  const patternRestDay = (r, dow) => ((typeById(r.typeId) || {}).group === "g-fitness") && FIT_REST_DOWS.includes(dow);
   function patternLenMin(r) {
     const s = toMin(r.start), e = toMin(r.end);
     return s !== null && e !== null && e > s ? e - s : ((typeById(r.typeId) || {}).min || 60);
@@ -58147,8 +58154,11 @@
     const t = typeById(typeId);
     if (!t) return null;
     const start = patternStartFor(t);
+    // starts on today's weekday -- or the next day that isn't a rest day for a Fitness type
+    let dow = dowIndex(TODAY);
+    if (t.group === "g-fitness") for (let i = 0; i < 7 && FIT_REST_DOWS.includes(dow); i++) dow = (dow + 1) % 7;
     const row = {
-      id: uid(), note: "", freq: "weekly", weekdays: [dowIndex(TODAY)], start, end: addMinutesToTimeStr(start, t.min),
+      id: uid(), note: "", freq: "weekly", weekdays: [dow], start, end: addMinutesToTimeStr(start, t.min),
       fromPattern: true, startDate: keyOf(TODAY), ...typedEventFields(t),
     };
     const w = who || t.who;
@@ -58172,11 +58182,14 @@
     }).join("")}</div>`;
     const list = rows.length ? rows.map(r => {
       const g = typeGroupOf(typeById(r.typeId));
-      const days = ET_DAYS.map((d, i) => `<button type="button" class="et-day${(r.weekdays || []).includes(i) ? " on" : ""}" data-et-day="${esc(r.id)}:${i}" aria-pressed="${(r.weekdays || []).includes(i)}" aria-label="${esc(r.title)} on ${WD_FULL[i]}">${d}</button>`).join("");
+      const days = ET_DAYS.map((d, i) => patternRestDay(r, i)
+        ? `<button type="button" class="et-day is-rest" data-et-day="${esc(r.id)}:${i}" aria-pressed="false" aria-disabled="true" aria-label="${WD_FULL[i]} is a rest day">${d}</button>`
+        : `<button type="button" class="et-day${(r.weekdays || []).includes(i) ? " on" : ""}" data-et-day="${esc(r.id)}:${i}" aria-pressed="${(r.weekdays || []).includes(i)}" aria-label="${esc(r.title)} on ${WD_FULL[i]}">${d}</button>`).join("");
+      const restNote = g && g.id === "g-fitness" ? `<div class="et-restnote">Wednesday and Saturday are rest days</div>` : "";
       return `<div class="et-row" style="--et-accent:${g ? esc(g.accent) : "var(--gold)"}">
         <div class="et-row-head">${g ? `<span class="et-ic" aria-hidden="true">${modeIconHtml(g, 18)}</span>` : ""}<span class="et-name">${esc(r.title)}</span><span class="et-len">${typeLenLabel(patternLenMin(r))}</span>
           <button type="button" class="et-x" data-et-del="${esc(r.id)}" aria-label="Remove ${esc(r.title)} from my week">×</button></div>
-        <div class="et-days">${days}</div>
+        <div class="et-days">${days}</div>${restNote}
         <label class="et-time">Starts <input type="time" value="${esc(r.start || "")}" data-et-start="${esc(r.id)}"><span class="et-end">ends ${r.end ? fmtTime(r.end) : ""}</span></label>
       </div>`;
     }).join("") : `<div class="et-empty">Nothing in your week yet. Tap Add to build it from the menu.</div>`;
@@ -58237,6 +58250,14 @@
   (function wireEventTypesPage() {
     const page = document.getElementById("eventTypesPage");
     if (!page) return;
+    // a Fitness row made before rest days applied: drop Wed/Sat from it (idempotent)
+    let pruned = false;
+    patternRows().forEach(r => {
+      if (!Array.isArray(r.weekdays)) return;
+      const keep = r.weekdays.filter(d => !patternRestDay(r, d));
+      if (keep.length !== r.weekdays.length) { r.weekdays = keep; pruned = true; }
+    });
+    if (pruned) saveRoutines();
     page.addEventListener("click", e => {
       const tab = e.target.closest("[data-et-tab]");
       if (tab) { etTab = tab.dataset.etTab; etAddGroup = null; renderEventTypesPage(); return; }
@@ -58255,7 +58276,7 @@
       const dayBtn = e.target.closest("[data-et-day]");
       if (dayBtn) {
         const [id, di] = dayBtn.dataset.etDay.split(":"), r = ROUTINE_TASKS.find(x => x.id === id), d = +di;
-        if (!r) return;
+        if (!r || patternRestDay(r, d)) return;
         const set = new Set(r.weekdays || []);
         if (set.has(d)) set.delete(d); else set.add(d);
         r.weekdays = [...set].sort((a, b) => a - b);
