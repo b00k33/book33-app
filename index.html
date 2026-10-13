@@ -5813,6 +5813,14 @@
   .tps-when { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
   .tps-field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 120px; min-width: 0; font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
   .tps-chk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .tps-runs { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--note-line); }
+  .tps-runs-h { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .06em; }
+  .tps-run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .tps-run-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 140px; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .tps-run-a { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tps-run-b { min-height: 44px; padding: 0 16px; border: 1.5px solid var(--note-line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .tps-run-b:hover, .tps-run-b:focus-visible { border-color: var(--gold); }
+  #dayFab[data-nudge]::after { content: ""; position: absolute; top: 6px; right: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--gold); border: 2px solid var(--paper); }
   .tps-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
   .tps-manage { border: 0; background: none; min-height: 44px; padding: 0 12px; color: var(--ink-faint); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
   /* ---- Event menu page (2026-10-13): "My week" + "Types". --et-accent is the GROUP's
@@ -47414,7 +47422,7 @@
       const r = ROUTINE_TASKS.find(x => x.id === e.rtTaskId);
       return r && r.typeId ? typeById(r.typeId) : null;
     }
-    if (e.id && String(e.id).indexOf("fitcal-") === 0) return typeByLabel(e.title);
+    if (e.id && /^fit(?:cal|plan)-/.test(String(e.id))) return typeByLabel(e.title);
     return null;
   }
   // colour-only twin of modeOf(): a typed item paints its GROUP; everything else keeps
@@ -48053,6 +48061,7 @@
     const now = new Date();
     renderNowCurrentCard(now);
     renderNowFacts(now);
+    updateMenuNudgeDot();
   }
   // Retired AGAIN 2026-09-01 evening (Linh, having lived with it a few hours:
   // "i dont like that the mobile has now next to do above calendar. remove.")
@@ -57955,8 +57964,9 @@
     tpState = {
       change, eventId: opts.eventId || null, onPick: opts.onPick || null, date, allDay: !!opts.allDay, end: opts.end || "",
       start: opts.start || (needsWhen ? defaultStartFor(date) : ""), needsWhen,
-      step: "groups", groupId: null, typeId: null,
+      step: "groups", groupId: null, typeId: null, nudges: [],
     };
+    if (!change && !opts.onPick) { try { tpState.nudges = menuNudges(); } catch (e) { tpState.nudges = []; } }
     armBackGuard();
     renderTypePicker();
     animateSheetOpen(document.getElementById("tpsOverlay"));
@@ -58008,6 +58018,7 @@
         <button type="button" class="tl-detail-close" data-tps-close aria-label="Close">×</button>
       </div>
       ${when}${body}
+      ${s.step === "groups" && !s.onPick && !s.change ? tpNudgesHtml() : ""}
       ${s.step === "groups" && !s.onPick ? `<div class="tps-foot"><button type="button" class="tps-manage" data-tps-manage="week">My usual week</button><button type="button" class="tps-manage" data-tps-manage="types">Manage event types</button></div>` : ""}`;
   }
   function tpFinish(who) {
@@ -58032,6 +58043,20 @@
     if (e.target === e.currentTarget || e.target.closest("[data-tps-close]")) { closeTypePicker(); return; }
     const mg = e.target.closest("[data-tps-manage]");
     if (mg) { closeTypePicker(); etTab = mg.dataset.tpsManage === "week" ? "week" : "types"; state.view = "eventTypes"; render(); return; }
+    const nb = e.target.closest("[data-tps-nudge]");
+    if (nb) {
+      const [i, j] = nb.dataset.tpsNudge.split(":").map(Number), a = (tpState.nudges[i] || { actions: [] }).actions[j];
+      if (!a) return;
+      if (a.pick) {   // "Add one": straight to that group's types, on the day/time the calendar suggested
+        Object.assign(tpState, { date: a.pick.date, start: a.pick.start, needsWhen: false, allDay: false, groupId: a.pick.group, step: "types" });
+        renderTypePicker();
+        return;
+      }
+      a.run();
+      render();
+      if (tpState) { tpState.nudges = menuNudges(); renderTypePicker(); }
+      return;
+    }
     const g = e.target.closest("[data-tps-group]");
     if (g) { tpState.groupId = g.dataset.tpsGroup; tpState.step = "types"; renderTypePicker(); return; }
     if (e.target.closest("[data-tps-back]")) { tpState.step = "groups"; tpState.groupId = null; renderTypePicker(); return; }
@@ -58269,6 +58294,111 @@
       saveTypeStore(); etAddGroup = null; renderEventTypesPage();
     });
   })();
+  // ---- "Runs itself" (2026-10-13): what the calendar notices for her ------------------
+  // Three kinds, all computed from what is already on the calendar (nothing new stored):
+  //  did  -- a finished menu item nobody ticked: Done / Skipped, one tap
+  //  clash -- two menu items overlapping in the next 3 days: one-tap move of the later one
+  //  missing -- fewer workout days planned than her weekly target, or nothing together
+  // They show at the foot of the type picker (where she plans) and as a dot on the + button.
+  // Never above the calendar (R8) and never a failure state: every row has a one-tap fix.
+  function menuItemsOn(d) {
+    return dayEventsRawFor(d).filter(e => !e.allDay && e.start && !isGhostItem(e) && typeOf(e) && !/^fit(?:cal|plan)-/.test(String(e.id)));
+  }
+  const menuItemOpen = e => !DONE[e.id] && !(OUTCOMES[e.id] && OUTCOMES[e.id].s);
+  function menuNudges() {
+    const out = [], now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    // did it happen? (today's finished items, then yesterday's), at most two
+    const did = [];
+    [addDays(TODAY, -1), TODAY].forEach(d => menuItemsOn(d).forEach(e => {
+      const g = (typeOf(e) || {}).group;
+      if (g === "g-work" || g === "g-meals") return;
+      const end = itemEndMin(e);
+      if (end === null || !menuItemOpen(e)) return;
+      if (keyOf(d) === keyOf(TODAY) && end > nowMin) return;
+      did.push({ e, d, end });
+    }));
+    did.sort((a, b) => (keyOf(b.d) + b.end).localeCompare(keyOf(a.d) + a.end)).slice(0, 2).forEach(({ e, d }) => {
+      out.push({
+        kind: "did", text: `Did ${e.title} happen?`, sub: `${keyOf(d) === keyOf(TODAY) ? "Today" : "Yesterday"} · ${fmtTime(e.start)}`,
+        actions: [
+          { label: "Done", run: () => { setOutcomeStatus(e.id, "done", { fitLink: e.fitLink, fitDate: e.date }); } },
+          { label: "Skipped", run: () => { setOutcomeStatus(e.id, "cancelled"); } },
+        ],
+      });
+    });
+    // a clash in the next three days (first one found)
+    for (let i = 0; i < 3 && !out.some(n => n.kind === "clash"); i++) {
+      const d = addDays(TODAY, i);
+      const items = menuItemsOn(d).filter(menuItemOpen).sort((a, b) => toMin(a.start) - toMin(b.start));
+      for (let a = 0; a < items.length && !out.some(n => n.kind === "clash"); a++) {
+        for (let b = a + 1; b < items.length; b++) {
+          const ea = itemEndMin(items[a]);
+          if (ea === null || toMin(items[b].start) >= ea) continue;
+          const later = items[b], first = items[a], dur = itemDurationMin(later), newStart = ea;
+          const fits = newStart + dur <= 1439;
+          const fromT = later.start, fromEnd = later.end, dayKey = keyOf(d);
+          out.push({
+            kind: "clash", text: `${first.title} and ${later.title} overlap`, sub: `${i === 0 ? "Today" : i === 1 ? "Tomorrow" : WD_FULL[dowIndex(d)]} · ${fmtTime(first.start)}`,
+            // later one slides to the end of the first; if that runs past midnight, the first
+            // one slides earlier to finish where the later one starts instead
+            actions: fits ? [{
+              label: `Move ${later.title} to ${fmtTime(minToTime(newStart))}`,
+              run: () => {
+                rescheduleItem(later, dayKey, minToTime(newStart));
+                showUndoSnackbar(`${later.title} moved`, () => rescheduleItem(later, dayKey, fromT, fromEnd));
+              },
+            }] : (toMin(later.start) - itemDurationMin(first) >= 0 ? [{
+              label: `Move ${first.title} to ${fmtTime(minToTime(toMin(later.start) - itemDurationMin(first)))}`,
+              run: () => {
+                const fT = first.start, fE = first.end;
+                rescheduleItem(first, dayKey, minToTime(toMin(later.start) - itemDurationMin(first)));
+                showUndoSnackbar(`${first.title} moved`, () => rescheduleItem(first, dayKey, fT, fE));
+              },
+            }] : []),
+          });
+          break;
+        }
+      }
+    }
+    // missing this week (only the days still ahead can be filled)
+    const mon = startOfWeek(TODAY), days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+    const target = fitWeekTarget(TODAY);
+    const fitDay = d => fitLoggedOn(d) || dayEventsRawFor(d).some(e => { const t = typeOf(e); return (t && t.group === "g-fitness") || (e.fitLink && !e.allDay); });
+    const planned = days.filter(fitDay).length;
+    const freeFit = days.filter(d => dayDiff(d, TODAY) >= 0 && !fitDay(d) && ["rest", "restExtra"].indexOf(fitGoalFor(d)) < 0)[0];
+    if (planned < target && freeFit) {
+      out.push({
+        kind: "missing", text: `Workout days: ${planned} of ${target} planned`, sub: "This week",
+        actions: [{ label: "Add one", pick: { group: "g-fitness", date: keyOf(freeFit), start: "07:00" } }],
+      });
+    }
+    const togetherThisWeek = days.some(d => dayEventsRawFor(d).some(e => { const t = typeOf(e); return t && t.group === "g-together" && e.who !== "me"; }));
+    const togetherDay = days.filter(d => dayDiff(d, TODAY) >= 0 && [4, 5, 6].indexOf(dowIndex(d)) >= 0)[0] || (dowIndex(TODAY) < 6 ? null : TODAY);
+    if (!togetherThisWeek && togetherDay) {
+      out.push({
+        kind: "missing", text: "Nothing together planned", sub: "This week",
+        actions: [{ label: "Add one", pick: { group: "g-together", date: keyOf(togetherDay), start: "19:00" } }],
+      });
+    }
+    return out;
+  }
+  function tpNudgesHtml() {
+    const list = (tpState && tpState.nudges) || [];
+    if (!list.length) return "";
+    return `<div class="tps-runs"><div class="tps-runs-h">Needs a look</div>${list.slice(0, 3).map((n, i) => `
+      <div class="tps-run">
+        <div class="tps-run-t"><span>${esc(n.text)}</span><span class="tps-opt-sub">${esc(n.sub)}</span></div>
+        <div class="tps-run-a">${n.actions.map((a, j) => `<button type="button" class="tps-run-b" data-tps-nudge="${i}:${j}">${esc(a.label)}</button>`).join("")}</div>
+      </div>`).join("")}</div>`;
+  }
+  // a dot on the + button while something needs a look -- recomputed on every Day render
+  function updateMenuNudgeDot() {
+    const fab = document.getElementById("dayFab");
+    if (!fab) return;
+    let n = 0;
+    try { n = menuNudges().length; } catch (e) { n = 0; }
+    fab.toggleAttribute("data-nudge", n > 0);
+  }
   // done items sink to the bottom, same as renderTodoPage() -- "the full to-do list",
   // not just the rail card's pending-only cap of 5.
   // a to-do's steps/photos default to empty -- every to-do made before this feature
