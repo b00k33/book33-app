@@ -61,6 +61,24 @@ effort defaults to.
     re-render, so Tab walks across; add/remove re-render). They flow into a planned day
     (`planSessionFromTemplate`) and, new, into a logged-but-not-started session: the Gym
     screen's "Start from a template" chips (`data-wo-sess-tpl` → `copyPlanIntoSession`).
+    **Exercise modes, demo link, pain notes (2026-10-13, "some exercises need a timer" /
+    "...differentiate right or left side" / "...a link of video demo" / "for each gym session
+    i need to make notes of where i feel pain"):** every lift exercise — in a template, a
+    planned day AND a logged session — has `ex.timed` (Reps | Timer: sets are seconds, no
+    kg) and `ex.sided` (Left & right: a Left and a Right number per set). A set object keeps
+    `reps/weightKg/secs/repsR/secsR` side by side, so flipping a toggle never loses a number.
+    One writer (`applySetField`: typing Left fills an empty/matching Right), one row
+    builder (`exSetRowHtml`/`exTableHeadHtml`/`exModesHtml`) shared by all three editors, one
+    click dispatcher (`applyExMode`, spec `ctx:a:b:prop:1|0`, ctx = `tpl`/`pex`/`ex`). The
+    choice and the demo link (`video`, http/https only) are remembered BY EXERCISE NAME in
+    `book33-fitness-exmodes` (`EX_MODE_PREFS`), so "L sit" starts Timed + shows ▶ Demo
+    everywhere after the first time. A Timed set in a LOGGED session gets a ▶ (`exHold`):
+    counts down to the number in the box and buzzes at zero (vibrate only — no sound, her
+    standing sound-off), counts up when empty; ■ saves what she held. Only the button's text
+    updates per tick, never a re-render. Pain notes: `sess.pain = {areas:{Knee:"L"|"R"|"LR",
+    "Lower back":"1"}, note}` — deliberately NOT `sess.notes`, because `biomechTipFor()`
+    recycles long session notes into the day's tip. Part of `exercisesHtml`, so Workout Mode
+    and the Fitness page logger both show it; recent-sessions list shows "Pain: …".
     `PLANNED_FIT`
     is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
     streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
