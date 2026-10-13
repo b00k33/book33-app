@@ -14887,6 +14887,7 @@
     padding: 4px 0 4px; border-radius: 0;
   }
   .qa-title-edit:focus { outline: none; border-bottom-style: solid; border-bottom-color: var(--margin-rule); }
+  .qa-title-edit.qa-title-fixed { border-bottom: none; padding: 4px 0; }
   .qa-prev-chips, .qa-prev-opts { display: flex; flex-wrap: wrap; gap: 8px; }
   .qa-prev-opts { margin-top: 8px; }
   .qa-chip, .qa-opt {
@@ -33929,7 +33930,7 @@
     }
     const cells = [];
     if (!e.generated) {
-      cells.push(cell(`data-edit="${e.id}"`, "Edit event", "✎"));
+      cells.push(cell(`data-edit="${e.id}"`, e.typeId ? "Change type" : "Edit event", "✎"));
     } else if (e.fromRecurringEvent && e.recurId) {
       // recurring event occurrence: named "Edit series", not "Edit event", on purpose --
       // unlike every other branch here this genuinely edits every occurrence at once
@@ -34605,7 +34606,7 @@
       : "";
     const deskActionsHtml = `<div class="tl-desk-actions">
         ${deskStartNowHtml}
-        ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ Edit</button>` : ""}
+        ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ ${e.typeId ? "Change type" : "Edit"}</button>` : ""}
         ${canMove && !movePanelOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move="move">🕑 Reschedule</button>
         <button type="button" class="tl-desk-btn" data-tl-toggle-move="copy">⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>` : ""}
         ${delAttr ? `<button type="button" class="tl-desk-btn tl-desk-del" ${delAttr}>🗑 Delete</button>` : ""}
@@ -57829,11 +57830,32 @@
     saveEvents(EVENTS);
     return ev;
   }
-  function applyTypeToEvent(id, t) {
+  // The quick bar never makes a free-titled event: what she types is matched to a type on
+  // the menu (the label as a whole word, or one of a few everyday names for it); no match
+  // = the picker opens on that day and time. Hidden types never match.
+  const TYPE_ALIASES = { workout: "gym", exercise: "gym", weights: "gym", yoga: "stretching", climbing: "bouldering", climb: "bouldering",
+    jog: "run", hike: "walk", mani: "manicure", nails: "manicure", hair: "hairwash", blowout: "blowdry", patients: "clinic", work: "clinic",
+    billing: "admin", admin: "admin", laundry: "laundry", groceries: "shopping", supper: "dinner", brunch: "breakfast", flight: "travel",
+    date: "datenight", "date night": "datenight" };
+  function quickTypeMatch(title) {
+    const raw = String(title || "").trim().toLowerCase();
+    if (!raw) return null;
+    const live = id => { const t = typeById(id); return t && !TYPE_STORE.hidden.includes(t.id) ? t : null; };
+    const exact = typeByLabel(raw);
+    if (exact && live(exact.id)) return exact;
+    const re = w => new RegExp("\\b" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b");
+    const byLabel = menuTypes().filter(t => re(t.label.toLowerCase()).test(raw)).sort((a, b) => b.label.length - a.label.length)[0];
+    if (byLabel) return byLabel;
+    for (const k of Object.keys(TYPE_ALIASES)) if (re(k).test(raw) && live(TYPE_ALIASES[k])) return typeById(TYPE_ALIASES[k]);
+    return null;
+  }
+  function applyTypeToEvent(id, t, who) {
     const ev = EVENTS.find(x => x.id === id);
     if (!ev || !t) return;
-    delete ev.mode; delete ev.fitLink; delete ev.steps;
+    delete ev.mode; delete ev.fitLink; delete ev.steps; delete ev.who;
     Object.assign(ev, typedEventFields(t));
+    const w = who || t.who;
+    if (w && w !== "me") ev.who = w;
     saveEvents(EVENTS);
     render();
   }
@@ -57902,6 +57924,7 @@
   function tpFinish(who) {
     const s = tpState, t = s && typeById(s.typeId);
     if (!s || !t) return;
+    if (s.change) { const id = s.eventId; closeTypePicker(); applyTypeToEvent(id, t, who); return; }
     const start = s.allDay ? "" : (s.start || defaultStartFor(s.date));
     const ev = createTypedEvent(t.id, { date: s.date, start, end: s.end, allDay: s.allDay, who });
     closeTypePicker();
@@ -57925,7 +57948,6 @@
     if (ty) {
       const t = typeById(ty.dataset.tpsType);
       if (!t) return;
-      if (tpState.change) { const id = tpState.eventId; closeTypePicker(); applyTypeToEvent(id, t); return; }
       tpState.typeId = t.id;
       if (t.smart === "together") { tpState.step = "who"; renderTypePicker(); return; }
       tpFinish(null);
@@ -62271,6 +62293,9 @@
     openTypePicker({ date: dateKey, allDay: true });
   }
   function openFormForEdit(ev) {
+    // a typed (menu) event has no title to retype: "Edit" is Change type (Reschedule and
+    // Duplicate stay on the popover). Only legacy untyped events open the old form.
+    if (ev && ev.typeId) { openTypePicker({ eventId: ev.id }); return; }
     armBackGuard();
     addRow.hidden = true;
     animateSheetOpen(form, document.getElementById("addFormBackdrop"));
@@ -63087,12 +63112,16 @@
       saveRoutines();
       return { kind: "routine", id: rt.id, p, label: rec.label };
     }
-    EVENTS.push({
-      id: uid(), date: keyOf(p.date), track: p.track, title: p.title,
-      category: "", locPath: p.locPath, allDay: !p.start, start: p.start, end: p.end,
-    });
+    // a pasted line only becomes an event if it names a type on the menu -- otherwise it
+    // counts as "couldn't read" (a pasted list can't stop and ask for each line).
+    const ty = quickTypeMatch(p.title);
+    if (!ty) return null;
+    const dateKey = keyOf(p.date);
+    const ev = createTypedEvent(ty.id, { date: dateKey, start: p.start || defaultStartFor(dateKey), end: p.end || "" });
+    if (p.locPath && p.locPath.length) ev.locPath = p.locPath;
+    if (p.title.trim().toLowerCase() !== ty.label.toLowerCase()) ev.note = p.title.trim();
     saveEvents(EVENTS);
-    const made = { kind: "event", id: EVENTS[EVENTS.length - 1].id, p };
+    const made = { kind: "event", id: ev.id, p };
     if (spendAmount != null) {
       made.spendId = addSpend({ date: keyOf(p.date), amount: spendAmount, category: guessSpendCategory(p.title), note: p.title });
       made.spendAmount = spendAmount;
@@ -63383,16 +63412,21 @@
       opts = WHO_IDS.map(w2 => opt("data-qa-who", w2, `${whoEm(w2)} ${esc(whoLabel(w2))}`, who === w2)).join("");
     }
     box.hidden = false;
+    // a calendar event takes its name from the menu, never from the keyboard: show the
+    // type it matched (or a nudge to pick one) instead of an editable title.
+    const evTyped = kind === "event" && !rec, tyM = evTyped ? quickTypeMatch(p.title) : null;
+    const titleHtml = evTyped
+      ? `<div class="qa-title-edit qa-title-fixed" id="qaTitleFixed">${tyM ? esc(tyM.label) : "Pick what it is next"}</div>`
+      : `<input type="text" class="qa-title-edit" id="qaTitleEdit" value="${esc(p.title)}" autocomplete="off" aria-label="Title — tap to edit">`;
     box.innerHTML = `<div class="qa-prev">
-      <div class="qa-prev-main"><span class="qa-prev-icon">${rec ? "↻" : kind === "event" ? "📅" : "☑"}</span><input
-        type="text" class="qa-title-edit" id="qaTitleEdit" value="${esc(p.title)}" autocomplete="off" aria-label="Title — tap to edit"></div>
+      <div class="qa-prev-main"><span class="qa-prev-icon">${rec ? "↻" : kind === "event" ? "📅" : "☑"}</span>${titleHtml}</div>
       <div class="qa-prev-chips">
         ${chip("kind", kindLbl)}
         ${rec ? "" : chip("date", `📆 ${qaDayLbl(p.date)}`)}
         ${chip("time", timeLbl, !p.start && (kind === "event" || !!bareHour))}
         ${chip("loc", locLbl, false)}
-        ${chip("track", `${QA_TRACK_FACES[p.track]} ${p.track}`)}
-        ${chip("who", `${whoEm(who)} ${esc(whoLabel(who))}`)}
+        ${evTyped ? "" : chip("track", `${QA_TRACK_FACES[p.track]} ${p.track}`)}
+        ${chip("who",`${whoEm(who)} ${esc(whoLabel(who))}`)}
         ${qaDraft.estMin != null ? `<span class="qa-chip static">⏳ ~${fmtDurMin(qaDraft.estMin)}</span>` : ""}
         ${spendAmount != null ? `<span class="qa-chip static">💸 $${spendAmount.toFixed(2)} → Money</span>` : ""}
       </div>
@@ -63436,23 +63470,31 @@
         + `${spendAmount != null ? ` · <b>$${spendAmount.toFixed(2)}</b> → Money page` : ""}`, true);
       return;
     }
-    EVENTS.push({
-      id: uid(), date: keyOf(p.date), track: p.track, title: p.title, kind: "event",
-      category: "", locPath: p.locPath, allDay: !p.start, start: p.start, end: p.end,
-      ...(dft.who && dft.who !== "me" ? { who: dft.who } : {}),
-      ...(dft.estMin != null ? { estMin: dft.estMin } : {}),
+    // an event is a type from the menu: matched from what she wrote, else she picks it
+    // (the picker opens on the day/time already read -- nothing is saved untyped).
+    const ty = quickTypeMatch(p.title);
+    if (!ty) {
+      openTypePicker({ date: keyOf(p.date), start: p.start || "", end: p.end || "", allDay: false });
+      qaShowNote("Pick what it is — events come from the menu", false);
+      return;
+    }
+    const dateKey = keyOf(p.date);
+    const ev = createTypedEvent(ty.id, {
+      date: dateKey, start: p.start || defaultStartFor(dateKey), end: p.end || "", who: dft.who,
     });
+    if (p.locPath && p.locPath.length) ev.locPath = p.locPath;
+    if (dft.estMin != null) ev.estMin = dft.estMin;
+    if (p.title.trim().toLowerCase() !== ty.label.toLowerCase()) ev.note = p.title.trim();   // "Dinner with Sam" keeps the rest
     saveEvents(EVENTS);
-    lastQuickAdd = { evIds: [EVENTS[EVENTS.length - 1].id], routineIds: [], spendIds: [] };
+    lastQuickAdd = { evIds: [ev.id], routineIds: [], spendIds: [] };
     if (spendAmount != null) {
-      lastQuickAdd.spendIds = [addSpend({ date: keyOf(p.date), amount: spendAmount, category: guessSpendCategory(p.title), note: p.title })];
+      lastQuickAdd.spendIds = [addSpend({ date: dateKey, amount: spendAmount, category: guessSpendCategory(p.title), note: p.title })];
     }
     state.anchor = new Date(p.date);
     render();
-    qaShowNote(`Added 📅 <b>${esc(p.title)}</b> — ${p.date.getDate()} ${MON_SHORT[p.date.getMonth()]}`
+    qaShowNote(`Added 📅 <b>${esc(ty.label)}</b> — ${p.date.getDate()} ${MON_SHORT[p.date.getMonth()]}`
       + `${dft.who && dft.who !== "me" ? ` · ${whoEm(dft.who)} <b>${esc(whoLabel(dft.who))}</b>` : ""}`
-      + `${p.start ? ` · ${fmtTime(p.start)}${p.end ? `–${fmtTime(p.end)}` : ""}` : " · all day"}`
-      + `${p.locPath.length ? ` · ${esc(p.locPath.join(" › "))}` : ""} · ${p.track}`
+      + ` · ${fmtTime(ev.start)}–${fmtTime(ev.end)}`
       + `${spendAmount != null ? ` · <b>$${spendAmount.toFixed(2)}</b> → Money page` : ""}`, true);
   }
 
