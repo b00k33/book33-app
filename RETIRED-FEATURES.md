@@ -495,3 +495,27 @@ event, i select the event e.g. gym, work etc." The calendar is a menu now (see C
 none were part of this retirement. Don't strip `title` from events: typed events keep the
 type's label in `title` on purpose, so every renderer/title-keyed feature (workout card,
 meal slots, Done logging) keeps working.
+
+## 18. The bare start — hidden 2026-10-14, NOT deleted
+
+Her words: "i need to go through a stripping of the calendar app because i am overwhelmed by all
+the elements and i dont know how to use it properly. this way i can readd what i need as i
+use it overtime." Everything below is **hidden until she adds it back** from the "+ Add back"
+chip where she is (CLAUDE.md "The bare start"). Unlike §1–§17 nothing here is retired for
+good — it is a starting state, so a hidden piece coming back because SHE tapped it in the chip
+is correct, and a hidden piece coming back by itself is the bug. Code and data are untouched.
+- **Event popup:** Mark done, Open full profile, Reschedule, Duplicate, "change just this day",
+  Repeat days/times link, "from your routine", "Next after this", category row, food-log
+  link, streak, reminder, conversation guide, Skip today (phone), Start walkthrough, Start a
+  Mode now, and the "4 occurrences today" time buttons. What stays: title, time with "Repeats"
+  once, "N steps" (one line, tap to open), Edit, Delete. The tick on the calendar block is how
+  she marks something done by default.
+- **Day screen:** the left column (today's numbers + mini month; rides `PREFS.sideOpen`) and
+  the right strip (Right now / Insights, its panel and the phone's right-edge swipe).
+- **Left menu:** Life Map and Conversation Guides (they live behind More). The menu is Today,
+  Month, Events & birthdays, Fitness, Marital, More, then Settings. "Everything else" is now
+  named "More". The old "Show sidebar" row is gone — the chip's "Left column" does that job.
+- **Calendar default:** the computer opens on the whole week (`PREFS.calDaysDesk`, a first-load
+  default only — she can pick any count and it is remembered); the phone keeps its own count.
+**Kept on purpose (her answer — do not hide):** birthdays, the planned-workout chip, the cycle
+chip, wash/habit prompts, the days picker, the moon (theme) and the hours gear.
