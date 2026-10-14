@@ -105,7 +105,19 @@ effort defaults to.
     8-head écorché, half-body mirrored, every muscle group in its true place — the mock
     `mocks/fitness-anatomy-mock-2026-10-14.html` is the spec (now vs new, both themes, every
     tile size, a named anatomy check). Ids, classes, the five areas and the tile crops are
-    unchanged, so nothing that draws a figure had to change. The summary strip's muscle map and
+    unchanged, so nothing that draws a figure had to change. **Body parts (2026-10-14 pm,
+    "include hands arms upper lower grip ankle feet etc"; commit 08b939a):** a second chip row,
+    `TPE_PARTS` (neck, shoulder, uarm "Upper arm", larm "Lower arm", wrist, hand "Hands", grip,
+    lback, hip, knee, ankle, feet), after the five `TPE_MOVES`; `TPE_AREAS` is both, still one
+    `ex.area` per exercise. Each part is drawn by `TPE_ART` as an OVERLAY (`PART_OF`: the
+    muscles it is made of plus `p-*` shapes for hand / wrist / knee / ankle / foot / neck),
+    `use.tpe-ov`, hidden unless `--v-<part>` is `visible` — so a figure with no part sets
+    draws exactly as before and a tap never lands on an unlit part. `tpeMapProps(v)` writes
+    `--i-*` + `--v-*` for every map (summary + Workout Mode); "Full body" lights only the four
+    movement groups (`TPE_MOVE_K`), never a part. Three family hues: `--tpe-arm` (shoulder to
+    grip), `--tpe-low` (hip to feet), `--tpe-spine` (neck, lower back). `TPE_AREA_RX` matches
+    a part first, but only on words a gym lift never uses (supination, wrist, toe curl,
+    clamshell, chin tuck...), so "Bicep curl" stays Pull and "Close-grip bench" stays Push. The summary strip's muscle map and
     legend highlight each other; the ribbon and the set rows' fill bars show load; the coach
     strip (`tpeHistory`/`tpeCoachHtml`) reads `FIT_LOG` for last session + PR and hides plates
     at 0 kg. Numbers are typed or stepped (saved live, no re-render while typing — only
