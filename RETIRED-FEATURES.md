@@ -519,3 +519,12 @@ is correct, and a hidden piece coming back by itself is the bug. Code and data a
   default only — she can pick any count and it is remembered); the phone keeps its own count.
 **Kept on purpose (her answer — do not hide):** birthdays, the planned-workout chip, the cycle
 chip, wash/habit prompts, the days picker, the moon (theme) and the hours gear.
+
+## 19. The "Often" row — retired 2026-10-15
+Her pick on the exercise-library mock: "Retire it". It was the chip row of her most-used exercise
+names under the Workout templates editor's name box (`tpeOftenNames`, `#tpeOften`, shown while
+the box had focus) and the same row under Workout Mode's "+ Add exercise" (`[data-wo-often]`).
+What does that job now: the "From my exercises ›" chip beside every lift add box opens the
+library picker — most-used first, tick several, one button, and each copy brings its default
+sets. Typing still autocompletes from every library name. Never bring a bare "often" chip row
+back beside an add box; the library section and picker are the one place to browse.
