@@ -9654,6 +9654,12 @@
     position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0;
     border: 0; padding: 0; margin: 0; cursor: pointer; -webkit-appearance: none;
   }
+  /* 2026-10-14 ("see the problem?" -- tapping End opened the browser's own clock wheel ON TOP of
+     this list): the invisible clock icon inside a time input is a second, separate way into the
+     browser's picker. Removed here; the click itself is cancelled in JS (search "browser's own
+     clock"). "Type an exact time…" still opens the browser's picker on purpose, via showPicker(). */
+  #addForm .when-native::-webkit-calendar-picker-indicator,
+  #ovrStart::-webkit-calendar-picker-indicator, #ovrEnd::-webkit-calendar-picker-indicator { display: none; }
   #addForm .when-label {
     display: inline-flex; align-items: center; white-space: nowrap; min-height: 20px;
     padding: 6px 10px; border-radius: var(--field-radius-sm); background: var(--field-bg);
@@ -20833,7 +20839,12 @@
   .strip-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .strip-tx b { font-size: 13px; font-weight: 600; }
   .strip-tx small { font-size: 12px; font-weight: 500; color: var(--ink-faint); }
-  .strip-act { flex: none; font-size: 12px; color: var(--ink-faint); text-decoration: underline; }
+  /* a chip, never an underlined word (her standing rule 2026-10-14: "i dont like links, i prefer chips") */
+  .strip-act {
+    flex: none; font-size: 12px; font-weight: 600; color: var(--ink-soft); padding: 4px 12px; border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--ink) 18%, transparent); background: var(--paper);
+  }
+  .strip-it:hover .strip-act { border-color: var(--margin-rule); color: var(--margin-rule); }
   .strip-sub { padding: 8px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
   .strip-none { padding: 8px 12px; font-size: 12px; color: var(--ink-faint); }
   .strip-new { animation: stripArrive .5s ease both; }
@@ -68618,6 +68629,14 @@
   });
   fWhenPopCustom.addEventListener("click", () => {
     const input = fWhenPopMode === "start" ? fStart : fEnd;
+    // 2026-10-14: an empty End made the browser's clock open on the CURRENT time (her screenshot:
+    // "4:16 PM" under a 6:30pm start). Start it from the event's own length after Start instead.
+    if (input === fEnd && !fEnd.value && fStart.value) {
+      const d = parseInt(fDur.value, 10) > 0 ? parseInt(fDur.value, 10) : 30;
+      fEnd.value = minToTime((toMin(fStart.value) + d) % 1440);
+      efpSyncAddForm();
+      renderWhenRow();
+    }
     closeFWhenPop();
     if (typeof input.showPicker === "function") { try { input.showPicker(); } catch (err) { input.focus(); } }
     else input.focus();
@@ -68625,8 +68644,25 @@
   // mousedown (not click) so this fires before the native time picker's own
   // trigger -- exactly the technique b33mp already uses on #fDate (search
   // "b33mpIsMobile" for the same preventDefault-on-mousedown comment).
+  // 2026-10-14 (her screenshot: the browser's own clock wheel open ON TOP of this list). Two
+  // pickers must never stack: while the browser's clock is open ("Type an exact time…"), a press on
+  // the field belongs to it, so the list stays shut.
+  const fNativeTimeOpen = el => { try { return el.matches(":open"); } catch (err) { return false; } };
   [["fStart", fStart, "start"], ["fEnd", fEnd, "end"]].forEach(([, input, mode]) => {
-    input.addEventListener("mousedown", e => { if (!input.disabled) { e.preventDefault(); openFWhenPop(mode, input); } });
+    input.addEventListener("mousedown", e => {
+      if (input.disabled) return;
+      e.preventDefault();
+      if (!fNativeTimeOpen(input)) openFWhenPop(mode, input);
+    });
+    // mousedown alone did not stop the browser's clock -- the click that follows (on the input's
+    // invisible clock icon, or a tap on a phone) could still open it, on top of this list. Same belt
+    // the date sheet (b33mp) already wears: cancel the click too, and open the list if nothing did
+    // yet (keyboard / <label> clicks arrive with no mousedown first).
+    input.addEventListener("click", e => {
+      if (input.disabled) return;
+      e.preventDefault();
+      if (!fNativeTimeOpen(input) && (fWhenPop.hidden || fWhenPopTrigger !== input)) openFWhenPop(mode, input);
+    });
     input.addEventListener("keydown", e => {
       if (input.disabled) return;
       if (e.key !== "Enter" && e.key !== " " && !(e.key === "ArrowDown" && e.altKey)) return;
@@ -68751,8 +68787,16 @@
     const input = e.target.closest("#ovrStart, #ovrEnd");
     if (!input) return;
     e.preventDefault();
-    openOvrWhenPop(input.id === "ovrStart" ? "start" : "end", input);
+    if (!fNativeTimeOpen(input)) openOvrWhenPop(input.id === "ovrStart" ? "start" : "end", input);
   });
+  // the click that follows must not open the browser's own clock wheel on top (2026-10-14,
+  // same fix as #fStart/#fEnd above)
+  document.addEventListener("click", e => {
+    const input = e.target.closest && e.target.closest("#ovrStart, #ovrEnd");
+    if (!input) return;
+    e.preventDefault();
+    if (ovrWhenPop.hidden && !fNativeTimeOpen(input)) openOvrWhenPop(input.id === "ovrStart" ? "start" : "end", input);
+  }, true);   // capture: the detail sheet's own click handlers can't swallow it first
   document.addEventListener("keydown", e => {
     const input = e.target.closest && e.target.closest("#ovrStart, #ovrEnd");
     if (!input) return;
