@@ -20805,6 +20805,69 @@
   }
   .nav-back-btn:hover, .nav-back-btn:active { background: var(--raised); }
   @media (min-width: 768px) { .nav-back-btn { display: none; } }
+
+  /* ---- STRIP -- the bare start (2026-10-14, "i am overwhelmed by all the elements ... readd
+     what i need as i use it overtime"). The "+ Add back" chip and its list (one component, used
+     in the event popup and at the foot of the menu), the one-line "N steps", and what hides the
+     right strip. Nothing here deletes anything: a hidden piece is simply not drawn. ---- */
+  .strip-wrap { margin-top: 8px; }
+  .strip-chip {
+    display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 4px 12px; border-radius: 999px;
+    border: 1px dashed color-mix(in oklab, var(--ink) 28%, transparent); background: transparent;
+    color: var(--ink-soft); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .strip-chip:hover, .strip-chip[aria-expanded="true"] { border-color: var(--margin-rule); color: var(--margin-rule); }
+  .strip-list {
+    margin-top: 8px; border: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); border-radius: var(--radius-sm);
+    background: var(--paper); overflow: hidden auto; max-height: 320px;
+  }
+  .strip-it {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0;
+    border-bottom: 1px solid color-mix(in oklab, var(--ink) 8%, transparent); background: transparent;
+    padding: 8px 12px; font: inherit; color: var(--ink); cursor: pointer;
+  }
+  .strip-it:last-child { border-bottom: 0; }
+  .strip-it:hover { background: color-mix(in oklab, var(--margin-rule) 10%, var(--paper)); }
+  .strip-ic { flex: none; width: 16px; text-align: center; color: var(--ink-faint); font-weight: 700; }
+  .strip-on .strip-ic { color: var(--margin-rule); }
+  .strip-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .strip-tx b { font-size: 13px; font-weight: 600; }
+  .strip-tx small { font-size: 12px; font-weight: 500; color: var(--ink-faint); }
+  .strip-act { flex: none; font-size: 12px; color: var(--ink-faint); text-decoration: underline; }
+  .strip-sub { padding: 8px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .strip-none { padding: 8px 12px; font-size: 12px; color: var(--ink-faint); }
+  .strip-new { animation: stripArrive .5s ease both; }
+  @keyframes stripArrive {
+    0% { background: color-mix(in oklab, var(--margin-rule) 16%, transparent); transform: translateY(-4px); opacity: 0; }
+    35% { opacity: 1; }
+    100% { background: transparent; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .strip-new { animation: none; } }
+  .tl-detail-body .strip-wrap { order: 200; }
+  #deskNavRail .strip-wrap, #navPanelRows .strip-wrap, #navIconRail .strip-wrap { margin: 4px 0; padding: 0 8px; }
+  #deskNavRail .strip-list, #navPanelRows .strip-list, #navIconRail .strip-list { max-height: 260px; }
+  /* "6 steps" -- one line until tapped */
+  .tl-steps-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .tl-detail-body .tl-steps-wrap { order: 50; }
+  .tl-steps-toggle {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent;
+    padding: 8px 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer;
+  }
+  .tl-steps-caret { width: 16px; text-align: center; color: var(--ink-faint); }
+  /* thumb size (44px): the chip stays a small dashed pill to the eye, its hit area grows past the
+     edge; the one-line steps toggle and the list rows become whole-row targets */
+  @media (max-width: 640px), (pointer: coarse) {
+    .strip-chip { position: relative; }
+    .strip-chip::after { content: ""; position: absolute; inset: -6px 0; }
+    .strip-it { min-height: 44px; }
+    .tl-steps-toggle { min-height: 44px; }
+  }
+  /* the right strip (Right now / Insights), its panel and the phone's right-edge hint, until she adds it back */
+  html[data-strip-right-off] #deskWidgetRail,
+  html[data-strip-right-off] #wrPanel,
+  html[data-strip-right-off] #wrFallback,
+  html[data-strip-right-off] #ddEdgeHintRight { display: none !important; }
+  html[data-strip-right-off][data-wr-panel-open] #deskColMain { margin-right: 0 !important; }
 </style>
 
 <div class="wrap" id="wrap" data-view="day">
@@ -34310,9 +34373,9 @@
     // braces, not the only thing stopping a double-start.
     const startNowMode = modeOf(e);
     const showStartNow = !!startNowMode && e.date === keyOf(TODAY) && !currentSession();
-    if (showStartNow) {
+    if (showStartNow && stripOn("pop.mode")) {   // 2026-10-14: an add-back piece (the bare start)
       const m = modeById(startNowMode);
-      extraRows.push(row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, modeIconHtml(m, 16) || "▶", true));
+      extraRows.push(stripTag("pop.mode", row(`data-tl-start-mode="${e.id}"`, `Start ${m.name} now`, modeIconHtml(m, 16) || "▶", true)));
     }
     if (e.rtTaskId === HAIR_ROUTINE_ID) {
       // hair-wash gets one extra action the generic routine branch below doesn't offer:
@@ -34350,8 +34413,9 @@
     if (tlItemCanMove(e)) {
       // both "gold" -- repeat & schedule per her table; Duplicate isn't in her named
       // example list but is the same category (copying this item onto a new date/time).
-      cells.push(cell(`data-tl-toggle-move="move"`, "Reschedule", "◷", "gold"));
-      cells.push(cell(`data-tl-toggle-move="copy"`, "Duplicate", "⧉", "gold"));
+      // 2026-10-14 (the bare start): each is its own add-back piece, hidden until added.
+      if (stripOn("pop.resched")) cells.push(stripTag("pop.resched", cell(`data-tl-toggle-move="move"`, "Reschedule", "◷", "gold")));
+      if (stripOn("pop.dup")) cells.push(stripTag("pop.dup", cell(`data-tl-toggle-move="copy"`, "Duplicate", "⧉", "gold")));
     }
     if (!e.generated) {
       cells.push(cell(`data-del="${e.id}"`, "Delete", "🗑", "danger"));
@@ -34404,6 +34468,9 @@
   // without snapping shut mid-interaction; openTlDetail() resets it for a freshly-opened
   // item so the sheet always STARTS flat/collapsed per her "less busy by default" ask.
   let tlDetailPanel = null;
+  // 2026-10-14 (the bare start): whether the one-line "6 steps" is opened. Module-level for
+  // the same survive-refresh reason; openTlDetail() resets it so every popup starts short.
+  let tlStepsOpen = false;
   // 2026-08-04 ("edit this day vs the routine"): which scope the edit panel writes to —
   // "day" (the DEFAULT: overrides[date] only) or "routine" (the template). Module-level
   // for the same survive-refresh reason as tlDetailPanel above; openTlDetail() resets
@@ -34549,7 +34616,10 @@
     // only ever set on hair-wash steps today (see generatedFor's hair branch), but this
     // reads generically off any e.steps entry, so any other stepped routine picks it up
     // for free the moment it starts setting those fields too.
-    const stepsHtml = hasSteps ? `<div class="tl-detail-steps">${e.steps.map((s, i) => {
+    // 2026-10-14 (the bare start): the steps are ONE line -- "▸ 6 steps · 2 done" -- until
+    // tapped (tlStepsOpen); the walkthrough button is its own add-back piece (pop.walk).
+    const stepsDoneN = hasSteps ? e.steps.filter((s, i) => isDone(`${e.id}::step::${i}`)).length : 0;
+    const stepsListHtml = hasSteps ? `<div class="tl-detail-steps">${e.steps.map((s, i) => {
       const stepId = `${e.id}::step::${i}`;
       const sd = isDone(stepId);
       const prod = s.productId ? hairProductById(s.productId) : null;
@@ -34561,7 +34631,11 @@
         <span class="tl-step-t">${esc(stepLabel(s))}</span><span class="tl-step-m">${stepMinOf(s)}m</span>
         ${prodHtml}${noteHtml}
       </label>`;
-    }).join("")}</div>${`<button type="button" class="tl-walk-start-btn" data-tl-walk="${e.id}">▶ Start walkthrough</button>`}` : "";
+    }).join("")}</div>` : "";
+    const stepsHtml = hasSteps ? `<div class="tl-steps-wrap">
+        <button type="button" class="tl-steps-toggle" data-tl-steps-toggle aria-expanded="${tlStepsOpen}"><span class="tl-steps-caret" aria-hidden="true">${tlStepsOpen ? "▾" : "▸"}</span>${e.steps.length} step${e.steps.length === 1 ? "" : "s"}${stepsDoneN ? ` · ${stepsDoneN} done` : ""}</button>
+        ${tlStepsOpen ? stepsListHtml + (stripOn("pop.walk") ? stripTag("pop.walk", `<button type="button" class="tl-walk-start-btn" data-tl-walk="${e.id}">▶ Start walkthrough</button>`) : "") : ""}
+      </div>` : "";
     // bare .tl-detail-fitlink line, always visible in the flat default view -- no
     // .tl-detail-extra box around it. A plain read-only note (non-routine e.note) is
     // DISPLAY, not an editable field, so it stays visible too, same as location/category
@@ -35001,13 +35075,16 @@
     const deskStartNowHtml = deskShowStartNow
       ? `<button type="button" class="tl-desk-btn tl-desk-start-mode" data-tl-start-mode="${e.id}">${modeIconHtml(modeById(deskStartNowMode), 14) || "▶"} Start ${esc(modeById(deskStartNowMode).name)} now</button>`
       : "";
+    // 2026-10-14 (the bare start): Edit and Delete are the popup's two buttons; Reschedule,
+    // Duplicate, Mark done and "Start a Mode now" are STRIP pieces (hidden until added back
+    // from the "+ Add back" chip at the foot of this popup).
     const deskActionsHtml = `<div class="tl-desk-actions">
-        ${deskStartNowHtml}
+        ${stripOn("pop.mode") ? stripTag("pop.mode", deskStartNowHtml) : ""}
         ${deskEditAttr ? `<button type="button" class="tl-desk-btn" ${deskEditAttr}>✎ ${e.typeId ? "Change type" : "Edit"}</button>` : ""}
-        ${canMove && !movePanelOpen ? `<button type="button" class="tl-desk-btn" data-tl-toggle-move="move">🕑 Reschedule</button>
-        <button type="button" class="tl-desk-btn" data-tl-toggle-move="copy">⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>` : ""}
+        ${canMove && !movePanelOpen && stripOn("pop.resched") ? stripTag("pop.resched", `<button type="button" class="tl-desk-btn" data-tl-toggle-move="move">🕑 Reschedule</button>`) : ""}
+        ${canMove && !movePanelOpen && stripOn("pop.dup") ? stripTag("pop.dup", `<button type="button" class="tl-desk-btn" data-tl-toggle-move="copy">⟳ ${e.fitLink || e.id.indexOf("fitcal-") === 0 ? "Book another like it" : "Duplicate here"}</button>`) : ""}
         ${delAttr ? `<button type="button" class="tl-desk-btn tl-desk-del" ${delAttr}>🗑 Delete</button>` : ""}
-        <button type="button" class="tl-desk-btn tl-desk-done" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>✓ ${done ? "Done" : "Mark done"}</button>
+        ${stripOn("pop.done") ? stripTag("pop.done", `<button type="button" class="tl-desk-btn tl-desk-done" data-tick-ev="${e.id}" data-on="${done}"${e.fitLink ? ` data-fit-link="${esc(e.fitLink)}" data-fit-date="${e.date}"` : ""}>✓ ${done ? "Done" : "Mark done"}</button>`) : ""}
       </div>`;
     // Per-event Reminder override — only for items that map to a stored object (a
     // handwritten/imported event, or a recurring event's template) and only while
@@ -35083,6 +35160,25 @@
     // would open this way?" was "every event", so the entry point lives here in the
     // shared body template instead, right after the guide row per the approved mock.
     const openProfileBtnHtml = `<button type="button" class="tl-profile-open-btn" data-open-profile="${e.id}">⤢ Open full profile</button>`;
+    // 2026-10-14 (the bare start): which add-back pieces EXIST for this event -- the chip at
+    // the foot lists only these, so it never offers a food link on a Pilates block. Skip and
+    // Repeat only exist on the phone layout (CSS hides them on desktop), so they only count there.
+    const stripMobile = window.matchMedia("(max-width: 640px)").matches;
+    const stripAvail = ["pop.done", "pop.profile", "pop.origin"];
+    if (canMove) stripAvail.push("pop.resched", "pop.dup");
+    if (hasRtnExtras) stripAvail.push("pop.thisday");
+    if (freqLabelShort || stripMobile) stripAvail.push("pop.repeat");
+    if (nextAfterHtml) stripAvail.push("pop.next");
+    if ((TL_MERGE_GROUPS[e.id] || []).length > 1) stripAvail.push("pop.merge");
+    if (e.category) stripAvail.push("pop.cat");
+    if (isMealEvent) stripAvail.push("pop.food");
+    if (streakN > 0) stripAvail.push("pop.streak");
+    if (remT) stripAvail.push("pop.remind");
+    if (guideShow) stripAvail.push("pop.guide");
+    if (secondaryActionBtnHtml && stripMobile) stripAvail.push("pop.skip");
+    if (hasSteps) stripAvail.push("pop.walk");
+    if (deskShowStartNow) stripAvail.push("pop.mode");
+    const sp = (id, html) => (html && stripOn(id)) ? stripTag(id, html) : "";
     document.getElementById("tlDetailBody").innerHTML = `
       <div class="tl-detail-title tl-detail-mobile-hide"><span class="tl-detail-icon" style="background:var(--${e.track || "personal"}-ink, var(--margin-rule))"></span>${esc(e.title)}</div>
       <!-- 2026-08-25 (Commit 1, header restyle): was .tl-detail-mobile-hide (Zone 1's
@@ -35096,24 +35192,25 @@
            with no category shows no empty tag row at all. trackLabel() is retired --
            see the retired-features doc. Visible at every width -- the title+subtitle
            hero doesn't carry category, so this is the only place it shows on mobile. -->
-      ${e.category ? `<div class="tl-detail-row">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(e.category)}</span></div>` : ""}
-      ${repeatsRowHtml}
-      ${originRowHtml}
-      ${nextAfterHtml}
-      ${streakRowHtml}
+      ${e.category ? sp("pop.cat", `<div class="tl-detail-row">${glyphHtml("🏷", "tl-detail-em")}<span>${esc(e.category)}</span></div>`) : ""}
+      ${sp("pop.repeat", repeatsRowHtml)}
+      ${sp("pop.origin", originRowHtml)}
+      ${sp("pop.next", nextAfterHtml)}
+      ${sp("pop.streak", streakRowHtml)}
       ${chainRowHtml}
-      ${nutritionRowHtml}
+      ${sp("pop.food", nutritionRowHtml)}
       ${fitnessCardHtml(e)}
       ${phaseBandsHtml}
-      ${remHtml}
+      ${sp("pop.remind", remHtml)}
       ${starsHtml}
-      ${actionPairHtml}
+      ${sp("pop.skip", actionPairHtml)}
       ${fitLinkHtml}${typedSmartHtml(e)}${plainNoteHtml}
-      ${guideRowHtml}
-      ${openProfileBtnHtml}
+      ${sp("pop.guide", guideRowHtml)}
+      ${sp("pop.profile", openProfileBtnHtml)}
       ${stepsHtml}
       ${actionsHtml}${deskActionsHtml}
-      ${editFieldsHtml}${moveHtml}
+      ${sp("pop.thisday", routineTodayFieldsHtml)}${fitEditFieldsHtml}${moveHtml}
+      ${stripChipHtml("pop", stripAvail)}
     `;
     // Zone 1 — the coloured header (mobile only; desktop hides #tlDetailHero/
     // .tl-detail-drag wholesale and keeps the plain .tl-detail-title/row markup
@@ -35152,6 +35249,11 @@
     headDoneBtn.classList.toggle("done", done);
     headDoneBtn.setAttribute("aria-label", done ? doneWord : notDoneWord);
     headDoneBtn.innerHTML = done ? `<span>✓</span> Done` : `Done`;
+    // 2026-10-14 (the bare start): the phone's header Done is the pop.done piece too -- hidden
+    // until added back (the tick on the calendar block still ticks it).
+    headDoneBtn.hidden = !stripOn("pop.done");
+    headDoneBtn.dataset.stripPc = "pop.done";
+    stripPlayArrive();
   }
   // Shared open/close motion for every sheet-style overlay (search "ONE SHEET
   // SYSTEM" for the CSS side) -- Linh, 2026-09-02: "viewing event and editing
@@ -35234,6 +35336,8 @@
     const e = TL_ITEMS_BY_ID[id];
     if (!e) return;
     tlDetailPanel = null;
+    tlStepsOpen = false;   // 2026-10-14: every popup starts short, the steps behind one line
+    stripChipOpen.pop = false;   // ... and with the "+ Add back" list folded
     tlOvrScope = "day";
     tlMoveScope = "day";   // §6: Move always opens on "This day only", the safe scope
     tlGuideOpenId = null;
@@ -35794,8 +35898,9 @@
   function renderTlMergeList(id) {
     const host = document.getElementById("tlDetailMergeList");
     const run = TL_MERGE_GROUPS[id];
-    if (!run || run.length < 2) { host.hidden = true; host.innerHTML = ""; return; }
+    if (!run || run.length < 2 || !stripOn("pop.merge")) { host.hidden = true; host.innerHTML = ""; return; }
     host.hidden = false;
+    host.dataset.stripPc = "pop.merge";
     host.innerHTML = `<div class="tl-merge-label">${run.length} occurrences today</div>
       <div class="tl-merge-rows">${run.map(m => `<button type="button" class="tl-merge-row${m.id === id ? " on" : ""}" data-tl-merge-open="${esc(m.id)}">${fmtTime(m.start)} – ${fmtTime(m.end)}</button>`).join("")}</div>`;
   }
@@ -36132,6 +36237,10 @@
   // "confirm" step is needed — picking a new date/time IS the draft, choosing an action
   // commits it. rescheduleItem/duplicateItem (near itemEndMin) do the actual work.
   document.getElementById("tlDetailBody").addEventListener("click", e => {
+    // 2026-10-14 (the bare start): the one-line "6 steps" opens/closes the tick list. Same
+    // stopPropagation-before-rerender discipline as the star/scope handlers below.
+    const stepsToggle = e.target.closest("[data-tl-steps-toggle]");
+    if (stepsToggle) { e.stopPropagation(); tlStepsOpen = !tlStepsOpen; refreshOpenTlDetail(); return; }
     const walkBtn = e.target.closest("[data-tl-walk]");
     if (walkBtn) { openTlWalk(walkBtn.dataset.tlWalk); return; }
     const profileBtn = e.target.closest("[data-open-profile]");
@@ -39273,6 +39382,169 @@
   function savePrefs() {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(PREFS)); } catch (e) {}
   }
+  // ===================================================================
+  // STRIP -- the bare start (2026-10-14, her words: "i need to go through a
+  // stripping of the calendar app because i am overwhelmed by all the elements and
+  // i dont know how to use it properly. this way i can readd what i need as i use
+  // it overtime"). ask28: level B, "+ Add back" chip where she is, popup = title /
+  // time+repeat / steps line / Edit / Delete, whole week, phone matches.
+  //
+  // NOTHING IS DELETED -- every piece below still has its code and data; it is only
+  // not drawn until she adds it back. STRIP_PIECES is the one list: a piece's id is
+  // what the render code asks (stripOn), what the chip lists, and what is stored.
+  // Default = hidden. The chip (stripChipHtml) is the SAME place that hides and
+  // restores, per CLAUDE.md trap 1 ("the one-way door").
+  //   pop.*   the event popup (#tlDetailSheet) -- renderTlDetailBody/HeadActions
+  //   day.*   the Day screen's two side areas (day.left rides PREFS.sideOpen, the
+  //           existing collapse flag, so the old « button and this chip never disagree)
+  //   menu.*  rows that used to be pinned in the left menu (now behind "More")
+  // Stored in book33-strip (synced like every book33-* key, so phone and computer
+  // share one strip). `applied` = the one-time first-load pass already ran.
+  // ===================================================================
+  const STRIP_KEY = "book33-strip";
+  const STRIP_PIECES = [
+    { id: "pop.done",    area: "pop",  label: "Mark done button",       desc: "the tick on the calendar block does this too" },
+    { id: "pop.profile", area: "pop",  label: "Open full profile",      desc: "" },
+    { id: "pop.resched", area: "pop",  label: "Reschedule button",      desc: "" },
+    { id: "pop.dup",     area: "pop",  label: "Duplicate button",       desc: "" },
+    { id: "pop.thisday", area: "pop",  label: "Change just this day",   desc: "title and times for one day" },
+    { id: "pop.repeat",  area: "pop",  label: "Repeat days and times",  desc: "with a change link" },
+    { id: "pop.origin",  area: "pop",  label: "Where it comes from",    desc: "“from your routine”" },
+    { id: "pop.next",    area: "pop",  label: "When it comes next",     desc: "“Next after this”" },
+    { id: "pop.merge",   area: "pop",  label: "Other times, same block", desc: "“4 occurrences today” time buttons" },
+    { id: "pop.cat",     area: "pop",  label: "Its category",           desc: "" },
+    { id: "pop.food",    area: "pop",  label: "Food log link",          desc: "meals only" },
+    { id: "pop.streak",  area: "pop",  label: "Streak",                 desc: "“N in a row”" },
+    { id: "pop.remind",  area: "pop",  label: "Reminder",               desc: "Default, Custom or Off" },
+    { id: "pop.guide",   area: "pop",  label: "Conversation guide",     desc: "" },
+    { id: "pop.skip",    area: "pop",  label: "Skip today button",      desc: "" },
+    { id: "pop.walk",    area: "pop",  label: "Start walkthrough",      desc: "for routines with steps" },
+    { id: "pop.mode",    area: "pop",  label: "Start a Mode now",       desc: "" },
+    { id: "day.left",    area: "menu", label: "Left column",            desc: "today's numbers and the mini month" },
+    { id: "day.right",   area: "menu", label: "Right strip",            desc: "Right now and Insights" },
+    { id: "menu.lifemap", area: "menu", label: "Life Map in the menu",  desc: "" },
+    { id: "menu.guides", area: "menu", label: "Conversation Guides in the menu", desc: "" }
+  ];
+  const STRIP = (function () {
+    let raw = null;
+    try { raw = JSON.parse(localStorage.getItem(STRIP_KEY)); } catch (e) {}
+    return { on: raw && raw.on && typeof raw.on === "object" ? raw.on : {}, applied: !!(raw && raw.applied) };
+  })();
+  function saveStrip() {
+    try { localStorage.setItem(STRIP_KEY, JSON.stringify({ v: 1, applied: STRIP.applied, on: STRIP.on })); } catch (e) {}
+  }
+  // The first-load pass, once: the left column starts closed and the calendar starts on
+  // the whole week (her picks). After this her own choices are never overwritten.
+  if (!STRIP.applied) {
+    PREFS.sideOpen = false;
+    PREFS.calDaysDesk = 7;
+    savePrefs();
+    STRIP.applied = true;
+    saveStrip();
+  }
+  function stripOn(id) {
+    if (id === "day.left") return PREFS.sideOpen === true;
+    return STRIP.on[id] === true;
+  }
+  function stripPiece(id) { return STRIP_PIECES.find(p => p.id === id) || null; }
+  // [data-strip-right-off] on <html> is what the CSS reads to hide the right strip, its
+  // panel and the phone's right-edge hint (search "data-strip-right-off").
+  function stripApplyAttrs() {
+    document.documentElement.toggleAttribute("data-strip-right-off", !stripOn("day.right"));
+  }
+  stripApplyAttrs();
+  let stripChipOpen = {};
+  let stripJustAdded = null;
+  // Stamps a piece's root element so a piece she has just added can play its one short
+  // "arrive" motion (stripPlayArrive). Never wraps -- the popup's mobile layout orders its
+  // direct children with CSS `order`, so an extra wrapper div would break that.
+  function stripTag(id, html) {
+    return html ? html.replace(/<([a-zA-Z][\w-]*)/, '<$1 data-strip-pc="' + id + '"') : html;
+  }
+  function stripPlayArrive() {
+    if (!stripJustAdded) return;
+    const id = stripJustAdded;
+    stripJustAdded = null;
+    // every match, not the first: Mark done exists twice (phone header + desktop row) and only
+    // one of them is on screen at a given width
+    const els = document.querySelectorAll('[data-strip-pc="' + id + '"]');
+    els.forEach(el => el.classList.add("strip-new"));
+    setTimeout(() => els.forEach(el => el.classList.remove("strip-new")), 900);
+  }
+  function stripAllRowsHtml() {
+    const anyHidden = STRIP_PIECES.some(p => !stripOn(p.id));
+    const anyShown = STRIP_PIECES.some(p => stripOn(p.id));
+    return `<div class="strip-sub">Everything</div>`
+      + (anyHidden ? `<button type="button" class="strip-it" data-strip-all="on"><span class="strip-ic" aria-hidden="true">+</span><span class="strip-tx"><b>Show everything again</b><small>every hidden piece, in the menu and the popup</small></span></button>` : "")
+      + (anyShown ? `<button type="button" class="strip-it" data-strip-all="off"><span class="strip-ic" aria-hidden="true">–</span><span class="strip-tx"><b>Back to the bare start</b></span></button>` : "");
+  }
+  // One chip per area. `ids` (optional) narrows the list to the pieces that actually
+  // exist for what is on screen -- the popup passes only what THIS event has, so the list
+  // never offers "Food log link" on a Pilates block.
+  function stripChipHtml(area, ids, skip) {
+    // `skip` = ids to leave out (the phone's menu has no left column to add back)
+    const pcs = STRIP_PIECES.filter(p => p.area === area && (!ids || ids.indexOf(p.id) !== -1) && !(skip && skip.indexOf(p.id) !== -1));
+    if (!pcs.length) return "";
+    const open = !!stripChipOpen[area];
+    let list = "";
+    if (open) {
+      const hidden = pcs.filter(p => !stripOn(p.id));
+      const shown = pcs.filter(p => stripOn(p.id));
+      const addRow = p => `<button type="button" class="strip-it" data-strip-add="${p.id}"><span class="strip-ic" aria-hidden="true">+</span><span class="strip-tx"><b>${esc(p.label)}</b>${p.desc ? `<small>${esc(p.desc)}</small>` : ""}</span></button>`;
+      const hideRow = p => `<button type="button" class="strip-it strip-on" data-strip-hide="${p.id}"><span class="strip-ic" aria-hidden="true">✓</span><span class="strip-tx"><b>${esc(p.label)}</b></span><span class="strip-act">hide</span></button>`;
+      list = `<div class="strip-list" role="group" aria-label="Add back">`
+        + (hidden.length ? hidden.map(addRow).join("") : `<div class="strip-none">Nothing hidden here.</div>`)
+        + (shown.length ? `<div class="strip-sub">Showing now</div>` + shown.map(hideRow).join("") : "")
+        + (area === "menu" ? stripAllRowsHtml() : "")
+        + `</div>`;
+    }
+    return `<div class="strip-wrap" data-strip-area="${area}"><button type="button" class="strip-chip" data-strip-chip="${area}" aria-expanded="${open}">+ Add back</button>${list}</div>`;
+  }
+  function stripRenderMenus() {
+    renderDeskSidebar(); renderDeskNavRail(); renderNavPanel(); renderNavIconRail(); renderNavTabStrip();
+  }
+  function stripSet(id, on) {
+    const p = stripPiece(id);
+    if (!p) return;
+    if (id === "day.left") { PREFS.sideOpen = !!on; savePrefs(); }
+    else { if (on) STRIP.on[id] = true; else delete STRIP.on[id]; saveStrip(); }
+    stripJustAdded = on ? id : null;
+    stripApplyAttrs();
+    if (p.area === "pop") refreshOpenTlDetail();
+    else { stripRenderMenus(); stripPlayArrive(); }
+  }
+  function stripAll(on) {
+    STRIP_PIECES.forEach(p => {
+      if (p.id === "day.left") PREFS.sideOpen = !!on;
+      else if (on) STRIP.on[p.id] = true;
+      else delete STRIP.on[p.id];
+    });
+    savePrefs(); saveStrip();
+    stripJustAdded = null;
+    stripApplyAttrs();
+    stripRenderMenus();
+    refreshOpenTlDetail();
+  }
+  // ONE document-level delegate for both areas. It runs AFTER #tlDetailOverlay's own
+  // "click outside the sheet closes it" listener (document is last in the bubble), so the
+  // re-render below can never make that listener see an orphaned target and close the sheet.
+  document.addEventListener("click", e => {
+    const chip = e.target.closest("[data-strip-chip]");
+    if (chip) {
+      const a = chip.dataset.stripChip;
+      stripChipOpen[a] = !stripChipOpen[a];
+      if (a === "pop") refreshOpenTlDetail(); else stripRenderMenus();
+      return;
+    }
+    const add = e.target.closest("[data-strip-add]");
+    if (add) { stripSet(add.dataset.stripAdd, true); return; }
+    const hide = e.target.closest("[data-strip-hide]");
+    if (hide) { stripSet(hide.dataset.stripHide, false); return; }
+    const all = e.target.closest("[data-strip-all]");
+    if (all) { stripAll(all.dataset.stripAll === "on"); return; }
+    // a tap anywhere outside the menu's open list folds it away (the popup's list folds with the popup)
+    if (stripChipOpen.menu && !e.target.closest('.strip-wrap[data-strip-area="menu"]')) { stripChipOpen.menu = false; stripRenderMenus(); }
+  });
   // PREFS.tracksOff was only ever writable
   // through the "Parts of life" sidebar checklist, now gone -- a track already
   // hidden there would otherwise stay silently hidden forever with no UI left to
@@ -39289,8 +39561,19 @@
   // this one-line change would flip them all correctly with nothing else to
   // touch — see placeDeskGrid()'s "else if (on)" branch (the pre-4-zone desktop
   // layout, kept verbatim) for what now renders instead of the 1-day zones.
+  // 2026-10-14 (the bare start): the computer and the phone remember their OWN day count.
+  // The computer's "whole week" default must not push a 7-column grid onto a 360px phone
+  // (its blocks lose their names there), and book33-prefs is shared between the two. The
+  // phone keeps reading PREFS.calDays exactly as before; the computer reads calDaysDesk
+  // first and falls back to calDays, so nothing she had already chosen is lost.
+  function calDaysIsDesk() { return window.matchMedia("(min-width: 768px)").matches; }
   function calDaysActive() {
+    if (calDaysIsDesk() && PREFS.calDaysDesk) return PREFS.calDaysDesk;
     return PREFS.calDays || 1;
+  }
+  function calDaysSet(n) {
+    if (calDaysIsDesk()) PREFS.calDaysDesk = n; else PREFS.calDays = n;
+    savePrefs();
   }
   // THE one statement of which
   // day-counts are week-aligned. 7 = Week (Mon-Sun always), 5 = Work week (Mon-Fri
@@ -40255,7 +40538,7 @@
   }
   function renderCalDaysUI() {
     document.querySelectorAll(".cal-days-btn").forEach(b => {
-      b.setAttribute("aria-pressed", String(+b.dataset.calDays === (PREFS.calDays || 1)));
+      b.setAttribute("aria-pressed", String(+b.dataset.calDays === calDaysActive()));
     });
     const single = document.getElementById("timelineScroll");
     const multi = document.getElementById("multiDayWrap");
@@ -49681,7 +49964,7 @@
   function renderEverythingElseSheet() {
     const host = document.getElementById("eelSheet");
     if (!host) return;
-    const door = eelOpenDoor ? NAV_DOORS.find(d => d.id === eelOpenDoor) : null;
+    const door = eelOpenDoor ? navDoorsNow().find(d => d.id === eelOpenDoor) : null;   // 2026-10-14: minus what is pinned to the menu
     if (eelOpenDoor && !door) { eelOpenDoor = null; }
     if (door) {
       // alphabetical, her rule -- sorted here explicitly
@@ -49691,7 +49974,7 @@
         .sort((a, b) => a.label.localeCompare(b.label));
       host.innerHTML = `
         <div class="eel-head">
-          <button type="button" class="eel-back" data-eel-back>‹ Everything else</button>
+          <button type="button" class="eel-back" data-eel-back>‹ More</button>
           <button type="button" class="tl-detail-close" data-eel-close aria-label="Close">×</button>
         </div>
         <div class="eel-door-title"><span class="eel-swatch" aria-hidden="true">${navIconHtml({ icon: door.icon })}</span>${esc(door.label)}</div>
@@ -49704,11 +49987,11 @@
     }
     host.innerHTML = `
       <div class="tl-detail-head eel-head">
-        <div class="eel-title" id="eelTitle">Everything else</div>
+        <div class="eel-title" id="eelTitle">More</div>
         <button type="button" class="tl-detail-close" data-eel-close aria-label="Close">×</button>
       </div>
       <div class="eel-list">
-        ${NAV_DOORS.map(d => `<button type="button" class="eel-row eel-door-row" data-eel-door="${d.id}">`
+        ${navDoorsNow().map(d => `<button type="button" class="eel-row eel-door-row" data-eel-door="${d.id}">`
           + `<span class="eel-swatch" aria-hidden="true">${navIconHtml({ icon: d.icon })}</span>`
           + `<span class="eel-door-t"><span class="eel-door-name">${esc(d.label)}</span><span class="eel-door-preview">${esc(d.preview)}</span></span>`
           + `<span class="eel-chev" aria-hidden="true">›</span></button>`).join("")}
@@ -51364,6 +51647,11 @@
   // (renderNavPanelRowHtml()) -- one reorder here does both.
   const NAV_ITEMS = [
     { viewId: "day",     label: "Today",     icon: "☀",  group: null },
+    // "Calendar" here means the month-grid overview, distinct from "Today" (the day
+    // timeline) above -- the two are complementary views of the same data, same
+    // distinction Google Calendar itself makes between its own "Today" and "Month".
+    // 2026-10-14 (the bare start, her level-B menu): second row, right after Today.
+    { viewId: "month",   label: "Month",     icon: "🗓",  group: null },
     // Label covers two CATEGORIES ids (events + the standalone
     // birthdays page) -- a nav row can only carry one data-view, so this routes to
     // "events" (the All Events rebuild already surfaces birthdays as gold capsules
@@ -51388,18 +51676,16 @@
     // NEW (2026-08-30): was 3 taps deep behind Everything else -> Planning -> Life
     // Map -- one of her two named most-used pages, now one tap like Events beside
     // it. Removed from NAV_DOORS' planning door below so it isn't listed twice.
-    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: "Also" },
+    // 2026-10-14 (the bare start): behind "More" until added back (strip: "menu.lifemap").
+    { viewId: "lifeMap", label: "Life Map",  icon: "🗺",  group: "Also", strip: "menu.lifemap" },
     // 2026-09-17 (synth22, "put conversation guide here" + a screenshot of this
     // exact rail): was 3 taps deep behind Everything else -> Conversation Guides'
     // own door -- same promotion Life Map got on 2026-08-30, same reasoning (a
     // page real enough to use daily doesn't belong behind a catch-all). Removed
     // from NAV_DOORS below so it isn't listed twice; its CATEGORIES chapter entry
     // (search "guides3") stays untouched, same as Life Map's own.
-    { viewId: "guides",  label: "Conversation Guides", icon: "💬", group: "Also" },
-    // "Calendar" here means the month-grid overview, distinct from "Today" (the day
-    // timeline) above -- the two are complementary views of the same data, same
-    // distinction Google Calendar itself makes between its own "Today" and "Month".
-    { viewId: "month",   label: "Month",     icon: "🗓",  group: "Also" },
+    { viewId: "guides",  label: "Conversation Guides", icon: "💬", group: "Also", strip: "menu.guides" },   // 2026-10-14: behind "More" until added back
+    // Month moved up beside Today (2026-10-14, the bare start) -- see the second row above.
     // 2026-10-10 (ask28, "i dont use some of it" -> "To-do"): unpinned, not
     // retired -- its page, route and CATEGORIES entry are untouched, same "rail
     // retirement, not page retirement" shape as RETIRED-FEATURES.md's earlier nav
@@ -51454,10 +51740,32 @@
     { id: "planning", label: "Planning", icon: "🗺",
       preview: "Event menu · Goals · Birthdays · To-do",
       views: ["eventTypes", "goals", "birthdays", "todo"] },
+    // 2026-10-14 (the bare start): where Life Map and Conversation Guides live while they are
+    // not pinned to the menu. navDoorsNow() drops a view from here the moment she adds it back
+    // to the menu (so it is never listed twice), and drops the whole door when both are pinned.
+    { id: "also", label: "Life Map & Guides", icon: "🗺",
+      preview: "Life Map · Conversation Guides",
+      views: ["lifeMap", "guides"] },
   ];
-  // Computed, not hardcoded -- the "Everything else" row's badge always matches
-  // NAV_DOORS' real contents.
-  const navDoorsPageCount = () => NAV_DOORS.reduce((n, d) => n + d.views.length, 0);
+  // 2026-10-14 (the bare start): the menu's rows right now = NAV_ITEMS minus the footer and
+  // minus any row whose strip piece is hidden. EVERY surface that lists the pinned rows (desktop
+  // rail, phone drawer, icon rail, tab strip, launcher) asks this, never NAV_ITEMS directly.
+  function navPinnedNow() {
+    return NAV_ITEMS.filter(item => item.group !== "_footer" && (!item.strip || stripOn(item.strip)));
+  }
+  // NAV_DOORS minus whatever is pinned to the menu right now.
+  function navDoorsNow() {
+    return NAV_DOORS.map(d => {
+      const views = d.views.filter(v => {
+        const it = NAV_ITEMS.find(i => i.viewId === v);
+        return !(it && it.strip && stripOn(it.strip));
+      });
+      return views.length === d.views.length ? d : Object.assign({}, d, { views });
+    }).filter(d => d.views.length);
+  }
+  // Computed, not hardcoded -- the "More" row's badge always matches
+  // the doors' real contents.
+  const navDoorsPageCount = () => navDoorsNow().reduce((n, d) => n + d.views.length, 0);
   // one label lookup so a door's page rows never duplicate/drift from CATEGORIES'
   // own labels -- scans every chapter's views, same shape as categoryOf() above it.
   const navDoorViewLabel = viewId => {
@@ -51500,7 +51808,7 @@
   function navPanelEverythingElseRowHtml() {
     return `<button type="button" class="nav-panel-row" data-nav-everything-else aria-haspopup="dialog">`
       + `<span class="nav-ic" aria-hidden="true">▤</span>`
-      + `<span class="nav-panel-lbl">Everything else</span>`
+      + `<span class="nav-panel-lbl">More</span>`
       + `<span class="nav-panel-count">${navDoorsPageCount()}</span>`
       + `</button>`;
   }
@@ -51613,13 +51921,13 @@
   // rail is a descendant of that host), no second wiring needed.
   function navIconRailChaptersRowHtml() {
     return `<button type="button" class="nir-row" data-nav-everything-else aria-haspopup="dialog">`
-      + `<span class="nav-ic" aria-hidden="true">▤</span><span class="nir-lbl">Everything else</span></button>`;
+      + `<span class="nav-ic" aria-hidden="true">▤</span><span class="nir-lbl">More</span></button>`;
   }
   function renderNavIconRail() {
     const host = document.getElementById("navIconRail");
     if (!host) return;
     let html = "", lastGroup;
-    const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
+    const pinnedItems = navPinnedNow();
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && lastGroup && item.group) {
         html += `<div class="nir-sep" aria-hidden="true"></div>`;
@@ -51628,6 +51936,7 @@
       html += navIconRailRowHtml(item);
     });
     html += `<div class="nir-sep" aria-hidden="true"></div>` + navIconRailChaptersRowHtml();
+    html += stripChipHtml("menu", null, ["day.left"]);   // 2026-10-14 (the bare start)
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) html += `<div class="nir-sep" aria-hidden="true"></div>` + navIconRailRowHtml(footerItem);
     html += b33InstallRowHtml("nir");
@@ -51675,7 +51984,7 @@
     // single Everything-else door row (navPanelChaptersHtml() itself isn't
     // deleted, see its own comment -- renderNavChaptersExtras() still calls it for
     // the icon rail's flyout).
-    const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
+    const pinnedItems = navPinnedNow();
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && item.group) {
         html += `<div class="nav-panel-group-lbl">${esc(item.group)}</div>`;
@@ -51683,7 +51992,11 @@
       lastGroup = item.group;
       html += navPanelRowHtml(item);
     });
-    html += `<div class="nav-panel-group-lbl">More</div>` + navPanelEverythingElseRowHtml();
+    // 2026-10-14 (the bare start): the row is itself called "More" now, so the "More" group
+    // label above it is gone (it would have read "More / More"). The "+ Add back" chip sits
+    // just above Settings, the same place as on the desktop rail.
+    html += navPanelEverythingElseRowHtml();
+    html += stripChipHtml("menu", null, ["day.left"]);
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) html += navPanelRowHtml(footerItem);
     html += b33InstallRowHtml("panel");
@@ -51718,7 +52031,7 @@
   function renderNavTabStrip() {
     const host = document.getElementById("navTabStrip");
     if (!host) return;
-    const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
+    const pinnedItems = navPinnedNow();
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     host.innerHTML = pinnedItems.map(navTabRowHtml).join("") + navTabEverythingElseHtml()
       + (footerItem ? navTabRowHtml(footerItem) : "");
@@ -51782,6 +52095,7 @@
   // Right-drawer: same open/close shape as #navPanel above, sharing its
   // backdrop and its "only one at a time" rule.
   function openDayRightDrawer() {
+    if (!stripOn("day.right")) return;   // 2026-10-14: the right drawer is a STRIP piece, shut until added back
     armBackGuard();
     closeNavPanel();
     const panel = document.getElementById("dayRightDrawer");
@@ -52423,9 +52737,8 @@
     const btn = e.target.closest("[data-cal-days]");
     if (!btn) return;
     const n = parseInt(btn.dataset.calDays, 10);
-    if (!n || PREFS.calDays === n) return;
-    PREFS.calDays = n;
-    savePrefs();
+    if (!n || calDaysActive() === n) return;
+    calDaysSet(n);
     renderDay();
   });
   // 2026-08-06 (Linh: "Today should jump to the Day page from any tab"): same
@@ -54252,32 +54565,26 @@
     // 2026-09-03: the in-app Back row -- first thing in the rail, shown only while
     // there is a previous page (b33SyncBackBtns); same b33GoBack() as hardware back
     html += `<button type="button" class="dnr-row dnr-back" data-b33-back${b33CanGoBack() ? "" : " hidden"} title="Back to the previous page"><span class="dnr-ic" aria-hidden="true">‹</span><span class="dnr-lbl">Back</span></button>`;
-    const pinnedItems = NAV_ITEMS.filter(item => item.group !== "_footer");
+    const pinnedItems = navPinnedNow();
     pinnedItems.forEach(item => {
       if (item.group !== lastGroup && lastGroup && item.group) {
         html += `<div class="dnr-sep" aria-hidden="true"></div>`;
       }
       lastGroup = item.group;
       html += dnrRailRowHtml(item, item.viewId === state.view);
-      // 2026-08-23 (Linh: "fold the collapsed sidebar into the icon nav rail -- one
-      // rail, not two columns"): not a real NAV_ITEMS entry -- it doesn't navigate
-      // anywhere, so it's hand-built here rather than added to that array. Shows
-      // only right after Today, and only while she's actually on the Day page with
-      // the sidebar collapsed; #dnrScroll's own click listener below branches on
-      // data-action (not data-view) to reopen it instead of navigating. The gold
-      // border is deliberate -- see .dnr-ic-marked -- so it doesn't read as just
-      // another page to tap.
-      if (item.viewId === "day" && state.view === "day" && PREFS.sideOpen === false) {
-        html += `<button type="button" class="dnr-row" data-action="reopen-sidebar" title="Show calendar sidebar" aria-label="Show calendar sidebar">`
-          + `<span class="dnr-ic dnr-ic-marked">${b33IconSvg("reopenSidebar")}</span><span class="dnr-lbl">Show sidebar</span></button>`;
-      }
+      // 2026-10-14 (the bare start): the old "Show sidebar" row (2026-08-23) is gone from here.
+      // The "+ Add back" chip below is the one place that brings the left column back (it rides
+      // the same PREFS.sideOpen flag, so the « button inside the column still works).
     });
     // 2026-08-29 (Calendar-first nav rebuild, Commit 3): the permanent rail's own
-    // "Everything else" trigger -- expand, don't navigate, same data-action shape
-    // as reopen-sidebar just above (not a real NAV_ITEMS entry, doesn't navigate).
+    // "More" trigger (was "Everything else", renamed 2026-10-14) -- expand, don't navigate,
+    // same data-action shape as the other non-page rows (not a real NAV_ITEMS entry).
     html += `<div class="dnr-sep" aria-hidden="true"></div>`
-      + `<button type="button" class="dnr-row" data-action="everything-else" title="Everything else" aria-label="Everything else" aria-haspopup="dialog">`
-      + `<span class="dnr-ic">${b33IconSvg("everythingElse")}</span><span class="dnr-lbl">Everything else</span></button>`;
+      + `<button type="button" class="dnr-row" data-action="everything-else" title="More pages" aria-label="More pages" aria-haspopup="dialog">`
+      + `<span class="dnr-ic">${b33IconSvg("everythingElse")}</span><span class="dnr-lbl">More</span></button>`;
+    // 2026-10-14 (the bare start): the menu's "+ Add back" chip -- left column, right strip,
+    // Life Map, Conversation Guides. Sits just above Settings, always in the same place.
+    html += stripChipHtml("menu");
     const footerItem = NAV_ITEMS.find(item => item.group === "_footer");
     if (footerItem) {
       html += `<div class="dnr-sep" aria-hidden="true"></div>` + dnrRailRowHtml(footerItem, footerItem.viewId === state.view);
@@ -54301,6 +54608,7 @@
     const reopenSidebar = e.target.closest('[data-action="reopen-sidebar"]');
     if (reopenSidebar) { PREFS.sideOpen = true; savePrefs(); renderDeskSidebar(); renderDeskNavRail(); return; }
     if (e.target.closest('[data-action="everything-else"]')) { openEverythingElseSheet(); return; }
+    if (e.target.closest(".strip-wrap")) return;   // 2026-10-14: the "+ Add back" chip has its own document-level handler
     const row = e.target.closest("[data-view]");
     if (!row) return;
     state.view = row.dataset.view;
@@ -54438,7 +54746,7 @@
   let dnrLauncherOpen = false;
   function dnrLauncherGridHtml() {
     let html = "", lastGroup;
-    NAV_ITEMS.filter(item => item.group !== "_footer").forEach(item => {
+    navPinnedNow().forEach(item => {   // 2026-10-14: the same pinned rows as the rail
       const newGroup = item.group && item.group !== lastGroup;
       lastGroup = item.group;
       if (newGroup) html += `<div class="dnr-launch-grouplbl">${esc(item.group)}</div>`;
@@ -54471,7 +54779,7 @@
     // deleted) -- one row opening the same Everything-else sheet every other
     // surface now uses, not a 36-page list inline in the popover.
     const everythingElseRow = `<button type="button" class="dnr-row" data-action="everything-else" aria-haspopup="dialog">`
-      + `<span class="dnr-ic">${navIconHtml({ icon: "▤" })}</span><span class="dnr-lbl">Everything else</span>`
+      + `<span class="dnr-ic">${navIconHtml({ icon: "▤" })}</span><span class="dnr-lbl">More</span>`
       + `<span class="dnr-count">${navDoorsPageCount()}</span></button>`;
     const pop = document.createElement("div");
     pop.className = "dnr-launch-pop";
@@ -54702,9 +55010,8 @@
     if (state.view !== "day") return;
     if (!["1", "3", "5", "7"].includes(e.key)) return;
     const n = parseInt(e.key, 10);
-    if (PREFS.calDays === n) return;
-    PREFS.calDays = n;
-    savePrefs();
+    if (calDaysActive() === n) return;
+    calDaysSet(n);
     renderDay();
   });
 

@@ -341,6 +341,50 @@ old freeform calendar (see Data below), so flag that before any push.
   field; §3 "Mode decides the colour" — typed items are coloured by GROUP (her choice);
   untyped items still follow the Mode/neutral rule. §17 records the retired typed screens.
 
+## The bare start — C22 starts stripped back (2026-10-14, her words: "i am overwhelmed by all
+## the elements ... readd what i need as i use it overtime")
+Built on the branch `c22-strip` (worktree `.wtscratch_strip`) — **never push to main until she
+says "push live"** (her review rule: build, show screenshots on computer + phone, she says it).
+**Nothing is deleted — hide only.** A piece is only drawn once she adds it back; its code and
+data are untouched (RETIRED-FEATURES.md §18).
+- **The registry:** `STRIP_PIECES` (search "STRIP -- the bare start"). A piece's id is what the
+  render code asks (`stripOn(id)`), what the chip lists, and what is stored in `book33-strip`
+  (`{v:1, applied, on:{id:true}}`, cloud-synced like every `book33-*` key, so phone and computer
+  share one strip). Default = hidden. A NEW clutter-prone control gets a registry row and a
+  `stripOn` gate — never a bare always-on button in the popup or the menu.
+- **One component, two homes:** `stripChipHtml(area, ids, skip)` draws the dashed "+ Add back"
+  chip and its list ("add" rows, then "Showing now" rows each with "hide"). `area:"pop"` sits at
+  the foot of the event popup and lists only pieces THIS event actually has (`stripAvail` in
+  `renderTlDetailBody`); `area:"menu"` sits above Settings in the desktop rail, the phone drawer
+  and the icon rail (the phone skips "Left column": there it is the "Calendar & numbers" row).
+  One document click delegate drives both, and folds the menu list on any outside tap. The menu
+  list also carries "Show everything again" / "Back to the bare start". A piece she has just
+  added plays one short `strip-new` arrive animation (`stripTag` stamps `data-strip-pc` on the
+  piece's root element — never wrap a popup piece: the phone popup orders its direct children
+  with CSS `order`).
+- **Event popup base:** title, time with "Repeats" once, "▸ N steps" (one line, tap to open —
+  `tlStepsOpen`, reset on open), Edit, Delete. Pieces: `pop.done` (also hides the phone
+  header Done), `pop.profile`, `pop.resched`, `pop.dup`, `pop.thisday`, `pop.repeat`,
+  `pop.origin`, `pop.next`, `pop.merge` (the "4 occurrences today" buttons, `renderTlMergeList`),
+  `pop.cat`, `pop.food`, `pop.streak`, `pop.remind`, `pop.guide`, `pop.skip`, `pop.walk`,
+  `pop.mode`. Mark done is NOT in the popup by default — the tick circle on the block does it.
+- **Day screen:** `day.left` rides `PREFS.sideOpen` (so the old « button and the chip never
+  disagree); `day.right` toggles `html[data-strip-right-off]` (CSS hides `#deskWidgetRail`,
+  `#wrPanel`, `#wrFallback`, `#ddEdgeHintRight`; `openDayRightDrawer()` returns early).
+- **Menu:** `NAV_ITEMS` pins Today, Month, Events & birthdays, Fitness, Marital; Life Map and
+  Conversation Guides carry `strip:` ids (`menu.lifemap`, `menu.guides`) and show in the menu only
+  once added back (`navPinnedNow()`); until then they live in the "Life Map & Guides" door of the
+  More sheet (`NAV_DOORS` + `navDoorsNow()` drops the door when both are pinned). "Everything
+  else" is named "More" everywhere (ids `eel*` / `data-action="everything-else"` kept).
+- **Calendar default:** the first-load pass (once, `STRIP.applied`) closes the left column and
+  sets `PREFS.calDaysDesk = 7`. The computer and the phone remember their OWN day count
+  (`calDaysActive()` / `calDaysSet(n)`; the phone keeps `PREFS.calDays`) because the phone's
+  7-column grid loses block names. Her own later choice is never overwritten.
+- **Kept visible on purpose:** birthdays, planned-workout chip, cycle chip, wash/habit prompts,
+  days picker, moon, hours gear.
+- **Touch size:** the chip keeps its small dashed look but its hit area is 44px (`::after`),
+  the steps toggle and list rows are 44px on a phone.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
