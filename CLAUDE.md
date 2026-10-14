@@ -117,7 +117,32 @@ effort defaults to.
     movement groups (`TPE_MOVE_K`), never a part. Three family hues: `--tpe-arm` (shoulder to
     grip), `--tpe-low` (hip to feet), `--tpe-spine` (neck, lower back). `TPE_AREA_RX` matches
     a part first, but only on words a gym lift never uses (supination, wrist, toe curl,
-    clamshell, chin tuck...), so "Bicep curl" stays Pull and "Close-grip bench" stays Push. The summary strip's muscle map and
+    clamshell, chin tuck...), so "Bicep curl" stays Pull and "Close-grip bench" stays Push.
+    **Muscles & exercises reference (2026-10-15, "do some online research, especially in free
+    physio information ... build a muscle and exercise reference for the fitness system.
+    include animations and visual integrations"; her 8 picks on the mock, which is the spec:
+    `mocks/muscle-reference-mock-2026-10-14.html`):** a "Muscles & exercises" section on the
+    Fitness page between Workout templates and Upcoming (`#fitHomeRef`, `refRenderHome()`:
+    the two figures tinted by group + four tab chips Muscles / Exercises / Checks / Where it
+    hurts) and ONE slide-up sheet (`#refPanelOverlay`, the app's `.slide-panel-*` chrome with
+    its own overlay, a back stack, Escape / overlay tap / hardware back via `b33GoBack`).
+    Data: `REF_MUSCLES` (23, light real `TPE_ART` ids; plain name first, Latin small),
+    `REF_EX` (36, `p` = does most, `s` = helps, `rx` finds an entry from a template or session
+    name through `refExFor`, checked in `REF_EX_ORDER` specific-first), `REF_TESTS` (12 physio
+    checks with steps, a positive, small trust numbers + plain words), `REF_PAIN` (her
+    `PAIN_AREAS` -> muscles around it, checks, rehab lines, and her own log: ticks in the last
+    30 days from `FIT_LOG`, lit on the side she ticked, plus a chip to the routine with
+    `painTrack`). Every line is paraphrased from the page in its `src` (Physio-pedia read
+    through a text proxy, Physiotutors, PhysicalTherapyWeb, two journals) and the sources are
+    chips (`data-ref-url`), never links; triceps / forearm / peroneals had no readable page and
+    say so. Lit muscles breathe through a registered `--i` (`@property`); the small moving
+    figures (`REF_RIG`: side-view joint-angle rigs for squat / deadlift / row / press / bench /
+    Nordic / lunge / Neer / leg raise / Thomas / calf squeeze, hand-drawn front views for the
+    Scarf test, Hawkins-Kennedy, painful arc, empty can) are CSS keyframes, so the `.tpe`
+    reduced-motion rule stops them. Ways in: the editor's Muscles chip and the Workout Mode
+    tile (`data-ref-open="exname:..."`), one chip per ticked joint in the pain check-in
+    (`refPainChipsHtml`), any muscle on any figure. Every sheet that touches a check ends on
+    "it does not diagnose, and your physio's plan stays the plan" — keep that line. The summary strip's muscle map and
     legend highlight each other; the ribbon and the set rows' fill bars show load; the coach
     strip (`tpeHistory`/`tpeCoachHtml`) reads `FIT_LOG` for last session + PR and hides plates
     at 0 kg. Numbers are typed or stepped (saved live, no re-render while typing — only
