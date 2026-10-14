@@ -156,6 +156,38 @@ effort defaults to.
     above `.tpe`; don't copy it to other pages. The
     planned-day and logged-session editors still use the shared `exSetRowHtml` builders and
     are untouched.
+    **My exercises — the library (2026-10-15, "put my exercises in a library so i can reuse it";
+    her 12 picks on the mock, which is the spec: `mocks/exercise-library-mock-2026-10-15.html`):**
+    every lift name she has ever typed — templates, planned days, logged sessions — is one entry
+    in `EX_LIB` (`book33-fitness-exlib`, keyed by `exModeName`; `libSync()` folds new names in on
+    every read, nothing is ever dropped). Lifts only: Gym and F45; Bouldering routes are
+    untouched. An entry carries the name, its DEFAULT SETS (first learnt from the richest copy,
+    then owned by the entry) and `hidden`; timed / sided / rest / area / gear / demo stay in
+    `EX_MODE_PREFS`, so an entry's settings ARE its mode prefs. Two homes, one store: the Fitness
+    page's "My exercises" section (`#fitHomeLib`, `libRenderHome()`, between Workout templates and
+    Muscles & exercises: search + a tap on the figure + group tabs All / Core / Legs / Push / Pull
+    (+ Hidden), chips most-used first, "+ New") and the PICKER sheet (`libOpenPick(spec)` →
+    `refOpen("libpick", …)`, the reference sheet's own `#refPanelOverlay`) behind a "From my
+    exercises ›" chip beside every lift "+ Add exercise" box: the template editor (`tpl:<id>`),
+    a planned day (`pex:<dateKey>`), a logged session / Today's logger / Workout Mode
+    (`ex:<dateKey>:<sessId>`). Tick several, one sticky button ("Add 2 to first edition");
+    names already in that list are greyed "· in"; each new copy gets the entry's default sets
+    and its remembered modes (`libDefaultSets` is the first choice in `addTemplateExercise` /
+    `addPlannedExercise` / `addExercise`, after today's plan). A chip on the home section opens
+    the ENTRY sheet (`refOpen("lib", key)` → `libEntryBody`): the editor's own set rows, ribbon
+    and coach strip edit the defaults; "In your templates" rows; Rename (every template, plan and
+    log row follows — `libRename`, undo); Merge a twin in (`libMerge`, same reach); Hide / Show
+    (hidden = out of the chips, still autocompletes). Typing in any add box still autocompletes,
+    now from every library name (`libDatalistNames`). Retired: the editor's and Workout Mode's
+    "Often" chip row (RETIRED-FEATURES.md §19) — the picker is most-used first. **Traps:**
+    `#tlWorkoutBody` stops every click bubbling (its own outside-click guard), so the library
+    delegate AND the reference delegate are registered in the CAPTURE phase — any new
+    document-level delegate that must work inside Workout Mode needs the same (the reference
+    build's Workout Mode tile silently never opened until this fix); `.ref-ov` is z-index 365
+    (above Workout Mode's 360, below the 370 toast) for the same reason; the field law's
+    `!important` padding on `input[type="search"]` is only beaten by an equal `!important` at
+    higher specificity (`.tpe .lib-search input[type="search"]`). The app's globals live inside
+    the IIFE — verify through the DOM and seed through the `book33-*` keys, never from the console.
     **Workout Mode is an athlete screen (2026-10-14 pm, her words on the Gym "Planning" screen:
     "this display looks too sparse i want animated interactive design for an athlete. make 1
     mock" → "yes build it - push"; the mock is `mocks/workout-mode-athlete-mock-2026-10-14.html`,
