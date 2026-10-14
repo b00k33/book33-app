@@ -99,7 +99,13 @@ effort defaults to.
     inferred from the name (`tpeAreaOf`/`tpeGearOf`), changeable by hand, and remembered BY
     NAME in `EX_MODE_PREFS` with timed/sided/rest/video. The artwork is `TPE_ART` (inline
     SVG defs injected once into `#tpeArtDefs`, ids prefixed `tpe-`; muscle figures, gear
-    icons, a barbell loaded with real-colour plates). The summary strip's muscle map and
+    icons, a barbell loaded with real-colour plates). **The figures are real anatomy
+    (2026-10-14 pm, "make the fitness diagrams and images more realistic and use accurate
+    anatomy"; her picks: a woman's proportions, fibre lines kept, gear icons kept):** an
+    8-head écorché, half-body mirrored, every muscle group in its true place — the mock
+    `mocks/fitness-anatomy-mock-2026-10-14.html` is the spec (now vs new, both themes, every
+    tile size, a named anatomy check). Ids, classes, the five areas and the tile crops are
+    unchanged, so nothing that draws a figure had to change. The summary strip's muscle map and
     legend highlight each other; the ribbon and the set rows' fill bars show load; the coach
     strip (`tpeHistory`/`tpeCoachHtml`) reads `FIT_LOG` for last session + PR and hides plates
     at 0 kg. Numbers are typed or stepped (saved live, no re-render while typing — only
