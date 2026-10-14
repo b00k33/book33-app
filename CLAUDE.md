@@ -107,11 +107,44 @@ effort defaults to.
     is the only full rebuild and runs from `renderFitness()`). Deleting a template or
     removing an exercise has no confirm — `showUndoSnackbar`. The prefix is `tpe-`, NOT
     `wt-`: `wt*` is the week-to-do module (`wtAdd`, `.wt-chip`, `data-wt-*`) and a first
-    attempt silently lost to its `wtAdd`. **Flagged design45 exception, this editor only:**
-    shaded artwork, five muscle-area hues (`--tpe-core/legs/push/pull/full`) and 10–12.5px
-    type — documented in the CSS comment above `.tpe`; don't copy it to other pages. The
+    attempt silently lost to its `wtAdd`. **Flagged design45 exception, this editor and Workout
+    Mode only (extended 2026-10-14 pm, see the next paragraph):** shaded artwork, five muscle-area
+    hues (`--tpe-core/legs/push/pull/full`) and 10–12.5px type — documented in the CSS comment
+    above `.tpe`; don't copy it to other pages. The
     planned-day and logged-session editors still use the shared `exSetRowHtml` builders and
     are untouched.
+    **Workout Mode is an athlete screen (2026-10-14 pm, her words on the Gym "Planning" screen:
+    "this display looks too sparse i want animated interactive design for an athlete. make 1
+    mock" → "yes build it - push"; the mock is `mocks/workout-mode-athlete-mock-2026-10-14.html`,
+    MOCK=BUILD):** `#tlWorkoutBody` now carries `tpe wo`, so `renderTlWorkoutBody()` (`woBodyHtml`
+    and the `wo*` helpers beside it) draws the templates editor's own components — tokens, chips,
+    `.tpe-step` steppers, the ribbon, fill-bar set rows, the coach strip, `TPE_ART` figures — and
+    the design45 exception above now covers **this editor and Workout Mode, nowhere else** (the
+    `.tpe` CSS comment says the same). What the screen adds, top to bottom: the week strip with a
+    letter under each dot (`woWeekHtml`, `fitDayStatus`); the athlete strip (`woHeroHtml`: front +
+    back figures lit by this workout's muscle groups — `woMapVals` brightens them LIVE as sets are
+    ticked — a sets ring, exercises / elapsed (`#woElapsed`, written by `tickTlWorkoutTimer`
+    beside the header clock) / kg moved (live: ticked sets only), the muscle legend that
+    highlights cards); the one big control (`#woTop`/`woTopHtml`: Begin → the rest banner with
+    its countdown ring + "Next: …" → Start rest → nothing after the last set); one card per
+    exercise (`woCardHtml`: tile, name, gear, "n / N" or "Done ✓", ×, modes row, ribbon, set
+    rows, coach strip); "+ Add exercise" + an **Often** chip row (`tpeOftenNames`); pain chips.
+    **Same data, same writers:** every control keeps the `data-ex-*` / `data-pex-*` attribute
+    the shared handlers dispatch on, so `applySetField`, `applyExMode`, `applyExRest`,
+    `applyExVid`, `addSet`/`addExercise`, `toggleSetDone`, `toggleExHold` stay the only
+    writers; the − / + steppers call `setExerciseSetField`/`setPlannedSetField`. **Live rule:**
+    a tick, a hold, a typed or stepped number, a rest and the clock update their own nodes
+    (`woRefresh` → rows' `--p`/done/next, counts, ribbon, coach, `woHeroUpdate`); a set added or
+    removed or a mode flipped redraws that one card (`woCardRebuild`); only add/remove exercise,
+    a template or undo rebuild the body (`woRerenderKeep`, which stops the cards already on
+    screen replaying their arrive motion). A LOGGED set's number is its done button; the next
+    undone set glows; ticking the LAST set starts no rest (`maybeStartExRest` checks `woNext()`)
+    — the strip shows the trophy instead, with a longer buzz. Removing an exercise has no confirm
+    (`showUndoSnackbar`). The old "tap a set's number…" hint line is a one-time toast on Begin
+    here (`tpeToast`, raised to z-index 370 to clear the 360 overlay). Deviation from the mock,
+    disclosed: the phone keeps the per-exercise × (the mock hid it; there is no other way to
+    remove an exercise). Plan mode draws the same screen with planned numbers (ring = sets
+    planned, "≈ min"), Begin pulsing on today, "Saved as you go" on a future date.
     `PLANNED_FIT`
     is a SEPARATE store from `FIT_LOG`, on purpose — fitLoggedOn/fitWeekProgress/
     streaks/the Growth heatmap all read `FIT_LOG` alone and must keep meaning
