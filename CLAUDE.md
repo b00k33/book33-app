@@ -248,6 +248,37 @@ effort defaults to.
     .ad-chip.tl-item` ties it on specificity; `#tlWorkoutBody` swallows bubbling clicks, so the one
     delegate on `[data-st],[data-stairs-day],[data-st-day]` is capture-phase; the phone place row needs
     `padding-right: 52px` so the x never sits on the day total.
+    **My don'ts (2026-10-15, "a what not to do list for health and fitness to help me journal my personal
+    codes of what not to do", then "make it table format"; ask28 with a guide + three popup rounds;
+    `mocks/dont-list-guide-2026-10-15.html` is the spec; search "MY DON'TS" in index.html):** a personal
+    ledger of codes, in HER words. **The list is a TABLE** (`table.dnt-t`): its header row (Don't · Kind · Firm ·
+    Linked to · Again) is the table's own first row, never a separate strip (her standing table rule); on a
+    phone, `@container tpe (max-width: 640px)` drops Kind and Linked-to (the kind dot sits before the words,
+    the links under them). Data `book33-fitness-donts` = `{kinds:[{id,name}], items:[{id, words, why, kind,
+    firm:"never"|"rather", ex:[lowercased exercise names], areas:[PAIN_AREAS ids], log:[{id, d, t:"learned"|
+    "again", note}], hidden?, addedAt}], noMe:{promptId:true}}`. **Nothing is ever seeded** and there is no
+    number or name column (the wording is the code). Kinds: Health + Fitness chips plus her own ("+ New kind").
+    Firm: two levels, a solid grey tag (Never) vs an outlined one (Rather not): no red, no new hue; only Fitness
+    keeps its green dot. **"Happened again" is data, not a scold:** a dated journal line + one grey ring in the
+    Again column per time (a few rings, then "+n"), never a number or colour that scolds; Undo on each tap.
+    Hide first; "Delete for good" only from the Hidden shelf, with an Undo; a saved don't can never lose its
+    words. One sheet (`refOpen("dont", id | "new", side)` -> `dntSheetBody`): words, kind, firm, why, optional
+    links (body areas = `PAIN_AREAS`, exercises typed from My exercises), the journal; an existing don't saves as
+    she types, a new one has "Save don't". **Prompts shelf (closed by default):** `DNT_PROMPTS` (general advice
+    in plain words, NOT copied from a page; labelled "Common physio advice" etc.) + patterns from her OWN log
+    (`dntLogPrompts`: an area ticked in 3+ of her last 30 days of sessions; sessions on Wed/Sat in the last 8
+    weeks); "Make it mine" opens the sheet pre-filled, "Not me" sets it aside (`noMe`, with Undo); nothing joins
+    her list until she saves. **Four doors, one list:** the Fitness page table (`#fitHomeDonts`, its section head is
+    drawn with the table so the kind chips sit in it) + a "My don'ts" chip on the Body page (`data-dnt="gopage"`);
+    one quiet line per match in Workout Mode (`dntStripsHtml`, between the athlete strip and Begin; a match =
+    a linked exercise name, or a linked body area whose muscles (`refPain[a].mus` vs `refExFor(name).p`) or part
+    the exercise uses); "Make this a don't" after the pain check-in (`dntPainChipsHtml`, opens the sheet with
+    that area, the session date and her pain note as the first journal line); `dont: ...` in the Add bar
+    (`qaTryDont`: lands as "Rather not", kind guessed from the words, Undo via `lastQuickAdd.dontIds`). **Traps:**
+    one capture-phase delegate on `[data-dnt]` (Workout Mode swallows bubbling clicks); the apostrophe in
+    "don't" is fine in text but never in an unquoted attribute; the journal line's input class is `dnt-note`
+    and the prompts footnote is `dnt-pfoot` (they once shared a name); a phone sheet's rows are
+    `lib-bar`-sticky, same as the library.
     **Workout Mode is an athlete screen (2026-10-14 pm, her words on the Gym "Planning" screen:
     "this display looks too sparse i want animated interactive design for an athlete. make 1
     mock" → "yes build it - push"; the mock is `mocks/workout-mode-athlete-mock-2026-10-14.html`,
