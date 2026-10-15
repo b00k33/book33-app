@@ -528,3 +528,11 @@ What does that job now: the "From my exercises ›" chip beside every lift add b
 library picker — most-used first, tick several, one button, and each copy brings its default
 sets. Typing still autocompletes from every library name. Never bring a bare "often" chip row
 back beside an add box; the library section and picker are the one place to browse.
+
+## 20. The template tab strip — retired 2026-10-15
+Her pick on the exercise-types mock ("c and b"): the row of one tab per workout template
+(`.tpe-tabs`, under "Workout templates") is gone. What does that job now: the **shelf** — one chip
+row (All · each exercise type with its count · No type yet · Goals · + New type · "Sort N left ›")
+and, under the opened shelf, the plan chips that hold that type with "+ New template" beside them
+(`xtShelfHtml`, `xtShelfTemplate`). Every template is still one tap away (All shelf, then its chip);
+nothing was deleted. Never bring back a second, template-only tab row above or beside the shelf.

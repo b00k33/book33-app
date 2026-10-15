@@ -188,6 +188,42 @@ effort defaults to.
     `!important` padding on `input[type="search"]` is only beaten by an equal `!important` at
     higher specificity (`.tpe .lib-search input[type="search"]`). The app's globals live inside
     the IIFE — verify through the DOM and seed through the `book33-*` keys, never from the console.
+    **Exercise types + goals (2026-10-15, "organise my exercise plans into exercise type category e.g.
+    joint stabilising, flexibility, strength, isometric, plyometric. include a goal category e.g. 10
+    pistol squats in a row"; her 15 picks on `mocks/exercise-types-goals-mock-2026-10-15.html`, which
+    is the spec; search "XT module" in index.html):** a TYPE belongs to each EXERCISE, never to a plan
+    (a plan shows the mix). It is stored by name beside timed/sided/rest in `EX_MODE_PREFS[…].type`
+    (built-in ids stab / flex / str / iso / ply, plus her own from "+ New type" in
+    `book33-fitness-types` = `{custom:[{id,name}]}`). **She always picks the type; nothing is guessed
+    from a name** — a row shows no type until she does. A type is a drawn glyph + word, never a new
+    hue (colour stays = muscle group; green is goals only). Picking one on an untouched row also
+    starts it sensibly (`xtFreshApply`: Isometric = Timer + rest 1:00, Flexibility = Timer + Left &
+    right + rest 0:30, Plyometric = rest 2:00; `p.xtDef` remembers what it set, an Undo snackbar
+    says so, a tuned row only gets the tag). **The shelf REPLACES the old template tab strip:** one
+    chip row (All · each type with its count · No type yet · Goals · + New type · "Sort N left ›")
+    opens a shelf; the plan chips that hold that type sit under it ("Stabilising in first edition
+    2/7"); empty types are hidden; a mixed plan sits on every shelf it has exercises for, opened
+    from a shelf it opens By type with that type lit (`TPE.shelf / byType / xlit`). An "In order | By
+    type" switch sits above the list. The one-time "Sort my exercises" sheet (`xtMaybeSort`, flag
+    `book33-fitness-sort-seen`) is also reachable from the dashed "Sort N left ›" chip until all are
+    typed. The type tag shows wherever an exercise appears: plan list, Workout Mode card sub-line,
+    Today's logger, planned day, the My exercises chips (type filter chips + the same Type row in the
+    entry). **Goals:** `book33-fitness-goals` = `[{id,name,kind,n,reps?,by?,done?,doneAt?}]`, kinds
+    row (best single set; lower side if Left & right) / hold (longest) / weight (heaviest with ≥ the
+    goal's reps) / tick ("I can do it"). "Times a week" is NOT a goal kind (`fitWeekTarget` owns it).
+    One active goal per exercise. **Progress is never stored** — `xtProg` counts it from `FIT_LOG` on
+    every draw; a set counts once ticked (`s.done`), and sessions dated before `XT_TICK_FROM`
+    (2026-10-13, when ticking arrived) count typed numbers. Reaching one toasts "Goal reached: …",
+    moves the card to Reached and keeps a ✓ on the row — nothing is deleted (`xtGoalCheck`: `true` =
+    refresh the page, `"render"` = toast only because a draw is under way, `false` = silent). Goals
+    show on the Goals shelf, as a flag + "8/10" on the exercise row, and as the coach-strip line
+    in Workout Mode ("Goal 10 · 2 to go"); a rename moves them (`libRenameAll`) and undo restores them
+    (`libSnap`/`libRestore`). Made from the "+ Goal" chip on an exercise or the shelf's "+ New goal"
+    (`refOpen("goalnew")`). **Traps hit while building:** a perl splice with single-quoted strings
+    wrote a literal `\n` into the JS and the whole 3 MB script died on a SyntaxError (use double
+    quotes or real newlines, then parse every inline script); the tick handler re-draws the page before
+    the 700 ms goal timer, so the check has to run (and toast) inside `renderFitness`; the shelf
+    chip row scrolls sideways on a phone but the detail's Type row WRAPS so all types stay in view.
     **Workout Mode is an athlete screen (2026-10-14 pm, her words on the Gym "Planning" screen:
     "this display looks too sparse i want animated interactive design for an athlete. make 1
     mock" → "yes build it - push"; the mock is `mocks/workout-mode-athlete-mock-2026-10-14.html`,
