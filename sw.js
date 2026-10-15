@@ -1,7 +1,7 @@
 ﻿// Book33 service worker -- offline app-shell cache.
 // Hand-edited directly in this clone (book33-app-redesign) -- there is no build step
 // here. Bump CACHE_VERSION on any meaningful change so a fresh deploy evicts the old cache.
-var CACHE_VERSION = "b33-20261015-exlib-v166";
+var CACHE_VERSION = "b33-20261015-mantras-v167";
 
 // Precached at install so the shell is available offline from the very first launch --
 // fonts aren't in this list (cross-origin, subset-dependent Noto Emoji query string,
@@ -112,16 +112,29 @@ self.addEventListener("fetch", function (e) {
   // in its own small cache, then bounce into the app with ?shareics=1 â€” the calendar
   // import module reads the stash on boot and opens its normal import preview.
   if (req.method === "POST" && new URL(req.url).pathname.indexOf("share-ics") !== -1) {
+    // 2026-10-15 (mantras + My quotes): the same share target now also takes a picture ("image") and shared text/links
+    // (title, text, url) from Instagram / Pinterest / anything. A picture or text is stashed and the app opens its New
+    // quote sheet (./?sharequote=1); a calendar file still goes to the .ics import exactly as before.
     e.respondWith(
       req.formData().then(function (fd) {
-        var f = fd.get("ics");
-        return f && f.text ? f.text() : "";
-      }).then(function (text) {
+        var img = fd.get("image"), ics = fd.get("ics");
+        var info = { title: String(fd.get("title") || ""), text: String(fd.get("text") || ""), url: String(fd.get("url") || "") };
         return caches.open("b33-share").then(function (c) {
-          return c.put("./shared.ics", new Response(text || "", { headers: { "Content-Type": "text/calendar" } }));
+          var putInfo = function () { return c.put("./shared-quote.json", new Response(JSON.stringify(info), { headers: { "Content-Type": "application/json" } })); };
+          if (img && img.size) {
+            info.imageName = img.name || "";
+            return c.put("./shared-quote-image", new Response(img, { headers: { "Content-Type": img.type || "image/jpeg" } })).then(putInfo).then(function () { return "./?sharequote=1"; });
+          }
+          if (ics && ics.text) {
+            return ics.text().then(function (text) {
+              return c.put("./shared.ics", new Response(text || "", { headers: { "Content-Type": "text/calendar" } }));
+            }).then(function () { return "./?shareics=1"; });
+          }
+          if (info.text || info.title || info.url) return putInfo().then(function () { return "./?sharequote=1"; });
+          return "./?shareics=1";
         });
-      }).catch(function () {}).then(function () {
-        return Response.redirect("./?shareics=1", 303);
+      }).catch(function () { return "./?shareics=1"; }).then(function (to) {
+        return Response.redirect(to, 303);
       })
     );
     return;

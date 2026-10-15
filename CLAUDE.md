@@ -493,6 +493,64 @@ data are untouched (RETIRED-FEATURES.md §18).
 - **Touch size:** the chip keeps its small dashed look but its hit area is 44px (`::after`),
   the steps toggle and list rows are 44px on a phone.
 
+## Mantras + My quotes — one quiet line across the top of every page (2026-10-15, her words:
+## "mantras, visible on calendar page and visible everywhere - i want to build database of
+## favourite quotes with images too")
+ask28 with a guide, three popup rounds and a full mock; the mock is the spec:
+`mocks/mantra-quotes-mock-2026-10-15.html` (MOCK=BUILD). Her 12 picks: ONE line across the top of
+EVERY page (phone and computer; tap = the full card) · a 26px round picture + the words · ONE library
+with a gold star marking the mantras (no second list) · sources: screenshots with words baked in, photos
+of book pages, copied text, her own words/photos — **the words are always typed once, the app cannot read
+text out of a picture** · about 20–30 pictures · big pictures in the shared cloud cupboard · shuffle + "I
+pin one" + context rules · library = Wall with a switch to List · adding four ways · context rules point
+at THEMES · tap the line = the full card · the fasting card uses the library.
+- **Page-header law exception, flagged:** the law bans taglines and caps a header at 56px; this line is
+  her explicit ask, kept to ONE 36px row (two lines at most, clamped; the whole quote is on the card).
+  Do not copy it to other pages. `#mantraLine` is a body child BEFORE `.wrap` (so it is above everything
+  and `body { margin-left: 180px }` keeps it clear of the desktop rail); a second host sits first inside
+  Workout Mode's `#tlWorkoutSheet`. Both are `[data-mq-host]`, painted by `mqRender()` (called from
+  `render()` inside a try/catch — the line must never take a page down — and from `stripRenderMenus()`).
+  `--mq-h` (the line's live height, 0 while hidden) is what keeps Life Map's `100dvh` page from scrolling.
+- **Data (search "MANTRAS + MY QUOTES"):** `book33-quotes` = `[{id, words, who, themes[], star, hidden?,
+  thumb (a 160px JPEG data URL, in the synced notebook so the line works offline), pic (cloud path, set only
+  once uploaded), picUrl (a public photo link, C7 imports), src ("c7:<person>:<hash>"), addedAt}]`;
+  `book33-quote-rules` = `{pinned, themes[], on:{gym,f45,bouldering}, mode:{work,night}, ud:{"4","22"}}`. The
+  big 1200px picture lives in IndexedDB `book33-quotes`/`pics` on the device that made it (`{id, blob, up}` —
+  `up:false` is the upload queue) and in the Supabase Storage bucket `quote-pics` (`<user id>/<quote id>.jpg`).
+  `mqFlush()` uploads the queue when signed in and the bucket exists; a missing bucket ("Bucket not found") sets
+  `MQ.cloud = "missing"`, tiles say "Waiting to upload" and the library shows one plain line — the words and the
+  round picture always work. **The bucket SQL is `supabase/quote_pics_setup.sql` and has NOT been run:** she wants
+  to see it first and say yes (a bucket, then four owner-folder policies — select, insert, update because a
+  replaced picture is an upsert, delete). The app reaches the signed-in Supabase client through
+  `window.__B33_SB()` (one line in the sync IIFE); nothing else may create a second client.
+- **Which quote shows (`mqCands`):** pinned > what is on now (`currentItem` → `typeOf` → `rules.on`) > Mode
+  (`activeMode()` → `rules.mode`) > Universal Day (`universalDay().value`, "22/4" matches 22 or 4 → `rules.ud`) >
+  every starred quote. A theme with nothing in it is skipped, so the line never shows a blank; an empty library
+  draws NO line. Shuffle every 12 s with a soft fade, never while typing in a field with text, never while a card or
+  sheet is open or for a minute after a tap. Default themes (a disclosed call): Discipline, Focus, Rest, Strong;
+  `mqThemeList()` also lists any theme a quote carries that the list lacks.
+- **Hide, never delete by accident:** "Hide" keeps the quote under Hidden (off the Wall and the line); "Delete for
+  good" exists only on a hidden quote and has an Undo. "Not a mantra" only takes the star off. No example quotes are
+  seeded anywhere (NO-suggestions rule); the 4 built-in `FAST_QUOTES` stay as the fasting card's fallback.
+- **Adding:** the New quote sheet (`mqOpenNew`) from the library, a share into the installed app (manifest
+  `share_target` now also takes `image`, `title`, `text`, `url`; `sw.js` stashes the picture + words in the
+  `b33-share` cache and bounces to `./?sharequote=1`, `mqShareBoot()` opens New quote with them; a `.ics` still goes to
+  the calendar import), Choose / Paste / Take a photo (`mqProcess`: upright, on white, 1200px + 160px), and
+  `quote: …` (or `mantra: …`, optional ` — who`) in the Add, search or log bar (`qaTryQuote`, with Undo through
+  `lastQuickAdd.quoteIds`). **Bring in from C7 Inspo** (`mqOpenC7`) READS C7's rows from Supabase `c7_records`
+  (entities `inspo_theme` / `inspo_person`, read-only select with the app's own session) and COPIES the ticked quotes
+  (words = the line, who = the person, theme = the C7 theme, picture = the person's `photo_url` hot-linked, dedupe
+  key `src`). C7 is never written to and its own auth slot is never touched.
+- **Strip registry:** `top.quotes` ("Quote line", area menu) is the first piece with `dflt: true` — ON until she
+  hides it from the "+ Add back" list (`stripOn` / `stripSet` / `stripAll` / `stripAllRowsHtml` all know `dflt`;
+  "Back to the bare start" and "Show everything again" deliberately leave it as she set it).
+- **Traps hit while building:** the document click delegate is CAPTURE-phase (Workout Mode swallows bubbling
+  clicks) and stops propagation only for `[data-mq-act]` taps; the card/sheet are z-index 366/365 (above Workout
+  Mode 360, below the 370 toast) and join `b33GoBack` + Escape; the phone card keeps 56px of bottom padding so the
+  floating sync pill never covers a chip; a phone's `.nav-tiers` drops its own safe-area padding while the line is
+  on (`body[data-mq-on]`) so the status bar is cleared once, not twice; `toBlob` on a big photo takes a moment in a
+  slow browser, so the sheet shows "Shrinking…" and holds Save.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
