@@ -224,6 +224,30 @@ effort defaults to.
     quotes or real newlines, then parse every inline script); the tick handler re-draws the page before
     the 700 ms goal timer, so the check has to run (and toast) inside `renderFitness`; the shelf
     chip row scrolls sideways on a phone but the detail's Type row WRAPS so all types stay in view.
+    **Stairs plan (2026-10-15, "make a steps plan ... 7 flights of stairs at work which is 10 steps per
+    floor, up and down once each a day, plus my home steps ... steps will be part of my calendar
+    fitness"; her 11 picks on `mocks/steps-plan-guide-2026-10-15.html`, which is the spec; search "STAIRS
+    PLAN" in index.html):** a "Stairs plan" section under Weekly plan on the Fitness page (`#fitHomeStairs`,
+    `stRenderPlan()`). Each PLACE (Work, Home — typed names) = flights x steps a flight x times up x times
+    down, plus the weekdays she is there (M-S chips). **Steps are never stored, always computed**
+    (`stPer = flights*steps*(up+down)`, `stUp = flights*up`); only the plan and her ticks are saved, in
+    `book33-fitness-stairs` = `{places:[{id,name,flights,steps,up,down,days:[0..6, Monday = 0]}],
+    log:{"YYYY-MM-DD":{done:{placeId:true}, extra:[{id,flights,steps,up,down}]}}}`. Her two places start
+    typed in (`ST_SEED`: Work 7x10 with Work days EMPTY, Home 6x10 every day) but live in memory only
+    until her first edit, so a plan saved on another device is never overwritten. Total = steps both ways
+    (big), "13 flights up" small. No target, no streak, and **stairs never touch `FIT_LOG`,
+    `fitWeekProgress` or "This week n/5 days"**. **Calendar:** `stairsChipFor(d)` returns ONE automatic
+    all-day chip per planned day (she places nothing); tapping it opens the day sheet
+    (`refOpen("stairs", dateKey)` -> `stSheetBody`: one tick per place, "+ Extra flights", an undo on an
+    extra). Chip states dashed (planned) / filled to the ticked share (`--st-p`) / solid "260 check". Label
+    is the compact "Stairs 140/260" (the word hides at <=767px in `#mdAlldayRow` and below 1280px in the
+    single-day top bar `.ddt-allday`; the staircase glyph `XT_PATH.stairs` stays). **Traps hit while
+    building:** the chip is PREPENDED to both `dayEvents` lists (`dayEventsRawFor` and `renderDay`'s own
+    copy) because the multi-day all-day row shows 2 chips + "+N more" and an appended chip was always
+    behind the "+N more"; its CSS sits LAST in the stylesheet because design45's `#dayAlldayRow
+    .ad-chip.tl-item` ties it on specificity; `#tlWorkoutBody` swallows bubbling clicks, so the one
+    delegate on `[data-st],[data-stairs-day],[data-st-day]` is capture-phase; the phone place row needs
+    `padding-right: 52px` so the x never sits on the day total.
     **Workout Mode is an athlete screen (2026-10-14 pm, her words on the Gym "Planning" screen:
     "this display looks too sparse i want animated interactive design for an athlete. make 1
     mock" → "yes build it - push"; the mock is `mocks/workout-mode-athlete-mock-2026-10-14.html`,
