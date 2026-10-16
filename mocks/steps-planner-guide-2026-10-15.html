@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steps planner — guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap">
+<style>
+/* ===== the app's tokens (Day theme + Night) ===== */
+:root {
+  --ground: #F5F7FA; --paper: #FFFFFF; --note-line: #E6E9EF; --field-bg: #F1F3F7; --ink: #1E2330; --ink-soft: #6B7280; --ink-faint: #9AA3B2;
+  --accent-seed: #2F5BEA; --fit: #3E9E5B; --legs: #23874D; --radius-sm: 10px; --radius-md: 16px; --font-body: Manrope, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow: 0 1px 2px rgba(14,22,33,0.05), 0 4px 16px -6px rgba(14,22,33,0.12);
+  --work: #4CAF6E;
+}
+:root[data-theme="dark"] {
+  --ground: #0E1116; --paper: #171B22; --note-line: #262C36; --field-bg: #11151C; --ink: #ECEFF4; --ink-soft: #9AA3B2; --ink-faint: #6B7280;
+  --fit: #4DB56D; --legs: #4CC37F; --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 4px 16px -6px rgba(0,0,0,0.6);
+  --work: #2F7A4A;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 500 14px/1.25 var(--font-body); -webkit-font-smoothing: antialiased; padding: 16px 16px 48px; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+b { font-weight: 700; }
+small { font-size: 12px; color: var(--ink-soft); }
+svg.ic { width: 1em; height: 1em; }
+
+/* ===== mock chrome (not part of the app) ===== */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; max-width: 1080px; margin: 0 auto 16px; }
+.bar h1 { font-size: 14px; font-weight: 800; margin: 0; }
+.bar .hint { color: var(--ink-soft); font-size: 12px; margin-left: auto; }
+.seg { display: inline-flex; flex-wrap: wrap; background: color-mix(in oklab, var(--accent-seed) 10%, transparent); border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--ink-soft); min-height: 32px; }
+.seg button.on { color: var(--ink); background: var(--paper); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--paper); border: 1px solid var(--note-line); border-radius: var(--radius-md); box-shadow: var(--shadow); padding: 16px; }
+.card h2 { font-size: 13px; font-weight: 800; margin: 0 0 4px; }
+.card > p { margin: 0 0 12px; font-size: 12px; color: var(--ink-soft); line-height: 1.4; max-width: 84ch; }
+.lab { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); display: block; margin-bottom: 8px; }
+body[data-s]:not([data-s="all"]) .wrap > .card { display: none; }
+body[data-s="sum"] #sum, body[data-s="plan"] #plan, body[data-s="day"] #day, body[data-s="phone"] #phone, body[data-s="picks"] #picks { display: block; }
+.section-head { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; }
+.section-head h2 { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .01em; }
+.section-head .rule { flex: 1; height: 1px; background: var(--note-line); }
+.note { font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+.note b { color: var(--ink); }
+.ex { color: var(--ink-faint); font-weight: 600; }
+.ex::after { content: " (example)"; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+
+/* ===== shared pieces (as in the app) ===== */
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--note-line); background: var(--paper); border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--ink-soft); min-height: 30px; font-variant-numeric: tabular-nums; }
+.chip.on { border-color: var(--accent-seed); background: color-mix(in oklab, var(--accent-seed) 10%, transparent); color: var(--accent-seed); }
+.chip.dash { border-style: dashed; color: var(--accent-seed); background: none; }
+.chip.day { min-width: 32px; justify-content: center; padding: 5px 8px; }
+.chip.day.on { border-color: var(--fit); background: color-mix(in oklab, var(--fit) 14%, var(--paper)); color: var(--fit); }
+.chip.quick { border-style: dashed; font-weight: 700; }
+.step { display: inline-flex; align-items: center; background: var(--paper); border: 1px solid var(--note-line); border-radius: 999px; }
+.step button { width: 26px; height: 28px; font-size: 16px; line-height: 1; color: var(--accent-seed); border-radius: 50%; }
+.step output { display: inline-flex; justify-content: center; min-width: 30px; padding: 0 2px; font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; }
+.step.wide output { min-width: 54px; }
+.gl { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in oklab, var(--legs) 14%, var(--paper)); color: var(--legs); }
+.gl svg { width: 22px; height: 22px; }
+.gl.sm { width: 22px; height: 22px; border-radius: 7px; } .gl.sm svg { width: 14px; height: 14px; }
+.f-lab { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-faint); font-weight: 700; display: block; margin-bottom: 4px; }
+.good { color: var(--fit); }
+
+/* ===== 1 · the route ===== */
+.route { display: grid; grid-template-columns: auto 1fr auto 0.8fr auto 1fr auto; align-items: end; gap: 0 8px; padding: 8px 4px 0; }
+.node { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; text-align: center; }
+.node i { width: 16px; height: 16px; border-radius: 50%; border: 3px solid var(--fit); background: var(--paper); display: block; }
+.node.work i { background: var(--fit); }
+.seg-w { position: relative; padding-bottom: 6px; min-width: 0; }
+.seg-w .cnt { display: block; text-align: center; font-size: 22px; font-weight: 800; color: var(--fit); font-variant-numeric: tabular-nums; line-height: 1; margin-bottom: 4px; }
+.seg-w .cnt small { display: block; font-size: 11px; font-weight: 600; margin-top: 4px; }
+.seg-w .feet { display: flex; justify-content: space-between; height: 20px; color: var(--fit); padding: 0 6px; }
+.seg-w .feet svg { width: 16px; height: 16px; opacity: 0; }
+.seg-w .feet svg:nth-child(even) { transform: translateY(5px); }
+.seg-w .ln { height: 4px; border-radius: 4px; background: var(--note-line); position: relative; overflow: hidden; }
+.seg-w .ln i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fit); border-radius: 4px; }
+.seg-w.train .ln { background: repeating-linear-gradient(90deg, var(--ink-faint) 0 6px, transparent 6px 12px); height: 3px; opacity: .6; }
+.seg-w.train .cnt { font-size: 12px; color: var(--ink-faint); font-weight: 700; }
+.route.go .seg-w.w1 .ln i { animation: draw 1.4s ease-out .1s forwards; }
+.route.go .seg-w.w2 .ln i { animation: draw 1.4s ease-out 1.9s forwards; }
+.route.go .seg-w.w1 .feet svg { animation: step .35s ease-out forwards; animation-delay: calc(var(--i) * 190ms + 150ms); }
+.route.go .seg-w.w2 .feet svg { animation: step .35s ease-out forwards; animation-delay: calc(var(--i) * 190ms + 1950ms); }
+@keyframes draw { to { width: 100%; } }
+@keyframes step { from { opacity: 0; margin-top: 8px; } to { opacity: 1; margin-top: 0; } }
+.eqs { margin-top: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+table.eq { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+table.eq td, table.eq th { padding: 8px 8px; border-bottom: 1px solid var(--note-line); font-size: 13px; text-align: right; }
+table.eq td:first-child, table.eq th:first-child { text-align: left; }
+table.eq th { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; }
+table.eq td b { font-size: 14px; }
+table.eq tr.sub td { color: var(--ink-soft); font-size: 12px; }
+table.eq tr.tot td { border-bottom: 0; border-top: 2px solid var(--note-line); font-weight: 800; font-size: 15px; padding-top: 12px; }
+table.eq tr.tot td b { color: var(--fit); font-size: 22px; }
+.total { border-radius: var(--radius-md); padding: 16px; background: color-mix(in oklab, var(--fit) 13%, var(--paper)); border: 1px solid color-mix(in oklab, var(--fit) 35%, var(--note-line)); display: flex; flex-direction: column; gap: 6px; }
+.total .big { font-size: 44px; font-weight: 800; line-height: 1; color: var(--fit); font-variant-numeric: tabular-nums; }
+.total .what { font-size: 16px; font-weight: 800; }
+.total .more { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.4; }
+.kinds { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.kinds span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.kinds i { width: 12px; height: 12px; border-radius: 4px; background: var(--fit); display: inline-block; }
+.kinds i.h { background: color-mix(in oklab, var(--fit) 45%, var(--paper)); }
+
+/* ===== 2 · the plan on the Fitness page ===== */
+.grp { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; }
+.grp:first-of-type { margin-top: 4px; }
+.grp .lab { margin: 0; }
+.grp .rule { flex: 1; height: 1px; background: var(--note-line); }
+.prow { display: grid; grid-template-columns: auto minmax(0, 1fr) 118px; gap: 12px 16px; padding: 12px 0; border-bottom: 1px solid var(--note-line); align-items: center; }
+.prow .nm { font-size: 15px; font-weight: 800; }
+.prow .nmf { min-width: 150px; }
+.prow .nmf .nm { display: inline-block; border-bottom: 1px dashed var(--note-line); padding-bottom: 1px; }
+.prow .ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; }
+.prow .ctl > div { display: flex; flex-direction: column; }
+.prow .dd { display: flex; gap: 4px; align-items: center; }
+.prow .res { text-align: right; align-self: center; }
+.prow .res b { font-size: 20px; font-weight: 800; color: var(--fit); font-variant-numeric: tabular-nums; }
+.prow .res small { display: block; }
+.prow .res.todo b { color: var(--ink-faint); font-size: 14px; }
+.tstrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 12px; }
+.tcol { border: 1px solid var(--note-line); border-radius: var(--radius-sm); padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; min-height: 132px; }
+.tcol.today { border-color: var(--accent-seed); }
+.tcol .dn { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-faint); }
+.tcol .v { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tcol .bars { flex: 1; width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; justify-content: flex-start; min-height: 64px; }
+.tcol .bars i { display: block; width: 100%; border-radius: 4px; background: var(--fit); transform-origin: bottom; animation: grow .7s ease-out both; }
+.tcol .bars i.h { background: color-mix(in oklab, var(--fit) 45%, var(--paper)); }
+@keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.tcol small { font-size: 10px; text-align: center; line-height: 1.2; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--ink-soft); margin-top: 10px; align-items: center; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--fit); vertical-align: -2px; margin-right: 6px; }
+.legend i.h { background: color-mix(in oklab, var(--fit) 45%, var(--paper)); }
+.totals { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; padding: 12px 0 0; }
+.totals b { font-size: 20px; font-weight: 800; color: var(--fit); font-variant-numeric: tabular-nums; }
+.audit { margin-top: 16px; border: 1px dashed var(--note-line); border-radius: var(--radius-md); padding: 12px 16px; }
+.audit ol { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+.audit ol b { color: var(--ink); }
+
+/* ===== 3 · the calendar day ===== */
+.cal { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; }
+.day { border: 1px solid var(--note-line); border-radius: var(--radius-md); overflow: hidden; background: var(--paper); }
+.day .dh { padding: 12px 16px; font-size: 20px; font-weight: 700; border-bottom: 1px solid var(--note-line); display: flex; align-items: baseline; gap: 12px; }
+.day .dh small { font-size: 13px; }
+.allday { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--note-line); align-items: center; background: color-mix(in oklab, var(--ink) 2.5%, var(--paper)); }
+.allday .lab { margin: 0 6px 0 0; }
+.sch { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 5px; border-radius: 999px; font-size: 12px; font-weight: 700; min-height: 30px; border: 1px dashed color-mix(in oklab, var(--fit) 60%, transparent); color: var(--fit); background: color-mix(in oklab, var(--fit) 8%, var(--paper)); font-variant-numeric: tabular-nums; transition: background .4s, border-color .4s; overflow: hidden; }
+.sch b { color: var(--ink); position: relative; }
+.sch .gl { position: relative; }
+.sch > span:not(.gl) { position: relative; }
+.sch::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--p, 0%); background: color-mix(in oklab, var(--fit) 26%, var(--paper)); transition: width .5s ease; }
+.sch.part { border-style: solid; }
+.sch.done { border-style: solid; background: color-mix(in oklab, var(--fit) 24%, var(--paper)); }
+.sch.cyc { border: 1px solid #7A1F2E; color: #7A1F2E; background: color-mix(in oklab, #7A1F2E 8%, var(--paper)); padding: 4px 10px; }
+.sch.cyc::before { display: none; }
+.hours { position: relative; height: 300px; background: repeating-linear-gradient(to bottom, transparent 0 54px, var(--note-line) 54px 55px); }
+.hr { position: absolute; left: 0; width: 56px; text-align: right; padding-right: 8px; font-size: 11px; color: var(--ink-faint); font-weight: 600; transform: translateY(-6px); }
+.blk { position: absolute; left: 64px; right: 16px; border-radius: 10px; padding: 6px 12px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; color: var(--ink); }
+.blk small { color: color-mix(in oklab, var(--ink) 70%, transparent); }
+.blk.fit { background: color-mix(in oklab, var(--fit) 34%, var(--paper)); }
+.blk.wk { background: color-mix(in oklab, var(--work) 40%, var(--paper)); }
+.pop { border: 1px solid var(--note-line); border-radius: var(--radius-md); box-shadow: 0 10px 40px -12px rgba(14,22,33,.35); background: var(--paper); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.pop .ph { display: flex; align-items: center; gap: 10px; }
+.pop .ph b { font-size: 15px; font-weight: 800; flex: 1; }
+.pop .ph small { display: block; font-weight: 600; }
+.sgrp { display: flex; align-items: center; gap: 8px; margin: 2px 0 -4px; }
+.sgrp .lab { margin: 0; }
+.sgrp .rule { flex: 1; height: 1px; background: var(--note-line); }
+.leg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 8px; align-items: center; padding: 8px; border-radius: var(--radius-sm); background: var(--field-bg); }
+.leg .who { grid-column: 1 / -1; }
+.leg .who b { font-size: 14px; display: block; }
+.leg .who small { display: block; }
+.tk2 { display: inline-flex; justify-content: flex-start; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid var(--note-line); background: var(--paper); font-size: 12px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; transition: background .25s, border-color .25s, color .25s; }
+.tk2 .c { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--note-line); display: grid; place-items: center; font-size: 14px; color: transparent; transition: all .25s; }
+.tk2 .c::after { content: "✓"; }
+.tk2.on { border-color: var(--fit); background: color-mix(in oklab, var(--fit) 12%, var(--paper)); color: var(--ink); }
+.tk2.on .c { background: var(--fit); border-color: var(--fit); color: #fff; animation: pop .35s both; }
+@keyframes pop { 0% { transform: scale(.4); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
+.prw { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: var(--radius-sm); background: var(--field-bg); min-height: 56px; width: 100%; text-align: left; }
+.prw .tk { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--note-line); background: var(--paper); display: grid; place-items: center; font-size: 18px; font-weight: 800; color: transparent; transition: all .25s; }
+.prw.on .tk { border-color: var(--fit); background: var(--fit); color: #fff; animation: pop .35s both; }
+.prw b { font-size: 14px; display: block; }
+.prw .n { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.meter { display: flex; align-items: center; gap: 12px; }
+.meter .bar2 { flex: 1; height: 10px; border-radius: 999px; background: var(--field-bg); overflow: hidden; }
+.meter .bar2 i { display: block; height: 100%; width: 0; background: var(--fit); border-radius: 999px; transition: width .5s ease; }
+.meter b { font-variant-numeric: tabular-nums; font-size: 13px; }
+.states { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.states .s { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.states .s small { flex: 1; min-width: 160px; }
+.pop .tryit { font-size: 11px; font-weight: 700; color: var(--accent-seed); text-align: center; }
+
+/* ===== 4 · the phone ===== */
+.phone { width: 360px; border: 1px solid var(--note-line); border-radius: 28px; padding: 12px; background: var(--ground); display: flex; flex-direction: column; gap: 12px; }
+.phones { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+.phone .card { box-shadow: none; padding: 12px; }
+.pl { display: flex; flex-direction: column; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--note-line); }
+.pl-h { display: flex; align-items: center; gap: 10px; }
+.pl-h .nm { flex: 1; font-size: 15px; font-weight: 800; }
+.pl-h .res { text-align: right; } .pl-h .res b { font-size: 20px; font-weight: 800; color: var(--fit); font-variant-numeric: tabular-nums; } .pl-h .res small { display: block; }
+.pl-h .res.todo b { color: var(--ink-faint); font-size: 14px; }
+.pl-g { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.pl-g .full { grid-column: 1 / -1; }
+.pl .dd { display: flex; gap: 4px; justify-content: space-between; }
+.pl .chip.day { min-width: 0; flex: 1; min-height: 44px; }
+.pl .chip.quick { min-height: 44px; flex: none; }
+.pl .step button { width: 44px; height: 44px; }
+.pl .step { width: 100%; justify-content: space-between; }
+.pl .step output { flex: 1; }
+.phone .tstrip { gap: 4px; }
+.phone .tcol { padding: 6px 2px; min-height: 104px; }
+.phone .tcol .v { font-size: 11px; }
+.phone .allday { padding: 8px 12px; }
+.phone .tk2 { justify-content: flex-start; }
+.pt { font-size: 11px; font-weight: 700; color: var(--ink-faint); text-align: center; letter-spacing: .04em; text-transform: uppercase; }
+
+/* ===== 5 · other ways ===== */
+.opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.opt { border: 1px solid var(--note-line); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.opt.rec { border-color: color-mix(in oklab, var(--fit) 50%, var(--note-line)); }
+.opt h3 { margin: 0; font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.opt h3 em { font-style: normal; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--fit); font-weight: 800; }
+.opt .mini { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.opt .mini .r { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--field-bg); justify-content: space-between; }
+.opt .mini .r b { font-size: 13px; }
+.opt .mini .r.chain { flex-direction: column; align-items: stretch; gap: 4px; }
+.opt .mini .hop { display: flex; justify-content: space-between; color: var(--ink-soft); }
+.opt .mini .tkd { display: inline-flex; gap: 4px; }
+.opt .mini .tkd i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--note-line); display: inline-block; }
+.opt .mini .tkd i.on { background: var(--fit); border-color: var(--fit); }
+.opt p { margin: 0; font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
+.qh { font-size: 13px; font-weight: 800; margin: 20px 0 8px; display: flex; align-items: center; gap: 12px; }
+.qh:first-of-type { margin-top: 0; }
+.qh .rule { flex: 1; height: 1px; background: var(--note-line); }
+.tinystrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-items: end; height: 64px; }
+.tinystrip div { display: flex; flex-direction: column-reverse; gap: 2px; height: 100%; justify-content: flex-start; }
+.tinystrip i { display: block; border-radius: 3px; background: var(--fit); }
+.tinystrip i.b2 { background: color-mix(in oklab, var(--fit) 70%, var(--paper)); }
+.tinystrip i.b3 { background: color-mix(in oklab, var(--fit) 45%, var(--paper)); }
+.tinystrip i.b4 { background: color-mix(in oklab, var(--fit) 28%, var(--paper)); }
+
+[data-still] *, [data-still] *::before { animation: none !important; transition: none !important; }
+[data-still] .route .seg-w .ln i { width: 100% !important; }
+[data-still] .route .seg-w .feet svg { opacity: 1 !important; }
+#err:empty { display: none; }
+#err { position: fixed; left: 8px; bottom: 8px; background: #fff0f0; color: #a00; font: 12px monospace; padding: 6px 10px; border-radius: 6px; z-index: 9; white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) {
+  .route.go .seg-w .ln i, .route.go .seg-w .feet svg, .tcol .bars i, .tk2.on .c, .prw.on .tk { animation: none !important; }
+  .route.go .seg-w .ln i { width: 100%; } .route.go .seg-w .feet svg { opacity: 1; }
+  .sch::before, .meter .bar2 i { transition: none; }
+}
+@media (max-width: 860px) { .eqs, .cal { grid-template-columns: 1fr; } .opts { grid-template-columns: 1fr; } }
+
+/* ===== v2: your picks ===== */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; margin-top: 16px; }
+.mcard { border: 1px solid var(--note-line); border-radius: var(--radius-md); padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.mcard h3 { margin: 0; font-size: 12px; font-weight: 800; }
+.mrow { display: flex; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--field-bg); font-size: 13px; font-weight: 700; justify-content: space-between; flex-wrap: wrap; }
+.mrow small { font-weight: 600; }
+.mrow.new { background: color-mix(in oklab, var(--fit) 12%, var(--paper)); border: 1px solid color-mix(in oklab, var(--fit) 40%, var(--note-line)); animation: slidein .5s both; }
+@keyframes slidein { from { opacity: 0; transform: translateY(-6px); } }
+.type { border: 1px dashed var(--ink-faint); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--ink-faint); }
+.arrow { text-align: center; color: var(--ink-faint); font-size: 12px; font-weight: 700; }
+.xform { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: var(--radius-sm); background: var(--field-bg); }
+.xform .xact { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.prw .rm { width: 28px; height: 28px; border-radius: 50%; color: var(--ink-soft); font-size: 18px; line-height: 1; }
+.picks { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; }
+.pick { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--note-line); }
+.pick i { width: 22px; height: 22px; border-radius: 50%; background: var(--fit); color: #fff; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; }
+.pick b { display: block; font-size: 13px; }
+.pick small { display: block; margin-top: 2px; line-height: 1.35; }
+.foot { margin-top: 12px; font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.foot .fld { display: inline-block; min-width: 44px; text-align: center; border-bottom: 1px dashed var(--ink-faint); font-weight: 800; color: var(--ink); }
+.prow .res .km { color: var(--ink-soft); }
+@media (max-width: 860px) { .two, .picks { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="stairs" viewBox="0 0 24 24"><path d="M3 19h4v-4h4v-4h4V7h4V4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="walk" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11c-1.8 0-3-2-3-4.2C5 4.6 6.2 3 7.7 3s2.8 1.6 2.8 3.8C10.5 9 9.6 11 8 11z"/><path d="M7.8 13.8c-1 0-1.7.7-1.7 1.7s.7 1.7 1.7 1.7 1.7-.7 1.7-1.7-.7-1.7-1.7-1.7z"/><g transform="translate(8.5 4)"><path d="M8 11c-1.8 0-3-2-3-4.2C5 4.6 6.2 3 7.7 3s2.8 1.6 2.8 3.8C10.5 9 9.6 11 8 11z"/><path d="M7.8 13.8c-1 0-1.7.7-1.7 1.7s.7 1.7 1.7 1.7 1.7-.7 1.7-1.7-.7-1.7-1.7-1.7z"/></g></g></symbol>
+</svg>
+
+<div class="bar">
+  <h1>Steps planner — guide</h1>
+  <div class="seg" id="seg">
+    <button data-go="sum" class="on">1 · The sum</button><button data-go="plan">2 · The plan</button><button data-go="day">3 · The calendar day</button><button data-go="phone">4 · Phone</button><button data-go="picks">5 · Your picks</button><button data-go="all">All</button>
+  </div>
+  <button class="chip" id="theme">Night mode</button>
+  <span class="hint">Your picks are built in · Town Hall ↔ Dymocks (412) is an <b>example number</b> until you type yours</span>
+</div>
+
+<div class="wrap">
+
+<!-- ================= 1 · THE SUM ================= -->
+<section class="card" id="sum">
+  <h2>One place for every step you take</h2>
+  <p>Your Stairs plan grows into a Steps plan. A <b>walk</b> is one direction with its own number of steps (your 728). The stairs you already set up stay exactly as they are, next to the walks. The app adds the day up.</p>
+  <div class="route go" id="route">
+    <div class="node"><i></i>Home</div>
+    <div class="seg-w w1"><span class="cnt"><span data-count="728">728</span><small>Home → Station</small></span><div class="feet" id="f1"></div><div class="ln"><i></i></div></div>
+    <div class="node"><i></i>Home<br>station</div>
+    <div class="seg-w train"><span class="cnt">train<small>not counted</small></span><div class="ln"></div></div>
+    <div class="node"><i></i>Town Hall<br>station</div>
+    <div class="seg-w w2"><span class="cnt"><span data-count="412">412</span><small>Town Hall → Dymocks <span class="ex"></span></small></span><div class="feet" id="f2"></div><div class="ln"><i></i></div></div>
+    <div class="node work"><i></i>Work<br>(Dymocks)</div>
+  </div>
+  <div style="text-align:right;margin-top:8px"><button class="chip" id="replay">▶ Play again</button></div>
+
+  <div class="eqs">
+    <table class="eq">
+      <thead><tr><th>A work day</th><th>How it is worked out</th><th>Steps</th></tr></thead>
+      <tbody>
+        <tr><td><b>Home → Station</b><br><small>walk · ≈ 0.5 km</small></td><td>728 steps, once</td><td><b>728</b></td></tr>
+        <tr><td><b>Station → Home</b><br><small>walk · ≈ 0.5 km</small></td><td>728 steps, once</td><td><b>728</b></td></tr>
+        <tr><td><b>Town Hall → Dymocks</b><br><small>walk · ≈ 0.3 km</small></td><td><span class="ex">412 steps, once</span></td><td><b><span class="ex">412</span></b></td></tr>
+        <tr><td><b>Dymocks → Town Hall</b><br><small>walk · ≈ 0.3 km</small></td><td><span class="ex">412 steps, once</span></td><td><b><span class="ex">412</span></b></td></tr>
+        <tr class="sub"><td>Work stairs<br><small>7 flights × 10 steps</small></td><td>70 up + 70 down</td><td><b>140</b></td></tr>
+        <tr class="sub"><td>Home stairs<br><small>6 flights × 10 steps</small></td><td>60 up + 60 down</td><td><b>120</b></td></tr>
+        <tr class="tot"><td colspan="2">Steps on a work day</td><td><b>2,540</b></td></tr>
+      </tbody>
+    </table>
+    <div class="total">
+      <span class="big">2,540</span><span class="what">steps on a work day</span>
+      <span class="more">728 + 728 + 412 + 412 + 140 + 120<br>Walking ≈ 1.6 km. On a day with no commute it is just the home stairs: <b>120</b>.<br>A work week (5 days) with home stairs every day: <b>12,940</b>.</span>
+      <div class="kinds"><span><i></i>Walking 2,280</span><span><i class="h"></i>Stairs 260</span></div>
+    </div>
+  </div>
+  <p class="note" style="margin:12px 0 0"><b>Each direction is its own leg,</b> so each has its own tick. A taxi home means you simply do not tick Station → Home. “+ Add the way back” copies a leg for you in one tap.</p>
+</section>
+
+<!-- ================= 2 · THE PLAN ================= -->
+<section class="card" id="plan">
+  <div class="section-head"><h2>Steps plan</h2><span class="rule"></span></div>
+  <p>Same spot on the Fitness page, under “Weekly plan” (it was “Stairs plan”). Two groups: <b>Walking</b> and <b>Stairs</b>. Each row shows only the boxes it needs. Type the steps (the − and + move it by 10). The big green number is the answer for that row.</p>
+  <div id="planRows"></div>
+  <div style="padding-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="chip dash">+ Add a walk</button><button class="chip dash">+ Add stairs</button></div>
+  <div class="foot">Distances are a guess: steps × <span class="fld">0.70</span> m a step. Change it if you know your stride.</div>
+
+  <span class="lab" style="margin-top:16px">This week — steps a day</span>
+  <div class="tstrip" id="wkstrip"></div>
+  <div class="legend"><span><i></i>Walking</span><span><i class="h"></i>Stairs</span><span>Wed &amp; Sat are your rest days for workouts — your steps are still counted, you still walk them.</span></div>
+  <div class="totals"><span><b>2,540</b> <small>steps today</small></span><span><b>12,940</b> <small>steps this week</small></span><span><b>≈ 1.6 km</b> <small>walking today</small></span><span><b>13</b> <small>flights up today</small></span></div>
+
+  <div class="two">
+    <div class="mcard">
+      <h3>The first time you open it</h3>
+      <div class="mrow"><span>Home → Station</span><small>728 steps · days: none yet</small></div>
+      <div class="mrow"><span>Station → Home</span><small>728 steps · days: none yet</small></div>
+      <div class="mrow"><span>Town Hall → Dymocks</span><span class="type">type your steps</span></div>
+      <div class="mrow"><span>Dymocks → Town Hall</span><span class="type">type your steps</span></div>
+      <div class="mrow"><span>Work stairs</span><small>7 × 10 · days: none yet</small></div>
+      <div class="mrow"><span>Home stairs</span><small>6 × 10 · every day</small></div>
+      <small>A leg with no steps stays out of the totals until you type its count. Nothing counts on a day until you tick that leg's days — the same as the stairs today.</small>
+    </div>
+    <div class="mcard">
+      <h3>“+ Add the way back”, one tap</h3>
+      <div class="mrow"><span>Town Hall → Dymocks</span><small>412 · M T W T F</small><button class="chip dash">+ Add the way back</button></div>
+      <div class="arrow">↓ one tap</div>
+      <div class="mrow"><span>Town Hall → Dymocks</span><small>412 · M T W T F</small></div>
+      <div class="mrow new"><span>Dymocks → Town Hall</span><small>412 · M T W T F · new, editable</small></div>
+      <small>The new leg has the name turned around, the same steps and the same days. Change anything on it afterwards. The chip shows only on a walk that has no way back yet.</small>
+    </div>
+  </div>
+
+  <div class="audit">
+    <span class="lab" style="margin-bottom:0">What I tidy while I am in here</span>
+    <ol>
+      <li><b>“Place” becomes “Name”</b> — one box that fits a walk or a staircase.</li>
+      <li><b>Each row shows only its own boxes.</b> A walk has no “flights”; stairs have no “steps one way”. Nothing greyed out.</li>
+      <li><b>Days: one tap for Mon–Fri.</b> “Weekdays” and “Every day” chips set them in one tap (the day letters still work for single days).</li>
+      <li><b>The chip and the sheet say “Steps”</b> instead of “Stairs”, with a footprints icon (the stairs icon stays on the stairs rows).</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ================= 3 · THE CALENDAR DAY ================= -->
+<section class="card" id="day">
+  <h2>On the calendar</h2>
+  <p>Still one automatic chip per day in the all-day row. Tap it and the day opens as a list: <b>one tick for each leg</b> (so there and back are two ticks), one for each staircase. The chip fills as you tick. <b>Try it: tap the ticks, or “+ Extra steps”.</b></p>
+  <div class="cal">
+    <div class="day">
+      <div class="dh">Thursday, 15 October <small>Week 42</small></div>
+      <div class="allday"><span class="lab">All day</span><span id="chipSlot"></span></div>
+      <div class="hours" id="hours"></div>
+    </div>
+    <div class="pop" id="sheetSlot"></div>
+  </div>
+  <div class="states">
+    <span class="lab" style="margin:16px 0 0">How the chip changes through the day</span>
+    <div class="s"><span class="sch"><span class="gl sm"><svg><use href="#walk"/></svg></span><span>Steps </span><b>2,540</b></span><small>Planned — dashed, nothing ticked yet</small></div>
+    <div class="s"><span class="sch part" style="--p:29%"><span class="gl sm"><svg><use href="#walk"/></svg></span><span>Steps </span><b>728/2,540</b></span><small>Part-done — fills left to right as you tick</small></div>
+    <div class="s"><span class="sch done"><span class="gl sm"><svg><use href="#walk"/></svg></span><span>Steps </span><b>2,540 ✓</b></span><small>Done — solid</small></div>
+  </div>
+</section>
+
+<!-- ================= 4 · PHONE ================= -->
+<section class="card" id="phone">
+  <h2>On the phone (360 wide)</h2>
+  <p>Same things, stacked. Steppers, day chips and ticks keep a 44px tap size.</p>
+  <div class="phones">
+    <div class="phone">
+      <div class="pt">Fitness page · Steps plan</div>
+      <div class="card" id="phonePlan"></div>
+    </div>
+    <div class="phone">
+      <div class="pt">Day · chip + sheet</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="dh" style="padding:12px;font-size:16px;font-weight:700;border-bottom:1px solid var(--note-line)">Thu 15 Oct</div>
+        <div class="allday"><span id="chipSlot2"></span></div>
+      </div>
+      <div class="pop" id="sheetSlot2" style="gap:10px"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5 · YOUR PICKS ================= -->
+<section class="card" id="picks">
+  <h2>What you picked</h2>
+  <p>Everything on the other tabs follows these. If one is wrong, tell me the number.</p>
+  <div class="picks">
+    <div class="pick"><i>1</i><div><b>Each direction is its own leg</b><small>Home → Station and Station → Home are two legs, each with its own steps.</small></div></div>
+    <div class="pick"><i>2</i><div><b>One tick per leg</b><small>So there and back are two ticks in the day sheet. Stairs keep one tick each.</small></div></div>
+    <div class="pick"><i>3</i><div><b>One Steps plan, two groups</b><small>Walking and Stairs under Weekly plan, one week strip, one total.</small></div></div>
+    <div class="pick"><i>4</i><div><b>One “Steps 728/2,540” chip</b><small>Footprints icon, exact numbers, fills as you tick.</small></div></div>
+    <div class="pick"><i>5</i><div><b>“+ Add the way back”</b><small>One tap copies a leg turned around, same steps and days.</small></div></div>
+    <div class="pick"><i>6</i><div><b>Two shades in the week strip</b><small>Walking and stairs, with a small legend.</small></div></div>
+    <div class="pick"><i>7</i><div><b>“Weekdays” and “Every day” chips</b><small>Next to the day letters, which still work.</small></div></div>
+    <div class="pick"><i>8</i><div><b>“+ Extra steps” and “+ Extra flights”</b><small>Extra steps takes one number for the day (a dog walk).</small></div></div>
+    <div class="pick"><i>9</i><div><b>A small “≈ 0.5 km” on each walk</b><small>An estimate: steps × 0.70 m. You can change the 0.70 under the plan.</small></div></div>
+    <div class="pick"><i>10</i><div><b>Four starter legs, 728 filled in</b><small>The two Dymocks legs wait for your count and stay out of the totals until then.</small></div></div>
+    <div class="pick"><i>11</i><div><b>No phone-count box</b><small>It stays a planner: nothing to type each day.</small></div></div>
+    <div class="pick"><i>+</i><div><b>Your stairs are untouched</b><small>Work stairs 7 × 10 and Home stairs 6 × 10, and every tick you have already made, stay exactly as they are.</small></div></div>
+  </div>
+</section>
+
+</div>
+<div id="err"></div>
+<script>
+window.onerror = (m, s, l) => { const e = document.getElementById('err'); e.textContent += m + ' @' + l + '\n'; };
+const root = document.documentElement, fmt = n => n.toLocaleString('en-AU');
+if (location.hash.split('+').includes('still')) root.dataset.still = 1;
+const ic = (id, cls) => `<svg class="${cls || ''}"><use href="#${id}"/></svg>`;
+const DAYS = ['M','T','W','T','F','S','S'];
+const STRIDE = 0.7;
+const km = s => '≈ ' + (Math.round(s * STRIDE / 100) / 10).toFixed(1) + ' km';
+
+/* ----- her data (the Dymocks legs are an EXAMPLE number) ----- */
+const WALKS = [
+  { id: 'w1', n: 'Home → Station', s: 728, days: [1,1,1,1,1,0,0], ex: false },
+  { id: 'w2', n: 'Station → Home', s: 728, days: [1,1,1,1,1,0,0], ex: false },
+  { id: 'w3', n: 'Town Hall → Dymocks', s: 412, days: [1,1,1,1,1,0,0], ex: true },
+  { id: 'w4', n: 'Dymocks → Town Hall', s: 412, days: [1,1,1,1,1,0,0], ex: true }
+];
+const STAIRS = [
+  { id: 's1', n: 'Work stairs', f: 7, s: 10, u: 1, d: 1, days: [1,1,1,1,1,0,0] },
+  { id: 's2', n: 'Home stairs', f: 6, s: 10, u: 1, d: 1, days: [1,1,1,1,1,1,1] }
+];
+const sPer = p => p.f * p.s * (p.u + p.d);
+const exTag = w => w.ex ? ' <span class="ex"></span>' : '';
+
+/* ----- route animation ----- */
+function feet(id, n) { const el = document.getElementById(id); el.innerHTML = Array.from({ length: n }, (_, i) => `<svg style="--i:${i}"><use href="#walk"/></svg>`).join(''); }
+feet('f1', 6); feet('f2', 6);
+function countUp() {
+  if (root.dataset.still) return;
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const to = +el.dataset.count, delay = el.closest('.w2') ? 1900 : 100, t0 = performance.now() + delay;
+    el.textContent = '0';
+    (function tick(now) { const p = Math.min(1, Math.max(0, (now - t0) / 1400)); el.textContent = fmt(Math.round(to * (1 - Math.pow(1 - p, 3)))); if (p < 1) requestAnimationFrame(tick); })(performance.now());
+  });
+}
+function play() { const r = document.getElementById('route'); r.classList.remove('go'); void r.offsetWidth; r.classList.add('go'); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) countUp(); }
+document.getElementById('replay').addEventListener('click', play);
+play();
+
+/* ----- the plan rows ----- */
+const dd = (days, phone) => `<span class="dd">${days.map((o, i) => `<button class="chip day${o ? ' on' : ''}">${DAYS[i]}</button>`).join('')}${phone ? '' : '<button class="chip quick">Weekdays</button><button class="chip quick">Every day</button>'}</span>`;
+const stp = (v, wide) => `<span class="step${wide ? ' wide' : ''}"><button>−</button><output>${fmt(v)}</output><button>+</button></span>`;
+function walkRow(w) { return `<div class="prow"><div class="gl">${ic('walk')}</div><div class="ctl">
+  <div class="nmf"><span class="f-lab">Name</span><span class="nm">${w.n}</span></div>
+  <div><span class="f-lab">Steps</span>${stp(w.s, 1)}</div>
+  <div><span class="f-lab">Days</span>${dd(w.days)}</div></div>
+  <div class="res"><b>${fmt(w.s)}</b><small>a day · <span class="km">${km(w.s)}</span>${w.ex ? ' · example' : ''}</small></div></div>`; }
+function stairRow(p) { return `<div class="prow"><div class="gl">${ic('stairs')}</div><div class="ctl">
+  <div class="nmf"><span class="f-lab">Name</span><span class="nm">${p.n}</span></div>
+  <div><span class="f-lab">Flights</span>${stp(p.f)}</div>
+  <div><span class="f-lab">Steps a flight</span>${stp(p.s)}</div>
+  <div><span class="f-lab">Times up</span>${stp(p.u)}</div>
+  <div><span class="f-lab">Times down</span>${stp(p.d)}</div>
+  <div><span class="f-lab">Days</span>${dd(p.days)}</div></div>
+  <div class="res"><b>${fmt(sPer(p))}</b><small>a day · ${p.f} × ${p.s} × ${p.u + p.d}</small></div></div>`; }
+document.getElementById('planRows').innerHTML =
+  `<div class="grp"><span class="lab">Walking</span><span class="rule"></span></div>${WALKS.map(walkRow).join('')}` +
+  `<div class="grp"><span class="lab">Stairs</span><span class="rule"></span></div>${STAIRS.map(stairRow).join('')}`;
+
+/* ----- the week strip (work Mon–Fri) ----- */
+function strip(id) {
+  const el = document.getElementById(id), names = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  el.innerHTML = names.map((n, i) => {
+    const w = WALKS.reduce((a, x) => a + (x.days[i] ? x.s : 0), 0), s = STAIRS.reduce((a, x) => a + (x.days[i] ? sPer(x) : 0), 0), t = w + s, today = i === 3, mx = 2540, H = 64;
+    const bars = (w ? `<i style="height:${Math.round(w / mx * H)}px"></i>` : '') + (s ? `<i class="h" style="height:${Math.max(3, Math.round(s / mx * H))}px"></i>` : '');
+    return `<div class="tcol${today ? ' today' : ''}"><span class="dn">${n}${today ? ' · today' : ''}</span><div class="bars">${bars}</div><span class="v">${fmt(t)}</span>${i === 2 || i === 5 ? '<small>rest day</small>' : ''}</div>`;
+  }).join('');
+}
+strip('wkstrip');
+
+/* ----- the phone plan ----- */
+const quick = '<div style="display:flex;gap:6px;margin-top:6px"><button class="chip quick">Weekdays</button><button class="chip quick">Every day</button></div>';
+function pWalk(w) { return `<div class="pl"><div class="pl-h"><span class="gl">${ic('walk')}</span><span class="nm">${w.n}</span><span class="res"><b>${fmt(w.s)}</b><small>a day · ${km(w.s)}${w.ex ? ' · example' : ''}</small></span></div>
+  <div><span class="f-lab">Steps</span>${stp(w.s, 1)}</div>
+  <div><span class="f-lab">Days</span>${dd(w.days, 1)}${quick}</div></div>`; }
+function pStair(p) { return `<div class="pl"><div class="pl-h"><span class="gl">${ic('stairs')}</span><span class="nm">${p.n}</span><span class="res"><b>${fmt(sPer(p))}</b><small>a day · ${p.f} × ${p.s} × ${p.u + p.d}</small></span></div>
+  <div class="pl-g"><div><span class="f-lab">Flights</span>${stp(p.f)}</div><div><span class="f-lab">Steps a flight</span>${stp(p.s)}</div><div><span class="f-lab">Times up</span>${stp(p.u)}</div><div><span class="f-lab">Times down</span>${stp(p.d)}</div></div>
+  <div><span class="f-lab">Days</span>${dd(p.days, 1)}${quick}</div></div>`; }
+document.getElementById('phonePlan').innerHTML = `<div class="section-head"><h2>Steps plan</h2><span class="rule"></span></div>
+  <div class="grp"><span class="lab">Walking</span><span class="rule"></span></div>${pWalk(WALKS[0])}${pWalk(WALKS[1])}
+  <div class="grp"><span class="lab">Stairs</span><span class="rule"></span></div>${pStair(STAIRS[0])}
+  <div style="padding-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="chip dash" style="min-height:44px">+ Add a walk</button><button class="chip dash" style="min-height:44px">+ Add stairs</button></div>
+  <div class="tstrip" id="wkstrip2" style="margin-top:12px"></div><div class="totals"><span><b>2,540</b> <small>today</small></span><span><b>12,940</b> <small>this week</small></span><span><b>≈ 1.6 km</b> <small>walking today</small></span></div>`;
+strip('wkstrip2');
+
+/* ----- the day: timeline ----- */
+(function () {
+  const el = document.getElementById('hours');
+  const hrs = [['7am', 0], ['8am', 55], ['9am', 110], ['10am', 165], ['11am', 220], ['12pm', 275]];
+  el.innerHTML = hrs.map(([t, y]) => `<span class="hr" style="top:${y}px">${t}</span>`).join('') +
+    '<div class="blk fit" style="top:27px;height:48px"><span>Pilates</span><small>7:30 – 8:15am</small></div><div class="blk wk" style="top:110px;height:185px"><span>Clinic</span><small>9:00am – 1:00pm</small></div>';
+})();
+
+/* ----- the day: sheet + chip, live (tap the ticks and the extras) ----- */
+const T = { w1: 1, w2: 0, w3: 0, w4: 0, s1: 0, s2: 0 };
+const AMT = { w1: 728, w2: 728, w3: 412, w4: 412, s1: 140, s2: 120 };
+const UI = { form: false, draft: 2300 }, EXTRAS = [];
+const exSum = () => EXTRAS.reduce((a, x) => a + x, 0);
+const totalNow = () => 2540 + exSum();
+const doneNow = () => Object.keys(T).reduce((a, k) => a + (T[k] ? AMT[k] : 0), 0) + exSum();
+const pr = (id, name, small, n) => `<button class="prw${T[id] ? ' on' : ''}" data-k="${id}"><span class="tk">✓</span><div><b>${name}</b><small>${small}</small></div><span class="n">${fmt(n)}</span></button>`;
+function sheet() {
+  const d = doneNow(), tot = totalNow(), pct = Math.min(100, Math.round(d / tot * 100));
+  const ex = EXTRAS.map((x, i) => `<div class="prw on"><span class="tk">✓</span><div><b>Extra steps</b><small>${fmt(x)} steps · ${km(x)}</small></div><span class="n">${fmt(x)}</span></div>`).join('');
+  const form = UI.form
+    ? `<div class="xform"><span class="f-lab" style="margin:0">Extra steps — one number for the day</span><span class="step wide" style="align-self:flex-start"><button data-x="dec">−</button><output>${fmt(UI.draft)}</output><button data-x="inc">+</button></span><div class="xact"><button class="chip" data-x="cancel">Cancel</button><button class="chip on" data-x="add">Add ${fmt(UI.draft)} steps</button></div></div>`
+    : `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="chip dash" data-x="open">+ Extra steps</button><button class="chip dash">+ Extra flights</button></div>`;
+  return `<div class="ph"><span class="gl">${ic('walk')}</span><b>Steps today<small>Thursday 15 October</small></b><button class="chip">Edit plan</button></div>
+    <div class="sgrp"><span class="lab">Walking</span><span class="rule"></span></div>${WALKS.map(w => pr(w.id, w.n, `${fmt(w.s)} steps · ${km(w.s)}${exTag(w)}`, w.s)).join('')}${ex}
+    <div class="sgrp"><span class="lab">Stairs</span><span class="rule"></span></div>${STAIRS.map(p => pr(p.id, p.n, `${p.f} flights × ${p.s} · up and down`, sPer(p))).join('')}
+    <div class="meter"><div class="bar2"><i style="width:${pct}%"></i></div><b data-meter>${fmt(d)} / ${fmt(tot)}</b></div>${form}
+    <small>Each leg has its own tick. Un-tick “Station → Home” if you took a taxi — one tap, nothing to confirm.</small>`;
+}
+function chip() {
+  const d = doneNow(), tot = totalNow(), cls = d >= tot ? ' done' : d > 0 ? ' part' : '', p = Math.min(100, Math.round(d / tot * 100));
+  return `<span class="sch${cls}" style="--p:${p}%"><span class="gl sm">${ic('walk')}</span><span>Steps </span><b>${d >= tot ? fmt(d) + ' ✓' : fmt(d) + '/' + fmt(tot)}</b></span>`;
+}
+function paint() {
+  ['sheetSlot', 'sheetSlot2'].forEach(id => { document.getElementById(id).innerHTML = sheet(); });
+  ['chipSlot', 'chipSlot2'].forEach(id => { document.getElementById(id).innerHTML = chip(); });
+}
+document.addEventListener('click', e => {
+  const x = e.target.closest('[data-x]');
+  if (x) {
+    const a = x.dataset.x;
+    if (a === 'open') UI.form = true; else if (a === 'cancel') UI.form = false;
+    else if (a === 'dec') UI.draft = Math.max(100, UI.draft - 100); else if (a === 'inc') UI.draft += 100;
+    else if (a === 'add') { EXTRAS.push(UI.draft); UI.form = false; }
+    paint(); return;
+  }
+  const b = e.target.closest('[data-k]'); if (!b) return;
+  const k = b.dataset.k; T[k] = T[k] ? 0 : 1;
+  /* patch in place so the tick pops and the bar slides instead of the sheet being redrawn from scratch */
+  document.querySelectorAll(`[data-k="${k}"]`).forEach(el => el.classList.toggle('on', !!T[k]));
+  const d = doneNow(), tot = totalNow(), pct = Math.min(100, Math.round(d / tot * 100));
+  document.querySelectorAll('.meter .bar2 i').forEach(i => { i.style.width = pct + '%'; });
+  document.querySelectorAll('[data-meter]').forEach(m => { m.textContent = fmt(d) + ' / ' + fmt(tot); });
+  ['chipSlot', 'chipSlot2'].forEach(id => { document.getElementById(id).innerHTML = chip(); });
+});
+paint();
+
+/* ----- tabs, theme, hash hooks:  #s=plan+dark+still ----- */
+function show(s) { document.body.dataset.s = s; document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.go === s)); }
+document.getElementById('seg').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) show(b.dataset.go); });
+function theme(dark) { if (dark) root.dataset.theme = 'dark'; else delete root.dataset.theme; document.getElementById('theme').textContent = dark ? 'Day mode' : 'Night mode'; }
+document.getElementById('theme').addEventListener('click', () => theme(root.dataset.theme !== 'dark'));
+location.hash.slice(1).split('+').forEach(t => { if (t === 'still') root.dataset.still = 1; if (t === 'dark') theme(true); if (t.startsWith('s=')) show(t.slice(2)); });
+if (!document.body.dataset.s) show('sum');
+</script>
+</body>
+</html>

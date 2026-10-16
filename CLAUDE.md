@@ -224,30 +224,56 @@ effort defaults to.
     quotes or real newlines, then parse every inline script); the tick handler re-draws the page before
     the 700 ms goal timer, so the check has to run (and toast) inside `renderFitness`; the shelf
     chip row scrolls sideways on a phone but the detail's Type row WRAPS so all types stay in view.
-    **Stairs plan (2026-10-15, "make a steps plan ... 7 flights of stairs at work which is 10 steps per
-    floor, up and down once each a day, plus my home steps ... steps will be part of my calendar
-    fitness"; her 11 picks on `mocks/steps-plan-guide-2026-10-15.html`, which is the spec; search "STAIRS
-    PLAN" in index.html):** a "Stairs plan" section under Weekly plan on the Fitness page (`#fitHomeStairs`,
-    `stRenderPlan()`). Each PLACE (Work, Home — typed names) = flights x steps a flight x times up x times
-    down, plus the weekdays she is there (M-S chips). **Steps are never stored, always computed**
-    (`stPer = flights*steps*(up+down)`, `stUp = flights*up`); only the plan and her ticks are saved, in
-    `book33-fitness-stairs` = `{places:[{id,name,flights,steps,up,down,days:[0..6, Monday = 0]}],
-    log:{"YYYY-MM-DD":{done:{placeId:true}, extra:[{id,flights,steps,up,down}]}}}`. Her two places start
-    typed in (`ST_SEED`: Work 7x10 with Work days EMPTY, Home 6x10 every day) but live in memory only
-    until her first edit, so a plan saved on another device is never overwritten. Total = steps both ways
-    (big), "13 flights up" small. No target, no streak, and **stairs never touch `FIT_LOG`,
-    `fitWeekProgress` or "This week n/5 days"**. **Calendar:** `stairsChipFor(d)` returns ONE automatic
-    all-day chip per planned day (she places nothing); tapping it opens the day sheet
-    (`refOpen("stairs", dateKey)` -> `stSheetBody`: one tick per place, "+ Extra flights", an undo on an
-    extra). Chip states dashed (planned) / filled to the ticked share (`--st-p`) / solid "260 check". Label
-    is the compact "Stairs 140/260" (the word hides at <=767px in `#mdAlldayRow` and below 1280px in the
-    single-day top bar `.ddt-allday`; the staircase glyph `XT_PATH.stairs` stays). **Traps hit while
-    building:** the chip is PREPENDED to both `dayEvents` lists (`dayEventsRawFor` and `renderDay`'s own
-    copy) because the multi-day all-day row shows 2 chips + "+N more" and an appended chip was always
-    behind the "+N more"; its CSS sits LAST in the stylesheet because design45's `#dayAlldayRow
-    .ad-chip.tl-item` ties it on specificity; `#tlWorkoutBody` swallows bubbling clicks, so the one
-    delegate on `[data-st],[data-stairs-day],[data-st-day]` is capture-phase; the phone place row needs
-    `padding-right: 52px` so the x never sits on the day total.
+    **Steps plan (2026-10-16; grew out of the 2026-10-15 "Stairs plan" — her words: "make a steps plan ... 7
+    flights of stairs at work which is 10 steps per floor ... steps will be part of my calendar fitness",
+    then "turn that steps stairs tracking into a steps planner/management so i can input that my walk to the
+    station from home is 728 steps one way, and allow me to calculate my steps for the day, same for from
+    town hall station to work (dymocks)"; her picks (ask28, three popup rounds) are on
+    `mocks/steps-planner-guide-2026-10-15.html`, which is the spec; the older
+    `mocks/steps-plan-guide-2026-10-15.html` is the stairs-only version; search "STEPS PLAN" in
+    index.html):** a "Steps plan" section under Weekly plan on the Fitness page (`#fitHomeStairs` — the id
+    kept its old name — `stRenderPlan()`), two groups: **Walking** and **Stairs**. A place is a **walk**
+    (`kind:"walk"`, steps one way, typed) or **stairs** (flights x steps a flight x times up x times down),
+    plus the weekdays she does it (M-S chips + "Weekdays" / "Every day" shortcuts; a second tap on a shortcut
+    clears). **EACH DIRECTION IS ITS OWN LEG** (Home -> Station and Station -> Home are two walks, one tick
+    each); "+ Add the way back" (`stBackName`, `stHasBack`) copies a walk turned around ("A -> B" becomes
+    "B -> A"; a name with no arrow gets "(back)"), same steps and days, and shows only on a walk with no
+    way back yet. **Steps are never stored, always computed** (`stPer`: walk = its steps, stairs =
+    `flights*steps*(up+down)`, extra steps = `n`; `stUp` = flights climbed, stairs only); only the plan, her
+    ticks and the stride are saved, in `book33-fitness-stairs` (the key keeps its old name, so her saved
+    stairs and ticks are untouched) = `{stride, walkSeeded, places:[{id,kind:"walk",name,walk,days} |
+    {id,kind:"stairs",name,flights,steps,up,down,days}], log:{"YYYY-MM-DD":{done:{placeId:true},
+    extra:[{id,n} (extra steps) | {id,flights,steps,up,down}]}}}`; a place with no `kind` is stairs
+    (everything saved before 10/16). A walk with 0 steps ("type your steps") is left out of every total.
+    **Starter plan** (`ST_SEED`): four walks (Home -> Station 728, Station -> Home 728, Town Hall ->
+    Dymocks and Dymocks -> Town Hall both "type your steps"), Work stairs 7x10 with days EMPTY, Home stairs
+    6x10 every day; held in memory only until her first edit, so a plan saved on another device is never
+    overwritten. **Migration:** a plan saved before walks existed gets the four starter walks added ONCE
+    (in memory; `walkSeeded` is saved with her next edit and keeps them from coming back after she removes
+    them) and every stairs row and tick is untouched. **Distance:** a small "≈ 0.5 km" on each walk =
+    steps x `ST.stride` (0.70 m a step to start, a small editable field under the plan; estimate only,
+    never on stairs). No target, no streak, no phone-count box, and **steps never touch `FIT_LOG`,
+    `fitWeekProgress` or "This week n/5 days"**. **Week strip:** two shades only (walking / stairs, a small
+    legend), totals = steps today, steps this week, "≈ 1.6 km walking today", flights up (when there are
+    stairs). **Calendar:** `stairsChipFor(d)` returns ONE automatic all-day chip per planned day, titled
+    "Steps" with the footprints glyph `XT_PATH.walk` (she places nothing); tapping it opens the day sheet
+    (`refOpen("stairs", dateKey)` -> `stSheetBody`: a Walking group and a Stairs group, ONE tick per leg or
+    staircase, the meter, and two chips "+ Extra steps" (one number for the day) and "+ Extra flights"; an
+    undo on removing an extra). Chip states dashed (planned) / filled to the ticked share (`--st-p`) /
+    solid "2,540 check". Label "Steps 728/2,540": the word hides at <=1359px in `#mdAlldayRow` (the week's
+    columns are ~118px at 1100px wide) and below 1280px in the single-day top bar `.ddt-allday`; at
+    <=767px in `#mdAlldayRow` the whole label becomes the planned total in short form ("2.5k", "check" once
+    done) because "728/2,540" cannot fit a ~90px phone column. **Traps hit while building:** the chip is
+    PREPENDED to both `dayEvents` lists (`dayEventsRawFor` and `renderDay`'s own copy) because the
+    multi-day all-day row shows 2 chips + "+N more" and an appended chip was always behind the "+N more";
+    its CSS sits LAST in the stylesheet because design45's `#dayAlldayRow .ad-chip.tl-item` ties it on
+    specificity; `#tlWorkoutBody` swallows bubbling clicks, so the one delegate on
+    `[data-st],[data-stairs-day],[data-st-day]` is capture-phase; the phone row needs `padding-right: 52px`
+    so the x never sits on the day total, AND any desktop width rule on a field (`.st-walk .st-nm`, 20ch)
+    needs a phone twin INSIDE the `@container tpe` block or it out-specifics the phone `width:100%` and the
+    name pushes the total under the x; `.tpe-chip` sets `display:inline-flex`, so a chip's `hidden`
+    attribute needs `.st-back[hidden]{display:none}`; the app's functions are not on `window`, so a test
+    harness can only click and read the DOM and localStorage.
     **My don'ts (2026-10-15, "a what not to do list for health and fitness to help me journal my personal
     codes of what not to do", then "make it table format"; ask28 with a guide + three popup rounds;
     `mocks/dont-list-guide-2026-10-15.html` is the spec; search "MY DON'TS" in index.html):** a personal
