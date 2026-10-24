@@ -2,7 +2,7 @@
 -- Run this once in Book33's Supabase project (mqaswzpuqqlujfhooplm):
 --   Dashboard -> SQL Editor -> New query -> paste this whole file -> Run.
 -- Safe to run again (every step is "if not exists" / "drop if exists").
--- NOT RUN YET: Linh's rule is that this is shown to her first and run only on her explicit yes.
+-- RUN 2026-10-24 on Linh's explicit yes (her rule: shown to her first, run only on her yes).
 --
 -- Why this exists: the quote library keeps each quote's words and a tiny round picture inside the
 -- app's notebook (the one synced row), but the big picture (1200 px, about 150 KB) cannot live there
