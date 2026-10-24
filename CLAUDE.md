@@ -636,9 +636,10 @@ at THEMES · tap the line = the full card · the fasting card uses the library.
   `up:false` is the upload queue) and in the Supabase Storage bucket `quote-pics` (`<user id>/<quote id>.jpg`).
   `mqFlush()` uploads the queue when signed in and the bucket exists; a missing bucket ("Bucket not found") sets
   `MQ.cloud = "missing"`, tiles say "Waiting to upload" and the library shows one plain line — the words and the
-  round picture always work. **The bucket SQL is `supabase/quote_pics_setup.sql` and has NOT been run:** she wants
-  to see it first and say yes (a bucket, then four owner-folder policies — select, insert, update because a
-  replaced picture is an upsert, delete). The app reaches the signed-in Supabase client through
+  round picture always work. **The bucket SQL, `supabase/quote_pics_setup.sql`, was run on 2026-10-24 on her yes** (Book33's
+  project `mqaswzpuqqlujfhooplm`, SQL Editor; verified: private bucket, 5 MB, JPEG only, four owner-folder
+  policies — select, insert, update because a replaced picture is an upsert, delete). It is idempotent. Any
+  further bucket or policy change follows her rule: show it to her, run it only on her explicit yes. The app reaches the signed-in Supabase client through
   `window.__B33_SB()` (one line in the sync IIFE); nothing else may create a second client.
 - **Which quote shows (`mqCands`):** pinned > what is on now (`currentItem` → `typeOf` → `rules.on`) > Mode
   (`activeMode()` → `rules.mode`) > Universal Day (`universalDay().value`, "22/4" matches 22 or 4 → `rules.ud`) >
