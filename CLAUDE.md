@@ -668,6 +668,40 @@ at THEMES · tap the line = the full card · the fasting card uses the library.
   on (`body[data-mq-on]`) so the status bar is cleared once, not twice; `toBlob` on a big photo takes a moment in a
   slow browser, so the sheet shows "Shrinking…" and holds Save.
 
+## Meal prep — a Breakfast / Lunch / Dinner event holds the meal (2026-10-24, her words: "for breakfast lunch and
+## dinner events, i want to be able to meal prep. e.g. breakfast can be matcha green tea drink")
+ask28 with a guide and three popup rounds (all her picks were the recommended ones); the guide is the spec:
+`mocks/meal-prep-guide-2026-10-24.html` (MOCK=BUILD). Search "MEAL PREP" / `mealBlockHtml` in index.html.
+- **What a meal event holds:** what the meal is, what to prepare ahead (tickable steps), its ingredients (feed the
+  shopping list), and a pick from My Recipes. A Snack event is untouched (still the food-log row, `pop.food`).
+- **Stores** (same value shapes everywhere: recipe id string | `{out:true,note}` | `{custom}`; own `""` = none that day):
+  `book33-mealplan` (dinner), `book33-lunchplan`, NEW `book33-breakfastplan`, NEW `book33-meal-defaults`
+  (`{breakfast?,lunch?,dinner?}` = "every Breakfast"), NEW `book33-meal-prep`
+  (`{"YYYY-MM-DD|slot":{r:recipeId,done:[stepText]}}`; a tick belongs to the recipe it was made on, so changing the
+  recipe starts the ticks over). **Resolution:** the day's own value wins, else the default (`mealEntryFor(k, slot)`
+  returns `own: true|false`). One writer per scope: `mbApply` (scope "all" writes the default and drops the day's own
+  value; "day" writes the day's own value), then `mealAfterChange()` repaints everything that shows a meal.
+- **Recipes** gained optional `prep: [string]` and `meals: ["breakfast"|"lunch"|"dinner"]` (the recipe form's Prep
+  box and "Suits" chips). Untagged = suits every meal. Only the dinner ranking filters by `meals` (so a breakfast
+  recipe is never suggested for dinner); pickers list the slot's recipes first, then the rest. An own typed dish is plain
+  text for that day, no "Save as recipe".
+- **Defaults + shopping:** `syncShoppingWithMealPlan` covers all three stores' dates plus the next 7 days (the window
+  a default stands in for); added rows carry `mealPlanned`, ingredients are checked against the fridge first.
+- **Two places, one truth:** the event popup block (`pop.meal`, a default-ON strip piece, not hidden by the bare
+  start) and the Food page (`#mealPlanDef` "Every day" row + a Breakfast row in each week day, `renderMealDefaults`
+  / `renderMealPlan`; a "None this day" option). Changing either repaints the other and any open popup.
+  Change starts on "Just this day" once a default exists, otherwise "Every <meal>".
+- **Block states** (`mealBlockHtml`): planned (name, "From every Breakfast" / "Just today", ↺ back to the default,
+  Change, prep ticks, ingredient chips, **Had it**, "Log something else →"); nothing planned (Plan <meal>, "Log what I
+  ate →"); logged (✓, Undo for a plan-made entry). **Had it** writes the same `NUT_MEALS[date]` entry the log row
+  writes (`fromPlan:true`, desc = meal name), on the event's own date, and only shows when the date is today or past.
+- **Calendar:** a block ≥40px tall shows the meal name + "n/m prep" under its time (`mealBlockSubHtml`); the
+  multi-day card appends " · meal" to its time line. Prep lives only inside the event, never as its own calendar item.
+- **Traps hit while building:** a re-render detaches the tapped button, and the outside-click handler reads a detached
+  target as an outside tap and closes the sheet — the sheet's click delegate calls `e.stopPropagation()` for `[data-mb]`;
+  a custom dish tonight crashed `dinnerSuggestionHTML` until it got its own branch; the meal block only draws when
+  `pop.meal` is in the strip registry as `dflt: true`.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
