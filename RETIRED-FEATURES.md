@@ -536,3 +536,11 @@ row (All · each exercise type with its count · No type yet · Goals · + New t
 and, under the opened shelf, the plan chips that hold that type with "+ New template" beside them
 (`xtShelfHtml`, `xtShelfTemplate`). Every template is still one tap away (All shelf, then its chip);
 nothing was deleted. Never bring back a second, template-only tab row above or beside the shelf.
+
+## 21. The "Paste Cliniko schedule" box — hidden 2026-10-25, NOT deleted
+Her pick 9 on the C22 + LCM Appointments merge ("one paste, in LCM"): the day's patients now come from
+LCM's own list (`lcm-appt-digest` → `book33-lcm-days`, see CLAUDE.md "C22 + LCM Appointments"), so C22's
+paste box (`wmbPasteFormHtml`, on the Today's patients card and the Work Day Board) draws nothing while
+`WMB_PASTE_HIDDEN` is true. Its code, `clinicDayParseText` / `clinicDaySaveFromText` and the saved
+`book33-clinic-day` data are untouched, and a day LCM has no list for still reads that older paste. Pasting
+happens in LCM's Appointments dialog only. Never bring back a second paste box in C22 unasked.

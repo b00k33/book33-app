@@ -703,6 +703,28 @@ ask28 with a guide and three popup rounds (all her picks were the recommended on
   a custom dish tonight crashed `dinnerSuggestionHTML` until it got its own branch; the meal block only draws when
   `pop.meal` is in the strip registry as `dflt: true`.
 
+## C22 + LCM Appointments — one calendar, both ways (2026-10-25, her words: "what if i want to merge c22 with lcm
+## pharmacy appointment page? help me design this before mocking")
+ask28 with a guide and 14 popup picks (all the recommended ones); the mock is the spec:
+`lcm-pharmacy-app/c22-merge-mock-2026-10-25.html` (MOCK=BUILD). Search "C22 + LCM APPOINTMENTS" in index.html.
+- **Both ways, each edits only its own** (pick 2). Both apps sit on one origin (b00k33.github.io), so each READS the
+  other's localStorage and WRITES only its own prefix. C22 writes `book33-cal-digest` (`calDigestSave`, from
+  `saveWidgetDigest`, 1.2 s debounce, same-content guarded, device-local: in the sync EXCLUDE list) = its resolved items +
+  birthdays for today-7..+35: `{v, at, days: {day: {i: [{id, s, e?, t, g | c, k:"clinic"?, d?, x?}], b?: [names]}}}`. LCM
+  writes `lcm-appt-digest`; C22 copies it into `book33-lcm-days` (`lcmDaysSync`: one list per LCM login, replaced whole,
+  newest `at` wins; NOISY in the sync, so it syncs without marking the notebook dirty). `lcmPatientsOn` merges the logins
+  newest first and drops a booking a second login also lists (same time + name). Patient names, focus and goal ride C22's
+  cloud row this way, as the pasted `book33-clinic-day` already did.
+- **Names in the Clinic block** (pick 6): `clinicPatientsFor(day)` = LCM's list, else the older paste, else none; a Clinic
+  (or "CBD work") block shows a count badge and one 17px row per patient at its own time (`clinicBlockRowsHtml`; the
+  rows are 17px by the mock, not 44px — a dense list inside a block, the popover's list rows and the card button are the
+  full-size ways in); a narrow week cell shows the count only. Tap a row = a small card + "Open in LCM"
+  (`clinCardOpen`, `?appt=<id>&d=<day>`; C22 never edits a booking). The Clinic popover lists the patients for any date.
+- **One paste, in LCM** (pick 9): C22's paste box is hidden, not deleted (`WMB_PASTE_HIDDEN`, RETIRED-FEATURES.md §21).
+- **Everything else (the grid tint, fold rows, Me chip, cake, Sunday)** is LCM's side: its CLAUDE.md "C22 on the grid".
+- **Trap hit while building:** `migrateBeautyRoutines` calls `saveWidgetDigest()` during boot, before later lines run —
+  the digest's module state must be `var` / function declarations; a `let` there threw a TDZ error and stopped the app.
+
 ## design45 — Book33's design system (2026-09-02, "i really like this design. use it")
 Read with: `ABOUT-ME.md` (who this is for), `RETIRED-FEATURES.md` (what must never come
 back), `MEASURING.md` (the commit-time checks — mandatory, see "Every commit" below).
