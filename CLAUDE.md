@@ -819,10 +819,10 @@ tappable — a chip opens its own sheet in place, never a page jump (the 2026-09
 birthday-tap rule).
 
 ### Every commit
-Push straight to `main` after committing — no confirmation needed (2026-09-10, "always
-push" / "push live without needing my permission" — this repo joins C7/LCM's existing
-auto-push list; the old commit-then-ask-before-push rule is gone). Still confirm before
-deleting data. Report what changed plus the one-line undo. **Any commit that touches
+**Push to `main` only when she says "push live"**, each time, for that change (her pick
+2026-10-25, the folder audit: "Wait for push live", same as LCM). This replaces the
+2026-09-10 auto-push ("always push"); commit freely, then show her the result and wait.
+C7 keeps its own auto-push. Still confirm before deleting data. Report what changed plus the one-line undo. **Any commit that touches
 layout runs the mobile report in `MEASURING.md` and pastes the results.** A rule nobody
 measures is a wish.
 
@@ -1449,16 +1449,11 @@ CHECK → SHOW. Diagnose what's actually wrong before touching anything; don't r
 everything just because you can — preserve what already works. When given a screenshot,
 report WHAT'S WRONG / WHY / WHAT YOU'D CHANGE / WHY IT'S BETTER before building the mock.
 
-**APPROVAL GATE — still real, reshaped by the 2026-09-10 auto-push override.** Book33/
-book33-app is now full auto-push (commit, verify, push `main`, no waiting for a "go") —
-see "Every commit" above and cross-session memory `feedback_check_before_upload`'s
-2026-09-10 entry. That removes the WAITING-to-push step; it does not remove showing her
-the shape of a significant, not-yet-agreed visual change before building/shipping it —
-same distinction the C7 and LCM Pharmacy auto-push overrides both preserve. For a
-significant visual change she hasn't already seen: show the mock/preview and get her
-go-ahead on the DIRECTION first, same as always; once she's approved a direction (or the
-work is a correction to something already agreed), implement, verify, and push straight
-through without a separate push-confirmation step.
+**APPROVAL GATE — two separate steps.** For a significant visual change she hasn't
+already seen: show the mock/preview and get her go-ahead on the DIRECTION first; once a
+direction is approved (or the work corrects something already agreed), implement and
+verify. Going live is a second, separate word: push only on her "push live" (see "Every
+commit" above; her pick 2026-10-25 ended the 2026-09-10 auto-push).
 
 **Design judgement, not order-taking.** If a request would make the interface worse:
 name the problem, explain the trade-off briefly, recommend the better option, then let
