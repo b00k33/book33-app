@@ -21750,6 +21750,22 @@
   .mp-back { border: 0; background: none; padding: 0 2px; color: var(--ink-soft); font-size: 13px; font-weight: 800; line-height: 1; letter-spacing: 0; text-transform: none; cursor: pointer; }
   @media (max-width: 760px) { .mp-def { grid-template-columns: 1fr; } }
   @media (prefers-reduced-motion: reduce) { .mb-tk i.fresh, .mb-logged.fresh { animation: none; } }
+  /* ===== C22 + LCM Appointments (2026-10-25; the spec is lcm-pharmacy-app/c22-merge-mock-2026-10-25.html): the day's
+     LCM patients as rows inside the Clinic block at their own times, a count on the block, and the patient card. */
+  .tl-clin-n { display: inline-block; flex: none; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--mode-g-work, #4F86E8); color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; font-variant-numeric: tabular-nums; vertical-align: 1px; }
+  .md-bar .tl-clin-n { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); margin: 0; }
+  .tl-clin-row { position: absolute; left: 28px; right: 6px; z-index: 1; height: 17px; display: flex; align-items: center; gap: 6px; padding: 0 6px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--mode-g-work, #4F86E8) 12%, var(--paper)); font-size: 11px; font-weight: 500; line-height: 1; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-align: left; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .tl-clin-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--ink); }
+  .tl-clin-row i { flex: none; width: 8px; height: 8px; border-radius: 2px; }
+  .tl-clin-row.done { opacity: .6; }
+  .tl-clin-row:focus-visible { outline: 2px solid var(--accent-seed, #2F5BEA); outline-offset: 1px; }
+  .tl-detail-pat[data-clin-pat] { display: block; width: 100%; text-align: left; cursor: pointer; }
+  #clinPatCard { position: fixed; z-index: 366; width: 240px; max-width: calc(100vw - 24px); padding: 12px; border: 1px solid var(--note-line); border-radius: var(--radius-sm); background: var(--paper); box-shadow: 0 8px 24px rgba(0, 0, 0, .18); color: var(--ink); font-size: 13px; }
+  #clinPatCard[hidden] { display: none; }
+  #clinPatCard .cpc-t { font-size: 14px; font-weight: 700; }
+  #clinPatCard .cpc-w { margin: 4px 0 8px; font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  #clinPatCard .wmb-brief { margin: 0 0 12px; }
+  #clinPatCard .cpc-go { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent-seed, #2F5BEA); color: var(--accent-seed, #2F5BEA); font-size: 13px; font-weight: 700; cursor: pointer; }
 </style>
 <!-- Mantras + My quotes (2026-10-15): the ONE quiet line across the top of every page, filled by mqRender(). Hidden until the library has a mantra. -->
 <div id="mantraLine" class="mq-line" data-mq-host hidden></div>
@@ -35071,10 +35087,13 @@
       // opening the full detail sheet. e.stopPropagation() in its click handler
       // (search "data-travel-peek") keeps this from also firing openTlDetail.
       const travelPeekIc = modeOf(e) === "travel" ? `<button type="button" class="tl-travel-peek" data-travel-peek="${e.id}" aria-label="Travel quick look" title="Travel quick look">🚆</button>` : "";
+      // 2026-10-25 (C22 + LCM merge, her pick 6): a Clinic block counts its patients and lists them at their times
+      const clinPats = isBlock && !p.mergeCount ? clinicPatsForBlock(e, keyOf(state.anchor)) : null;
       return `<div class="tl-item ${cls}${done ? " done" : ""}${oc.status === "cancelled" ? " oc-cancelled" : oc.status === "rescheduled" ? " oc-resched" : ""}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-kind="${kind}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${powerMark ? ` data-power="${powerMark}"` : ""}${chainAttr}${solo} style="${style}"${!e.generated && !p.mergeCount ? ` data-move-id="${e.id}" title="Press and hold to reschedule · right-click to edit"` : ""}>
-        <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${stageChip(e)}${mergeBadge}${ocNoteIc}${travelPeekIc}</span>
+        <span class="tl-title">${tick}${ovrDot}${lifeDot}${esc(stagedLabel(e))}${clinicCountHtml(clinPats)}${stageChip(e)}${mergeBadge}${ocNoteIc}${travelPeekIc}</span>
         <span class="tl-meta">${meta}${ocSub}</span>
         ${isBlock && !tight && p.h >= 40 && !p.mergeCount ? mealBlockSubHtml(e) : ""}
+        ${clinPats && !tight ? clinicBlockRowsHtml(clinPats, p.top + topNudge, p.h) : ""}
         ${rateHtml}${resizeHandles}
       </div>`;
     }).join("") : "";
@@ -44423,7 +44442,7 @@
       : "";
     return `<div class="md-item tl-item${isDone(e.id) ? " done" : ""}" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
       style="top:${top}px;height:${h}px;${colStyle}">
-      <span class="md-item-title">${itemMarkHtml(e)}<span class="md-item-title-txt">${esc(e.title)}</span>${mergeBadge}</span>
+      <span class="md-item-title">${itemMarkHtml(e)}<span class="md-item-title-txt">${esc(e.title)}</span>${p.mergeCount ? "" : clinicCountHtml(clinicPatsForBlock(e, p.dk))}${mergeBadge}</span>
       <span class="md-item-time">${timeTxt}${(() => { const mm = mealPlainFor(e); return mm ? ` · ${mm.done ? "✓ " : ""}${esc(mm.text)}` : ""; })()}</span>
       ${resizeHandles}
     </div>`;
@@ -44486,7 +44505,7 @@
     // still says so, same reasoning as mdItemHtml()'s own badge just above.
     const label = p.mergeCount > 1 ? `${esc(e.title)} ×${p.mergeCount} — ${fmtTime(e.start)} – ${fmtTime(minToTime(p.trueEnd))}` : `${esc(e.title)} — ${fmtTime(e.start)}`;
     return `<div class="md-bar tl-item" data-track="${e.track}" data-mode="${colorModeOf(e) || ""}" data-origin="${itemOrigin(e)}" data-category="${esc(e.category || "")}" data-tl-detail="${e.id}"${p.powerMark ? ` data-power="${p.powerMark}"` : ""}
-      aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}"></div>`;
+      aria-label="${label}" title="${esc(e.title)}" style="top:${top}px;height:${h}px;${colStyle}">${h >= 28 && !p.mergeCount ? clinicCountHtml(clinicPatsForBlock(e, p.dk)) : ""}</div>`;
   }
   function mdColumnHtml(d, items, labelable, colWidth) {
     let placed = [];
@@ -44521,6 +44540,7 @@
     placed.forEach(p => {
       p.top = topForMin(p.cs);
       p.h = Math.max(topForMin(p.ce) - p.top - 3, labelable ? 26 : 8);
+      p.dk = keyOf(d);   // the Clinic block's patient count reads its own date (2026-10-25)
     });
     clusterOverlaps(placed);
     // STEP 3 tier pick: a non-labelable column (too narrow, ever) always falls
@@ -55464,6 +55484,8 @@
   // the list she pasted for tomorrow when it exists (the paste box saves Today or
   // Tomorrow), else the calendar guess. Same reader shape as wmbPatientList().
   function wmbPatientCountFor(date) {
+    const lc = lcmPatientsOn(keyOf(date)).length;   // LCM's bookings first (2026-10-25)
+    if (lc) return lc;
     const imp = loadClinicDayFor(keyOf(date));
     if (imp) return imp.appointments.length;
     try { return clinicPatientsIn(dayEventsRawFor(date)).filter(o => !o.rtTaskId && !o.ghostSkip && !o.ghostMoved && !WMB_NOT_PATIENT_RE.test(normTitle(o.title))).length; } catch (e) { return 0; }
@@ -55520,6 +55542,7 @@
     return { appointments, skipped };
   }
   let wmbPasteOpen = false, wmbPasteDraft = "", wmbPasteDay = null, wmbPasteMsg = "";
+  var WMB_PASTE_HIDDEN = true;   // 2026-10-25: the day's list comes from LCM now (see "C22 + LCM APPOINTMENTS")
   // default day: today, or tomorrow once the evening has come (she pastes the next
   // day's list after work) -- the toggle stays visible either way
   function wmbPasteDayKey() {
@@ -55537,6 +55560,8 @@
     return { ok: true, msg: `${n} patient${n === 1 ? "" : "s"} saved for ${when}${parsed.skipped.length ? ` · skipped ${parsed.skipped.join(", ")}` : ""}` };
   }
   function wmbPasteFormHtml() {
+    // hidden 2026-10-25 (her pick 9 on the C22 + LCM merge: one paste, in LCM); kept, not deleted -- RETIRED-FEATURES.md §21
+    if (WMB_PASTE_HIDDEN) return "";
     const dayKey = wmbPasteDayKey();
     return `<div class="wmb-paste${wmbPasteOpen ? " open" : ""}">
       <div class="wmb-paste-head">
@@ -55585,6 +55610,175 @@
   // no shared backend) -- confirmed via its own git remote, b00k33/lcm-pharmacy, whose
   // real published address is this one, no custom domain.
   const LCM_PHARMACY_URL = "https://b00k33.github.io/lcm-pharmacy/";
+  /* ============================================================
+     C22 + LCM APPOINTMENTS -- one calendar, both ways (2026-10-25, her 14 picks;
+     lcm-pharmacy-app/c22-merge-mock-2026-10-25.html is the spec, MOCK = BUILD).
+     Both apps live on ONE origin (b00k33.github.io), so each READS the other's
+     localStorage on the same browser and WRITES only its own prefix.
+     - C22 -> LCM: book33-cal-digest = her timed items + birthdays for today-7 ..
+       today+35, already resolved (routines, repeats, workouts), so LCM never re-builds
+       C22's calendar. Derived, so it never syncs (EXCLUDE in the sync layer).
+     - LCM -> C22: LCM writes lcm-appt-digest (its own key, one clinic login at a
+       time); C22 keeps the last list it saw for each login in book33-lcm-days, which
+       syncs (NOISY), so the phone has the patients too. The day's patients then read
+       LCM first, the old pasted list second (clinicPatientsFor) -- one paste, in LCM.
+     ============================================================ */
+  // var + function declarations on purpose: a boot-time migration calls saveWidgetDigest() (and so calDigestSoon)
+  // long before this block runs, and a let/const read there is a ReferenceError that stops the whole app
+  var CAL_DIGEST_KEY = "book33-cal-digest";
+  var LCM_DAYS_KEY = "book33-lcm-days";
+  var LCM_DIGEST_KEY = "lcm-appt-digest";   // LCM's own key: read here, never written
+  function calDigestItem(e) {
+    const t = typeOf(e), g = typeGroupOf(t), em = itemEndMin(e);
+    const o = { id: String(e.id), s: e.start, t: e.title || (t ? t.label : "") };
+    if (em != null) o.e = minToTime(em);
+    // a group = LCM draws its colour + glyph; an untyped item sends a real hex only (LCM can't read C22's --vars)
+    if (g) o.g = g.id; else { const c = resolveEventColorHex(e); if (/^#[0-9a-f]{3,8}$/i.test(c)) o.c = c; }
+    if (t && t.smart === "clinic") o.k = "clinic";
+    if (isDone(e.id)) o.d = 1;
+    // the card's one extra line: the meal, who it is with, or how many steps
+    let x = "";
+    try { const m = mealPlainFor(e); if (m) x = m.text; } catch (err) {}
+    if (!x && t && t.smart === "together") { const w = whoOf(e); if (w === "both") x = "with " + partnerName(); else if (w === "partner") x = "for " + partnerName(); }
+    const steps = e.steps || (t && t.steps) || [];
+    if (!x && steps.length) x = `${steps.length} steps`;
+    if (x) o.x = x;
+    return o;
+  }
+  function calDigestCompute() {
+    const days = {};
+    for (let i = -7; i <= 35; i++) {
+      const d = addDays(TODAY, i);
+      let items = [];
+      try { items = dayItemsFor(d).map(calDigestItem); } catch (err) {}
+      const b = birthdaysOn(d).map(p => p.name).filter(Boolean);
+      if (items.length || b.length) days[keyOf(d)] = b.length ? { i: items, b } : { i: items };
+    }
+    return days;
+  }
+  // same-content guarded (the stamp is added after the compare) and run at most once
+  // every 1.2 s: saveWidgetDigest() asks on every render, tick and save
+  var calDigestLast = "", calDigestT = 0;
+  function calDigestSave() {
+    calDigestT = 0;
+    try {
+      const body = JSON.stringify(calDigestCompute());
+      if (body === calDigestLast) return;
+      calDigestLast = body;
+      localStorage.setItem(CAL_DIGEST_KEY, `{"v":1,"at":${Date.now()},"days":${body}}`);
+    } catch (err) {}
+  }
+  function calDigestSoon() { if (!calDigestT) calDigestT = setTimeout(calDigestSave, 1200); }
+  function lcmDaysLoad() {
+    try { const v = JSON.parse(localStorage.getItem(LCM_DAYS_KEY)); if (v && v.loc && typeof v.loc === "object") return v; } catch (err) {}
+    return { v: 1, loc: {} };
+  }
+  var LCM_DAYS = lcmDaysLoad();
+  // copies LCM's own list in when LCM wrote a newer one on this browser; one list per
+  // clinic login, replaced whole (a cancelled booking leaves with it)
+  function lcmDaysSync() {
+    let dg = null;
+    try { dg = JSON.parse(localStorage.getItem(LCM_DIGEST_KEY)); } catch (err) {}
+    LCM_DAYS = lcmDaysLoad();
+    if (!dg || !dg.loc || !dg.days || typeof dg.days !== "object" || !dg.at) return false;
+    const cur = LCM_DAYS.loc[dg.loc];
+    if (cur && cur.at >= dg.at) return false;
+    LCM_DAYS.loc[dg.loc] = { at: dg.at, name: String(dg.name || dg.loc), days: dg.days };
+    try { localStorage.setItem(LCM_DAYS_KEY, JSON.stringify(LCM_DAYS)); } catch (err) {}
+    return true;
+  }
+  function lcmPatientsOn(dateKey) {
+    if (!LCM_DAYS) LCM_DAYS = lcmDaysLoad();
+    const out = [], seen = {};
+    // newest list first, so a clinic renamed in LCM (a new key, the old list still here) never shows a booking twice
+    Object.keys(LCM_DAYS.loc).sort((a, b) => (LCM_DAYS.loc[b].at || 0) - (LCM_DAYS.loc[a].at || 0)).forEach(l => {
+      const L = LCM_DAYS.loc[l];
+      ((L.days || {})[dateKey] || []).forEach(a => {
+        if (!a || !a.s || !a.p) return;
+        const k = a.s + "|" + String(a.p).trim().toLowerCase();
+        if (seen[k]) return;
+        seen[k] = 1;
+        out.push(Object.assign({ loc: l, ln: L.name }, a));
+      });
+    });
+    return out.sort((a, b) => toMin(a.s) - toMin(b.s));
+  }
+  // THE day's patient list for any date: LCM's bookings, else the list pasted before
+  // the merge (book33-clinic-day), else none
+  function clinicPatientsFor(dateKey) {
+    const lcm = lcmPatientsOn(dateKey);
+    if (lcm.length) return lcm.map(a => ({ start: a.s, end: a.e || a.s, name: a.p, type: a.k || "", status: "booked", focus: a.f || "", goal: a.g || "", c: a.c || "", source: "lcm", lcmId: a.id, lcmLoc: a.ln, date: dateKey }));
+    const imp = loadClinicDayFor(dateKey);
+    if (!imp) return [];
+    return imp.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked", focus: a.focus || "", goal: a.goal || "", source: "import", date: dateKey }))
+      .sort((a, b) => toMin(a.start) - toMin(b.start));
+  }
+  // the Clinic block's own patients: the ones whose start sits inside it
+  function clinicPatsForBlock(e, dateKey) {
+    const t = typeOf(e);
+    if (!(t && t.smart === "clinic") && !(e.track === "work" && normTitle(e.title || "") === "cbd work")) return null;
+    const cs = toMin(e.start), ce = itemEndMin(e);
+    if (cs == null || ce == null) return null;
+    return clinicPatientsFor(dateKey).map((p, i) => Object.assign({ i }, p)).filter(p => { const m = toMin(p.start); return m >= cs && m < ce; });
+  }
+  function clinicCountHtml(pats) { return pats && pats.length ? `<span class="tl-clin-n" title="${pats.length} patient${pats.length === 1 ? "" : "s"}">${pats.length}</span>` : ""; }
+  function clinPastFor(p) { const tk = keyOf(TODAY); if (p.date < tk) return true; if (p.date > tk) return false; const n = new Date(); return toMin(p.end || p.start) <= n.getHours() * 60 + n.getMinutes(); }
+  // her pick 6: a row per patient inside the block, at its own time (17px, never on top of the one before)
+  function clinicBlockRowsHtml(pats, blockTop, blockH) {
+    if (!pats || !pats.length) return "";
+    let lastY = 4;
+    return pats.map(p => {
+      let y = Math.max(22, Math.round(topForMin(toMin(p.start)) - blockTop));
+      if (y < lastY + 18) y = lastY + 18;
+      lastY = y;
+      if (y + 17 > blockH - 2) return "";
+      const done = clinPastFor(p);
+      return `<button type="button" class="tl-clin-row${done ? " done" : ""}" data-clin-pat="${esc(p.date)}|${p.i}" style="top:${y}px" aria-label="${esc(p.name)}, ${esc(fmtTime(p.start))}"><i style="background:${esc(p.c || "var(--mode-g-work, #4F86E8)")}"></i>${esc(fmtTime(p.start))} <b>${esc(p.name)}</b>${done ? " ✓" : ""}</button>`;
+    }).join("");
+  }
+  function lcmOpenUrl(p) { return `${LCM_PHARMACY_URL}?${p.lcmId ? `appt=${encodeURIComponent(p.lcmId)}&` : ""}d=${encodeURIComponent(p.date)}`; }
+  // her pick 7: tap = a small card + "Open in LCM" (C22 never edits a booking)
+  var clinCardEl = null;
+  function clinCardClose() { if (clinCardEl && !clinCardEl.hidden) { clinCardEl.hidden = true; clinCardEl._key = ""; } }
+  function clinCardOpen(p, anchor, key) {
+    if (!clinCardEl) {
+      clinCardEl = document.createElement("div");
+      clinCardEl.id = "clinPatCard"; clinCardEl.setAttribute("role", "dialog"); clinCardEl.setAttribute("aria-label", "Patient");
+      document.body.appendChild(clinCardEl);
+    }
+    const when = fmtTime(p.start) + (p.end && p.end !== p.start ? ` – ${fmtTime(p.end)}` : "");
+    clinCardEl.innerHTML = `<div class="cpc-t">${esc(p.name)}</div><div class="cpc-w">${esc([when, p.type, p.lcmLoc].filter(Boolean).join(" · "))}</div>${wmbBriefRows(p)}<button type="button" class="cpc-go" data-clin-open>Open in LCM</button>`;
+    clinCardEl._p = p; clinCardEl._key = key; clinCardEl.hidden = false;
+    const r = anchor.getBoundingClientRect(), vw = window.innerWidth, vh = window.innerHeight, w = clinCardEl.offsetWidth, h = clinCardEl.offsetHeight;
+    clinCardEl.style.left = Math.round(Math.min(Math.max(12, r.left), vw - 12 - w)) + "px";
+    clinCardEl.style.top = Math.round(r.bottom + 6 + h <= vh - 12 ? r.bottom + 6 : Math.max(12, r.top - 6 - h)) + "px";
+  }
+  // capture phase: a row sits inside the block (whose own tap opens the event) and
+  // Workout Mode swallows bubbling clicks
+  ["pointerdown", "mousedown", "touchstart"].forEach(t => document.addEventListener(t, e => { if (e.target.closest && e.target.closest("[data-clin-pat]")) e.stopPropagation(); }, { capture: true, passive: true }));
+  document.addEventListener("click", e => {
+    const row = e.target.closest("[data-clin-pat]");
+    if (row) {
+      e.stopPropagation(); e.preventDefault();
+      const key = row.dataset.clinPat, j = key.lastIndexOf("|");
+      const p = clinicPatientsFor(key.slice(0, j))[+key.slice(j + 1)];
+      if (!p || (clinCardEl && !clinCardEl.hidden && clinCardEl._key === key)) { clinCardClose(); return; }
+      clinCardOpen(p, row, key);
+      return;
+    }
+    if (!clinCardEl || clinCardEl.hidden) return;
+    if (clinCardEl.contains(e.target)) {
+      if (e.target.closest("[data-clin-open]")) { e.stopPropagation(); window.open(lcmOpenUrl(clinCardEl._p), "_blank", "noopener"); clinCardClose(); }
+      return;
+    }
+    clinCardClose();
+  }, true);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") clinCardClose(); });
+  // LCM wrote a new list (another tab on this browser), or this tab came back to the front
+  window.addEventListener("storage", e => { if (e.key === LCM_DIGEST_KEY && lcmDaysSync()) { clinCardClose(); render(); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && lcmDaysSync()) { clinCardClose(); render(); } });
+  // after boot, once the sync layer's save hook is in place (so the copy reaches the cloud)
+  setTimeout(() => { if (lcmDaysSync()) render(); }, 1500);
   // --- the board itself: two lanes on one time axis, positioned proportionally
   // within the CBD Work block's own span (its own small scale, not the main
   // calendar's HOUR_H -- a shift is a much shorter, simpler span to lay out). ---
@@ -55616,6 +55810,8 @@
     });
   }
   function wmbPatientList() {
+    // 2026-10-25 (her pick 9, one paste in LCM): LCM's bookings for today win whole
+    if (lcmPatientsOn(keyOf(TODAY)).length) return { items: clinicPatientsFor(keyOf(TODAY)), fromImport: true };
     const clinicDay = loadClinicDay();
     if (clinicDay) {
       const items = clinicDay.appointments.map(a => ({ start: a.start, end: a.end, name: a.patient, type: a.type || "", status: a.status || "booked", focus: a.focus || "", goal: a.goal || "", source: "import" }));
@@ -55690,7 +55886,7 @@
     patients.sort((a, b) => toMin(a.start) - toMin(b.start));
     const fallbackNote = document.getElementById("wmbFallbackNote");
     fallbackNote.hidden = fromImport;
-    if (!fromImport) fallbackNote.textContent = "Showing Book33 events — paste the day from Cliniko above, or run /patients for the real list.";
+    if (!fromImport) fallbackNote.textContent = "Showing Book33 events — the real list arrives once LCM's Appointments has opened on this computer.";
 
     const viewMode = wmbBoardViewMode();
     document.querySelectorAll("#wmbViewToggle .evl-view-opt").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.wmbView === viewMode)));
@@ -61802,6 +61998,7 @@
   // user action throws.
   let lastWidgetDigestJSON = "";
   function saveWidgetDigest() {
+    calDigestSoon();   // LCM's Appointments grid reads her calendar from this (C22 + LCM APPOINTMENTS)
     try {
       const json = JSON.stringify(computeWidgetDigest());
       if (json === lastWidgetDigestJSON) return;
@@ -64946,19 +65143,27 @@
   // the "ticking this off logs a session" line already key off the title / fitLink.
   function typedSmartHtml(e) {
     const t = typeOf(e);
-    if (!t || e.generated) return "";
+    // a Clinic from her usual week is a routine occurrence (generated), and still lists its patients
+    if (!t || (e.generated && t.smart !== "clinic")) return "";
     let h = "";
     if (t.smart === "together") {
       const w = whoOf(e), pn = partnerName();
       const lbl = w === "both" ? `With ${pn}` : w === "partner" ? `For ${pn}` : "Just me";
       h += `<div class="tl-detail-row"><span class="tl-detail-em" aria-hidden="true">${whoEm(w)}</span><span class="tl-detail-note-text">${esc(lbl)}</span></div>`;
     }
-    if (t.smart === "clinic" && e.date === keyOf(TODAY)) {
+    // 2026-10-25 (C22 + LCM merge): any date, LCM's bookings first; each row opens the patient card
+    const dk = e.date || keyOf(state.anchor);
+    if (t.smart === "clinic" && (dk === keyOf(TODAY) || clinicPatientsFor(dk).length)) {
       try {
-        const pats = wmbPatientList().items.slice().sort((a, b) => toMin(a.start) - toMin(b.start));
-        h += `<div class="tl-detail-row tl-detail-patients"><div class="tl-detail-pat-h">Today's patients · ${pats.length}</div>${pats.slice(0, 6).map(p =>
-          `<div class="tl-detail-pat">${esc(fmtTime(p.start))} · ${esc(p.name || "Patient")}</div>`).join("")}
-          <button type="button" class="tl-walk-start-btn" data-tl-open-board>Work day board →</button></div>`;
+        const isToday = dk === keyOf(TODAY);
+        const own = clinicPatientsFor(dk);
+        // today with no LCM list keeps the board's own list (a pasted day + calendar walk-ins); its rows stay plain
+        const all = isToday && !lcmPatientsOn(dk).length ? wmbPatientList().items.slice().sort((a, b) => toMin(a.start) - toMin(b.start)) : own;
+        const tap = all === own;
+        h += `<div class="tl-detail-row tl-detail-patients"><div class="tl-detail-pat-h">${isToday ? "Today's patients" : "Patients"} · ${all.length}</div>${all.slice(0, 8).map((p, i) => tap
+          ? `<button type="button" class="tl-detail-pat" data-clin-pat="${esc(dk)}|${i}">${esc(fmtTime(p.start))} · ${esc(p.name || "Patient")}</button>`
+          : `<div class="tl-detail-pat">${esc(fmtTime(p.start))} · ${esc(p.name || "Patient")}</div>`).join("")}
+          ${isToday ? `<button type="button" class="tl-walk-start-btn" data-tl-open-board>Work day board →</button>` : ""}</div>`;
       } catch (err) { /* no patient list yet -- show nothing rather than an error */ }
     }
     return h;
@@ -76430,7 +76635,8 @@
   // for free just by NOT being "daybook-" prefixed) need to be named here instead,
   // or gather()/the save hook below would sweep them up as if she'd edited them.
   var EXCLUDE = {};
-  ["book33-pharmacy", "book33-prescriptions", CFG_KEY, DIRTY, DIRTY_KEYS, LAST_SYNC, "book33-migrated"]
+  // book33-cal-digest (2026-10-25) is LCM's read of this device's calendar: derived, so each device writes its own
+  ["book33-pharmacy", "book33-prescriptions", CFG_KEY, DIRTY, DIRTY_KEYS, LAST_SYNC, "book33-migrated", "book33-cal-digest"]
     .forEach(function (k) { EXCLUDE[k] = 1; });
   // Book33Notify recomputes and rewrites book33-push-queue on every boot (~1.2s in), every hour
   // while open, and every time the tab regains focus -- it embeds a fresh Date.now()
@@ -76446,7 +76652,9 @@
   // having been opened recently. NOISY keys still get pushed (so the queue itself
   // stays current in the cloud) but never set DIRTY and never count toward "is this
   // meaningfully different from the cloud" -- only an edit she actually made does.
-  var NOISY = { "book33-push-queue": 1, "book33-widget-today": 1 };
+  // book33-lcm-days (2026-10-25): LCM's patient lists copied in on the clinic computer -- pushed so the phone has
+  // them, never a reason to keep this device's copy over the cloud's
+  var NOISY = { "book33-push-queue": 1, "book33-widget-today": 1, "book33-lcm-days": 1 };
   function stripNoisy(obj) {
     var o = {};
     Object.keys(obj).forEach(function (k) { if (!NOISY[k]) o[k] = obj[k]; });
