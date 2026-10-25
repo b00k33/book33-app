@@ -715,8 +715,13 @@ ask28 with a guide and 14 popup picks (all the recommended ones); the mock is th
   newest `at` wins; NOISY in the sync, so it syncs without marking the notebook dirty). `lcmPatientsOn` merges the logins
   newest first and drops a booking a second login also lists (same time + name). Patient names, focus and goal ride C22's
   cloud row this way, as the pasted `book33-clinic-day` already did.
+- **Which block is the Clinic block** = `isClinicBlockEv(e)`, the one test (digest `k:"clinic"` and the rows): a typed
+  Clinic item, or a Work-track item titled for a clinic in either word order. Her real routines are "Work CBD" and
+  "Work Acupreg" (Mode "work", untyped), so an exact "cbd work" match missed both (found on her data, 2026-10-25).
+  The digest's colour is the one C22 paints: the type group, else the item's Mode accent, else its category colour read
+  off the page (`calDigestHex` resolves a `var(--cat-...)`), so her Mode-coloured calendar reaches LCM in its colours.
 - **Names in the Clinic block** (pick 6): `clinicPatientsFor(day)` = LCM's list, else the older paste, else none; a Clinic
-  (or "CBD work") block shows a count badge and one 17px row per patient at its own time (`clinicBlockRowsHtml`; the
+  block shows a count badge and one 17px row per patient at its own time (`clinicBlockRowsHtml`; the
   rows are 17px by the mock, not 44px — a dense list inside a block, the popover's list rows and the card button are the
   full-size ways in); a narrow week cell shows the count only. Tap a row = a small card + "Open in LCM"
   (`clinCardOpen`, `?appt=<id>&d=<day>`; C22 never edits a booking). The Clinic popover lists the patients for any date.

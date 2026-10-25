@@ -55629,13 +55629,28 @@
   var CAL_DIGEST_KEY = "book33-cal-digest";
   var LCM_DAYS_KEY = "book33-lcm-days";
   var LCM_DIGEST_KEY = "lcm-appt-digest";   // LCM's own key: read here, never written
+  // the Clinic block: a typed Clinic item, or her Work routine named for a clinic, either word order
+  // ("Work CBD" / "CBD Work", "Work Acupreg"; her real titles, 2026-10-25)
+  function isClinicBlockEv(e) {
+    const t = typeOf(e);
+    if (t && t.smart === "clinic") return true;
+    if (!e || e.track !== "work") return false;
+    const w = normTitle(e.title || "").split(/\s+/).sort().join(" ");
+    return w === "cbd work" || w === "acupreg work";
+  }
   function calDigestItem(e) {
     const t = typeOf(e), g = typeGroupOf(t), em = itemEndMin(e);
     const o = { id: String(e.id), s: e.start, t: e.title || (t ? t.label : "") };
     if (em != null) o.e = minToTime(em);
-    // a group = LCM draws its colour + glyph; an untyped item sends a real hex only (LCM can't read C22's --vars)
-    if (g) o.g = g.id; else { const c = resolveEventColorHex(e); if (/^#[0-9a-f]{3,8}$/i.test(c)) o.c = c; }
-    if (t && t.smart === "clinic") o.k = "clinic";
+    // a group = LCM draws its colour + glyph; an untyped item sends the hex C22 paints it (LCM can't read C22's
+    // --vars): its Mode's colour first (her calendar is coloured by Mode), else its life category's
+    if (g) o.g = g.id;
+    else {
+      const m = colorModeOf(e);
+      const c = calDigestHex(m ? (modeById(m) || {}).accent : "") || calDigestHex(resolveEventColorHex(e));
+      if (c) o.c = c;
+    }
+    if (isClinicBlockEv(e)) o.k = "clinic";
     if (isDone(e.id)) o.d = 1;
     // the card's one extra line: the meal, who it is with, or how many steps
     let x = "";
@@ -55646,7 +55661,19 @@
     if (x) o.x = x;
     return o;
   }
+  // a hex, or a category's var(--cat-...) read off the page as this device paints it; "" for anything else
+  var calDigestHexMemo = {};
+  function calDigestHex(c) {
+    c = String(c || "").trim();
+    const v = /^var\((--[\w-]+)/.exec(c);
+    if (v) {
+      if (!(v[1] in calDigestHexMemo)) { try { calDigestHexMemo[v[1]] = getComputedStyle(document.documentElement).getPropertyValue(v[1]).trim(); } catch (err) { calDigestHexMemo[v[1]] = ""; } }
+      c = calDigestHexMemo[v[1]];
+    }
+    return /^#[0-9a-f]{3,8}$/i.test(c) ? c : "";
+  }
   function calDigestCompute() {
+    calDigestHexMemo = {};
     const days = {};
     for (let i = -7; i <= 35; i++) {
       const d = addDays(TODAY, i);
@@ -55716,8 +55743,7 @@
   }
   // the Clinic block's own patients: the ones whose start sits inside it
   function clinicPatsForBlock(e, dateKey) {
-    const t = typeOf(e);
-    if (!(t && t.smart === "clinic") && !(e.track === "work" && normTitle(e.title || "") === "cbd work")) return null;
+    if (!isClinicBlockEv(e)) return null;
     const cs = toMin(e.start), ce = itemEndMin(e);
     if (cs == null || ce == null) return null;
     return clinicPatientsFor(dateKey).map((p, i) => Object.assign({ i }, p)).filter(p => { const m = toMin(p.start); return m >= cs && m < ce; });
