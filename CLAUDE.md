@@ -720,7 +720,8 @@ ask28 with a guide and 14 popup picks (all the recommended ones); the mock is th
   rows are 17px by the mock, not 44px — a dense list inside a block, the popover's list rows and the card button are the
   full-size ways in); a narrow week cell shows the count only. Tap a row = a small card + "Open in LCM"
   (`clinCardOpen`, `?appt=<id>&d=<day>`; C22 never edits a booking). The Clinic popover lists the patients for any date.
-- **One paste, in LCM** (pick 9): C22's paste box is hidden, not deleted (`WMB_PASTE_HIDDEN`, RETIRED-FEATURES.md §21).
+- **One paste, in LCM** (pick 9): C22's paste box is hidden, not deleted (`WMB_PASTE_HIDDEN`, RETIRED-FEATURES.md §21),
+  once LCM's list has reached the device; before that it still shows.
 - **Everything else (the grid tint, fold rows, Me chip, cake, Sunday)** is LCM's side: its CLAUDE.md "C22 on the grid".
 - **Trap hit while building:** `migrateBeautyRoutines` calls `saveWidgetDigest()` during boot, before later lines run —
   the digest's module state must be `var` / function declarations; a `let` there threw a TDZ error and stopped the app.

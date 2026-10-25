@@ -541,6 +541,7 @@ nothing was deleted. Never bring back a second, template-only tab row above or b
 Her pick 9 on the C22 + LCM Appointments merge ("one paste, in LCM"): the day's patients now come from
 LCM's own list (`lcm-appt-digest` → `book33-lcm-days`, see CLAUDE.md "C22 + LCM Appointments"), so C22's
 paste box (`wmbPasteFormHtml`, on the Today's patients card and the Work Day Board) draws nothing while
-`WMB_PASTE_HIDDEN` is true. Its code, `clinicDayParseText` / `clinicDaySaveFromText` and the saved
+`WMB_PASTE_HIDDEN` is true AND LCM's list has reached this device (`book33-lcm-days` holds a login); until then it
+stays, so the paste still works while LCM's half waits for her "push live". Its code, `clinicDayParseText` / `clinicDaySaveFromText` and the saved
 `book33-clinic-day` data are untouched, and a day LCM has no list for still reads that older paste. Pasting
 happens in LCM's Appointments dialog only. Never bring back a second paste box in C22 unasked.
