@@ -1641,9 +1641,8 @@ mechanical `--lh-tight` its category (calendar-block title) would otherwise get 
 `[data-desk-day1]` comment nearby depends on it staying exactly 1.25 for a ≥15px line box
 in a 27px 30-min timeline block; `--lh-tight` (1.1) would reopen a title-clipping bug.
 
-**Left pending, review individually**: two `line-height: 1.9` sites (`.cmd-eg-list`,
-`.p-steps`) — well outside the three-tier scale, likely deliberate, not folded into any
-token.
+**Left pending, review individually**: one `line-height: 1.9` site (`.cmd-eg-list`) — well
+outside the three-tier scale, likely deliberate, not folded into any token.
 
 ## Component pattern — multi-trigger hover card
 When a card needs MORE THAN ONE independent breakdown (not a single whole-card popover),
