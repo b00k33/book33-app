@@ -32640,7 +32640,7 @@
     const cy = chineseYear(d), yi = ANIMAL_INFO[cy.animal];
     el.innerHTML = `<div class="df-tiles">
       ${py != null ? `<div class="df-tile">
-        <div class="t-label">Personal Year · ${d.getFullYear()}</div>
+        <div class="t-label">Personal Year · ${pyYearLabel(d)}</div>
         <div class="t-head"><span class="t-value">${esc(masterLabel(py))}</span><span class="t-title">${esc(pyF.title)}</span></div>
         <div class="df-lean theme-acts">${pyF.lean.slice(0, 3).map(chip).join("")}</div>
       </div>
@@ -44665,7 +44665,7 @@
         pyEl.tabIndex = 0;
         // PY is the FIRST/leftmost item in this row (see #tilesDate.expanded
         // .mini-cal-mascot above); popover anchors left, same as PM/UD.
-        pyEl.innerHTML = `PY&nbsp;<b>${esc(String(masterLabel(pyForMascot)))}</b>${focusPopoverHtml(`Personal Year · ${d.getFullYear()}`, masterLabel(pyForMascot), pyFocus)}`;
+        pyEl.innerHTML = `PY&nbsp;<b>${esc(String(masterLabel(pyForMascot)))}</b>${focusPopoverHtml(`Personal Year · ${pyYearLabel(d)}`, masterLabel(pyForMascot), pyFocus)}`;
       } else {
         pyEl.innerHTML = "";
       }
@@ -45721,7 +45721,7 @@
       const mchip = x => `<span data-mo-action="${esc(x)}" role="button" tabindex="0" title="Schedule “${esc(x)}” this month">${esc(x)}</span>`;
       document.getElementById("moThemes").innerHTML = `<div class="df-tiles">
         <div class="df-tile">
-          <div class="t-label">Personal Year · ${y}</div>
+          <div class="t-label">Personal Year · ${pyYearLabel(themeAnchor)}</div>
           <div class="t-head"><span class="t-value">${esc(masterLabel(moPy))}</span><span class="t-title">${esc(pyF.title)}</span></div>
           <div class="df-lean theme-acts">${pyF.lean.slice(0, 3).map(mchip).join("")}</div>
         </div>
@@ -50050,26 +50050,35 @@
     return reduceKeepMaster(digitSum(`${pad(d.getDate())}${pad(d.getMonth() + 1)}${d.getFullYear()}`));
   }
   // Personal Year → Month → Day chain (masters kept at each displayed level).
-  // Needs a birthday on file; each returns null otherwise. (Standard formula — refine
-  // against GG33's "Year, Month, Weeks, Days, Hours" doc if her method differs.)
-  function personalYear(date) {
+  // Needs a birthday on file; each returns null otherwise.
+  // The Personal Year turns on HER BIRTHDAY, not 1 January (her pick 2026-11-15, GG33; LCM's
+  // Numbers & Stars counts the same way): born 15 Apr, PY 11 runs 15 Apr 2026 – 14 Apr 2027.
+  // personalYearStart(date) = the year that Personal Year began in.
+  function personalYearStart(date) {
     if (!PROFILE || !PROFILE.birthDate) return null;
-    const b = parseKey(PROFILE.birthDate);
-    return reduceKeepMaster(toSingleDigit(b.getMonth() + 1) + toSingleDigit(b.getDate()) + toSingleDigit(date.getFullYear()));
+    const b = parseKey(PROFILE.birthDate), bm = b.getMonth() + 1, m = date.getMonth() + 1;
+    return m > bm || (m === bm && date.getDate() >= b.getDate()) ? date.getFullYear() : date.getFullYear() - 1;
+  }
+  function pyOfYear(Y) { const b = parseKey(PROFILE.birthDate); return reduceKeepMaster(toSingleDigit(b.getMonth() + 1) + toSingleDigit(b.getDate()) + toSingleDigit(Y)); }   // declarations, not const: the boot reads these before this line runs (C22 trap, TDZ)
+  // "2026–27": a Personal Year spans two calendar years
+  function pyYearLabel(date) { const Y = personalYearStart(date); return Y == null ? String(date.getFullYear()) : `${Y}–${String(Y + 1).slice(2)}`; }
+  function personalYear(date) {
+    const Y = personalYearStart(date);
+    return Y == null ? null : pyOfYear(Y);
   }
   function personalMonth(date) {
     if (!PROFILE || !PROFILE.birthDate) return null;
     /* The personal month rolls over on her birth DAY-of-month, not the calendar 1st.
        Before that day each month we're still inside the previous month's PM window
-       (wrapping the year at January so the Dec 15→Jan 14 window shares one PY, not two). */
+       A window starts on her birth day, so it belongs wholly to one Personal Year: the PY that
+       began in y when the window's month is her birth month or later, else the one before. */
     const birthDay = parseKey(PROFILE.birthDate).getDate();
     let y = date.getFullYear(), m = date.getMonth() + 1;
     if (date.getDate() < birthDay) {
       m -= 1;
       if (m < 1) { m = 12; y -= 1; }
     }
-    const py = personalYear(new Date(y, 0, 1));
-    if (py == null) return null;
+    const py = pyOfYear(m >= parseKey(PROFILE.birthDate).getMonth() + 1 ? y : y - 1);
     return reduceKeepMaster(toSingleDigit(py) + toSingleDigit(m));
   }
   function personalDay(date) {
@@ -50087,7 +50096,7 @@
     const b = parseKey(PROFILE.birthDate);
     let y = date.getFullYear(), m = date.getMonth() + 1;
     if (date.getDate() < b.getDate()) { m -= 1; if (m < 1) { m = 12; y -= 1; } }
-    const pyCompound = digitSum(`${pad(b.getMonth() + 1)}${pad(b.getDate())}${y}`);
+    const pyCompound = digitSum(`${pad(b.getMonth() + 1)}${pad(b.getDate())}${m >= b.getMonth() + 1 ? y : y - 1}`);   // the same Personal Year as personalMonth()
     return pyCompound + m;
   }
 
