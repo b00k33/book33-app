@@ -227,8 +227,8 @@ effort defaults to.
     **Steps plan (2026-10-16; grew out of the 2026-10-15 "Stairs plan" — her words: "make a steps plan ... 7
     flights of stairs at work which is 10 steps per floor ... steps will be part of my calendar fitness",
     then "turn that steps stairs tracking into a steps planner/management so i can input that my walk to the
-    station from home is 728 steps one way, and allow me to calculate my steps for the day, same for from
-    town hall station to work (dymocks)"; her picks (ask28, three popup rounds) are on
+    station from home is N steps one way, and allow me to calculate my steps for the day, same for from
+    the station to work"; her picks (ask28, three popup rounds) are on
     `mocks/steps-planner-guide-2026-10-15.html`, which is the spec; the older
     `mocks/steps-plan-guide-2026-10-15.html` is the stairs-only version; search "STEPS PLAN" in
     index.html):** a "Steps plan" section under Weekly plan on the Fitness page (`#fitHomeStairs` — the id
@@ -245,8 +245,8 @@ effort defaults to.
     {id,kind:"stairs",name,flights,steps,up,down,days}], log:{"YYYY-MM-DD":{done:{placeId:true},
     extra:[{id,n} (extra steps) | {id,flights,steps,up,down}]}}}`; a place with no `kind` is stairs
     (everything saved before 10/16). A walk with 0 steps ("type your steps") is left out of every total.
-    **Starter plan** (`ST_SEED`): four walks (Home -> Station 728, Station -> Home 728, Town Hall ->
-    Dymocks and Dymocks -> Town Hall both "type your steps"), Work stairs 7x10 with days EMPTY, Home stairs
+    **Starter plan** (`ST_SEED`): four walks (Home -> Station, Station -> Home, Station ->
+    Work and Work -> Station, all four "type your steps"), Work stairs 7x10 with days EMPTY, Home stairs
     6x10 every day; held in memory only until her first edit, so a plan saved on another device is never
     overwritten. **Migration:** a plan saved before walks existed gets the four starter walks added ONCE
     (in memory; `walkSeeded` is saved with her next edit and keeps them from coming back after she removes
@@ -260,10 +260,10 @@ effort defaults to.
     (`refOpen("stairs", dateKey)` -> `stSheetBody`: a Walking group and a Stairs group, ONE tick per leg or
     staircase, the meter, and two chips "+ Extra steps" (one number for the day) and "+ Extra flights"; an
     undo on removing an extra). Chip states dashed (planned) / filled to the ticked share (`--st-p`) /
-    solid "2,540 check". Label "Steps 728/2,540": the word hides at <=1359px in `#mdAlldayRow` (the week's
+    solid "2,500 check". Label "Steps 700/2,500": the word hides at <=1359px in `#mdAlldayRow` (the week's
     columns are ~118px at 1100px wide) and below 1280px in the single-day top bar `.ddt-allday`; at
     <=767px in `#mdAlldayRow` the whole label becomes the planned total in short form ("2.5k", "check" once
-    done) because "728/2,540" cannot fit a ~90px phone column. **Traps hit while building:** the chip is
+    done) because "700/2,500" cannot fit a ~90px phone column. **Traps hit while building:** the chip is
     PREPENDED to both `dayEvents` lists (`dayEventsRawFor` and `renderDay`'s own copy) because the
     multi-day all-day row shows 2 chips + "+N more" and an appended chip was always behind the "+N more";
     its CSS sits LAST in the stylesheet because design45's `#dayAlldayRow .ad-chip.tl-item` ties it on
@@ -825,6 +825,28 @@ birthday-tap rule).
 C7 keeps its own auto-push. Still confirm before deleting data. Report what changed plus the one-line undo. **Any commit that touches
 layout runs the mobile report in `MEASURING.md` and pastes the results.** A rule nobody
 measures is a wish.
+**Before "push live", run `.github/scripts/private-audit.sh`** (the private terms live in a local file outside
+every repo; the script holds none). Exit 1 = a private detail is in the commit about to go public: stop, erase it.
+
+### Private details stay out of this PUBLIC repo (2026-11-22, her words: "keep private info local and erase any public info")
+`b00k33/book33-app` is public, and so is the page it serves: anything typed into `index.html`, a comment, a mock, a note
+or a commit message is public. Her name, birthday, height, family and partner names, the partner's schedule, home-area
+venues, other people's names and contact details, her health, her money arrangements and her chart numbers live only in
+her own saved data (this app's Settings / People / Profile card) or in Claude's local memory, never here. Describe by role
+("the partner", "family admin"); use a pretend name (Sam) in an example.
+- **A value the app needs comes from her saved data, never a default typed in the source.** With nothing saved, show a
+  plain empty state. Removing a default changes what her own copy shows until she has typed the value once: tell her.
+- **Built 2026-11-22:** the Profile card takes name, birthday and height (`PROFILE_DEFAULTS` is empty; no height means no
+  BMI); the People groups are roles (My family, In-laws, Extended family) and a group id her saved list holds that the
+  built-in list does not name stays a group of its own (`treeGroups()` / `groupOf()`), optionally filed into a role by her own
+  `book33-people-group-alias` setting; the partner's work nights take their usual nights, hours and venues from a setup in
+  the Partner popover (`book33-partner-work-plan`), and the per-night picks read the older `book33-husband-work` key as
+  an alias until `book33-partner-work` exists; Family admin has no seeded task; the Pilates studio, the nail salon, the
+  starter walking legs, the tax set-aside rates and a hair product are no longer in the starter data; the push function's
+  contact falls back to the app's public address, not an email.
+- **Kept on purpose (business names, not private):** the clinic building and clinic names in the work schedule and the
+  Where list. **Her call if she wants them out too.**
+- GitHub keeps every older commit; erasing history means rewriting a public branch (a force push), only on her word.
 
 ### Her 11 answers for the first build pass (2026-09-02) — these are decisions, not options
 1. **Both themes.** Night gets a dark translation of the same system (dark cards on

@@ -7,7 +7,7 @@
 // even though the cron re-reads the same queue every minute.
 //
 // Secrets required (supabase secrets set / dashboard → Edge Functions → Secrets):
-//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:...), B33_CRON_KEY
+//   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:... or an https address; unset = the app's public address), B33_CRON_KEY
 // Deploy with --no-verify-jwt; the x-b33-key header (checked below) is the guard.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -25,7 +25,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
   webpush.setVapidDetails(
-    Deno.env.get("VAPID_SUBJECT") ?? "mailto:linh.quach3@gmail.com",
+    Deno.env.get("VAPID_SUBJECT") ?? "https://b00k33.github.io/book33-app/",
     Deno.env.get("VAPID_PUBLIC_KEY")!,
     Deno.env.get("VAPID_PRIVATE_KEY")!,
   );
